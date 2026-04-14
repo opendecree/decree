@@ -80,6 +80,14 @@ e2e/                 # End-to-end tests
 
 Single Go binary, three gRPC services (SchemaService, ConfigService, AuditService). Services are selectively enabled via `ENABLE_SERVICES` env var for deployment flexibility.
 
+## Project Management
+
+- **Milestones** on GitHub track efforts (e.g. "Admin GUI", "Security Review")
+- **`.agents/context/`** holds design context for AI agents: completed effort archive, active design briefs
+- **`docs/development/checklists.md`** has standard dev workflow checklists (commit, PR, release)
+- **`docs/development/threat-model.md`** has the security threat model
+- **GitHub Issues** are the single source of truth for tasks — no separate effort tracking files
+
 ## Conventions
 
 - Vanilla dependencies only — standard, widely-adopted tools

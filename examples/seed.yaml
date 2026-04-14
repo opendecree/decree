@@ -1,0 +1,65 @@
+syntax: v1
+schema:
+  name: example-app
+  description: Example application configuration schema
+  fields:
+    app.name:
+      type: string
+      description: Application display name
+    app.debug:
+      type: bool
+      description: Enable debug logging
+    features.dark_mode:
+      type: bool
+      description: Enable dark mode UI
+    features.beta_access:
+      type: bool
+      description: Allow access to beta features
+    server.rate_limit:
+      type: integer
+      description: Maximum requests per second
+      constraints:
+        minimum: 1
+        maximum: 10000
+    server.timeout:
+      type: duration
+      description: Request timeout
+    server.max_connections:
+      type: integer
+      description: Maximum concurrent connections
+      constraints:
+        minimum: 1
+    payments.fee_rate:
+      type: number
+      description: Transaction fee percentage (0-1)
+      constraints:
+        minimum: 0
+        maximum: 1
+    payments.currency:
+      type: string
+      description: Default currency code
+      constraints:
+        enum: [USD, EUR, GBP]
+tenant:
+  name: acme-corp
+config:
+  description: Initial example configuration
+  values:
+    app.name:
+      value: "Acme Corp App"
+    app.debug:
+      value: false
+    features.dark_mode:
+      value: true
+    features.beta_access:
+      value: false
+    server.rate_limit:
+      value: 100
+    server.timeout:
+      value: "30s"
+    server.max_connections:
+      value: 50
+    payments.fee_rate:
+      value: 0.025
+    payments.currency:
+      value: "USD"

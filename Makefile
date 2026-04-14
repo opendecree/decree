@@ -6,7 +6,7 @@ DOCKER_RUN_TOOLS := docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tm
 MKDOCS_IMAGE := $(MKDOCS_IMAGE):9.7.6
 GOLANGCI_LINT_VERSION := v2.8.0
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e bench bench-e2e docs docs-api docs-cli docs-serve docs-deploy clean tools help
+.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-serve docs-deploy clean tools help
 
 all: generate lint test build
 
@@ -76,6 +76,12 @@ migrate-down: $(TOOLS_SENTINEL)
 e2e:
 	docker compose up -d --wait service
 	cd e2e && go test -tags=e2e -v -race -count=1 ./... || (cd .. && docker compose down -v && exit 1)
+	docker compose down -v
+
+## examples: Run SDK examples (docker compose → seed → run → teardown)
+examples:
+	docker compose up -d --wait service
+	cd examples && make setup && make test || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
 ## bench: Run unit benchmarks

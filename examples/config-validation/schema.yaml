@@ -1,0 +1,20 @@
+syntax: v1
+name: validation-example
+description: Schema for validation example
+fields:
+  app.name:
+    type: string
+    constraints:
+      minLength: 1
+      maxLength: 100
+  app.port:
+    type: integer
+    constraints:
+      minimum: 1
+      maximum: 65535
+  app.log_level:
+    type: string
+    constraints:
+      enum: [debug, info, warn, error]
+  app.homepage:
+    type: url

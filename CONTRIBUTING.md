@@ -201,6 +201,13 @@ make bench-e2e
 4. Ensure `make all` passes (generate, lint, test, build)
 5. Open a pull request against `main`
 
+## Development Resources
+
+- **[Development Checklists](docs/development/checklists.md)** — before commit, before PR, after merge, and release checklists
+- **[Threat Model](docs/development/threat-model.md)** — security threat model and known concerns
+- **[Server Configuration](docs/server/configuration.md)** — environment variables and deployment config
+- **[API Reference](docs/api/)** — gRPC API documentation and OpenAPI spec
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the Apache License 2.0.

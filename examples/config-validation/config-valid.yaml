@@ -1,0 +1,10 @@
+syntax: v1
+values:
+  app.name:
+    value: "My Application"
+  app.port:
+    value: 8080
+  app.log_level:
+    value: info
+  app.homepage:
+    value: "https://example.com"

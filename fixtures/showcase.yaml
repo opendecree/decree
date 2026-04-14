@@ -149,6 +149,7 @@ schema:
       nullable: true
       deprecated: true
       redirect_to: payments.fee_rate
+      tags: [legacy]
 
 tenant:
   name: demo

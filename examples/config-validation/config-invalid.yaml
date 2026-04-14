@@ -1,0 +1,12 @@
+syntax: v1
+values:
+  app.name:
+    value: ""
+  app.port:
+    value: 99999
+  app.log_level:
+    value: verbose
+  app.homepage:
+    value: "not-a-url"
+  app.unknown_field:
+    value: "this field is not in the schema"
