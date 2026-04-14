@@ -70,8 +70,8 @@ type ConfigFile struct {
 
 // ConfigValueDef represents a single config value in the YAML format.
 type ConfigValueDef struct {
-	Value       any `yaml:"value"`
-	Description string      `yaml:"description,omitempty"`
+	Value       any    `yaml:"value"`
+	Description string `yaml:"description,omitempty"`
 }
 
 // --- Options ---

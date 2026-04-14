@@ -21,12 +21,15 @@ type mockClient struct {
 func (m *mockClient) GetTenant(ctx context.Context, id string) (*adminclient.Tenant, error) {
 	return m.getTenantFn(ctx, id)
 }
+
 func (m *mockClient) GetSchemaVersion(ctx context.Context, id string, version int32) (*adminclient.Schema, error) {
 	return m.getSchemaVersionFn(ctx, id, version)
 }
+
 func (m *mockClient) ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error) {
 	return m.exportConfigFn(ctx, tenantID, version)
 }
+
 func (m *mockClient) ListFieldLocks(ctx context.Context, tenantID string) ([]adminclient.FieldLock, error) {
 	return m.listFieldLocksFn(ctx, tenantID)
 }

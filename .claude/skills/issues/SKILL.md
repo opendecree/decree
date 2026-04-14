@@ -9,32 +9,52 @@ List all open issues across the OpenDecree project, grouped by size label.
 
 ## Steps
 
-1. Fetch all open issues from the project board:
-   ```
-   gh project item-list 2 --owner opendecree --limit 200 --format json
-   ```
-   Filter to items where `content.type == "Issue"` and status is not "Done".
+1. Fetch all open issues from the project board and display grouped by size:
 
-2. Group by size label (`size: S`, `size: M`, `size: L`, unlabeled)
-3. Within each size group, sort by repo then milestone (milestoned first, then unassigned)
+```bash
+gh project item-list 2 --owner opendecree --limit 200 --format json | python3 -c "
+import json, sys
 
-## Output format
+data = json.load(sys.stdin)
+items = data.get('items', [])
+issues = [i for i in items if i.get('content', {}).get('type') == 'Issue' and i.get('status') != 'Done']
 
+groups = {'size: S': [], 'size: M': [], 'size: L': [], 'Unlabeled': []}
+for item in issues:
+    labels = item.get('labels') or []
+    size_labels = []
+    for l in labels:
+        name = l if isinstance(l, str) else l.get('name', '')
+        if name.startswith('size:'):
+            size_labels.append(name)
+
+    repo = item.get('content', {}).get('repository', '').split('/')[-1]
+    number = item.get('content', {}).get('number', 0)
+    title = item.get('content', {}).get('title', '')
+    milestone = item.get('milestone') or ''
+    if isinstance(milestone, dict):
+        milestone = milestone.get('title', '')
+
+    size = size_labels[0] if size_labels else 'Unlabeled'
+    if size not in groups:
+        size = 'Unlabeled'
+    groups[size].append((repo, number, title, milestone))
+
+for key in groups:
+    groups[key].sort(key=lambda x: (x[0], x[3] == '', x[3], x[1]))
+
+for label, display in [('size: S', 'size: S (quick wins)'), ('size: M', 'size: M (moderate)'), ('size: L', 'size: L (larger efforts)'), ('Unlabeled', 'Unlabeled')]:
+    if not groups[label]:
+        continue
+    print(f'## {display}')
+    for repo, num, title, ms in groups[label]:
+        ref = f'{repo}#{num}'
+        ms_display = ms if ms else '[no milestone]'
+        print(f'{ref:<35} {title:<60} {ms_display}')
+    print()
+"
 ```
-## size: S (quick wins)
-decree#132     Add make pre-commit target                    [no milestone]
-decree-ui#13   Add copyable ID attributes                   Admin GUI
 
-## size: M (moderate)
-decree#110     Stress test Phase 1                           Stress Testing
-decree-python#14  CI hardening                               [no milestone]
-
-## size: L (larger efforts)
-decree#32      contrib/viper: remote config provider         Ecosystem
-decree#88      Admin GUI Phase 8: embed in Go                Admin GUI
-
-## Unlabeled
-decree-ui#8    Add pre-commit npm script                     [no milestone]
-```
+2. If there are unlabeled issues, mention them at the end so they can be sized.
 
 Keep it compact — one line per issue, include repo prefix, right-aligned milestone. No prose, just the list.

@@ -1756,8 +1756,8 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\vUnlockField\x12$.centralconfig.v1.UnlockFieldRequest\x1a%.centralconfig.v1.UnlockFieldResponse\"2\x82\xd3\xe4\x93\x02,**/v1/tenants/{tenant_id}/locks/{field_path}\x12\x8a\x01\n" +
 	"\x0eListFieldLocks\x12'.centralconfig.v1.ListFieldLocksRequest\x1a(.centralconfig.v1.ListFieldLocksResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/v1/tenants/{tenant_id}/locks\x12~\n" +
 	"\fExportSchema\x12%.centralconfig.v1.ExportSchemaRequest\x1a&.centralconfig.v1.ExportSchemaResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/schemas/{id}/export\x12|\n" +
-	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/schemas/importB\xca\x01\n" +
-	"\x14com.centralconfig.v1B\x12SchemaServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/schemas/importB\xce\x01\n" +
+	"\x14com.centralconfig.v1B\x12SchemaServiceProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_schema_service_proto_rawDescOnce sync.Once

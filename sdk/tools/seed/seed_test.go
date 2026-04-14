@@ -22,18 +22,23 @@ type mockClient struct {
 func (m *mockClient) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error) {
 	return m.importSchemaFn(ctx, yamlContent, autoPublish...)
 }
+
 func (m *mockClient) ListSchemas(ctx context.Context) ([]*adminclient.Schema, error) {
 	return m.listSchemasFn(ctx)
 }
+
 func (m *mockClient) ListTenants(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error) {
 	return m.listTenantsFn(ctx, schemaID)
 }
+
 func (m *mockClient) CreateTenant(ctx context.Context, name, schemaID string, schemaVersion int32) (*adminclient.Tenant, error) {
 	return m.createTenantFn(ctx, name, schemaID, schemaVersion)
 }
+
 func (m *mockClient) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error) {
 	return m.importConfigFn(ctx, tenantID, yamlContent, description, mode...)
 }
+
 func (m *mockClient) LockField(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error {
 	return m.lockFieldFn(ctx, tenantID, fieldPath, lockedValues...)
 }

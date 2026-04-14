@@ -1512,8 +1512,8 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\x11RollbackToVersion\x12*.centralconfig.v1.RollbackToVersionRequest\x1a+.centralconfig.v1.RollbackToVersionResponse\";\x82\xd3\xe4\x93\x025\"3/v1/tenants/{tenant_id}/versions/{version}:rollback\x12\x88\x01\n" +
 	"\tSubscribe\x12\".centralconfig.v1.SubscribeRequest\x1a#.centralconfig.v1.SubscribeResponse\"0\x82\xd3\xe4\x93\x02*\x12(/v1/tenants/{tenant_id}/config:subscribe0\x01\x12\x8c\x01\n" +
 	"\fExportConfig\x12%.centralconfig.v1.ExportConfigRequest\x1a&.centralconfig.v1.ExportConfigResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/config/export\x12\x8f\x01\n" +
-	"\fImportConfig\x12%.centralconfig.v1.ImportConfigRequest\x1a&.centralconfig.v1.ImportConfigResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/tenants/{tenant_id}/config/importB\xca\x01\n" +
-	"\x14com.centralconfig.v1B\x12ConfigServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\fImportConfig\x12%.centralconfig.v1.ImportConfigRequest\x1a&.centralconfig.v1.ImportConfigResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/tenants/{tenant_id}/config/importB\xce\x01\n" +
+	"\x14com.centralconfig.v1B\x12ConfigServiceProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_config_service_proto_rawDescOnce sync.Once

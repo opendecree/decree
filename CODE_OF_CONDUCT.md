@@ -4,6 +4,6 @@ This project follows the [Contributor Covenant v2.1](https://www.contributor-cov
 
 ## Reporting
 
-If you experience or witness unacceptable behavior, please email **via GitHub Issues**.
+If you experience or witness unacceptable behavior, please [open an issue](https://github.com/opendecree/decree/issues/new?labels=conduct) or contact a maintainer directly.
 
 All reports will be reviewed and investigated promptly and fairly.

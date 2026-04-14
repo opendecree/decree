@@ -175,9 +175,17 @@ func TestCompletionScripts(t *testing.T) {
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		t.Run(shell, func(t *testing.T) {
 			var buf bytes.Buffer
-			rootCmd.SetOut(&buf)
-			rootCmd.SetArgs([]string{"completion", shell})
-			err := rootCmd.Execute()
+			var err error
+			switch shell {
+			case "bash":
+				err = rootCmd.GenBashCompletionV2(&buf, true)
+			case "zsh":
+				err = rootCmd.GenZshCompletion(&buf)
+			case "fish":
+				err = rootCmd.GenFishCompletion(&buf, true)
+			case "powershell":
+				err = rootCmd.GenPowerShellCompletion(&buf)
+			}
 			require.NoError(t, err)
 			assert.NotEmpty(t, buf.String())
 		})

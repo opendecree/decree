@@ -108,9 +108,9 @@ func TestREST_SchemaLifecycle(t *testing.T) {
 
 	// Create tenant.
 	tenantBody := map[string]any{
-		"name":           "rest-test-tenant",
-		"schemaId":       schemaID,
-		"schemaVersion":  1,
+		"name":          "rest-test-tenant",
+		"schemaId":      schemaID,
+		"schemaVersion": 1,
 	}
 	status, resp = httpPost(t, "/v1/tenants", tenantBody)
 	require.Equal(t, 200, status, "create tenant failed: %v", resp)

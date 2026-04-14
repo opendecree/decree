@@ -39,17 +39,20 @@ modify specs → generate code → test → lint → build → deploy → e2e te
 
 | Target | Description | Runs in |
 |--------|------------|---------|
+| `make all` | generate, lint, test, build | Mixed |
 | `make generate` | Generate Go code from protobuf (buf) and SQL (sqlc) | Docker |
-| `make test` | Run unit tests | Local |
+| `make build` | Build service + CLI binaries to `bin/` | Local |
+| `make test` | Run unit tests across all modules | Local |
 | `make lint` | Run golangci-lint, buf lint, buf breaking | Mixed |
-| `make build` | Build the service binary to `bin/` | Local |
+| `make pre-commit` | Full before-commit checks (build, vet, format, lint, test, coverage) | Local |
+| `make e2e` | End-to-end tests (docker compose lifecycle) | Docker |
+| `make examples` | Run SDK examples (docker compose lifecycle) | Docker |
+| `make docs` | Generate all documentation (API + CLI + man pages) | Mixed |
 | `make image` | Build the Docker image | Docker |
 | `make migrate` | Run database migrations | Docker |
-| `make e2e` | Spin up full stack and run e2e tests | Docker |
 | `make bench` | Run unit benchmarks | Local |
 | `make bench-e2e` | Run e2e benchmarks against docker stack | Docker |
-| `make clean` | Remove build artifacts and generated code | Local |
-| `make all` | generate, lint, test, build | Mixed |
+| `make clean` | Remove build artifacts and generated code | Mixed |
 
 ### Specs-First Workflow
 

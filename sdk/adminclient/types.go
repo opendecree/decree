@@ -73,15 +73,15 @@ type ExternalDocs struct {
 
 // FieldConstraints defines validation rules for a field.
 type FieldConstraints struct {
-	Min              *float64
-	Max              *float64
-	ExclusiveMin     *float64
-	ExclusiveMax     *float64
-	MinLength        *int32
-	MaxLength        *int32
-	Pattern          string
-	Enum             []string
-	JSONSchema       string
+	Min          *float64
+	Max          *float64
+	ExclusiveMin *float64
+	ExclusiveMax *float64
+	MinLength    *int32
+	MaxLength    *int32
+	Pattern      string
+	Enum         []string
+	JSONSchema   string
 }
 
 // Tenant represents a tenant assigned to a schema.

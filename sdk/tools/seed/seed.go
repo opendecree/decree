@@ -37,10 +37,10 @@ type SchemaDef struct {
 
 // SchemaInfoDef contains optional schema-level metadata.
 type SchemaInfoDef struct {
-	Title   string              `yaml:"title,omitempty"`
-	Author  string              `yaml:"author,omitempty"`
-	Contact *SchemaContactDef   `yaml:"contact,omitempty"`
-	Labels  map[string]string   `yaml:"labels,omitempty"`
+	Title   string            `yaml:"title,omitempty"`
+	Author  string            `yaml:"author,omitempty"`
+	Contact *SchemaContactDef `yaml:"contact,omitempty"`
+	Labels  map[string]string `yaml:"labels,omitempty"`
 }
 
 // SchemaContactDef contains contact information for a schema owner.
@@ -52,22 +52,22 @@ type SchemaContactDef struct {
 
 // FieldDef describes a single schema field.
 type FieldDef struct {
-	Type         string              `yaml:"type"`
-	Description  string              `yaml:"description,omitempty"`
-	Default      string              `yaml:"default,omitempty"`
-	Nullable     bool                `yaml:"nullable,omitempty"`
-	Deprecated   bool                `yaml:"deprecated,omitempty"`
-	RedirectTo   string              `yaml:"redirect_to,omitempty"`
-	Constraints  *ConstraintsDef     `yaml:"constraints,omitempty"`
-	Title        string              `yaml:"title,omitempty"`
-	Example      string              `yaml:"example,omitempty"`
+	Type         string                `yaml:"type"`
+	Description  string                `yaml:"description,omitempty"`
+	Default      string                `yaml:"default,omitempty"`
+	Nullable     bool                  `yaml:"nullable,omitempty"`
+	Deprecated   bool                  `yaml:"deprecated,omitempty"`
+	RedirectTo   string                `yaml:"redirect_to,omitempty"`
+	Constraints  *ConstraintsDef       `yaml:"constraints,omitempty"`
+	Title        string                `yaml:"title,omitempty"`
+	Example      string                `yaml:"example,omitempty"`
 	Examples     map[string]ExampleDef `yaml:"examples,omitempty"`
-	ExternalDocs *ExternalDocsDef    `yaml:"externalDocs,omitempty"`
-	Tags         []string            `yaml:"tags,omitempty"`
-	Format       string              `yaml:"format,omitempty"`
-	ReadOnly     bool                `yaml:"readOnly,omitempty"`
-	WriteOnce    bool                `yaml:"writeOnce,omitempty"`
-	Sensitive    bool                `yaml:"sensitive,omitempty"`
+	ExternalDocs *ExternalDocsDef      `yaml:"externalDocs,omitempty"`
+	Tags         []string              `yaml:"tags,omitempty"`
+	Format       string                `yaml:"format,omitempty"`
+	ReadOnly     bool                  `yaml:"readOnly,omitempty"`
+	WriteOnce    bool                  `yaml:"writeOnce,omitempty"`
+	Sensitive    bool                  `yaml:"sensitive,omitempty"`
 }
 
 // ExampleDef represents a named example value.

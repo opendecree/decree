@@ -557,8 +557,8 @@ const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
 	"\rQueryWriteLog\x12&.centralconfig.v1.QueryWriteLogRequest\x1a'.centralconfig.v1.QueryWriteLogResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/audit/logs\x12\x94\x01\n" +
 	"\rGetFieldUsage\x12&.centralconfig.v1.GetFieldUsageRequest\x1a'.centralconfig.v1.GetFieldUsageResponse\"2\x82\xd3\xe4\x93\x02,\x12*/v1/tenants/{tenant_id}/usage/{field_path}\x12\x8a\x01\n" +
 	"\x0eGetTenantUsage\x12'.centralconfig.v1.GetTenantUsageRequest\x1a(.centralconfig.v1.GetTenantUsageResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/v1/tenants/{tenant_id}/usage\x12\x95\x01\n" +
-	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/unused-fieldsB\xc9\x01\n" +
-	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/unused-fieldsB\xcd\x01\n" +
+	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_audit_service_proto_rawDescOnce sync.Once

@@ -83,6 +83,10 @@ func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (
 			break
 		}
 
+		if ctx.Err() != nil {
+			return zero, ctx.Err()
+		}
+
 		backoff := backoffDuration(attempt, cfg.InitialBackoff, cfg.MaxBackoff, cfg.Jitter)
 		select {
 		case <-ctx.Done():

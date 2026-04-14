@@ -5,8 +5,8 @@ go 1.24.0
 toolchain go1.24.11
 
 require (
-	github.com/stretchr/testify v1.11.1
 	github.com/opendecree/decree/api v0.1.2
+	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )

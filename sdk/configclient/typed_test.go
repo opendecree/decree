@@ -222,4 +222,3 @@ func TestTypedValueToString_Time(t *testing.T) {
 	tv := &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}}
 	assert.Contains(t, typedValueToString(tv), "2026-03-30")
 }
-

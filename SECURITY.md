@@ -6,7 +6,7 @@ If you discover a security vulnerability in OpenDecree, please report it respons
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email **via GitHub Security Advisories** with:
+Instead, please [report it via GitHub Security Advisories](https://github.com/opendecree/decree/security/advisories/new) with:
 
 1. A description of the vulnerability
 2. Steps to reproduce

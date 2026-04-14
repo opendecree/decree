@@ -122,8 +122,8 @@ const file_centralconfig_v1_version_service_proto_rawDesc = "" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06commit\x18\x02 \x01(\tR\x06commit2\x90\x01\n" +
 	"\x0eVersionService\x12~\n" +
-	"\x10GetServerVersion\x12).centralconfig.v1.GetServerVersionRequest\x1a*.centralconfig.v1.GetServerVersionResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/versionB\xcb\x01\n" +
-	"\x14com.centralconfig.v1B\x13VersionServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\x10GetServerVersion\x12).centralconfig.v1.GetServerVersionRequest\x1a*.centralconfig.v1.GetServerVersionResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/versionB\xcf\x01\n" +
+	"\x14com.centralconfig.v1B\x13VersionServiceProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_version_service_proto_rawDescOnce sync.Once

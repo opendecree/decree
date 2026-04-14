@@ -61,13 +61,13 @@ type fieldEntry struct {
 }
 
 type options struct {
-	subject        string
-	role           string
-	tenantID       string
-	bearerToken    string
-	minBackoff     time.Duration
-	maxBackoff     time.Duration
-	logger         *slog.Logger
+	subject     string
+	role        string
+	tenantID    string
+	bearerToken string
+	minBackoff  time.Duration
+	maxBackoff  time.Duration
+	logger      *slog.Logger
 }
 
 // New creates a new watcher for the given tenant's configuration.

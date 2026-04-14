@@ -150,8 +150,8 @@ func (m *mockRPC) ImportConfig(ctx context.Context, in *pb.ImportConfigRequest, 
 
 // mockStream simulates a gRPC server stream.
 type mockStream struct {
-	ch     chan *pb.SubscribeResponse
-	ctx    context.Context
+	ch  chan *pb.SubscribeResponse
+	ctx context.Context
 	grpc.ClientStream
 }
 

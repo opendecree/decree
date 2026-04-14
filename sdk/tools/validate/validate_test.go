@@ -250,9 +250,9 @@ fields:
       enum: ["true"]
 `
 	tests := []struct {
-		name  string
+		name   string
 		config string
-		valid bool
+		valid  bool
 	}{
 		{"int enum match", `syntax: "v1"
 values:

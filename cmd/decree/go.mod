@@ -5,12 +5,12 @@ go 1.24.0
 toolchain go1.24.11
 
 require (
-	github.com/spf13/cobra v1.10.2
-	github.com/stretchr/testify v1.11.1
 	github.com/opendecree/decree/api v0.1.2
 	github.com/opendecree/decree/sdk/adminclient v0.1.2
 	github.com/opendecree/decree/sdk/configclient v0.1.2
 	github.com/opendecree/decree/sdk/tools v0.1.0
+	github.com/spf13/cobra v1.10.2
+	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1

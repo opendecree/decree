@@ -1906,9 +1906,9 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\x0eFIELD_TYPE_URL\x10\x05\x12\x13\n" +
 	"\x0fFIELD_TYPE_JSON\x10\x06\x12\x15\n" +
 	"\x11FIELD_TYPE_NUMBER\x10\a\x12\x13\n" +
-	"\x0fFIELD_TYPE_BOOL\x10\bB\xc2\x01\n" +
+	"\x0fFIELD_TYPE_BOOL\x10\bB\xc6\x01\n" +
 	"\x14com.centralconfig.v1B\n" +
-	"TypesProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"TypesProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_types_proto_rawDescOnce sync.Once

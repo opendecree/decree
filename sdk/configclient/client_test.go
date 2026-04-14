@@ -14,8 +14,6 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
-func sp(s string) *string { return &s }
-
 func sv(s string) *pb.TypedValue {
 	return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: s}}
 }
