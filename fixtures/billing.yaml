@@ -1,0 +1,90 @@
+# Billing fixture — realistic payments configuration.
+#
+# Scenario: a payments schema with typed fields, constraints, enum,
+# one tenant with config values set, and a locked currency field.
+# Good for demo and manual testing.
+#
+# Fields:
+#   payments.fee_rate    — number with min/max (percentage)
+#   payments.retries     — integer with min/max
+#   payments.enabled     — boolean master switch
+#   payments.currency    — string with enum constraint (write-once, locked)
+#   settlement.timeout   — nullable duration with min/max
+#
+# Load: decree seed fixtures/billing.yaml
+
+syntax: v1
+
+schema:
+  name: billing
+  description: Payment processing configuration
+  info:
+    title: Billing Configuration
+    author: platform-team
+    contact:
+      email: platform@example.com
+    labels:
+      domain: payments
+      env: development
+  fields:
+    payments.fee_rate:
+      type: number
+      title: Fee Rate
+      description: Transaction fee as a percentage applied to all outbound transfers.
+      example: "2.5"
+      format: percentage
+      constraints:
+        minimum: 0
+        maximum: 100
+    payments.retries:
+      type: integer
+      title: Payment Retries
+      description: Number of times to retry a failed payment before giving up.
+      default: "3"
+      constraints:
+        minimum: 0
+        maximum: 10
+    payments.enabled:
+      type: bool
+      title: Payments Enabled
+      description: Master switch for the payment processing module.
+      default: "true"
+    payments.currency:
+      type: string
+      title: Default Currency
+      description: ISO 4217 currency code for all transactions. Cannot be changed after initial setup.
+      example: "USD"
+      writeOnce: true
+      constraints:
+        enum: [USD, EUR, GBP, JPY, CHF]
+    settlement.timeout:
+      type: duration
+      title: Settlement Timeout
+      description: Time window before a pending settlement is auto-cancelled.
+      nullable: true
+      default: "48h"
+      example: "24h"
+      constraints:
+        minimum: 3600    # 1h in seconds
+        maximum: 2592000 # 720h in seconds
+
+tenant:
+  name: acme
+
+config:
+  description: Initial billing setup for Acme Corp
+  values:
+    payments.fee_rate:
+      value: 2.5
+      description: Standard rate for 2026
+    payments.retries:
+      value: 3
+    payments.enabled:
+      value: true
+    payments.currency:
+      value: USD
+    settlement.timeout:
+      value: "24h"
+
+locks:
+  - field_path: payments.currency

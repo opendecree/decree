@@ -9,7 +9,7 @@ import (
 )
 
 func TestValidatorCache_ConcurrentSetGet(t *testing.T) {
-	c := NewValidatorCache()
+	c := NewValidatorCache(0)
 
 	const goroutines = 20
 	const iterations = 200
@@ -35,7 +35,7 @@ func TestValidatorCache_ConcurrentSetGet(t *testing.T) {
 }
 
 func TestValidatorCache_ConcurrentSetInvalidate(t *testing.T) {
-	c := NewValidatorCache()
+	c := NewValidatorCache(0)
 
 	const goroutines = 20
 	const iterations = 200

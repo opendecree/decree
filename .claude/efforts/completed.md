@@ -75,3 +75,31 @@ OAS-inspired metadata: schema-level info block (title, author, contact, labels),
 - **Man pages** — 43 pages via cobra/doc, Long descriptions for parent commands
 - **Docker layer caching** — GHA cache for main.yml and release.yml image builds
 - **configclient retry** — generic retry[T] with exponential backoff + jitter, opt-in via WithRetry()
+
+## Python SDK (effort 18)
+
+`opendecree` on PyPI (v0.1.0). Separate repo `opendecree/decree-python`. ConfigClient (sync + async) with @overload typed get(), ConfigWatcher with WatchedField[T] (.value, on_change, changes()). Error hierarchy, retry with backoff, auth metadata, version compatibility. 171 tests, 97% coverage, 95% floor. Docs, governance, OIDC publishing.
+
+## TypeScript SDK (effort 23)
+
+`@opendecree/sdk` on npm (v0.1.0). Separate repo `opendecree/decree-typescript`. ESM-only, async-only, Node 20+. ConfigClient with overloaded get() via runtime converters (Number, Boolean, String). ConfigWatcher with WatchedField<T> (EventEmitter, async iteration). Symbol.dispose support. @grpc/grpc-js + buf/ts-proto. Biome + vitest. 139 tests, 98% coverage, 95% floor. OIDC trusted publishing.
+
+## Multi-Tenant Auth (effort 24)
+
+Claims.TenantID (string) → Claims.TenantIDs ([]string). JWT: `tenant_ids` array. Metadata: comma-separated `x-tenant-id`. auth.CheckTenantAccess(ctx, tenantID) on all Schema + Config service methods. auth.AllowedTenantIDs(ctx) for ListTenants filtering pushed to store layer (SQL WHERE id = ANY) for correct pagination. No auth context = permissive (tests, internal calls).
+
+## Multi-Language SDKs (effort 18-multi-lang)
+
+Tracking effort for Python + TypeScript SDKs. Both shipped — see efforts 18 (Python) and 23 (TypeScript) above.
+
+## Schema Enrichment Persistence (effort 20 follow-up)
+
+Tags, title, example, examples, external_docs, format, read_only, write_once, sensitive persisted through full storage chain: DB migration, SQL queries, sqlc codegen, domain types, store params, PG/memory store adapters, service layer, proto conversion. Proto comments clarified name vs title semantics.
+
+## Docs Diagrams (effort 26)
+
+Phase 1 complete: replaced 5 ASCII diagrams with Mermaid. Phase 2 skipped (not needed). Phase 3 (nice-to-have) remains open (#104).
+
+## Cache Overflow Fix (#107)
+
+MemoryCache: bounded to 10k entries, evicts expired first then oldest, background sweep. ValidatorCache: bounded to 1k tenants, evicts oldest. Redis: docker-compose maxmemory 128mb + allkeys-lru.

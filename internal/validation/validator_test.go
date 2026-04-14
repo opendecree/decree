@@ -210,7 +210,7 @@ func TestValidate_NoConstraints(t *testing.T) {
 // --- Cache ---
 
 func TestValidatorCache(t *testing.T) {
-	c := NewValidatorCache()
+	c := NewValidatorCache(0)
 
 	_, ok := c.Get("t1")
 	assert.False(t, ok)
@@ -225,4 +225,51 @@ func TestValidatorCache(t *testing.T) {
 	c.Invalidate("t1")
 	_, ok = c.Get("t1")
 	assert.False(t, ok)
+}
+
+func TestValidatorCache_EvictsOldestWhenFull(t *testing.T) {
+	c := NewValidatorCache(2)
+
+	v1 := map[string]*FieldValidator{"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, nil)}
+	v2 := map[string]*FieldValidator{"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_INT, false, nil)}
+	v3 := map[string]*FieldValidator{"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_BOOL, false, nil)}
+
+	c.Set("t1", v1)
+	c.Set("t2", v2)
+	assert.Equal(t, 2, c.Len())
+
+	// Adding t3 should evict t1 (oldest).
+	c.Set("t3", v3)
+	assert.Equal(t, 2, c.Len())
+
+	_, ok := c.Get("t1")
+	assert.False(t, ok, "oldest tenant should be evicted")
+
+	_, ok = c.Get("t2")
+	assert.True(t, ok)
+
+	_, ok = c.Get("t3")
+	assert.True(t, ok)
+}
+
+func TestValidatorCache_UpdateExistingDoesNotGrow(t *testing.T) {
+	c := NewValidatorCache(2)
+
+	v1 := map[string]*FieldValidator{"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, nil)}
+	v2 := map[string]*FieldValidator{"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_INT, false, nil)}
+
+	c.Set("t1", v1)
+	c.Set("t2", v2)
+
+	// Update t1 — should not trigger eviction.
+	v1Updated := map[string]*FieldValidator{"y": NewFieldValidator("y", pb.FieldType_FIELD_TYPE_BOOL, false, nil)}
+	c.Set("t1", v1Updated)
+	assert.Equal(t, 2, c.Len())
+
+	got, ok := c.Get("t1")
+	require.True(t, ok)
+	assert.Contains(t, got, "y")
+
+	_, ok = c.Get("t2")
+	assert.True(t, ok, "t2 should not be evicted by update")
 }

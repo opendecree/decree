@@ -108,6 +108,15 @@ type SchemaField struct {
 	RedirectTo      *string     `json:"redirect_to"`
 	DefaultValue    *string     `json:"default_value"`
 	Description     *string     `json:"description"`
+	Title           *string     `json:"title"`
+	Example         *string     `json:"example"`
+	Examples        []byte      `json:"examples"`
+	ExternalDocs    []byte      `json:"external_docs"`
+	Tags            []string    `json:"tags"`
+	Format          *string     `json:"format"`
+	ReadOnly        bool        `json:"read_only"`
+	WriteOnce       bool        `json:"write_once"`
+	Sensitive       bool        `json:"sensitive"`
 }
 
 type SchemaVersion struct {

@@ -28,7 +28,7 @@ type ValidatorFactory struct {
 func NewValidatorFactory(store Store) *ValidatorFactory {
 	return &ValidatorFactory{
 		store: store,
-		cache: NewValidatorCache(),
+		cache: NewValidatorCache(0),
 	}
 }
 

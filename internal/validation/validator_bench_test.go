@@ -80,7 +80,7 @@ func BenchmarkNewFieldValidator_WithConstraints(b *testing.B) {
 }
 
 func BenchmarkValidatorCache_Get_Hit(b *testing.B) {
-	c := NewValidatorCache()
+	c := NewValidatorCache(0)
 	validators := map[string]*FieldValidator{
 		"a": NewFieldValidator("a", pb.FieldType_FIELD_TYPE_STRING, false, nil),
 		"b": NewFieldValidator("b", pb.FieldType_FIELD_TYPE_INT, false, nil),
@@ -93,7 +93,7 @@ func BenchmarkValidatorCache_Get_Hit(b *testing.B) {
 }
 
 func BenchmarkValidatorCache_Get_Hit_Parallel(b *testing.B) {
-	c := NewValidatorCache()
+	c := NewValidatorCache(0)
 	validators := map[string]*FieldValidator{
 		"a": NewFieldValidator("a", pb.FieldType_FIELD_TYPE_STRING, false, nil),
 		"b": NewFieldValidator("b", pb.FieldType_FIELD_TYPE_INT, false, nil),

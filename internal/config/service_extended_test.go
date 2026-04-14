@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,9 +10,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -170,3 +173,189 @@ func TestTypedValueToString_AllTypes(t *testing.T) {
 		})
 	}
 }
+
+// --- Subscribe ---
+
+// mockServerStream implements grpc.ServerStreamingServer[pb.SubscribeResponse] for testing.
+type mockServerStream struct {
+	ctx  context.Context
+	sent []*pb.SubscribeResponse
+}
+
+func (m *mockServerStream) Send(resp *pb.SubscribeResponse) error {
+	m.sent = append(m.sent, resp)
+	return nil
+}
+
+func (m *mockServerStream) Context() context.Context { return m.ctx }
+
+func (m *mockServerStream) SetHeader(metadata.MD) error  { return nil }
+func (m *mockServerStream) SendHeader(metadata.MD) error { return nil }
+func (m *mockServerStream) SetTrailer(metadata.MD)       {}
+func (m *mockServerStream) SendMsg(any) error            { return nil }
+func (m *mockServerStream) RecvMsg(any) error            { return nil }
+
+func TestSubscribe_InvalidTenantID(t *testing.T) {
+	svc, _, _, _ := newTestService()
+
+	stream := &mockServerStream{ctx: context.Background()}
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: ""}, stream)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestSubscribe_SubscribeError(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", ctx, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(nil), context.CancelFunc(func() {}), errors.New("subscribe failed"))
+
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestSubscribe_ForwardsEvents(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent, 2)
+	cancel := func() {}
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	now := time.Now()
+	ch <- pubsub.ConfigChangeEvent{
+		TenantID:  tenantID1,
+		Version:   1,
+		FieldPath: "app.name",
+		OldValue:  "",
+		NewValue:  "hello",
+		ChangedBy: "admin",
+		ChangedAt: now,
+	}
+	ch <- pubsub.ConfigChangeEvent{
+		TenantID:  tenantID1,
+		Version:   2,
+		FieldPath: "app.port",
+		OldValue:  "8080",
+		NewValue:  "9090",
+		ChangedBy: "admin",
+		ChangedAt: now,
+	}
+
+	// Close the channel so the for loop exits after draining.
+	close(ch)
+
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
+	require.NoError(t, err)
+
+	require.Len(t, stream.sent, 2)
+	assert.Equal(t, "app.name", stream.sent[0].Change.FieldPath)
+	assert.Equal(t, int32(1), stream.sent[0].Change.Version)
+	assert.Equal(t, "admin", stream.sent[0].Change.ChangedBy)
+	assert.Equal(t, "app.port", stream.sent[1].Change.FieldPath)
+	assert.Equal(t, int32(2), stream.sent[1].Change.Version)
+
+	// No leak — cancel context just for cleanup.
+	ctxCancel()
+}
+
+func TestSubscribe_FiltersByFieldPaths(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent, 3)
+	cancel := func() {}
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	now := time.Now()
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, FieldPath: "app.name", NewValue: "v1", ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 2, FieldPath: "app.port", NewValue: "9090", ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 3, FieldPath: "app.name", NewValue: "v2", ChangedAt: now}
+	close(ch)
+
+	err := svc.Subscribe(&pb.SubscribeRequest{
+		TenantId:   tenantID1,
+		FieldPaths: []string{"app.name"},
+	}, stream)
+	require.NoError(t, err)
+
+	// Only "app.name" events should be forwarded.
+	require.Len(t, stream.sent, 2)
+	assert.Equal(t, "app.name", stream.sent[0].Change.FieldPath)
+	assert.Equal(t, "app.name", stream.sent[1].Change.FieldPath)
+}
+
+func TestSubscribe_ContextCancellation(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent) // unbuffered — blocks
+	cancelCalled := false
+	cancel := func() { cancelCalled = true }
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	// Cancel the context immediately so the select hits ctx.Done().
+	ctxCancel()
+
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
+	require.NoError(t, err)
+	assert.Empty(t, stream.sent)
+	assert.True(t, cancelCalled, "subscriber cancel function should be called via defer")
+}
+
+func TestSubscribe_SendError(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent, 1)
+	cancel := func() {}
+
+	stream := &errServerStream{ctx: context.Background(), sendErr: errors.New("stream broken")}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, FieldPath: "x", NewValue: "y", ChangedAt: time.Now()}
+	close(ch)
+
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stream broken")
+}
+
+// errServerStream is a mock stream that returns an error on Send.
+type errServerStream struct {
+	ctx     context.Context
+	sendErr error
+}
+
+func (m *errServerStream) Send(*pb.SubscribeResponse) error { return m.sendErr }
+func (m *errServerStream) Context() context.Context         { return m.ctx }
+func (m *errServerStream) SetHeader(metadata.MD) error      { return nil }
+func (m *errServerStream) SendHeader(metadata.MD) error     { return nil }
+func (m *errServerStream) SetTrailer(metadata.MD)           {}
+func (m *errServerStream) SendMsg(any) error                { return nil }
+func (m *errServerStream) RecvMsg(any) error                { return nil }

@@ -26,8 +26,27 @@ const (
 // Claims represents the JWT claims used by the service.
 type Claims struct {
 	jwt.RegisteredClaims
-	Role     Role   `json:"role"`
-	TenantID string `json:"tenant_id"`
+	Role      Role     `json:"role"`
+	TenantIDs []string `json:"tenant_ids"`
+}
+
+// HasTenantAccess checks if the caller has access to a specific tenant.
+// Superadmins have access to all tenants.
+func (c *Claims) HasTenantAccess(tenantID string) bool {
+	if c.Role == RoleSuperAdmin {
+		return true
+	}
+	for _, id := range c.TenantIDs {
+		if id == tenantID {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSuperAdmin returns true if the caller has the superadmin role.
+func (c *Claims) IsSuperAdmin() bool {
+	return c.Role == RoleSuperAdmin
 }
 
 type claimsContextKey struct{}
@@ -129,9 +148,9 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 		return nil, status.Errorf(codes.PermissionDenied, "unknown role: %s", claims.Role)
 	}
 
-	// Non-superadmin must have a tenant_id.
-	if claims.Role != RoleSuperAdmin && claims.TenantID == "" {
-		return nil, status.Error(codes.PermissionDenied, "tenant_id required for non-superadmin")
+	// Non-superadmin must have at least one tenant_id.
+	if claims.Role != RoleSuperAdmin && len(claims.TenantIDs) == 0 {
+		return nil, status.Error(codes.PermissionDenied, "tenant_ids required for non-superadmin")
 	}
 
 	return context.WithValue(ctx, claimsContextKey{}, claims), nil

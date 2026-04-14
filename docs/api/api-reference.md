@@ -310,7 +310,7 @@ Each schema is versioned — updates create new immutable versions.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | [string](#string) |  | Server-assigned unique identifier (UUID). |
-| name | [string](#string) |  | Unique name for this schema. Must be a valid slug: lowercase alphanumeric characters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?. |
+| name | [string](#string) |  | Machine identifier for this schema, used in API calls, URLs, and code. Must be a unique slug: lowercase alphanumeric and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?. See info.title for a display name. |
 | description | [string](#string) |  | Human-readable description of the schema&#39;s purpose. |
 | version | [int32](#int32) |  | Schema version number (monotonically increasing, starting at 1). |
 | parent_version | [int32](#int32) | optional | The version this was derived from. Absent for the initial version (v1). |
@@ -395,12 +395,15 @@ SchemaField defines a single field within a configuration schema.
 
 ### SchemaInfo
 SchemaInfo contains optional metadata about a schema&#39;s ownership and context.
+Optional organizational metadata for a schema.
+Schema.description lives on Schema itself (not here) because it&#39;s a
+first-class field used in every listing, while these are optional extras.
 OAS: Info Object
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| title | [string](#string) |  | Human-friendly display title for the schema. OAS: info.title |
+| title | [string](#string) |  | Human-friendly display name (e.g. &#34;Payment Configuration&#34;). Unlike Schema.name (a machine slug), this is for UI and documentation. OAS: info.title |
 | author | [string](#string) |  | Schema owner identifier (person, team, or service). |
 | contact | [SchemaContact](#centralconfig-v1-SchemaContact) |  | Contact information for the schema owner. OAS: info.contact |
 | labels | [SchemaInfo.LabelsEntry](#centralconfig-v1-SchemaInfo-LabelsEntry) | repeated | Key-value labels for filtering and categorization. |

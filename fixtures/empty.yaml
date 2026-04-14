@@ -1,0 +1,37 @@
+# Empty fixture — schema and tenant with no config values.
+#
+# Scenario: a published schema with fields, a tenant created,
+# but zero config values set. Tests the blank-slate state where
+# every field shows its default or null.
+#
+# Load: decree seed fixtures/empty.yaml
+
+syntax: v1
+
+schema:
+  name: blank
+  description: Schema with no config values set
+  fields:
+    name:
+      type: string
+      title: Display Name
+      default: "Unnamed"
+    retries:
+      type: integer
+      title: Retries
+      default: "3"
+      constraints:
+        minimum: 0
+        maximum: 10
+    enabled:
+      type: bool
+      title: Enabled
+      default: "false"
+    notes:
+      type: string
+      title: Notes
+      nullable: true
+      description: Optional free-text notes.
+
+tenant:
+  name: blank-tenant

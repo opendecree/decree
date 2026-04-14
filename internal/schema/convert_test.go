@@ -48,6 +48,51 @@ func TestDomainFieldTypeToProto_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestFieldToProto_EnrichmentAttributes_RoundTrip(t *testing.T) {
+	// BUG: domain.SchemaField has no fields for tags, title, format, example,
+	// read_only, write_once, or sensitive. fieldToProto can never return them,
+	// so any enrichment attributes set on the proto are silently dropped after
+	// a round-trip through storage.
+	//
+	// This test documents the bug: it will pass once domain.SchemaField and
+	// fieldToProto are updated to carry these attributes.
+
+	desc := "Fee percentage"
+	title := "Fee Rate"
+	example := "0.15"
+	format := "percentage"
+
+	domainField := domain.SchemaField{
+		ID:          "field-1",
+		Path:        "payments.fee_rate",
+		FieldType:   domain.FieldTypeNumber,
+		Description: &desc,
+		Title:       &title,
+		Example:     &example,
+		Format:      &format,
+		Tags:        []string{"billing", "critical"},
+		ReadOnly:    true,
+		WriteOnce:   true,
+		Sensitive:   true,
+	}
+
+	got := fieldToProto(domainField)
+
+	// These pass today — original attributes survive.
+	assert.Equal(t, "payments.fee_rate", got.Path)
+	assert.Equal(t, pb.FieldType_FIELD_TYPE_NUMBER, got.Type)
+	assert.Equal(t, &desc, got.Description)
+
+	// These fail today — enrichment attributes are not carried by domain.SchemaField.
+	assert.Equal(t, &title, got.Title, "title should survive round-trip")
+	assert.Equal(t, &example, got.Example, "example should survive round-trip")
+	assert.Equal(t, &format, got.Format, "format should survive round-trip")
+	assert.Equal(t, []string{"billing", "critical"}, got.Tags, "tags should survive round-trip")
+	assert.True(t, got.ReadOnly, "read_only should survive round-trip")
+	assert.True(t, got.WriteOnce, "write_once should survive round-trip")
+	assert.True(t, got.Sensitive, "sensitive should survive round-trip")
+}
+
 func TestPtrString(t *testing.T) {
 	assert.Nil(t, ptrString(""))
 	s := ptrString("hello")

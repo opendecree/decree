@@ -1,0 +1,31 @@
+# Minimal fixture — the simplest possible setup.
+#
+# Scenario: one schema with 2 fields, one tenant, basic config values.
+# Use this for quick smoke tests or getting started.
+#
+# Load: decree seed fixtures/minimal.yaml
+
+syntax: v1
+
+schema:
+  name: simple
+  fields:
+    message:
+      type: string
+      title: Welcome Message
+      description: Displayed on the homepage.
+    enabled:
+      type: bool
+      title: Feature Enabled
+      description: Master switch for the feature.
+
+tenant:
+  name: default
+
+config:
+  description: Initial values
+  values:
+    message:
+      value: "Hello, world!"
+    enabled:
+      value: true

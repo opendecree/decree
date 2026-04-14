@@ -42,6 +42,10 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=main
+            COMMIT=${{ github.sha }}
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:main
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}

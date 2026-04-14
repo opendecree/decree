@@ -11,9 +11,21 @@ SELECT * FROM tenants
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListTenantsByIDs :many
+SELECT * FROM tenants
+WHERE id = ANY(@allowed_ids::uuid[])
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
 -- name: ListTenantsBySchema :many
 SELECT * FROM tenants
 WHERE schema_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: ListTenantsBySchemaAndIDs :many
+SELECT * FROM tenants
+WHERE schema_id = $1 AND id = ANY(@allowed_ids::uuid[])
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 

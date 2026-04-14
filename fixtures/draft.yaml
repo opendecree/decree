@@ -1,0 +1,33 @@
+# Draft fixture — unpublished schema, no tenant.
+#
+# Scenario: a schema that has been created but NOT published.
+# No tenant can be created until the schema is published.
+# Tests the draft state in the UI (publish button, no tenants).
+#
+# Note: decree seed will create the schema but skip tenant creation
+# since the schema is not published.
+#
+# Load: decree seed fixtures/draft.yaml
+
+syntax: v1
+
+schema:
+  name: draft-schema
+  description: Work in progress — not yet published
+  fields:
+    feature.name:
+      type: string
+      title: Feature Name
+    feature.enabled:
+      type: bool
+      title: Feature Toggle
+    feature.rollout_pct:
+      type: number
+      title: Rollout Percentage
+      description: Percentage of users who see this feature (0-100).
+      constraints:
+        minimum: 0
+        maximum: 100
+
+tenant:
+  name: placeholder

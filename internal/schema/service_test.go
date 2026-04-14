@@ -217,6 +217,75 @@ func TestCreateTenant_Success(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
+// --- Field enrichment round-trip ---
+
+func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
+	// BUG: tags and other enrichment attributes (title, format, example,
+	// read_only, write_once, sensitive) are accepted by CreateSchema but
+	// silently dropped because CreateSchemaFieldParams and domain.SchemaField
+	// have no fields for them. After a round-trip (Create → Get), they're gone.
+	//
+	// This test will pass once the full chain is fixed:
+	// CreateSchemaFieldParams → domain.SchemaField → DB → fieldToProto.
+
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+	ctx := context.Background()
+
+	title := "Fee Rate"
+	format := "percentage"
+	desc := "Fee percentage"
+
+	inputField := &pb.SchemaField{
+		Path:        "payments.fee_rate",
+		Type:        pb.FieldType_FIELD_TYPE_NUMBER,
+		Description: &desc,
+		Title:       &title,
+		Format:      &format,
+		Tags:        []string{"billing", "critical"},
+		ReadOnly:    true,
+		Sensitive:   true,
+	}
+
+	// --- Create: verify the store receives enrichment attributes ---
+	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
+		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
+	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
+		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
+	store.On("CreateSchemaField", ctx, mock.MatchedBy(func(p CreateSchemaFieldParams) bool {
+		return p.Path == "payments.fee_rate"
+	})).Return(domain.SchemaField{
+		Path:        "payments.fee_rate",
+		FieldType:   "number",
+		Description: &desc,
+		Title:       &title,
+		Format:      &format,
+		Tags:        []string{"billing", "critical"},
+		ReadOnly:    true,
+		Sensitive:   true,
+	}, nil)
+
+	resp, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{
+		Name:   "test-schema",
+		Fields: []*pb.SchemaField{inputField},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Schema.Fields, 1)
+
+	got := resp.Schema.Fields[0]
+
+	// These pass today.
+	assert.Equal(t, "payments.fee_rate", got.Path)
+	assert.Equal(t, &desc, got.Description)
+
+	// These fail today — enrichment attributes lost in round-trip.
+	assert.Equal(t, &title, got.Title, "title lost in round-trip")
+	assert.Equal(t, &format, got.Format, "format lost in round-trip")
+	assert.Equal(t, []string{"billing", "critical"}, got.Tags, "tags lost in round-trip")
+	assert.True(t, got.ReadOnly, "read_only lost in round-trip")
+	assert.True(t, got.Sensitive, "sensitive lost in round-trip")
+}
+
 // --- helpers ---
 
 func ptrInt32(v int32) *int32 {

@@ -177,6 +177,46 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 	return items, nil
 }
 
+const listTenantsByIDs = `-- name: ListTenantsByIDs :many
+SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
+WHERE id = ANY($3::uuid[])
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListTenantsByIDsParams struct {
+	Limit      int32         `json:"limit"`
+	Offset     int32         `json:"offset"`
+	AllowedIds []pgtype.UUID `json:"allowed_ids"`
+}
+
+func (q *Queries) ListTenantsByIDs(ctx context.Context, arg ListTenantsByIDsParams) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listTenantsByIDs, arg.Limit, arg.Offset, arg.AllowedIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Tenant{}
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SchemaID,
+			&i.SchemaVersion,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenantsBySchema = `-- name: ListTenantsBySchema :many
 SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
 WHERE schema_id = $1
@@ -192,6 +232,52 @@ type ListTenantsBySchemaParams struct {
 
 func (q *Queries) ListTenantsBySchema(ctx context.Context, arg ListTenantsBySchemaParams) ([]Tenant, error) {
 	rows, err := q.db.Query(ctx, listTenantsBySchema, arg.SchemaID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Tenant{}
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SchemaID,
+			&i.SchemaVersion,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTenantsBySchemaAndIDs = `-- name: ListTenantsBySchemaAndIDs :many
+SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
+WHERE schema_id = $1 AND id = ANY($4::uuid[])
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListTenantsBySchemaAndIDsParams struct {
+	SchemaID   pgtype.UUID   `json:"schema_id"`
+	Limit      int32         `json:"limit"`
+	Offset     int32         `json:"offset"`
+	AllowedIds []pgtype.UUID `json:"allowed_ids"`
+}
+
+func (q *Queries) ListTenantsBySchemaAndIDs(ctx context.Context, arg ListTenantsBySchemaAndIDsParams) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listTenantsBySchemaAndIDs,
+		arg.SchemaID,
+		arg.Limit,
+		arg.Offset,
+		arg.AllowedIds,
+	)
 	if err != nil {
 		return nil, err
 	}

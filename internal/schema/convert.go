@@ -48,6 +48,10 @@ func fieldToProto(f domain.SchemaField) *pb.SchemaField {
 		Type:       f.FieldType.ToProto(),
 		Nullable:   f.Nullable,
 		Deprecated: f.Deprecated,
+		Tags:       f.Tags,
+		ReadOnly:   f.ReadOnly,
+		WriteOnce:  f.WriteOnce,
+		Sensitive:  f.Sensitive,
 	}
 
 	if f.Constraints != nil {
@@ -64,6 +68,27 @@ func fieldToProto(f domain.SchemaField) *pb.SchemaField {
 	}
 	if f.Description != nil {
 		result.Description = f.Description
+	}
+	if f.Title != nil {
+		result.Title = f.Title
+	}
+	if f.Example != nil {
+		result.Example = f.Example
+	}
+	if f.Format != nil {
+		result.Format = f.Format
+	}
+	if f.Examples != nil {
+		var examples map[string]*pb.FieldExample
+		if err := json.Unmarshal(f.Examples, &examples); err == nil {
+			result.Examples = examples
+		}
+	}
+	if f.ExternalDocs != nil {
+		var docs pb.ExternalDocs
+		if err := json.Unmarshal(f.ExternalDocs, &docs); err == nil {
+			result.ExternalDocs = &docs
+		}
 	}
 	return result
 }

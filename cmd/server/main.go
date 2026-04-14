@@ -88,7 +88,7 @@ func run() int {
 		configStore = memConfig
 		schemaStoreVal = memSchema
 		auditStoreVal = audit.NewMemoryStore()
-		configCache = cache.NewMemoryCache()
+		configCache = cache.NewMemoryCache(0)
 		memPubSub := pubsub.NewMemoryPubSub()
 		publisher = memPubSub
 		subscriber = memPubSub

@@ -17,14 +17,15 @@ The tenant name is a unique slug (lowercase alphanumeric + hyphens, 1-63 charact
 
 Every tenant is pinned to a **published schema version**. The schema defines which fields exist, their types, and their constraints. You cannot assign an unpublished (draft) schema version to a tenant.
 
-```
-Schema "payments" v1 (published)
-  ├── Tenant "acme-prod"     (pinned to v1)
-  ├── Tenant "acme-staging"  (pinned to v1)
-  └── Tenant "globex-prod"   (pinned to v1)
-
-Schema "payments" v2 (published)
-  └── Tenant "acme-dev"      (pinned to v2)
+```mermaid
+graph TD
+    S[/"Schema: payments"/]
+    S --> V1{{"v1 (published)"}}
+    S --> V2{{"v2 (published)"}}
+    V1 --> T1["acme-prod"]
+    V1 --> T2["acme-staging"]
+    V1 --> T3["globex-prod"]
+    V2 --> T4["acme-dev"]
 ```
 
 Multiple tenants can share the same schema version. Each tenant's config values are independent -- changing config for `acme-prod` has no effect on `globex-prod`.
@@ -84,10 +85,19 @@ decree tenant create --name acme --schema <schema-id> --schema-version 1
 
 The schema ID and version must reference an existing, published schema version. The server returns the tenant ID (a UUID) which you use for all subsequent config operations.
 
+## Multi-Tenant Access Control
+
+Access to tenants is controlled via JWT claims or metadata headers. Each caller has a `tenant_ids` list that restricts which tenants they can access:
+
+- **Superadmins** see all tenants and can perform any operation.
+- **Non-superadmins** can only list, read, and modify tenants in their `tenant_ids` claim. Attempting to access a tenant outside this list returns `PermissionDenied`.
+
+Tenant filtering is pushed into the database query layer, so pagination works correctly regardless of role. See [Auth](auth.md) for details.
+
 ## Listing and Inspecting Tenants
 
 ```bash
-# List all tenants
+# List all tenants (superadmin sees all, others see their allowed tenants)
 decree tenant list
 
 # Get details for a specific tenant

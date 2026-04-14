@@ -419,5 +419,87 @@ func TestMemoryStore_DeleteSchemaCascade(t *testing.T) {
 	assert.Empty(t, locks)
 }
 
+func TestMemoryStore_ListTenants_FilteredByAllowedIDs(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "filter-test"})
+	require.NoError(t, err)
+
+	// Create 3 tenants.
+	t1, err := store.CreateTenant(ctx, CreateTenantParams{Name: "alpha", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	t2, err := store.CreateTenant(ctx, CreateTenantParams{Name: "beta", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	_, err = store.CreateTenant(ctx, CreateTenantParams{Name: "gamma", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+
+	// nil AllowedTenantIDs → all tenants (superadmin).
+	all, err := store.ListTenants(ctx, ListTenantsParams{Limit: 10, AllowedTenantIDs: nil})
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+
+	// Filter to specific IDs.
+	filtered, err := store.ListTenants(ctx, ListTenantsParams{
+		Limit:            10,
+		AllowedTenantIDs: []string{t1.ID, t2.ID},
+	})
+	require.NoError(t, err)
+	assert.Len(t, filtered, 2)
+	ids := []string{filtered[0].ID, filtered[1].ID}
+	assert.Contains(t, ids, t1.ID)
+	assert.Contains(t, ids, t2.ID)
+
+	// Empty AllowedTenantIDs → no tenants.
+	empty, err := store.ListTenants(ctx, ListTenantsParams{
+		Limit:            10,
+		AllowedTenantIDs: []string{},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
+	// Pagination works with filtering.
+	paged, err := store.ListTenants(ctx, ListTenantsParams{
+		Limit:            1,
+		AllowedTenantIDs: []string{t1.ID, t2.ID},
+	})
+	require.NoError(t, err)
+	assert.Len(t, paged, 1)
+}
+
+func TestMemoryStore_ListTenantsBySchema_FilteredByAllowedIDs(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s1, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "schema-a"})
+	require.NoError(t, err)
+	s2, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "schema-b"})
+	require.NoError(t, err)
+
+	t1, err := store.CreateTenant(ctx, CreateTenantParams{Name: "a1", SchemaID: s1.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	_, err = store.CreateTenant(ctx, CreateTenantParams{Name: "a2", SchemaID: s1.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	t3, err := store.CreateTenant(ctx, CreateTenantParams{Name: "b1", SchemaID: s2.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+
+	// Filter by schema + allowed IDs.
+	filtered, err := store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{
+		SchemaID:         s1.ID,
+		Limit:            10,
+		AllowedTenantIDs: []string{t1.ID, t3.ID}, // t3 is in schema-b, should not appear
+	})
+	require.NoError(t, err)
+	assert.Len(t, filtered, 1)
+	assert.Equal(t, t1.ID, filtered[0].ID)
+
+	// nil AllowedTenantIDs → all tenants in schema.
+	all, err := store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{
+		SchemaID: s1.ID, Limit: 10, AllowedTenantIDs: nil,
+	})
+	require.NoError(t, err)
+	assert.Len(t, all, 2)
+}
+
 // Verify MemoryStore implements Store at compile time.
 var _ Store = (*MemoryStore)(nil)

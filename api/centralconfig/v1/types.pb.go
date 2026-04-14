@@ -541,10 +541,14 @@ func (x *ExternalDocs) GetUrl() string {
 }
 
 // SchemaInfo contains optional metadata about a schema's ownership and context.
+// Optional organizational metadata for a schema.
+// Schema.description lives on Schema itself (not here) because it's a
+// first-class field used in every listing, while these are optional extras.
 // OAS: Info Object
 type SchemaInfo struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Human-friendly display title for the schema.
+	// Human-friendly display name (e.g. "Payment Configuration").
+	// Unlike Schema.name (a machine slug), this is for UI and documentation.
 	// OAS: info.title
 	Title string `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
 	// Schema owner identifier (person, team, or service).
@@ -688,8 +692,9 @@ type Schema struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Server-assigned unique identifier (UUID).
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Unique name for this schema. Must be a valid slug: lowercase alphanumeric
-	// characters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?.
+	// Machine identifier for this schema, used in API calls, URLs, and code.
+	// Must be a unique slug: lowercase alphanumeric and hyphens, 1-63 characters,
+	// matching [a-z0-9]([a-z0-9-]*[a-z0-9])?. See info.title for a display name.
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// Human-readable description of the schema's purpose.
 	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`

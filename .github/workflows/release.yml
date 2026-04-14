@@ -91,27 +91,47 @@ jobs:
       - name: Build release body
         id: body
         run: |
-          BODY=""
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
 
-          if [ "${{ steps.proto.outputs.found }}" = "true" ]; then
-            BODY="${BODY}## Proto Breaking Changes\n\n\`\`\`\n${{ steps.proto.outputs.details }}\n\`\`\`\n\n"
-          fi
+          {
+            if [ "${{ steps.proto.outputs.found }}" = "true" ]; then
+              echo "## Proto Breaking Changes"
+              echo ""
+              echo '```'
+              echo "${{ steps.proto.outputs.details }}"
+              echo '```'
+              echo ""
+            fi
 
-          if [ "${{ steps.sdk.outputs.found }}" = "true" ]; then
-            BODY="${BODY}## SDK API Changes\n\n${{ steps.sdk.outputs.details }}\n\n"
-          fi
+            if [ "${{ steps.sdk.outputs.found }}" = "true" ]; then
+              echo "## SDK API Changes"
+              echo ""
+              echo "${{ steps.sdk.outputs.details }}"
+              echo ""
+            fi
 
-          BODY="${BODY}## Install\n\n"
-          BODY="${BODY}\`\`\`bash\n"
-          BODY="${BODY}# CLI\ngo install github.com/opendecree/decree/cmd/decree@${GITHUB_REF_NAME}\n\n"
-          BODY="${BODY}# SDK\ngo get github.com/opendecree/decree/sdk/configclient@${GITHUB_REF_NAME}\n"
-          BODY="${BODY}go get github.com/opendecree/decree/sdk/adminclient@${GITHUB_REF_NAME}\n\n"
-          BODY="${BODY}# Docker\ndocker pull ghcr.io/opendecree/decree:\${GITHUB_REF_NAME#v}\n"
-          BODY="${BODY}\`\`\`\n"
+            cat <<INSTALL
+          ## Install
+
+          \`\`\`bash
+          # CLI
+          go install github.com/opendecree/decree/cmd/decree@${TAG}
+
+          # SDK
+          go get github.com/opendecree/decree/sdk/configclient@${TAG}
+          go get github.com/opendecree/decree/sdk/adminclient@${TAG}
+
+          # Docker
+          docker pull ghcr.io/opendecree/decree:${VERSION}
+          docker pull ghcr.io/opendecree/decree-cli:${VERSION}
+          \`\`\`
+          INSTALL
+          } > /tmp/release-body.md
 
           EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
           echo "content<<${EOF_MARKER}" >> $GITHUB_OUTPUT
-          echo -e "$BODY" >> $GITHUB_OUTPUT
+          cat /tmp/release-body.md >> $GITHUB_OUTPUT
           echo "${EOF_MARKER}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
@@ -197,6 +217,10 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:latest

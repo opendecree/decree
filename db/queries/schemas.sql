@@ -38,8 +38,12 @@ WHERE schema_id = $1 AND version = $2
 RETURNING *;
 
 -- name: CreateSchemaField :one
-INSERT INTO schema_fields (schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO schema_fields (
+    schema_version_id, path, field_type, constraints, nullable, deprecated,
+    redirect_to, default_value, description, title, example, examples,
+    external_docs, tags, format, read_only, write_once, sensitive
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 RETURNING *;
 
 -- name: GetSchemaFields :many

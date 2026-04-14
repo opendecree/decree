@@ -134,13 +134,13 @@ jobs:
           docker tag "${{ needs.tools.outputs.image }}" decree-tools
           touch .tools-image-built
 
-      - name: Regenerate docs
-        run: make docs
+      - name: Regenerate docs and OpenAPI spec
+        run: make generate docs
 
       - name: Check docs are up-to-date
         run: |
           if ! git diff --exit-code docs/ cmd/server/openapi.json; then
-            echo "::error::Generated docs or OpenAPI spec are out of date. Run 'make docs' and commit."
+            echo "::error::Generated docs or OpenAPI spec are out of date. Run 'make generate docs' and commit."
             exit 1
           fi
 

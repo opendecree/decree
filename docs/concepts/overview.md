@@ -6,9 +6,11 @@ OpenDecree manages **business-oriented configuration** for multi-tenant services
 
 OpenDecree follows a four-step flow:
 
-```
-Schema  -->  Tenant  -->  Config  -->  Subscribe
-(define)    (assign)     (write)      (consume)
+```mermaid
+flowchart LR
+    S[Schema\ndefine fields, types, constraints] --> T[Tenant\nassign to published version]
+    T --> C[Config\nwrite typed values]
+    C --> Sub[Subscribe\nconsume via reads or streaming]
 ```
 
 1. **Schema** -- define what fields exist, their types, and constraints. Schemas are versioned and immutable once published.
@@ -44,13 +46,40 @@ OpenDecree occupies the space between infrastructure config and application logi
 
 OpenDecree is a single Go binary exposing three gRPC services:
 
+```mermaid
+flowchart LR
+    Client[Client\ngRPC / REST] -->|JWT or\nmetadata| GW[Gateway]
+
+    subgraph Services
+        SS[SchemaService\nschemas, tenants]
+        CS[ConfigService\nread, write, subscribe]
+        AS[AuditService\nhistory, usage]
+    end
+
+    GW --> SS
+    GW --> CS
+    GW --> AS
+
+    subgraph Backends
+        DB[(Storage)]
+        Cache[(Cache)]
+        PS[(Pub/Sub)]
+    end
+
+    SS --> DB
+    CS --> DB
+    AS --> DB
+    CS --> Cache
+    CS <-->|change\nevents| PS
+```
+
 | Service | Purpose |
 |---------|---------|
 | **SchemaService** | Define and version configuration schemas, manage tenants |
 | **ConfigService** | Read, write, and subscribe to typed config values |
 | **AuditService** | Query change history and usage statistics |
 
-PostgreSQL stores schemas, config values, and audit entries. Redis provides caching and real-time change propagation via pub/sub. Services can be selectively enabled via `ENABLE_SERVICES` for deployment flexibility.
+The storage layer persists schemas, config values, and audit entries. A cache and pub/sub layer provides config caching and real-time change propagation. Both are behind Go interfaces — the default implementation uses PostgreSQL and Redis, but backends are pluggable. Authentication supports JWT (JWKS validation) or metadata headers, with multi-tenant access control. Services can be selectively enabled via `ENABLE_SERVICES` for deployment flexibility.
 
 ## Core Concepts
 

@@ -221,6 +221,15 @@ func (m *MemoryStore) CreateSchemaField(_ context.Context, arg CreateSchemaField
 		RedirectTo:      arg.RedirectTo,
 		DefaultValue:    arg.DefaultValue,
 		Description:     arg.Description,
+		Title:           arg.Title,
+		Example:         arg.Example,
+		Examples:        arg.Examples,
+		ExternalDocs:    arg.ExternalDocs,
+		Tags:            arg.Tags,
+		Format:          arg.Format,
+		ReadOnly:        arg.ReadOnly,
+		WriteOnce:       arg.WriteOnce,
+		Sensitive:       arg.Sensitive,
 	}
 	m.schemaFields[arg.SchemaVersionID] = append(m.schemaFields[arg.SchemaVersionID], f)
 	return f, nil
@@ -290,6 +299,9 @@ func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]d
 
 	all := make([]domain.Tenant, 0, len(m.tenants))
 	for _, t := range m.tenants {
+		if arg.AllowedTenantIDs != nil && !containsStr(arg.AllowedTenantIDs, t.ID) {
+			continue
+		}
 		all = append(all, t)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
@@ -303,9 +315,13 @@ func (m *MemoryStore) ListTenantsBySchema(_ context.Context, arg ListTenantsBySc
 
 	var filtered []domain.Tenant
 	for _, t := range m.tenants {
-		if t.SchemaID == arg.SchemaID {
-			filtered = append(filtered, t)
+		if t.SchemaID != arg.SchemaID {
+			continue
 		}
+		if arg.AllowedTenantIDs != nil && !containsStr(arg.AllowedTenantIDs, t.ID) {
+			continue
+		}
+		filtered = append(filtered, t)
 	}
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID < filtered[j].ID })
 

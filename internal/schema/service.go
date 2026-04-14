@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
@@ -21,6 +22,15 @@ var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4
 // validUUID checks whether s is a valid UUID string.
 func validUUID(s string) bool {
 	return uuidRe.MatchString(s)
+}
+
+func containsStr(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // Service implements the SchemaService gRPC server.
@@ -323,6 +333,9 @@ func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.
 	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
+		return nil, err
+	}
 
 	tenant, err := s.store.GetTenantByID(ctx, req.Id)
 	if err != nil {
@@ -343,6 +356,9 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 		pageSize = 50
 	}
 
+	// Push tenant access filtering into the store so pagination is correct.
+	allowedIDs := auth.AllowedTenantIDs(ctx)
+
 	var tenants []domain.Tenant
 	var err error
 
@@ -351,14 +367,16 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 			return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 		}
 		tenants, err = s.store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{
-			SchemaID: *req.SchemaId,
-			Limit:    pageSize,
-			Offset:   0,
+			SchemaID:         *req.SchemaId,
+			Limit:            pageSize,
+			Offset:           0,
+			AllowedTenantIDs: allowedIDs,
 		})
 	} else {
 		tenants, err = s.store.ListTenants(ctx, ListTenantsParams{
-			Limit:  pageSize,
-			Offset: 0,
+			Limit:            pageSize,
+			Offset:           0,
+			AllowedTenantIDs: allowedIDs,
 		})
 	}
 	if err != nil {
@@ -378,6 +396,9 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
 	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
+		return nil, err
 	}
 
 	var tenant domain.Tenant
@@ -437,6 +458,9 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
 	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
+		return nil, err
 	}
 
 	if err := s.store.DeleteTenant(ctx, req.Id); err != nil {
@@ -659,6 +683,14 @@ func (s *Service) createFields(ctx context.Context, versionID string, fields []*
 		if f.Constraints != nil {
 			constraints, _ = json.Marshal(f.Constraints)
 		}
+		var examples []byte
+		if len(f.Examples) > 0 {
+			examples, _ = json.Marshal(f.Examples)
+		}
+		var externalDocs []byte
+		if f.ExternalDocs != nil {
+			externalDocs, _ = json.Marshal(f.ExternalDocs)
+		}
 
 		dbField, err := s.store.CreateSchemaField(ctx, CreateSchemaFieldParams{
 			SchemaVersionID: versionID,
@@ -670,6 +702,15 @@ func (s *Service) createFields(ctx context.Context, versionID string, fields []*
 			RedirectTo:      f.RedirectTo,
 			DefaultValue:    f.DefaultValue,
 			Description:     f.Description,
+			Title:           f.Title,
+			Example:         f.Example,
+			Examples:        examples,
+			ExternalDocs:    externalDocs,
+			Tags:            f.Tags,
+			Format:          f.Format,
+			ReadOnly:        f.ReadOnly,
+			WriteOnce:       f.WriteOnce,
+			Sensitive:       f.Sensitive,
 		})
 		if err != nil {
 			s.logger.ErrorContext(ctx, "create schema field", "path", f.Path, "error", err)

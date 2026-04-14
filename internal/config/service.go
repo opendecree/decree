@@ -57,6 +57,9 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
+	}
 
 	// Resolve version.
 	version, err := s.resolveVersion(ctx, tenantID, req.Version)
@@ -127,6 +130,9 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
+	}
 
 	version, err := s.resolveVersion(ctx, tenantID, req.Version)
 	if err != nil {
@@ -162,6 +168,9 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	version, err := s.resolveVersion(ctx, tenantID, req.Version)
@@ -203,6 +212,9 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	actor := s.getActor(ctx)
@@ -282,6 +294,9 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	actor := s.getActor(ctx)
@@ -388,6 +403,9 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
+	}
 
 	pageSize := req.PageSize
 	if pageSize <= 0 || pageSize > 100 {
@@ -416,6 +434,9 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
+	}
 
 	version, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{
 		TenantID: tenantID,
@@ -435,6 +456,9 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	actor := s.getActor(ctx)
@@ -522,6 +546,9 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 	if tenantID == "" {
 		return status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return err
+	}
 
 	events, cancel, err := s.subscriber.Subscribe(ctx, req.TenantId)
 	if err != nil {
@@ -574,6 +601,9 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	version, err := s.resolveVersion(ctx, tenantID, req.Version)
@@ -630,6 +660,9 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	tenantID := req.TenantId
 	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
 	}
 
 	doc, err := unmarshalConfigYAML(req.YamlContent)

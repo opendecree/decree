@@ -12,8 +12,12 @@ COPY sdk/tools/go.mod sdk/tools/go.sum ./sdk/tools/
 RUN cd cmd/decree && go mod download
 
 # Build — this layer rebuilds on any source change, but deps are cached.
+ARG VERSION=dev
+ARG COMMIT=unknown
 COPY . .
-RUN cd cmd/decree && CGO_ENABLED=0 go build -o /bin/decree .
+RUN cd cmd/decree && CGO_ENABLED=0 go build \
+    -ldflags "-s -w -X main.cliVersion=${VERSION} -X main.cliCommit=${COMMIT}" \
+    -o /bin/decree .
 
 # Runtime stage
 FROM gcr.io/distroless/static-debian12:nonroot

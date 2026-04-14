@@ -1,0 +1,174 @@
+# Showcase fixture — demonstrates all field types and metadata.
+#
+# Scenario: a schema with all 8 field types, full metadata on every field
+# (title, description, examples, format, externalDocs, tags, flags),
+# including a deprecated field with redirect. Config values set for each.
+#
+# Use this to verify the UI renders every field type and metadata variant
+# correctly. Fields are tagged for grouping.
+#
+# Field types covered:
+#   string, integer, number, bool, duration, time, url, json
+#
+# Metadata covered:
+#   title, description, example, examples, format, externalDocs,
+#   tags, readOnly, writeOnce, sensitive, deprecated + redirectTo
+#
+# Paths vs tags:
+#   Path prefixes give structural hierarchy (e.g. payments.*, settlement.*).
+#   Tags give cross-cutting categories (e.g. [payments], [integrations]).
+#   These are independent — a field's tag does NOT have to match its path
+#   prefix. For example, api.webhook_url is tagged [integrations], not [api].
+#   This fixture mostly aligns them for simplicity, but real schemas often
+#   tag fields across multiple path groups.
+#
+# Load: decree seed fixtures/showcase.yaml
+
+syntax: v1
+
+schema:
+  name: showcase
+  description: Schema demonstrating all field types and metadata
+  info:
+    title: OpenDecree Showcase
+    author: docs-team
+    contact:
+      name: Documentation Team
+      email: docs@example.com
+      url: https://docs.example.com
+    labels:
+      purpose: demo
+      stability: experimental
+  fields:
+    app.name:
+      type: string
+      title: Application Name
+      description: The display name shown in the UI header and emails.
+      example: "MyApp Production"
+      default: "MyApp"
+      format: display-name
+      tags: [general]
+      constraints:
+        minLength: 1
+        maxLength: 100
+    app.version:
+      type: string
+      title: App Version
+      description: Semantic version of the deployed application. Used for feature gating.
+      example: "2.1.0"
+      format: semver
+      tags: [general]
+      readOnly: true
+      constraints:
+        pattern: "^\\d+\\.\\d+\\.\\d+$"
+    payments.retries:
+      type: integer
+      title: Payment Retries
+      description: Number of times to retry a failed payment before giving up.
+      example: "3"
+      default: "3"
+      tags: [payments]
+      constraints:
+        minimum: 0
+        maximum: 10
+    payments.fee_rate:
+      type: number
+      title: Fee Rate
+      description: Transaction fee as a percentage applied to all outbound transfers.
+      example: "2.5"
+      default: "1.0"
+      format: percentage
+      tags: [payments]
+      constraints:
+        minimum: 0
+        maximum: 100
+    payments.enabled:
+      type: bool
+      title: Payments Enabled
+      description: Master switch for the payment processing module. When disabled, all payment endpoints return 503.
+      default: "true"
+      tags: [payments]
+    payments.currency:
+      type: string
+      title: Default Currency
+      description: ISO 4217 currency code for all transactions.
+      example: "USD"
+      writeOnce: true
+      tags: [payments]
+      constraints:
+        enum: [USD, EUR, GBP, JPY, CHF]
+    settlement.window:
+      type: duration
+      title: Settlement Window
+      description: Time window after a transaction before settlement is finalized. Shorter windows mean faster payouts but less time for dispute resolution.
+      nullable: true
+      example: "24h"
+      default: "48h"
+      tags: [settlement]
+      constraints:
+        minimum: 3600
+        maximum: 2592000
+    settlement.cutoff_time:
+      type: time
+      title: Daily Cutoff Time
+      description: Transactions after this time are settled in the next batch.
+      nullable: true
+      example: "2025-01-15T17:00:00Z"
+      tags: [settlement]
+    api.webhook_url:
+      type: url
+      title: Webhook URL
+      description: URL to receive POST notifications for payment events. Must be HTTPS in production.
+      nullable: true
+      example: "https://example.com/webhooks/payments"
+      tags: [integrations]
+      externalDocs:
+        description: Webhook Integration Guide
+        url: https://docs.example.com/webhooks
+    api.rate_limits:
+      type: json
+      title: Rate Limits
+      description: JSON object defining per-endpoint rate limits. Keys are endpoint paths, values are requests per minute.
+      nullable: true
+      sensitive: true
+      example: '{"payments": 100, "refunds": 20}'
+      tags: [integrations]
+      constraints:
+        json_schema: '{"type":"object","additionalProperties":{"type":"integer","minimum":1}}'
+      examples:
+        basic:
+          value: '{"payments": 100}'
+          summary: Default rate limits
+        strict:
+          value: '{"payments": 10, "refunds": 5}'
+          summary: Strict limits for trial accounts
+    legacy.old_fee:
+      type: number
+      title: Old Fee Rate
+      description: "Deprecated: use payments.fee_rate instead."
+      nullable: true
+      deprecated: true
+      redirect_to: payments.fee_rate
+
+tenant:
+  name: demo
+
+config:
+  description: Demo values for showcase
+  values:
+    app.name:
+      value: "OpenDecree Demo"
+    app.version:
+      value: "0.3.1"
+    payments.retries:
+      value: 3
+    payments.fee_rate:
+      value: 2.5
+    payments.enabled:
+      value: true
+    payments.currency:
+      value: USD
+    settlement.window:
+      value: "24h"
+    api.webhook_url:
+      value: "https://example.com/webhooks/payments"

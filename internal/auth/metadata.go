@@ -69,15 +69,25 @@ func (m *MetadataInterceptor) extractClaims(ctx context.Context) (context.Contex
 		return nil, status.Errorf(codes.PermissionDenied, "unknown role: %s", role)
 	}
 
-	tenantID := firstMetadataValue(md, headerTenantID)
-	if role != RoleSuperAdmin && tenantID == "" {
+	// Parse tenant IDs — comma-separated in x-tenant-id header.
+	var tenantIDs []string
+	rawTenantID := firstMetadataValue(md, headerTenantID)
+	if rawTenantID != "" {
+		for _, id := range strings.Split(rawTenantID, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				tenantIDs = append(tenantIDs, id)
+			}
+		}
+	}
+	if role != RoleSuperAdmin && len(tenantIDs) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "x-tenant-id required for non-superadmin")
 	}
 
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{Subject: subject},
 		Role:             role,
-		TenantID:         tenantID,
+		TenantIDs:        tenantIDs,
 	}
 
 	return context.WithValue(ctx, claimsContextKey{}, claims), nil

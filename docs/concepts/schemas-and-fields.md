@@ -4,8 +4,14 @@ A **schema** defines the structure of a configuration — what fields exist, the
 
 ## Schema Lifecycle
 
-```
-Create (draft v1) → Update (draft v2, v3...) → Publish (immutable) → Assign to tenant
+```mermaid
+stateDiagram-v2
+    [*] --> Draft: Create schema
+    Draft --> Draft: Update fields
+    Draft --> Published: Publish version
+    Published --> Assigned: Assign to tenant
+    note right of Published: Immutable — fields\ncannot be changed
+    note right of Draft: New version created\non each update
 ```
 
 1. **Create** — define fields, types, and constraints. Creates version 1 as a draft.
@@ -73,6 +79,26 @@ fields:
     type: string
     deprecated: true
     redirect_to: payments.fee_rate
+
+  payments.currency:
+    type: string
+    description: Default settlement currency
+    writeOnce: true
+    tags: [compliance]
+    constraints:
+      enum: [USD, EUR, GBP]
+
+  api.webhook:
+    type: url
+    title: Payment Webhook
+    description: Webhook endpoint for payment events
+    nullable: true
+    tags: [integrations]
+    example: "https://example.com/webhooks/payments"
+    sensitive: true
+    externalDocs:
+      description: Webhook Integration Guide
+      url: https://docs.example.com/webhooks
 ```
 
 A [JSON Schema](../../schemas/schema-yaml.json) is available for editor validation and autocomplete.
@@ -163,6 +189,57 @@ constraints:
 | `redirect_to` | string | — | When deprecated, reads can be redirected to this field path. |
 | `default` | string | — | Default value for the field (encoded as string). |
 | `description` | string | — | Human-readable description of the field's purpose. |
+| `title` | string | — | Human-friendly display name (e.g. `"Fee Rate"` for path `payments.fee_rate`). |
+| `example` | string | — | Single example value, encoded as string. |
+| `examples` | map | — | Named examples with optional summary. See below. |
+| `format` | string | — | Semantic format hint (e.g. `"email"`, `"semver"`, `"percentage"`). Informational only — not enforced. |
+| `tags` | list | — | Tags for grouping and categorization. See [Tags](#tags). |
+| `readOnly` | bool | `false` | Whether the field is system-managed and not user-editable. |
+| `writeOnce` | bool | `false` | Whether the field can only be set once and becomes immutable after. |
+| `sensitive` | bool | `false` | Whether the field's value should be masked in logs and UI. |
+| `externalDocs` | object | — | Link to external documentation (`url` + optional `description`). |
+
+### Named examples
+
+```yaml
+examples:
+  basic:
+    value: '{"payments": 100}'
+    summary: Default rate limits
+  strict:
+    value: '{"payments": 10, "refunds": 5}'
+    summary: Strict limits for trial accounts
+```
+
+## Tags
+
+Tags provide cross-cutting categorization for fields, independent of path hierarchy. They are useful for UI grouping, filtering, and documentation.
+
+### Paths vs tags
+
+Field paths use dot-separated prefixes to create a structural hierarchy (e.g. `payments.fee_rate`, `payments.currency`). Tags provide an orthogonal dimension for grouping fields by concern, regardless of where they sit in the path tree.
+
+These two systems are **independent** — a field's tag does not have to match its path prefix:
+
+```yaml
+fields:
+  # Path prefix: "api", but the tag reflects the domain concern
+  api.webhook_url:
+    type: url
+    tags: [integrations]
+
+  # Path prefix: "payments", tagged by both domain and compliance
+  payments.fee_rate:
+    type: number
+    tags: [billing, compliance]
+
+  # Same prefix, different tag
+  payments.currency:
+    type: string
+    tags: [compliance]
+```
+
+As a convention, it can be convenient to align tags with path prefixes for simple schemas, but this is not enforced and should not be assumed. Real schemas often tag fields across multiple path groups to support cross-cutting views like "all compliance-related fields" or "all integrations".
 
 ## Import/Export Semantics
 

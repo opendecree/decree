@@ -6,17 +6,20 @@ OpenDecree supports real-time change streaming via gRPC server-side streaming. W
 
 The flow from write to subscriber:
 
-```
-Writer sets value
-       │
-       ▼
-Server validates and stores ──► PostgreSQL
-       │
-       ▼
-Server publishes change ──────► Redis Pub/Sub
-       │
-       ▼
-Subscriber receives event ────► gRPC stream
+```mermaid
+sequenceDiagram
+    participant W as Writer
+    participant S as ConfigService
+    participant DB as Storage
+    participant PS as Pub/Sub
+    participant Sub as Subscriber
+
+    W->>S: SetField / SetFields
+    S->>S: Validate against schema
+    S->>DB: Persist new version
+    S->>PS: Publish change event
+    PS-->>S: Fan out to listeners
+    S-->>Sub: ConfigChange on gRPC stream
 ```
 
 1. A client writes a config value via `SetField` or `SetFields`

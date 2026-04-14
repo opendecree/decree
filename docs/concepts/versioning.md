@@ -19,23 +19,20 @@ Versions start at 1 for each tenant and increment by 1 for every write operation
 
 OpenDecree uses **delta storage** -- each version stores only the fields that changed, not a full copy of the config. This keeps storage efficient even with frequent changes.
 
-```
-Version 1: {payments.enabled: true, payments.fee_rate: 0.025}
-Version 2: {payments.currency: "USD"}
-Version 3: {payments.fee_rate: 0.03}
+```mermaid
+flowchart TD
+    V1["v1\nenabled = true\nfee_rate = 0.025"]
+    V2["v2\ncurrency = USD"]
+    V3["v3\nfee_rate = 0.03"]
+
+    V1 --> Resolve
+    V2 --> Resolve
+    V3 --> Resolve
+
+    Resolve["Resolved at v3\nenabled = true ← v1\nfee_rate = 0.03 ← v3\ncurrency = USD ← v2"]
 ```
 
-When you read the full config at version 3, the server resolves it by layering all deltas:
-
-```
-Resolved at v3: {
-  payments.enabled:  true    (from v1)
-  payments.fee_rate: 0.03   (from v3 — overrides v1)
-  payments.currency: "USD"  (from v2)
-}
-```
-
-This resolution happens automatically -- `GetAllFields` and `GetField` always return the fully resolved config at the requested version.
+When you read the full config at version 3, the server resolves it by layering all deltas — later versions override earlier ones for the same field. This resolution happens automatically -- `GetAllFields` and `GetField` always return the fully resolved config at the requested version.
 
 ## Version Descriptions
 

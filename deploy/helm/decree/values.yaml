@@ -53,6 +53,10 @@ redis:
   existingSecret: ""
   # Key in the existing secret for REDIS_URL.
   urlKey: "REDIS_URL"
+  # IMPORTANT: Configure your Redis instance with memory limits to prevent OOM.
+  # Recommended settings (set on your Redis server, not here):
+  #   maxmemory 256mb
+  #   maxmemory-policy allkeys-lru
 
 # --- Authentication ---
 

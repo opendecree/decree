@@ -92,27 +92,34 @@ func ctxWithBearer(token string) context.Context {
 	return metadata.NewIncomingContext(context.Background(), md)
 }
 
-func validClaims(role Role, tenantID string) Claims {
+func validClaims(role Role, tenantIDs ...string) Claims {
+	// Filter out empty strings.
+	var ids []string
+	for _, id := range tenantIDs {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
 	return Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
-		Role:     role,
-		TenantID: tenantID,
+		Role:      role,
+		TenantIDs: ids,
 	}
 }
 
 // --- ClaimsFromContext ---
 
 func TestClaimsFromContext_Roundtrip(t *testing.T) {
-	claims := &Claims{Role: RoleAdmin, TenantID: "t1"}
+	claims := &Claims{Role: RoleAdmin, TenantIDs: []string{"t1"}}
 	ctx := ContextWithClaims(context.Background(), claims)
 
 	got, ok := ClaimsFromContext(ctx)
 	require.True(t, ok)
 	assert.Equal(t, RoleAdmin, got.Role)
-	assert.Equal(t, "t1", got.TenantID)
+	assert.Equal(t, []string{"t1"}, got.TenantIDs)
 }
 
 func TestClaimsFromContext_Missing(t *testing.T) {
@@ -215,8 +222,8 @@ func TestUnaryInterceptor_ExpiredToken(t *testing.T) {
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
 		},
-		Role:     RoleAdmin,
-		TenantID: "tenant-1",
+		Role:      RoleAdmin,
+		TenantIDs: []string{"tenant-1"},
 	}
 	ctx := ctxWithBearer(signToken(t, claims))
 
@@ -274,7 +281,7 @@ func TestUnaryInterceptor_NonSuperadminMissingTenantID(t *testing.T) {
 	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), "tenant_id required")
+	assert.Contains(t, status.Convert(err).Message(), "tenant_ids required")
 }
 
 func TestUnaryInterceptor_UserRoleWithTenantID(t *testing.T) {
@@ -299,7 +306,7 @@ func TestUnaryInterceptor_ClaimsInContext(t *testing.T) {
 		claims, ok := ClaimsFromContext(ctx)
 		require.True(t, ok)
 		assert.Equal(t, RoleAdmin, claims.Role)
-		assert.Equal(t, "tenant-42", claims.TenantID)
+		assert.Equal(t, []string{"tenant-42"}, claims.TenantIDs)
 		return "ok", nil
 	}
 

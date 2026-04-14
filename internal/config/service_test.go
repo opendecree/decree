@@ -173,8 +173,8 @@ func TestSetField_LockedField(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	// Use admin context — lock checks only apply to non-superadmin.
 	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
-		Role:     auth.RoleAdmin,
-		TenantID: "test-tenant",
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{"test-tenant"},
 	})
 
 	store.On("GetFieldLocks", ctx, tenantID1).

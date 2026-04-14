@@ -19,12 +19,12 @@ $(TOOLS_SENTINEL): build/Dockerfile.tools
 ## generate: Generate code from protobuf and SQL specs
 generate: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) sh -c 'buf generate && cd db && sqlc generate'
-	cp docs/api/openapi.swagger.json cmd/server/openapi.json
+	python3 scripts/patch-openapi.py
 
 ## generate-proto: Generate Go code from protobuf definitions
 generate-proto: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) buf generate
-	cp docs/api/openapi.swagger.json cmd/server/openapi.json
+	python3 scripts/patch-openapi.py
 
 ## generate-sqlc: Generate Go code from SQL queries
 generate-sqlc: $(TOOLS_SENTINEL)

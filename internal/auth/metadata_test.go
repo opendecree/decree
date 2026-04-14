@@ -46,7 +46,7 @@ func TestMetadata_DefaultsToSuperadmin(t *testing.T) {
 	require.NotNil(t, captured)
 	assert.Equal(t, "user@example.com", captured.Subject)
 	assert.Equal(t, RoleSuperAdmin, captured.Role)
-	assert.Empty(t, captured.TenantID)
+	assert.Empty(t, captured.TenantIDs)
 }
 
 func TestMetadata_AdminWithTenant(t *testing.T) {
@@ -70,7 +70,7 @@ func TestMetadata_AdminWithTenant(t *testing.T) {
 	require.NotNil(t, captured)
 	assert.Equal(t, "admin@example.com", captured.Subject)
 	assert.Equal(t, RoleAdmin, captured.Role)
-	assert.Equal(t, "tenant-123", captured.TenantID)
+	assert.Equal(t, []string{"tenant-123"}, captured.TenantIDs)
 }
 
 func TestMetadata_UserWithTenant(t *testing.T) {

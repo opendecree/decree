@@ -59,6 +59,15 @@ type SchemaField struct {
 	RedirectTo      *string
 	DefaultValue    *string
 	Description     *string
+	Title           *string
+	Example         *string
+	Examples        []byte
+	ExternalDocs    []byte
+	Tags            []string
+	Format          *string
+	ReadOnly        bool
+	WriteOnce       bool
+	Sensitive       bool
 }
 
 // Tenant represents a tenant assigned to a schema.

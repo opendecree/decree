@@ -44,6 +44,15 @@ type CreateSchemaFieldParams struct {
 	RedirectTo      *string
 	DefaultValue    *string
 	Description     *string
+	Title           *string
+	Example         *string
+	Examples        []byte
+	ExternalDocs    []byte
+	Tags            []string
+	Format          *string
+	ReadOnly        bool
+	WriteOnce       bool
+	Sensitive       bool
 }
 
 // DeleteSchemaFieldParams identifies a field to delete.
@@ -65,17 +74,19 @@ type CreateTenantParams struct {
 	SchemaVersion int32
 }
 
-// ListTenantsParams contains pagination parameters for listing tenants.
+// ListTenantsParams contains pagination and filtering parameters for listing tenants.
 type ListTenantsParams struct {
-	Limit  int32
-	Offset int32
+	Limit            int32
+	Offset           int32
+	AllowedTenantIDs []string // When non-nil, only return tenants with these IDs.
 }
 
 // ListTenantsBySchemaParams contains parameters for listing tenants by schema.
 type ListTenantsBySchemaParams struct {
-	SchemaID string
-	Limit    int32
-	Offset   int32
+	SchemaID         string
+	Limit            int32
+	Offset           int32
+	AllowedTenantIDs []string // When non-nil, only return tenants with these IDs.
 }
 
 // UpdateTenantNameParams contains parameters for updating a tenant's name.

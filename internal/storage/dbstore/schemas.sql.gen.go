@@ -36,9 +36,13 @@ func (q *Queries) CreateSchema(ctx context.Context, arg CreateSchemaParams) (Sch
 }
 
 const createSchemaField = `-- name: CreateSchemaField :one
-INSERT INTO schema_fields (schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description
+INSERT INTO schema_fields (
+    schema_version_id, path, field_type, constraints, nullable, deprecated,
+    redirect_to, default_value, description, title, example, examples,
+    external_docs, tags, format, read_only, write_once, sensitive
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+RETURNING id, schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description, title, example, examples, external_docs, tags, format, read_only, write_once, sensitive
 `
 
 type CreateSchemaFieldParams struct {
@@ -51,6 +55,15 @@ type CreateSchemaFieldParams struct {
 	RedirectTo      *string     `json:"redirect_to"`
 	DefaultValue    *string     `json:"default_value"`
 	Description     *string     `json:"description"`
+	Title           *string     `json:"title"`
+	Example         *string     `json:"example"`
+	Examples        []byte      `json:"examples"`
+	ExternalDocs    []byte      `json:"external_docs"`
+	Tags            []string    `json:"tags"`
+	Format          *string     `json:"format"`
+	ReadOnly        bool        `json:"read_only"`
+	WriteOnce       bool        `json:"write_once"`
+	Sensitive       bool        `json:"sensitive"`
 }
 
 func (q *Queries) CreateSchemaField(ctx context.Context, arg CreateSchemaFieldParams) (SchemaField, error) {
@@ -64,6 +77,15 @@ func (q *Queries) CreateSchemaField(ctx context.Context, arg CreateSchemaFieldPa
 		arg.RedirectTo,
 		arg.DefaultValue,
 		arg.Description,
+		arg.Title,
+		arg.Example,
+		arg.Examples,
+		arg.ExternalDocs,
+		arg.Tags,
+		arg.Format,
+		arg.ReadOnly,
+		arg.WriteOnce,
+		arg.Sensitive,
 	)
 	var i SchemaField
 	err := row.Scan(
@@ -77,6 +99,15 @@ func (q *Queries) CreateSchemaField(ctx context.Context, arg CreateSchemaFieldPa
 		&i.RedirectTo,
 		&i.DefaultValue,
 		&i.Description,
+		&i.Title,
+		&i.Example,
+		&i.Examples,
+		&i.ExternalDocs,
+		&i.Tags,
+		&i.Format,
+		&i.ReadOnly,
+		&i.WriteOnce,
+		&i.Sensitive,
 	)
 	return i, err
 }
@@ -199,7 +230,7 @@ func (q *Queries) GetSchemaByName(ctx context.Context, name string) (Schema, err
 }
 
 const getSchemaFields = `-- name: GetSchemaFields :many
-SELECT id, schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description FROM schema_fields
+SELECT id, schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description, title, example, examples, external_docs, tags, format, read_only, write_once, sensitive FROM schema_fields
 WHERE schema_version_id = $1
 ORDER BY path
 `
@@ -224,6 +255,15 @@ func (q *Queries) GetSchemaFields(ctx context.Context, schemaVersionID pgtype.UU
 			&i.RedirectTo,
 			&i.DefaultValue,
 			&i.Description,
+			&i.Title,
+			&i.Example,
+			&i.Examples,
+			&i.ExternalDocs,
+			&i.Tags,
+			&i.Format,
+			&i.ReadOnly,
+			&i.WriteOnce,
+			&i.Sensitive,
 		); err != nil {
 			return nil, err
 		}

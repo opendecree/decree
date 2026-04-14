@@ -46,6 +46,15 @@ CREATE TABLE schema_fields (
     redirect_to       TEXT,
     default_value     TEXT,
     description       TEXT,
+    title             TEXT,
+    example           TEXT,
+    examples          JSONB,
+    external_docs     JSONB,
+    tags              TEXT[],
+    format            TEXT,
+    read_only         BOOLEAN NOT NULL DEFAULT false,
+    write_once        BOOLEAN NOT NULL DEFAULT false,
+    sensitive         BOOLEAN NOT NULL DEFAULT false,
     UNIQUE(schema_version_id, path)
 );
 

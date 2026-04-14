@@ -1,8 +1,13 @@
 {
   "swagger": "2.0",
   "info": {
-    "title": "centralconfig/v1/types.proto",
-    "version": "version not set"
+    "title": "OpenDecree API",
+    "version": "0.4.0-alpha",
+    "description": "Schema-driven business configuration management for multi-tenant services.\n\n**Alpha** \u2014 APIs and behavior may change without notice between versions.",
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
   },
   "tags": [
     {
@@ -27,7 +32,7 @@
   "paths": {
     "/v1/audit/logs": {
       "get": {
-        "summary": "QueryWriteLog searches the audit log for config change events.\nAll filter parameters are optional — omit a filter to match all values.",
+        "summary": "QueryWriteLog searches the audit log for config change events.\nAll filter parameters are optional \u2014 omit a filter to match all values.",
         "operationId": "AuditService_QueryWriteLog",
         "responses": {
           "200": {
@@ -1074,7 +1079,7 @@
           },
           {
             "name": "since",
-            "description": "Fields not read since this time are considered unused.\nRequired — there is no \"all time\" default to avoid expensive full scans.",
+            "description": "Fields not read since this time are considered unused.\nRequired \u2014 there is no \"all time\" default to avoid expensive full scans.",
             "in": "query",
             "required": false,
             "type": "string",
@@ -1278,7 +1283,7 @@
     },
     "/v1/tenants/{tenantId}/versions/{version}:rollback": {
       "post": {
-        "summary": "RollbackToVersion creates a new version with the same values as the target version.\nThis does not delete intermediate versions — it creates a new version that\ncopies the target's values.",
+        "summary": "RollbackToVersion creates a new version with the same values as the target version.\nThis does not delete intermediate versions \u2014 it creates a new version that\ncopies the target's values.",
         "operationId": "ConfigService_RollbackToVersion",
         "responses": {
           "200": {
@@ -1672,7 +1677,7 @@
           "description": "When this version was created."
         }
       },
-      "description": "ConfigVersion represents a point-in-time snapshot of configuration changes.\nEach write operation (SetField, SetFields, RollbackToVersion) creates a new\nconfig version. Versions store only the changed fields (delta storage) — the\nfull config at any version is the union of all deltas up to that version."
+      "description": "ConfigVersion represents a point-in-time snapshot of configuration changes.\nEach write operation (SetField, SetFields, RollbackToVersion) creates a new\nconfig version. Versions store only the changed fields (delta storage) \u2014 the\nfull config at any version is the union of all deltas up to that version."
     },
     "v1CreateSchemaRequest": {
       "type": "object",
@@ -1776,12 +1781,12 @@
         "min": {
           "type": "number",
           "format": "double",
-          "description": "For integer/number/duration: minimum allowed value (inclusive, \u003e=)."
+          "description": "For integer/number/duration: minimum allowed value (inclusive, >=)."
         },
         "max": {
           "type": "number",
           "format": "double",
-          "description": "For integer/number/duration: maximum allowed value (inclusive, \u003c=)."
+          "description": "For integer/number/duration: maximum allowed value (inclusive, <=)."
         },
         "regex": {
           "type": "string",
@@ -1801,12 +1806,12 @@
         "exclusiveMin": {
           "type": "number",
           "format": "double",
-          "description": "For integer/number/duration: exclusive minimum (strict, \u003e)."
+          "description": "For integer/number/duration: exclusive minimum (strict, >)."
         },
         "exclusiveMax": {
           "type": "number",
           "format": "double",
-          "description": "For integer/number/duration: exclusive maximum (strict, \u003c)."
+          "description": "For integer/number/duration: exclusive maximum (strict, <)."
         },
         "minLength": {
           "type": "integer",
@@ -1819,7 +1824,7 @@
           "description": "For string: maximum allowed length."
         }
       },
-      "description": "FieldConstraints defines validation rules for a schema field.\nWhich constraints apply depends on the field's type — see FieldType docs."
+      "description": "FieldConstraints defines validation rules for a schema field.\nWhich constraints apply depends on the field's type \u2014 see FieldType docs."
     },
     "v1FieldExample": {
       "type": "object",
@@ -2014,7 +2019,7 @@
         "IMPORT_MODE_DEFAULTS"
       ],
       "default": "IMPORT_MODE_UNSPECIFIED",
-      "description": "ImportMode controls how imported values interact with existing config.\n\n - IMPORT_MODE_UNSPECIFIED: Unspecified defaults to merge behavior.\n - IMPORT_MODE_MERGE: Merge: update fields from YAML that differ, keep runtime overrides\nfor fields not in the YAML.\n - IMPORT_MODE_REPLACE: Replace: full replace — all fields from YAML are set, fields not in YAML\nare not carried forward. Runtime overrides are wiped.\n - IMPORT_MODE_DEFAULTS: Defaults: only set fields that have no value yet. Fields that already have\na value are skipped regardless of the YAML content."
+      "description": "ImportMode controls how imported values interact with existing config.\n\n - IMPORT_MODE_UNSPECIFIED: Unspecified defaults to merge behavior.\n - IMPORT_MODE_MERGE: Merge: update fields from YAML that differ, keep runtime overrides\nfor fields not in the YAML.\n - IMPORT_MODE_REPLACE: Replace: full replace \u2014 all fields from YAML are set, fields not in YAML\nare not carried forward. Runtime overrides are wiped.\n - IMPORT_MODE_DEFAULTS: Defaults: only set fields that have no value yet. Fields that already have\na value are skipped regardless of the YAML content."
     },
     "v1ImportSchemaRequest": {
       "type": "object",
@@ -2022,7 +2027,7 @@
         "yamlContent": {
           "type": "string",
           "format": "byte",
-          "description": "YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.\n\nImport uses full-replace semantics:\n- If no schema with this name exists: creates a new schema with version 1.\n- If a schema exists and fields differ from latest: creates the next version.\n- If a schema exists and fields are identical: returns AlreadyExists error.\n\nImported versions are created as drafts (unpublished) unless auto_publish is true.\nThe `version` field in the YAML is informational — the server assigns\nthe next version number automatically."
+          "description": "YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.\n\nImport uses full-replace semantics:\n- If no schema with this name exists: creates a new schema with version 1.\n- If a schema exists and fields differ from latest: creates the next version.\n- If a schema exists and fields are identical: returns AlreadyExists error.\n\nImported versions are created as drafts (unpublished) unless auto_publish is true.\nThe `version` field in the YAML is informational \u2014 the server assigns\nthe next version number automatically."
         },
         "autoPublish": {
           "type": "boolean",
@@ -2149,7 +2154,7 @@
         },
         "name": {
           "type": "string",
-          "description": "Unique name for this schema. Must be a valid slug: lowercase alphanumeric\ncharacters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?."
+          "description": "Machine identifier for this schema, used in API calls, URLs, and code.\nMust be a unique slug: lowercase alphanumeric and hyphens, 1-63 characters,\nmatching [a-z0-9]([a-z0-9-]*[a-z0-9])?. See info.title for a display name."
         },
         "description": {
           "type": "string",
@@ -2195,7 +2200,7 @@
           "description": "Optional schema metadata: ownership, contact, labels."
         }
       },
-      "description": "Schema represents a configuration schema template.\nSchemas define the allowed fields and their types for tenant configurations.\nEach schema is versioned — updates create new immutable versions."
+      "description": "Schema represents a configuration schema template.\nSchemas define the allowed fields and their types for tenant configurations.\nEach schema is versioned \u2014 updates create new immutable versions."
     },
     "v1SchemaContact": {
       "type": "object",
@@ -2228,7 +2233,7 @@
         },
         "constraints": {
           "$ref": "#/definitions/v1FieldConstraints",
-          "description": "Validation constraints. Optional — when absent, any value of the\ncorrect type is accepted."
+          "description": "Validation constraints. Optional \u2014 when absent, any value of the\ncorrect type is accepted."
         },
         "nullable": {
           "type": "boolean",
@@ -2278,7 +2283,7 @@
         },
         "format": {
           "type": "string",
-          "title": "Semantic format hint within the base type (e.g. \"email\", \"semver\", \"percentage\").\nInformational — not enforced by validation.\nOAS: format"
+          "title": "Semantic format hint within the base type (e.g. \"email\", \"semver\", \"percentage\").\nInformational \u2014 not enforced by validation.\nOAS: format"
         },
         "readOnly": {
           "type": "boolean",
@@ -2300,7 +2305,7 @@
       "properties": {
         "title": {
           "type": "string",
-          "title": "Human-friendly display title for the schema.\nOAS: info.title"
+          "title": "Human-friendly display name (e.g. \"Payment Configuration\").\nUnlike Schema.name (a machine slug), this is for UI and documentation.\nOAS: info.title"
         },
         "author": {
           "type": "string",
@@ -2318,7 +2323,7 @@
           "description": "Key-value labels for filtering and categorization."
         }
       },
-      "title": "SchemaInfo contains optional metadata about a schema's ownership and context.\nOAS: Info Object"
+      "title": "SchemaInfo contains optional metadata about a schema's ownership and context.\nOptional organizational metadata for a schema.\nSchema.description lives on Schema itself (not here) because it's a\nfirst-class field used in every listing, while these are optional extras.\nOAS: Info Object"
     },
     "v1SetFieldResponse": {
       "type": "object",
@@ -2469,5 +2474,24 @@
       },
       "description": "UsageStats represents aggregated read usage statistics for a config field."
     }
-  }
+  },
+  "securityDefinitions": {
+    "MetadataAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "x-subject",
+      "description": "Actor identity (required). Also set:\n- x-role: superadmin (default), admin, or user\n- x-tenant-id: required for non-superadmin, comma-separated for multi-tenant access"
+    },
+    "BearerAuth": {
+      "type": "apiKey",
+      "in": "header",
+      "name": "Authorization",
+      "description": "JWT Bearer token (e.g., \"Bearer eyJ...\").\nThe token's tenant_ids claim (array) determines accessible tenants."
+    }
+  },
+  "security": [
+    {
+      "MetadataAuth": []
+    }
+  ]
 }
