@@ -6,6 +6,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
+	"github.com/opendecree/decree/internal/storage/pgconv"
 )
 
 // PGStore implements Store using PostgreSQL via sqlc-generated queries.
@@ -22,100 +24,370 @@ func NewPGStore(writePool, readPool *pgxpool.Pool) *PGStore {
 	}
 }
 
-// Schema CRUD — writes go to write pool, reads to read pool.
+// --- Schema CRUD ---
 
-func (s *PGStore) CreateSchema(ctx context.Context, arg dbstore.CreateSchemaParams) (dbstore.Schema, error) {
-	return s.write.CreateSchema(ctx, arg)
+func (s *PGStore) CreateSchema(ctx context.Context, arg CreateSchemaParams) (domain.Schema, error) {
+	row, err := s.write.CreateSchema(ctx, dbstore.CreateSchemaParams{
+		Name:        arg.Name,
+		Description: arg.Description,
+	})
+	if err != nil {
+		return domain.Schema{}, err
+	}
+	return schemaFromDB(row), nil
 }
 
-func (s *PGStore) GetSchemaByID(ctx context.Context, id pgUUID) (dbstore.Schema, error) {
-	return s.read.GetSchemaByID(ctx, id)
+func (s *PGStore) GetSchemaByID(ctx context.Context, id string) (domain.Schema, error) {
+	pgID, err := pgconv.StringToUUID(id)
+	if err != nil {
+		return domain.Schema{}, err
+	}
+	row, err := s.read.GetSchemaByID(ctx, pgID)
+	if err != nil {
+		return domain.Schema{}, pgconv.WrapNotFound(err)
+	}
+	return schemaFromDB(row), nil
 }
 
-func (s *PGStore) GetSchemaByName(ctx context.Context, name string) (dbstore.Schema, error) {
-	return s.read.GetSchemaByName(ctx, name)
+func (s *PGStore) GetSchemaByName(ctx context.Context, name string) (domain.Schema, error) {
+	row, err := s.read.GetSchemaByName(ctx, name)
+	if err != nil {
+		return domain.Schema{}, pgconv.WrapNotFound(err)
+	}
+	return schemaFromDB(row), nil
 }
 
-func (s *PGStore) ListSchemas(ctx context.Context, arg dbstore.ListSchemasParams) ([]dbstore.Schema, error) {
-	return s.read.ListSchemas(ctx, arg)
+func (s *PGStore) ListSchemas(ctx context.Context, arg ListSchemasParams) ([]domain.Schema, error) {
+	rows, err := s.read.ListSchemas(ctx, dbstore.ListSchemasParams{
+		Limit:  arg.Limit,
+		Offset: arg.Offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.Schema, len(rows))
+	for i, r := range rows {
+		result[i] = schemaFromDB(r)
+	}
+	return result, nil
 }
 
-func (s *PGStore) DeleteSchema(ctx context.Context, id pgUUID) error {
-	return s.write.DeleteSchema(ctx, id)
+func (s *PGStore) DeleteSchema(ctx context.Context, id string) error {
+	pgID, err := pgconv.StringToUUID(id)
+	if err != nil {
+		return err
+	}
+	return s.write.DeleteSchema(ctx, pgID)
 }
 
-// Schema versions.
+// --- Schema versions ---
 
-func (s *PGStore) CreateSchemaVersion(ctx context.Context, arg dbstore.CreateSchemaVersionParams) (dbstore.SchemaVersion, error) {
-	return s.write.CreateSchemaVersion(ctx, arg)
+func (s *PGStore) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersionParams) (domain.SchemaVersion, error) {
+	schemaID, err := pgconv.StringToUUID(arg.SchemaID)
+	if err != nil {
+		return domain.SchemaVersion{}, err
+	}
+	row, err := s.write.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
+		SchemaID:      schemaID,
+		Version:       arg.Version,
+		ParentVersion: arg.ParentVersion,
+		Description:   arg.Description,
+		Checksum:      arg.Checksum,
+	})
+	if err != nil {
+		return domain.SchemaVersion{}, err
+	}
+	return schemaVersionFromDB(row), nil
 }
 
-func (s *PGStore) GetSchemaVersion(ctx context.Context, arg dbstore.GetSchemaVersionParams) (dbstore.SchemaVersion, error) {
-	return s.read.GetSchemaVersion(ctx, arg)
+func (s *PGStore) GetSchemaVersion(ctx context.Context, arg GetSchemaVersionParams) (domain.SchemaVersion, error) {
+	schemaID, err := pgconv.StringToUUID(arg.SchemaID)
+	if err != nil {
+		return domain.SchemaVersion{}, err
+	}
+	row, err := s.read.GetSchemaVersion(ctx, dbstore.GetSchemaVersionParams{
+		SchemaID: schemaID,
+		Version:  arg.Version,
+	})
+	if err != nil {
+		return domain.SchemaVersion{}, pgconv.WrapNotFound(err)
+	}
+	return schemaVersionFromDB(row), nil
 }
 
-func (s *PGStore) GetLatestSchemaVersion(ctx context.Context, schemaID pgUUID) (dbstore.SchemaVersion, error) {
-	return s.read.GetLatestSchemaVersion(ctx, schemaID)
+func (s *PGStore) GetLatestSchemaVersion(ctx context.Context, schemaID string) (domain.SchemaVersion, error) {
+	pgID, err := pgconv.StringToUUID(schemaID)
+	if err != nil {
+		return domain.SchemaVersion{}, err
+	}
+	row, err := s.read.GetLatestSchemaVersion(ctx, pgID)
+	if err != nil {
+		return domain.SchemaVersion{}, pgconv.WrapNotFound(err)
+	}
+	return schemaVersionFromDB(row), nil
 }
 
-func (s *PGStore) PublishSchemaVersion(ctx context.Context, arg dbstore.PublishSchemaVersionParams) (dbstore.SchemaVersion, error) {
-	return s.write.PublishSchemaVersion(ctx, arg)
+func (s *PGStore) PublishSchemaVersion(ctx context.Context, arg PublishSchemaVersionParams) (domain.SchemaVersion, error) {
+	schemaID, err := pgconv.StringToUUID(arg.SchemaID)
+	if err != nil {
+		return domain.SchemaVersion{}, err
+	}
+	row, err := s.write.PublishSchemaVersion(ctx, dbstore.PublishSchemaVersionParams{
+		SchemaID: schemaID,
+		Version:  arg.Version,
+	})
+	if err != nil {
+		return domain.SchemaVersion{}, pgconv.WrapNotFound(err)
+	}
+	return schemaVersionFromDB(row), nil
 }
 
-// Schema fields.
+// --- Schema fields ---
 
-func (s *PGStore) CreateSchemaField(ctx context.Context, arg dbstore.CreateSchemaFieldParams) (dbstore.SchemaField, error) {
-	return s.write.CreateSchemaField(ctx, arg)
+func (s *PGStore) CreateSchemaField(ctx context.Context, arg CreateSchemaFieldParams) (domain.SchemaField, error) {
+	svID, err := pgconv.StringToUUID(arg.SchemaVersionID)
+	if err != nil {
+		return domain.SchemaField{}, err
+	}
+	row, err := s.write.CreateSchemaField(ctx, dbstore.CreateSchemaFieldParams{
+		SchemaVersionID: svID,
+		Path:            arg.Path,
+		FieldType:       dbstore.FieldType(arg.FieldType),
+		Constraints:     arg.Constraints,
+		Nullable:        arg.Nullable,
+		Deprecated:      arg.Deprecated,
+		RedirectTo:      arg.RedirectTo,
+		DefaultValue:    arg.DefaultValue,
+		Description:     arg.Description,
+	})
+	if err != nil {
+		return domain.SchemaField{}, err
+	}
+	return schemaFieldFromDB(row), nil
 }
 
-func (s *PGStore) GetSchemaFields(ctx context.Context, schemaVersionID pgUUID) ([]dbstore.SchemaField, error) {
-	return s.read.GetSchemaFields(ctx, schemaVersionID)
+func (s *PGStore) GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error) {
+	svID, err := pgconv.StringToUUID(schemaVersionID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.GetSchemaFields(ctx, svID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.SchemaField, len(rows))
+	for i, r := range rows {
+		result[i] = schemaFieldFromDB(r)
+	}
+	return result, nil
 }
 
-func (s *PGStore) DeleteSchemaField(ctx context.Context, arg dbstore.DeleteSchemaFieldParams) error {
-	return s.write.DeleteSchemaField(ctx, arg)
+func (s *PGStore) DeleteSchemaField(ctx context.Context, arg DeleteSchemaFieldParams) error {
+	svID, err := pgconv.StringToUUID(arg.SchemaVersionID)
+	if err != nil {
+		return err
+	}
+	return s.write.DeleteSchemaField(ctx, dbstore.DeleteSchemaFieldParams{
+		SchemaVersionID: svID,
+		Path:            arg.Path,
+	})
 }
 
-// Tenants.
+// --- Tenants ---
 
-func (s *PGStore) CreateTenant(ctx context.Context, arg dbstore.CreateTenantParams) (dbstore.Tenant, error) {
-	return s.write.CreateTenant(ctx, arg)
+func (s *PGStore) CreateTenant(ctx context.Context, arg CreateTenantParams) (domain.Tenant, error) {
+	schemaID, err := pgconv.StringToUUID(arg.SchemaID)
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	row, err := s.write.CreateTenant(ctx, dbstore.CreateTenantParams{
+		Name:          arg.Name,
+		SchemaID:      schemaID,
+		SchemaVersion: arg.SchemaVersion,
+	})
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	return tenantFromDB(row), nil
 }
 
-func (s *PGStore) GetTenantByID(ctx context.Context, id pgUUID) (dbstore.Tenant, error) {
-	return s.read.GetTenantByID(ctx, id)
+func (s *PGStore) GetTenantByID(ctx context.Context, id string) (domain.Tenant, error) {
+	pgID, err := pgconv.StringToUUID(id)
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	row, err := s.read.GetTenantByID(ctx, pgID)
+	if err != nil {
+		return domain.Tenant{}, pgconv.WrapNotFound(err)
+	}
+	return tenantFromDB(row), nil
 }
 
-func (s *PGStore) ListTenants(ctx context.Context, arg dbstore.ListTenantsParams) ([]dbstore.Tenant, error) {
-	return s.read.ListTenants(ctx, arg)
+func (s *PGStore) ListTenants(ctx context.Context, arg ListTenantsParams) ([]domain.Tenant, error) {
+	rows, err := s.read.ListTenants(ctx, dbstore.ListTenantsParams{
+		Limit:  arg.Limit,
+		Offset: arg.Offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return tenantsFromDB(rows), nil
 }
 
-func (s *PGStore) ListTenantsBySchema(ctx context.Context, arg dbstore.ListTenantsBySchemaParams) ([]dbstore.Tenant, error) {
-	return s.read.ListTenantsBySchema(ctx, arg)
+func (s *PGStore) ListTenantsBySchema(ctx context.Context, arg ListTenantsBySchemaParams) ([]domain.Tenant, error) {
+	schemaID, err := pgconv.StringToUUID(arg.SchemaID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.ListTenantsBySchema(ctx, dbstore.ListTenantsBySchemaParams{
+		SchemaID: schemaID,
+		Limit:    arg.Limit,
+		Offset:   arg.Offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return tenantsFromDB(rows), nil
 }
 
-func (s *PGStore) UpdateTenantName(ctx context.Context, arg dbstore.UpdateTenantNameParams) (dbstore.Tenant, error) {
-	return s.write.UpdateTenantName(ctx, arg)
+func (s *PGStore) UpdateTenantName(ctx context.Context, arg UpdateTenantNameParams) (domain.Tenant, error) {
+	pgID, err := pgconv.StringToUUID(arg.ID)
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	row, err := s.write.UpdateTenantName(ctx, dbstore.UpdateTenantNameParams{
+		ID:   pgID,
+		Name: arg.Name,
+	})
+	if err != nil {
+		return domain.Tenant{}, pgconv.WrapNotFound(err)
+	}
+	return tenantFromDB(row), nil
 }
 
-func (s *PGStore) UpdateTenantSchemaVersion(ctx context.Context, arg dbstore.UpdateTenantSchemaVersionParams) (dbstore.Tenant, error) {
-	return s.write.UpdateTenantSchemaVersion(ctx, arg)
+func (s *PGStore) UpdateTenantSchemaVersion(ctx context.Context, arg UpdateTenantSchemaVersionParams) (domain.Tenant, error) {
+	pgID, err := pgconv.StringToUUID(arg.ID)
+	if err != nil {
+		return domain.Tenant{}, err
+	}
+	row, err := s.write.UpdateTenantSchemaVersion(ctx, dbstore.UpdateTenantSchemaVersionParams{
+		ID:            pgID,
+		SchemaVersion: arg.SchemaVersion,
+	})
+	if err != nil {
+		return domain.Tenant{}, pgconv.WrapNotFound(err)
+	}
+	return tenantFromDB(row), nil
 }
 
-func (s *PGStore) DeleteTenant(ctx context.Context, id pgUUID) error {
-	return s.write.DeleteTenant(ctx, id)
+func (s *PGStore) DeleteTenant(ctx context.Context, id string) error {
+	pgID, err := pgconv.StringToUUID(id)
+	if err != nil {
+		return err
+	}
+	return s.write.DeleteTenant(ctx, pgID)
 }
 
-// Field locks.
+// --- Field locks ---
 
-func (s *PGStore) CreateFieldLock(ctx context.Context, arg dbstore.CreateFieldLockParams) error {
-	return s.write.CreateFieldLock(ctx, arg)
+func (s *PGStore) CreateFieldLock(ctx context.Context, arg CreateFieldLockParams) error {
+	tenantID, err := pgconv.StringToUUID(arg.TenantID)
+	if err != nil {
+		return err
+	}
+	return s.write.CreateFieldLock(ctx, dbstore.CreateFieldLockParams{
+		TenantID:     tenantID,
+		FieldPath:    arg.FieldPath,
+		LockedValues: arg.LockedValues,
+	})
 }
 
-func (s *PGStore) DeleteFieldLock(ctx context.Context, arg dbstore.DeleteFieldLockParams) error {
-	return s.write.DeleteFieldLock(ctx, arg)
+func (s *PGStore) DeleteFieldLock(ctx context.Context, arg DeleteFieldLockParams) error {
+	tenantID, err := pgconv.StringToUUID(arg.TenantID)
+	if err != nil {
+		return err
+	}
+	return s.write.DeleteFieldLock(ctx, dbstore.DeleteFieldLockParams{
+		TenantID:  tenantID,
+		FieldPath: arg.FieldPath,
+	})
 }
 
-func (s *PGStore) GetFieldLocks(ctx context.Context, tenantID pgUUID) ([]dbstore.TenantFieldLock, error) {
-	return s.read.GetFieldLocks(ctx, tenantID)
+func (s *PGStore) GetFieldLocks(ctx context.Context, tenantID string) ([]domain.TenantFieldLock, error) {
+	pgID, err := pgconv.StringToUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.GetFieldLocks(ctx, pgID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.TenantFieldLock, len(rows))
+	for i, r := range rows {
+		result[i] = domain.TenantFieldLock{
+			TenantID:     pgconv.UUIDToString(r.TenantID),
+			FieldPath:    r.FieldPath,
+			LockedValues: r.LockedValues,
+		}
+	}
+	return result, nil
+}
+
+// --- DB → domain conversion helpers ---
+
+func schemaFromDB(r dbstore.Schema) domain.Schema {
+	return domain.Schema{
+		ID:          pgconv.UUIDToString(r.ID),
+		Name:        r.Name,
+		Description: r.Description,
+		CreatedAt:   pgconv.TimestamptzToTime(r.CreatedAt),
+		UpdatedAt:   pgconv.TimestamptzToTime(r.UpdatedAt),
+	}
+}
+
+func schemaVersionFromDB(r dbstore.SchemaVersion) domain.SchemaVersion {
+	return domain.SchemaVersion{
+		ID:            pgconv.UUIDToString(r.ID),
+		SchemaID:      pgconv.UUIDToString(r.SchemaID),
+		Version:       r.Version,
+		ParentVersion: r.ParentVersion,
+		Description:   r.Description,
+		Checksum:      r.Checksum,
+		Published:     r.Published,
+		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
+	}
+}
+
+func schemaFieldFromDB(r dbstore.SchemaField) domain.SchemaField {
+	return domain.SchemaField{
+		ID:              pgconv.UUIDToString(r.ID),
+		SchemaVersionID: pgconv.UUIDToString(r.SchemaVersionID),
+		Path:            r.Path,
+		FieldType:       domain.FieldType(r.FieldType),
+		Constraints:     r.Constraints,
+		Nullable:        r.Nullable,
+		Deprecated:      r.Deprecated,
+		RedirectTo:      r.RedirectTo,
+		DefaultValue:    r.DefaultValue,
+		Description:     r.Description,
+	}
+}
+
+func tenantFromDB(r dbstore.Tenant) domain.Tenant {
+	return domain.Tenant{
+		ID:            pgconv.UUIDToString(r.ID),
+		Name:          r.Name,
+		SchemaID:      pgconv.UUIDToString(r.SchemaID),
+		SchemaVersion: r.SchemaVersion,
+		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
+		UpdatedAt:     pgconv.TimestamptzToTime(r.UpdatedAt),
+	}
+}
+
+func tenantsFromDB(rows []dbstore.Tenant) []domain.Tenant {
+	result := make([]domain.Tenant, len(rows))
+	for i, r := range rows {
+		result[i] = tenantFromDB(r)
+	}
+	return result
 }

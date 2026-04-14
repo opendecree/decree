@@ -1,20 +1,24 @@
 # CLI Tool
 
-**Status:** Phase 1+2 Complete (power tools remaining)
+**Status:** Phase 1+2+3 Complete
 
 ---
 
 ## Completed
 
-26 commands across 6 groups (schema, tenant, config, watch, lock, audit) + version + gen-docs. Own Go module. 17 unit tests. `--publish` flag on schema import. `--mode` flag on config import (merge/replace/defaults).
+31 commands across 6 groups (schema, tenant, config, watch, lock, audit) + 5 power tools (diff, docgen, validate, seed, dump) + version + gen-docs. Own Go module. 17 unit tests for CLI structure + 5 unit test files for tools packages.
 
-## Remaining: Phase 3 — Power Tools
+### Phase 3 — Power Tools (as reusable Go packages)
 
-- [ ] `decree docs generate` — schema → markdown docs
-- [ ] `decree diff` — config version diffing
-- [ ] `decree validate` — offline YAML validation
-- [ ] `decree seed` — bootstrap: schema + tenant + config from YAML in one command
-- [ ] `decree dump` — full tenant backup (schema + config + locks)
+New module: `sdk/tools` with 5 sub-packages, each independently importable:
+
+- [x] `decree diff <tenant-id> <v1> <v2>` — config version diffing (`sdk/tools/diff`)
+- [x] `decree docgen [schema-id] [--file]` — schema → markdown docs (`sdk/tools/docgen`)
+- [x] `decree validate --schema --config [--strict]` — offline YAML validation (`sdk/tools/validate`)
+- [x] `decree seed <file> [--auto-publish]` — bootstrap from single YAML (`sdk/tools/seed`)
+- [x] `decree dump <tenant-id> [--version] [--no-locks]` — full tenant backup (`sdk/tools/dump`)
+
+Key design: offline tools (diff, docgen, validate) have zero gRPC/proto deps. Online tools (seed, dump) use adminclient. Seed/dump share a YAML format — dump output feeds directly into seed.
 
 ## Phase 4 — Polish (wishlist)
 

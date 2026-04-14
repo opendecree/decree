@@ -2,16 +2,14 @@ package audit
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 // Service implements the AuditService gRPC server.
@@ -35,29 +33,29 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		pageSize = 50
 	}
 
-	params := dbstore.QueryAuditWriteLogParams{
+	params := QueryWriteLogParams{
 		Limit:  pageSize,
 		Offset: 0,
 	}
-
 	if req.TenantId != nil {
-		id, err := parseUUID(*req.TenantId)
-		if err != nil {
+		if !isValidUUID(*req.TenantId) {
 			return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 		}
-		params.Column1 = id
+		params.TenantID = *req.TenantId
 	}
 	if req.Actor != nil {
-		params.Column2 = *req.Actor
+		params.Actor = *req.Actor
 	}
 	if req.FieldPath != nil {
-		params.Column3 = *req.FieldPath
+		params.FieldPath = *req.FieldPath
 	}
 	if req.StartTime != nil {
-		params.Column4 = pgtype.Timestamptz{Time: req.StartTime.AsTime(), Valid: true}
+		t := req.StartTime.AsTime()
+		params.StartTime = &t
 	}
 	if req.EndTime != nil {
-		params.Column5 = pgtype.Timestamptz{Time: req.EndTime.AsTime(), Valid: true}
+		t := req.EndTime.AsTime()
+		params.EndTime = &t
 	}
 
 	entries, err := s.store.QueryAuditWriteLog(ctx, params)
@@ -75,20 +73,21 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 }
 
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !isValidUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	params := dbstore.GetFieldUsageParams{
-		TenantID:  tenantID,
+	params := GetFieldUsageParams{
+		TenantID:  req.TenantId,
 		FieldPath: req.FieldPath,
 	}
 	if req.StartTime != nil {
-		params.Column3 = pgtype.Timestamptz{Time: req.StartTime.AsTime(), Valid: true}
+		t := req.StartTime.AsTime()
+		params.StartTime = &t
 	}
 	if req.EndTime != nil {
-		params.Column4 = pgtype.Timestamptz{Time: req.EndTime.AsTime(), Valid: true}
+		t := req.EndTime.AsTime()
+		params.EndTime = &t
 	}
 
 	stats, err := s.store.GetFieldUsage(ctx, params)
@@ -106,8 +105,8 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 		if stat.LastReadBy != nil {
 			lastReadBy = stat.LastReadBy
 		}
-		if stat.LastReadAt.Valid {
-			lastReadAt = timestamppb.New(stat.LastReadAt.Time)
+		if stat.LastReadAt != nil {
+			lastReadAt = timestamppb.New(*stat.LastReadAt)
 		}
 	}
 
@@ -123,19 +122,20 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 }
 
 func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequest) (*pb.GetTenantUsageResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !isValidUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	params := dbstore.GetTenantUsageParams{
-		TenantID: tenantID,
+	params := GetTenantUsageParams{
+		TenantID: req.TenantId,
 	}
 	if req.StartTime != nil {
-		params.Column2 = pgtype.Timestamptz{Time: req.StartTime.AsTime(), Valid: true}
+		t := req.StartTime.AsTime()
+		params.StartTime = &t
 	}
 	if req.EndTime != nil {
-		params.Column3 = pgtype.Timestamptz{Time: req.EndTime.AsTime(), Valid: true}
+		t := req.EndTime.AsTime()
+		params.EndTime = &t
 	}
 
 	rows, err := s.store.GetTenantUsage(ctx, params)
@@ -151,9 +151,8 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 			FieldPath: row.FieldPath,
 			ReadCount: row.ReadCount,
 		}
-		// LastReadAt comes as interface{} from the MAX() aggregate.
-		if t, ok := row.LastReadAt.(pgtype.Timestamptz); ok && t.Valid {
-			stat.LastReadAt = timestamppb.New(t.Time)
+		if row.LastReadAt != nil {
+			stat.LastReadAt = timestamppb.New(*row.LastReadAt)
 		}
 		fieldStats = append(fieldStats, stat)
 	}
@@ -162,16 +161,13 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 }
 
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !isValidUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	since := pgtype.Timestamptz{Time: req.Since.AsTime(), Valid: true}
-
-	paths, err := s.store.GetUnusedFields(ctx, dbstore.GetUnusedFieldsParams{
-		ID:         tenantID,
-		LastReadAt: since,
+	paths, err := s.store.GetUnusedFields(ctx, GetUnusedFieldsParams{
+		TenantID: req.TenantId,
+		Since:    req.Since.AsTime(),
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "get unused fields", "error", err)
@@ -183,28 +179,21 @@ func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRe
 
 // --- Helpers ---
 
-func parseUUID(s string) (pgtype.UUID, error) {
-	var id pgtype.UUID
-	if err := id.Scan(s); err != nil {
-		return id, fmt.Errorf("invalid uuid %q: %w", s, err)
+func isValidUUID(s string) bool {
+	// Simple length + format check. Full validation happens in the store layer.
+	if len(s) != 36 {
+		return false
 	}
-	return id, nil
+	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
 }
 
-func uuidToString(id pgtype.UUID) string {
-	if !id.Valid {
-		return ""
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x", id.Bytes[0:4], id.Bytes[4:6], id.Bytes[6:8], id.Bytes[8:10], id.Bytes[10:16])
-}
-
-func auditEntryToProto(e dbstore.AuditWriteLog) *pb.AuditEntry {
+func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 	entry := &pb.AuditEntry{
-		Id:        uuidToString(e.ID),
-		TenantId:  uuidToString(e.TenantID),
+		Id:        e.ID,
+		TenantId:  e.TenantID,
 		Actor:     e.Actor,
 		Action:    e.Action,
-		CreatedAt: timestamppb.New(e.CreatedAt.Time),
+		CreatedAt: timestamppb.New(e.CreatedAt),
 	}
 	entry.FieldPath = e.FieldPath
 	entry.OldValue = e.OldValue

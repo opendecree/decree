@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/adminclient"
@@ -39,6 +40,9 @@ func TestConfigSubscription(t *testing.T) {
 	subCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
+	// Add auth metadata (required by server).
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-test")
+
 	stream, err := configSvc.Subscribe(subCtx, &pb.SubscribeRequest{
 		TenantId:   tenant.ID,
 		FieldPaths: []string{"notify.enabled"},
@@ -54,7 +58,8 @@ func TestConfigSubscription(t *testing.T) {
 	change, err := stream.Recv()
 	require.NoError(t, err)
 	assert.Equal(t, "notify.enabled", change.Change.FieldPath)
-	assert.Equal(t, "true", change.Change.NewValue)
+	require.NotNil(t, change.Change.NewValue)
+	assert.Equal(t, "true", change.Change.NewValue.GetStringValue())
 
 	cancel()
 

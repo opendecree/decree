@@ -8,11 +8,7 @@ The repository includes a `docker-compose.yml` that starts the full stack:
 
 ```bash
 git clone https://github.com/opendecree/decree.git
-<<<<<<< HEAD
 cd decree
-=======
-cd central-config-service
->>>>>>> origin/main
 
 # Start everything: PostgreSQL, Redis, migrations, and the service
 docker compose up -d --wait service
@@ -98,11 +94,7 @@ spec:
     spec:
       containers:
         - name: decree
-<<<<<<< HEAD
           image: decree:latest
-=======
-          image: central-config-service:latest
->>>>>>> origin/main
           ports:
             - containerPort: 9090
               protocol: TCP

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strconv"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -54,11 +54,11 @@ func validateConfigYAML(doc *ConfigYAML) error {
 	return nil
 }
 
-// --- Export: DB rows → YAML ---
+// --- Export: DB rows -> YAML ---
 
 // configToYAML converts config rows to a YAML document, using schema field types
 // for typed value representation.
-func configToYAML(version int32, description string, rows []configRow, fieldTypes map[string]pb.FieldType) *ConfigYAML {
+func configToYAML(version int32, description string, rows []configRow, fieldTypes map[string]domain.FieldType) *ConfigYAML {
 	doc := &ConfigYAML{
 		Syntax:      yamlSyntaxV1,
 		Version:     version,
@@ -87,35 +87,35 @@ type configRow struct {
 }
 
 // typedValue converts a string value to its native Go type based on the field type.
-func typedValue(value string, ft pb.FieldType) interface{} {
+func typedValue(value string, ft domain.FieldType) interface{} {
 	switch ft {
-	case pb.FieldType_FIELD_TYPE_INT:
+	case domain.FieldTypeInteger:
 		if v, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return v
 		}
-	case pb.FieldType_FIELD_TYPE_NUMBER:
+	case domain.FieldTypeNumber:
 		if v, err := strconv.ParseFloat(value, 64); err == nil {
 			return v
 		}
-	case pb.FieldType_FIELD_TYPE_BOOL:
+	case domain.FieldTypeBool:
 		if v, err := strconv.ParseBool(value); err == nil {
 			return v
 		}
-	case pb.FieldType_FIELD_TYPE_JSON:
+	case domain.FieldTypeJSON:
 		var v interface{}
 		if err := json.Unmarshal([]byte(value), &v); err == nil {
 			return v
 		}
 	}
-	// string, time, duration, url, unknown → passthrough
+	// string, time, duration, url, unknown -> passthrough
 	return value
 }
 
-// --- Import: YAML → string values ---
+// --- Import: YAML -> string values ---
 
 // yamlToConfigValues converts YAML values back to string representations,
 // using schema field types for type-aware conversion.
-func yamlToConfigValues(doc *ConfigYAML, fieldTypes map[string]pb.FieldType) ([]configValueImport, error) {
+func yamlToConfigValues(doc *ConfigYAML, fieldTypes map[string]domain.FieldType) ([]configValueImport, error) {
 	result := make([]configValueImport, 0, len(doc.Values))
 
 	// Sort for deterministic ordering.
@@ -146,13 +146,13 @@ func yamlToConfigValues(doc *ConfigYAML, fieldTypes map[string]pb.FieldType) ([]
 }
 
 // stringifyValue converts a YAML-native value back to its string representation.
-func stringifyValue(value interface{}, ft pb.FieldType) (string, error) {
+func stringifyValue(value interface{}, ft domain.FieldType) (string, error) {
 	if value == nil {
 		return "", nil
 	}
 
 	switch ft {
-	case pb.FieldType_FIELD_TYPE_INT:
+	case domain.FieldTypeInteger:
 		switch v := value.(type) {
 		case int:
 			return strconv.FormatInt(int64(v), 10), nil
@@ -168,7 +168,7 @@ func stringifyValue(value interface{}, ft pb.FieldType) (string, error) {
 		}
 		return "", fmt.Errorf("cannot convert %T to integer", value)
 
-	case pb.FieldType_FIELD_TYPE_NUMBER:
+	case domain.FieldTypeNumber:
 		switch v := value.(type) {
 		case int:
 			return strconv.FormatFloat(float64(v), 'f', -1, 64), nil
@@ -181,7 +181,7 @@ func stringifyValue(value interface{}, ft pb.FieldType) (string, error) {
 		}
 		return "", fmt.Errorf("cannot convert %T to number", value)
 
-	case pb.FieldType_FIELD_TYPE_BOOL:
+	case domain.FieldTypeBool:
 		switch v := value.(type) {
 		case bool:
 			return strconv.FormatBool(v), nil
@@ -190,7 +190,7 @@ func stringifyValue(value interface{}, ft pb.FieldType) (string, error) {
 		}
 		return "", fmt.Errorf("cannot convert %T to bool", value)
 
-	case pb.FieldType_FIELD_TYPE_JSON:
+	case domain.FieldTypeJSON:
 		switch v := value.(type) {
 		case string:
 			return v, nil
@@ -203,7 +203,7 @@ func stringifyValue(value interface{}, ft pb.FieldType) (string, error) {
 		}
 
 	default:
-		// string, time, duration, url → expect string
+		// string, time, duration, url -> expect string
 		switch v := value.(type) {
 		case string:
 			return v, nil

@@ -1,6 +1,6 @@
 # Go Public Checklist
 
-**Status:** Planning
+**Status:** In Progress
 **Started:** 2026-03-29
 
 ---
@@ -11,40 +11,41 @@ Prepare the repo for public release on GitHub. Ensure it's clean, professional, 
 
 ## Must-Do (before flipping to public)
 
-- [ ] **Scan for secrets** — scan git history for leaked credentials, API keys, tokens. Tools: `gitleaks`, `trufflehog`, or `git log --all -p | grep -i password`
-- [ ] **LICENSE** — verify Apache 2.0 file exists and is correct
-- [ ] **Clean git history** — squash noisy CI fix commits, review full history for anything embarrassing
-- [ ] **README review** — final pass: links work, examples are accurate, positioning is clear
-- [ ] **Module paths** — confirm `github.com/opendecree/decree` is the final org/repo name. Changing after people import is painful.
-- [ ] **Remove GOPRIVATE** — once public, no need for GOPRIVATE/GONOSUMCHECK. pkg.go.dev will index automatically.
-- [ ] **GitHub repo settings** — description, topics (`go`, `grpc`, `configuration`, `multi-tenant`, `schema-driven`), website URL (docs site)
+- [x] **Scan for secrets** — gitleaks: no leaks found (46 commits scanned)
+- [x] **LICENSE** — Apache 2.0 verified
+- [x] **README review** — badges, power tools section, architecture diagram fix
+- [x] **Module paths** — all 8 modules confirmed under `github.com/opendecree/decree`
+- [x] **Remove GOPRIVATE** — not set anywhere, nothing to remove
+- [x] **Clean git history** — squashed Docker/CI/effort chains (46→40 commits)
+- [x] **GitHub repo settings** — description set, topics added (go, grpc, configuration, multi-tenant, schema-driven)
 
 ## Should-Do (before or shortly after)
 
-- [ ] **Tag v0.1.0** — first release. Triggers CI to build images, enables `go install`, pkg.go.dev indexing
-- [ ] **GitHub Actions** — verify GITHUB_TOKEN has packages:write for ghcr.io image push
-- [ ] **Branch protection** — require PR reviews, require CI to pass before merge to main
-- [ ] **Issue templates** — `.github/ISSUE_TEMPLATE/bug_report.md` + `feature_request.md`
-- [ ] **SECURITY.md** — vulnerability reporting instructions
-- [ ] **Code of Conduct** — `CODE_OF_CONDUCT.md` (Contributor Covenant is standard)
+- [x] **Flip to public** — already public
+- [x] **Tag v0.1.0** — tagged all 7 submodules + root; Go proxy indexed
+- [x] **Branch protection** — classic protection on main (require PR reviews + status checks)
+- [x] **Issue templates** — bug report + feature request
+- [x] **SECURITY.md** — vulnerability reporting instructions
+- [x] **Code of Conduct** — Contributor Covenant v2.1 (by reference)
+- [x] **GitHub Discussions** — enabled
+- [x] **Fix CI** — disabled setup-go cache, fixed stale pseudo-versions → tagged v0.1.0 submodules, fixed gofumpt/docs/adminclient type mapping, refreshed go.sum checksums
 
 ## Nice-to-Have
 
-- [ ] **README badges** — CI status, Go version, license, ghcr.io image
+- [x] **README badges** — CI status, Go version, license
+- [ ] **Docker layer caching** — add cache-from/to in CI Docker build steps
 - [ ] **Social preview** — repo card image for link sharing
-- [ ] **GitHub Discussions** — enable for Q&A and community
-- [ ] **Example repo** — separate repo with runnable examples per use case
-- [ ] **Blog post / announcement** — introduce DECREE, explain positioning
+- [ ] **Example repo** — separate repo with runnable examples
+- [ ] **Blog post / announcement** — introduce OpenDecree
 
 ## Implementation Order
 
-1. Scan for secrets (safety first)
-2. License + module path confirmation
-3. Clean git history (last chance before public)
-4. README final review
-5. GitHub repo settings
-6. Flip to public
-7. Tag v0.1.0
-8. Verify pkg.go.dev, ghcr.io, CI
-9. Issue templates, SECURITY.md, Code of Conduct
-10. Badges, social preview, discussions
+1. ~~Scan for secrets~~ done
+2. ~~License + module path confirmation~~ done
+3. ~~Clean git history~~ done
+4. ~~README final review~~ done
+5. ~~GitHub repo settings~~ done
+6. ~~Flip to public~~ already done
+7. ~~Tag v0.1.0~~ done
+8. ~~Fix CI~~ done (Build + Test + Lint pass; Docs + E2E in progress)
+9. Verify ghcr.io image push

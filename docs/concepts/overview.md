@@ -67,5 +67,5 @@ PostgreSQL stores schemas, config values, and audit entries. Redis provides cach
 
 - [Getting Started](../getting-started.md) -- hands-on walkthrough from zero to working config
 - [API Reference](../api/api-reference.md) -- full gRPC service and message definitions
-- [CLI Reference](../cli/ccs.md) -- all `decree` commands
+- [CLI Reference](../cli/decree.md) — all `decree` commands
 - [SDKs](../sdk.md) -- Go client libraries

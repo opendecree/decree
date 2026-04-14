@@ -6,17 +6,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 func TestConfigYAML_Roundtrip(t *testing.T) {
-	fieldTypes := map[string]pb.FieldType{
-		"payments.enabled":     pb.FieldType_FIELD_TYPE_BOOL,
-		"payments.max_retries": pb.FieldType_FIELD_TYPE_INT,
-		"payments.fee_rate":    pb.FieldType_FIELD_TYPE_NUMBER,
-		"payments.currency":    pb.FieldType_FIELD_TYPE_STRING,
-		"payments.window":      pb.FieldType_FIELD_TYPE_DURATION,
-		"payments.metadata":    pb.FieldType_FIELD_TYPE_JSON,
+	fieldTypes := map[string]domain.FieldType{
+		"payments.enabled":     domain.FieldTypeBool,
+		"payments.max_retries": domain.FieldTypeInteger,
+		"payments.fee_rate":    domain.FieldTypeNumber,
+		"payments.currency":    domain.FieldTypeString,
+		"payments.window":      domain.FieldTypeDuration,
+		"payments.metadata":    domain.FieldTypeJSON,
 	}
 
 	rows := []configRow{
@@ -28,7 +28,7 @@ func TestConfigYAML_Roundtrip(t *testing.T) {
 		{FieldPath: "payments.metadata", Value: `{"type":"object"}`},
 	}
 
-	// Export: rows → YAML doc → bytes
+	// Export: rows -> YAML doc -> bytes
 	doc := configToYAML(5, "test export", rows, fieldTypes)
 	assert.Equal(t, yamlSyntaxV1, doc.Syntax)
 	assert.Equal(t, int32(5), doc.Version)
@@ -46,7 +46,7 @@ func TestConfigYAML_Roundtrip(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "object", metaMap["type"])
 
-	// Marshal → unmarshal → import back
+	// Marshal -> unmarshal -> import back
 	data, err := marshalConfigYAML(doc)
 	require.NoError(t, err)
 
@@ -74,19 +74,19 @@ func TestConfigYAML_TypedValue(t *testing.T) {
 	tests := []struct {
 		name     string
 		value    string
-		ft       pb.FieldType
+		ft       domain.FieldType
 		expected interface{}
 	}{
-		{"integer", "42", pb.FieldType_FIELD_TYPE_INT, int64(42)},
-		{"negative integer", "-1", pb.FieldType_FIELD_TYPE_INT, int64(-1)},
-		{"number float", "3.14", pb.FieldType_FIELD_TYPE_NUMBER, 3.14},
-		{"number integer", "42", pb.FieldType_FIELD_TYPE_NUMBER, float64(42)},
-		{"bool true", "true", pb.FieldType_FIELD_TYPE_BOOL, true},
-		{"bool false", "false", pb.FieldType_FIELD_TYPE_BOOL, false},
-		{"string", "hello", pb.FieldType_FIELD_TYPE_STRING, "hello"},
-		{"time", "2025-01-15T09:30:00Z", pb.FieldType_FIELD_TYPE_TIME, "2025-01-15T09:30:00Z"},
-		{"duration", "24h", pb.FieldType_FIELD_TYPE_DURATION, "24h"},
-		{"url", "https://example.com", pb.FieldType_FIELD_TYPE_URL, "https://example.com"},
+		{"integer", "42", domain.FieldTypeInteger, int64(42)},
+		{"negative integer", "-1", domain.FieldTypeInteger, int64(-1)},
+		{"number float", "3.14", domain.FieldTypeNumber, 3.14},
+		{"number integer", "42", domain.FieldTypeNumber, float64(42)},
+		{"bool true", "true", domain.FieldTypeBool, true},
+		{"bool false", "false", domain.FieldTypeBool, false},
+		{"string", "hello", domain.FieldTypeString, "hello"},
+		{"time", "2025-01-15T09:30:00Z", domain.FieldTypeTime, "2025-01-15T09:30:00Z"},
+		{"duration", "24h", domain.FieldTypeDuration, "24h"},
+		{"url", "https://example.com", domain.FieldTypeURL, "https://example.com"},
 	}
 
 	for _, tc := range tests {
@@ -101,17 +101,17 @@ func TestConfigYAML_StringifyValue(t *testing.T) {
 	tests := []struct {
 		name     string
 		value    interface{}
-		ft       pb.FieldType
+		ft       domain.FieldType
 		expected string
 	}{
-		{"int from int", 3, pb.FieldType_FIELD_TYPE_INT, "3"},
-		{"int from float64", float64(3), pb.FieldType_FIELD_TYPE_INT, "3"},
-		{"number from float64", 3.14, pb.FieldType_FIELD_TYPE_NUMBER, "3.14"},
-		{"number from int", 42, pb.FieldType_FIELD_TYPE_NUMBER, "42"},
-		{"bool true", true, pb.FieldType_FIELD_TYPE_BOOL, "true"},
-		{"bool false", false, pb.FieldType_FIELD_TYPE_BOOL, "false"},
-		{"string", "hello", pb.FieldType_FIELD_TYPE_STRING, "hello"},
-		{"json map", map[string]interface{}{"key": "val"}, pb.FieldType_FIELD_TYPE_JSON, `{"key":"val"}`},
+		{"int from int", 3, domain.FieldTypeInteger, "3"},
+		{"int from float64", float64(3), domain.FieldTypeInteger, "3"},
+		{"number from float64", 3.14, domain.FieldTypeNumber, "3.14"},
+		{"number from int", 42, domain.FieldTypeNumber, "42"},
+		{"bool true", true, domain.FieldTypeBool, "true"},
+		{"bool false", false, domain.FieldTypeBool, "false"},
+		{"string", "hello", domain.FieldTypeString, "hello"},
+		{"json map", map[string]interface{}{"key": "val"}, domain.FieldTypeJSON, `{"key":"val"}`},
 	}
 
 	for _, tc := range tests {
@@ -125,11 +125,11 @@ func TestConfigYAML_StringifyValue(t *testing.T) {
 
 func TestConfigYAML_StringifyValue_Errors(t *testing.T) {
 	// Non-integer float for integer type
-	_, err := stringifyValue(3.14, pb.FieldType_FIELD_TYPE_INT)
+	_, err := stringifyValue(3.14, domain.FieldTypeInteger)
 	assert.ErrorContains(t, err, "expected integer")
 
 	// Wrong type for bool
-	_, err = stringifyValue(42, pb.FieldType_FIELD_TYPE_BOOL)
+	_, err = stringifyValue(42, domain.FieldTypeBool)
 	assert.ErrorContains(t, err, "cannot convert")
 }
 
@@ -178,7 +178,7 @@ func TestConfigYAML_Description(t *testing.T) {
 	rows := []configRow{
 		{FieldPath: "fee", Value: "0.5", Description: &desc},
 	}
-	fieldTypes := map[string]pb.FieldType{"fee": pb.FieldType_FIELD_TYPE_STRING}
+	fieldTypes := map[string]domain.FieldType{"fee": domain.FieldTypeString}
 
 	doc := configToYAML(1, "", rows, fieldTypes)
 	assert.Equal(t, "custom fee", doc.Values["fee"].Description)

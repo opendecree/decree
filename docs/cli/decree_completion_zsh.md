@@ -23,11 +23,7 @@ To load completions for every new session, execute once:
 
 #### Linux:
 
-<<<<<<< HEAD:docs/cli/decree_completion_zsh.md
 	decree completion zsh > "${fpath[1]}/_decree"
-=======
-	decree completion zsh > "${fpath[1]}/_ccs"
->>>>>>> origin/main:docs/cli/ccs_completion_zsh.md
 
 #### macOS:
 

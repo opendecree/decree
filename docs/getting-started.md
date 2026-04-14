@@ -11,11 +11,7 @@ This guide walks you through setting up OpenDecree, creating your first schema a
 
 ```bash
 git clone https://github.com/opendecree/decree.git
-<<<<<<< HEAD
 cd decree
-=======
-cd central-config-service
->>>>>>> origin/main
 
 # Start PostgreSQL, Redis, run migrations, and start the service
 docker compose up -d --wait service
@@ -26,7 +22,7 @@ The gRPC service is now available at `localhost:9090`. No JWT setup needed — t
 ## 2. Install the CLI
 
 ```bash
-go install github.com/opendecree/decree/cmd/ccs@latest
+go install github.com/opendecree/decree/cmd/decree@latest
 ```
 
 Set your identity (required for all operations):
@@ -260,5 +256,5 @@ decree config import <other-tenant-id> config-backup.yaml
 - [Concepts](concepts/overview.md) — understand schemas, tenants, typed values, and versioning in depth
 - [API Reference](api/api-reference.md) — full gRPC service and message definitions
 - [SDKs](sdk.md) — configclient, adminclient, and configwatcher documentation
-- [CLI Reference](cli/ccs.md) — all `decree` commands
+- [CLI Reference](cli/decree.md) — all `decree` commands
 - [Server Configuration](server/configuration.md) — environment variables and deployment

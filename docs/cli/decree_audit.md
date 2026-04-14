@@ -26,11 +26,7 @@ Query audit logs and usage statistics
 
 ### SEE ALSO
 
-<<<<<<< HEAD:docs/cli/decree_audit.md
 * [decree](decree.md)	 - OpenDecree CLI
-=======
-* [ccs](ccs.md)	 - Central Config Service CLI
->>>>>>> origin/main:docs/cli/ccs_audit.md
 * [decree audit query](decree_audit_query.md)	 - Query the config change audit log
 * [decree audit unused](decree_audit_unused.md)	 - Find fields not read since the given duration (e.g. 7d, 24h)
 * [decree audit usage](decree_audit_usage.md)	 - Show read usage statistics for a field

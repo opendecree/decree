@@ -1,13 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/opendecree/decree/schemas/schema-yaml.json",
-<<<<<<< HEAD
   "title": "OpenDecree Schema YAML",
   "description": "Schema definition format for the OpenDecree (syntax v1).",
-=======
-  "title": "Central Config Service Schema YAML",
-  "description": "Schema definition format for the Central Config Service (syntax v1).",
->>>>>>> origin/main
   "type": "object",
   "required": ["syntax", "name", "fields"],
   "additionalProperties": false,

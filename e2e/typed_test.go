@@ -23,9 +23,9 @@ func TestTypedValuesAndNull(t *testing.T) {
 
 	// 1. Create schema with all types.
 	s, err := admin.CreateSchema(ctx, "typed-e2e", []adminclient.Field{
-		{Path: "app.retries", Type: "FIELD_TYPE_INT"},
+		{Path: "app.retries", Type: "FIELD_TYPE_INT", Nullable: true},
 		{Path: "app.rate", Type: "FIELD_TYPE_NUMBER"},
-		{Path: "app.name", Type: "FIELD_TYPE_STRING"},
+		{Path: "app.name", Type: "FIELD_TYPE_STRING", Nullable: true},
 		{Path: "app.enabled", Type: "FIELD_TYPE_BOOL"},
 		{Path: "app.timeout", Type: "FIELD_TYPE_DURATION"},
 	}, "")

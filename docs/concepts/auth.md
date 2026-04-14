@@ -86,11 +86,7 @@ The admin can still change the field to other allowed enum values (e.g., USD, EU
 No configuration needed. Metadata auth is the default:
 
 ```bash
-<<<<<<< HEAD
 export DECREE_SUBJECT=dev@example.com
-=======
-export CCS_SUBJECT=dev@example.com
->>>>>>> origin/main
 decree config get-all <tenant-id>
 ```
 
@@ -119,4 +115,4 @@ environment:
 - [Server Configuration](../server/configuration.md) -- all auth-related environment variables
 - [Tenants](tenants.md) -- how tenant scoping works
 - [API Reference](../api/api-reference.md) -- RPC-level auth requirements
-- [CLI Reference](../cli/ccs.md) -- CLI auth flags and environment variables
+- [CLI Reference](../cli/decree.md) — CLI auth flags and environment variables

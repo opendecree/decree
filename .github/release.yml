@@ -1,0 +1,28 @@
+changelog:
+  categories:
+    - title: "⚠️ Breaking Changes"
+      labels:
+        - breaking
+    - title: "Proto / API"
+      labels:
+        - proto
+    - title: "Server"
+      labels:
+        - server
+    - title: "SDK"
+      labels:
+        - sdk
+    - title: "CLI"
+      labels:
+        - cli
+    - title: "Infrastructure"
+      labels:
+        - ci
+        - docker
+        - helm
+    - title: "Documentation"
+      labels:
+        - docs
+    - title: "Other Changes"
+      labels:
+        - "*"

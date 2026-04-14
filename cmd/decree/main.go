@@ -24,13 +24,8 @@ func main() {
 
 var rootCmd = &cobra.Command{
 	Use:   "decree",
-<<<<<<< HEAD:cmd/decree/main.go
 	Short: "OpenDecree CLI",
-	Long:  "Command-line tool for managing schemas, tenants, and configuration values in the OpenDecree.",
-=======
-	Short: "Central Config Service CLI",
-	Long:  "Command-line tool for managing schemas, tenants, and configuration values in the Central Config Service.",
->>>>>>> origin/main:cmd/ccs/main.go
+	Long:  "Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.",
 }
 
 func init() {
@@ -49,6 +44,11 @@ func init() {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(lockCmd)
 	rootCmd.AddCommand(auditCmd)
+	rootCmd.AddCommand(diffCmd)
+	rootCmd.AddCommand(docgenCmd)
+	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(seedCmd)
+	rootCmd.AddCommand(dumpCmd)
 }
 
 func envOrDefault(key, fallback string) string {

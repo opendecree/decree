@@ -69,7 +69,7 @@ go.mod                   # Server module (cmd/server + internal/)
 
 cmd/
 ├── server/              # Service entry point
-└── ccs/                 # CLI tool (own module: cmd/ccs/go.mod)
+└── decree/              # CLI tool (own module: cmd/decree/go.mod)
 
 proto/                   # Protobuf definitions (API source of truth)
 api/                     # Generated proto Go code (own module: api/go.mod)
@@ -92,7 +92,8 @@ internal/
 sdk/
 ├── configclient/        # Config read/write SDK (own module)
 ├── adminclient/         # Admin operations SDK (own module)
-└── configwatcher/       # Live typed values SDK (own module)
+├── configwatcher/       # Live typed values SDK (own module)
+└── tools/               # Power tools: diff, docgen, validate, seed, dump (own module)
 
 e2e/                     # End-to-end tests (own module: e2e/go.mod)
 build/                   # Dockerfiles (service + tools)
@@ -108,13 +109,14 @@ contrib/                 # Third-party integrations (future: viper, koanf)
 |--------|------|---------|
 | Server | `.` | Service binary + internal packages |
 | API | `api/` | Generated proto stubs (lightweight deps) |
-| CLI | `cmd/ccs/` | CLI binary (depends on SDKs, not internals) |
+| CLI | `cmd/decree/` | CLI binary (depends on SDKs, not internals) |
+| Tools | `sdk/tools/` | Reusable power tools (diff, docgen, validate, seed, dump) |
 | configclient | `sdk/configclient/` | Runtime config read/write SDK |
 | adminclient | `sdk/adminclient/` | Admin management SDK |
 | configwatcher | `sdk/configwatcher/` | Live typed values SDK |
 | E2E | `e2e/` | End-to-end tests (depends on SDKs) |
 
-Modules are independent — `go install .../cmd/ccs@latest` pulls only CLI deps, not server internals.
+Modules are independent — `go install .../cmd/decree@latest` pulls only CLI deps, not server internals.
 
 ## Running Locally
 

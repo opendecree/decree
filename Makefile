@@ -1,6 +1,6 @@
 BINARY_NAME := decree-server
 BUILD_DIR := bin
-TOOLS_IMAGE := central-config-tools
+TOOLS_IMAGE := decree-tools
 TOOLS_SENTINEL := .tools-image-built
 DOCKER_RUN_TOOLS := docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CURDIR):/workspace -w /workspace $(TOOLS_IMAGE)
 MKDOCS_IMAGE := $(MKDOCS_IMAGE):9.7.6
@@ -28,9 +28,14 @@ generate-proto: $(TOOLS_SENTINEL)
 generate-sqlc: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) bash -c "cd db && sqlc generate"
 
-## test: Run unit tests
+## test: Run unit tests (all modules)
 test:
 	go test ./... -race -count=1
+	cd sdk/configclient && go test ./... -race -count=1
+	cd sdk/adminclient && go test ./... -race -count=1
+	cd sdk/configwatcher && go test ./... -race -count=1
+	cd sdk/tools && go test ./... -race -count=1
+	cd cmd/decree && go test ./... -race -count=1
 
 ## lint: Run linters
 lint: lint-go lint-proto

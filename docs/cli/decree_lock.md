@@ -26,11 +26,7 @@ Manage field locks
 
 ### SEE ALSO
 
-<<<<<<< HEAD:docs/cli/decree_lock.md
 * [decree](decree.md)	 - OpenDecree CLI
-=======
-* [ccs](ccs.md)	 - Central Config Service CLI
->>>>>>> origin/main:docs/cli/ccs_lock.md
 * [decree lock list](decree_lock_list.md)	 - List field locks for a tenant
 * [decree lock remove](decree_lock_remove.md)	 - Unlock a field
 * [decree lock set](decree_lock_set.md)	 - Lock a field (prevents modification by non-superadmin)

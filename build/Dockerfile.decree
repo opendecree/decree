@@ -1,0 +1,25 @@
+# Build stage
+FROM golang:1.24-bookworm AS builder
+
+WORKDIR /app
+
+# Cache dependencies — this layer only rebuilds when go.mod/go.sum change.
+COPY cmd/decree/go.mod cmd/decree/go.sum ./cmd/decree/
+COPY api/go.mod api/go.sum ./api/
+COPY sdk/adminclient/go.mod sdk/adminclient/go.sum ./sdk/adminclient/
+COPY sdk/configclient/go.mod sdk/configclient/go.sum ./sdk/configclient/
+COPY sdk/tools/go.mod sdk/tools/go.sum ./sdk/tools/
+RUN cd cmd/decree && go mod download
+
+# Build — this layer rebuilds on any source change, but deps are cached.
+COPY . .
+RUN cd cmd/decree && CGO_ENABLED=0 go build -o /bin/decree .
+
+# Runtime stage
+FROM gcr.io/distroless/static-debian12:nonroot
+
+COPY --from=builder /bin/decree /bin/decree
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/bin/decree"]

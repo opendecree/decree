@@ -9,17 +9,29 @@ import (
 	"regexp"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 // FieldValidator validates a TypedValue against a schema field's constraints.
 type FieldValidator struct {
-	fieldPath string
-	fieldType pb.FieldType
-	nullable  bool
-	checks    []checkFunc
+	fieldPath       string
+	fieldType       pb.FieldType
+	domainFieldType domain.FieldType
+	nullable        bool
+	checks          []checkFunc
 }
 
 type checkFunc func(tv *pb.TypedValue) error
+
+// FieldType returns the proto field type for this validator.
+func (v *FieldValidator) FieldType() pb.FieldType {
+	return v.fieldType
+}
+
+// DomainFieldType returns the domain field type for this validator.
+func (v *FieldValidator) DomainFieldType() domain.FieldType {
+	return v.domainFieldType
+}
 
 // Validate checks a TypedValue against this field's constraints.
 // Returns nil if the value is valid. Returns an error describing the first violation.
@@ -50,9 +62,10 @@ func (v *FieldValidator) Validate(tv *pb.TypedValue) error {
 // NewFieldValidator creates a validator for a schema field.
 func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, constraints *pb.FieldConstraints) *FieldValidator {
 	v := &FieldValidator{
-		fieldPath: fieldPath,
-		fieldType: fieldType,
-		nullable:  nullable,
+		fieldPath:       fieldPath,
+		fieldType:       fieldType,
+		domainFieldType: domain.FieldTypeFromProto(fieldType),
+		nullable:        nullable,
 	}
 
 	// URL validity check is always applied (not constraint-dependent).

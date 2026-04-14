@@ -8,7 +8,7 @@ OpenDecree CLI
 
 ### Synopsis
 
-Command-line tool for managing schemas, tenants, and configuration values in the OpenDecree.
+Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.
 
 ### Options
 
@@ -28,9 +28,14 @@ Command-line tool for managing schemas, tenants, and configuration values in the
 * [decree audit](decree_audit.md)	 - Query audit logs and usage statistics
 * [decree completion](decree_completion.md)	 - Generate the autocompletion script for the specified shell
 * [decree config](decree_config.md)	 - Read and write configuration values
+* [decree diff](decree_diff.md)	 - Show differences between two config versions or files
+* [decree docgen](decree_docgen.md)	 - Generate markdown documentation from a schema
+* [decree dump](decree_dump.md)	 - Export a full tenant backup (schema + config + locks)
 * [decree lock](decree_lock.md)	 - Manage field locks
 * [decree schema](decree_schema.md)	 - Manage configuration schemas
+* [decree seed](decree_seed.md)	 - Bootstrap a schema, tenant, and config from a single YAML file
 * [decree tenant](decree_tenant.md)	 - Manage tenants
+* [decree validate](decree_validate.md)	 - Validate a config YAML against a schema YAML (offline)
 * [decree version](decree_version.md)	 - Print the CLI version
 * [decree watch](decree_watch.md)	 - Stream live config changes (like tail -f)
 

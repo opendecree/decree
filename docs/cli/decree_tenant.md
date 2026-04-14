@@ -26,11 +26,7 @@ Manage tenants
 
 ### SEE ALSO
 
-<<<<<<< HEAD:docs/cli/decree_tenant.md
 * [decree](decree.md)	 - OpenDecree CLI
-=======
-* [ccs](ccs.md)	 - Central Config Service CLI
->>>>>>> origin/main:docs/cli/ccs_tenant.md
 * [decree tenant create](decree_tenant_create.md)	 - Create a new tenant on a published schema version
 * [decree tenant delete](decree_tenant_delete.md)	 - Delete a tenant and all its configuration data
 * [decree tenant get](decree_tenant_get.md)	 - Show a tenant

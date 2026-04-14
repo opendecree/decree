@@ -48,41 +48,41 @@ nav:
   - CLI Reference:
       - decree: cli/decree.md
       - Schema:
-          - ccs schema: cli/decree_schema.md
-          - ccs schema create: cli/decree_schema_create.md
-          - ccs schema get: cli/decree_schema_get.md
-          - ccs schema list: cli/decree_schema_list.md
-          - ccs schema publish: cli/decree_schema_publish.md
-          - ccs schema delete: cli/decree_schema_delete.md
-          - ccs schema export: cli/decree_schema_export.md
-          - ccs schema import: cli/decree_schema_import.md
+          - decree schema: cli/decree_schema.md
+          - decree schema create: cli/decree_schema_create.md
+          - decree schema get: cli/decree_schema_get.md
+          - decree schema list: cli/decree_schema_list.md
+          - decree schema publish: cli/decree_schema_publish.md
+          - decree schema delete: cli/decree_schema_delete.md
+          - decree schema export: cli/decree_schema_export.md
+          - decree schema import: cli/decree_schema_import.md
       - Tenant:
-          - ccs tenant: cli/decree_tenant.md
-          - ccs tenant create: cli/decree_tenant_create.md
-          - ccs tenant get: cli/decree_tenant_get.md
-          - ccs tenant list: cli/decree_tenant_list.md
-          - ccs tenant delete: cli/decree_tenant_delete.md
+          - decree tenant: cli/decree_tenant.md
+          - decree tenant create: cli/decree_tenant_create.md
+          - decree tenant get: cli/decree_tenant_get.md
+          - decree tenant list: cli/decree_tenant_list.md
+          - decree tenant delete: cli/decree_tenant_delete.md
       - Config:
-          - ccs config: cli/decree_config.md
-          - ccs config get: cli/decree_config_get.md
-          - ccs config get-all: cli/decree_config_get-all.md
-          - ccs config set: cli/decree_config_set.md
-          - ccs config set-many: cli/decree_config_set-many.md
-          - ccs config versions: cli/decree_config_versions.md
-          - ccs config rollback: cli/decree_config_rollback.md
-          - ccs config export: cli/decree_config_export.md
-          - ccs config import: cli/decree_config_import.md
+          - decree config: cli/decree_config.md
+          - decree config get: cli/decree_config_get.md
+          - decree config get-all: cli/decree_config_get-all.md
+          - decree config set: cli/decree_config_set.md
+          - decree config set-many: cli/decree_config_set-many.md
+          - decree config versions: cli/decree_config_versions.md
+          - decree config rollback: cli/decree_config_rollback.md
+          - decree config export: cli/decree_config_export.md
+          - decree config import: cli/decree_config_import.md
       - Watch: cli/decree_watch.md
       - Lock:
-          - ccs lock: cli/decree_lock.md
-          - ccs lock set: cli/decree_lock_set.md
-          - ccs lock remove: cli/decree_lock_remove.md
-          - ccs lock list: cli/decree_lock_list.md
+          - decree lock: cli/decree_lock.md
+          - decree lock set: cli/decree_lock_set.md
+          - decree lock remove: cli/decree_lock_remove.md
+          - decree lock list: cli/decree_lock_list.md
       - Audit:
-          - ccs audit: cli/decree_audit.md
-          - ccs audit query: cli/decree_audit_query.md
-          - ccs audit usage: cli/decree_audit_usage.md
-          - ccs audit unused: cli/decree_audit_unused.md
+          - decree audit: cli/decree_audit.md
+          - decree audit query: cli/decree_audit_query.md
+          - decree audit usage: cli/decree_audit_usage.md
+          - decree audit unused: cli/decree_audit_unused.md
   - Use Cases:
       - Config as Code: usecases/config-as-code.md
   - Server:

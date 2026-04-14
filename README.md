@@ -1,5 +1,9 @@
 # OpenDecree
 
+[![CI](https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg)](https://github.com/opendecree/decree/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 Schema-driven business configuration management for multi-tenant services.
 
 ## What is this?
@@ -70,12 +74,13 @@ Install only what you need:
 go get github.com/opendecree/decree/sdk/configclient@latest
 go get github.com/opendecree/decree/sdk/adminclient@latest
 go get github.com/opendecree/decree/sdk/configwatcher@latest
+go get github.com/opendecree/decree/sdk/tools@latest         # diff, docgen, validate, seed, dump
 ```
 
 ## CLI
 
 ```bash
-go install github.com/opendecree/decree/cmd/ccs@latest
+go install github.com/opendecree/decree/cmd/decree@latest
 
 decree schema list
 decree schema import --publish schema.yaml      # import + auto-publish
@@ -89,6 +94,14 @@ decree config rollback <tenant-id> 2
 decree watch <tenant-id>                          # live stream
 decree lock set <tenant-id> payments.currency     # lock field
 decree audit query --tenant <tenant-id> --since 24h
+
+# Power tools
+decree seed environments/dev.yaml                 # bootstrap everything from one file
+decree dump <tenant-id> > backup.yaml             # full tenant backup
+decree diff <tenant-id> 1 2                       # diff two config versions
+decree diff --old v1.yaml --new v2.yaml           # diff two files
+decree docgen <schema-id>                          # generate markdown docs
+decree validate --schema s.yaml --config c.yaml   # offline validation
 ```
 
 Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`
@@ -127,7 +140,7 @@ decree config get-all <tenant-id>
 
 ```
 ┌──────────┐     gRPC      ┌────────────────────────┐
-│  Clients ├──────────────►│  OpenDecree │
+│  Clients ├──────────────►│      OpenDecree        │
 └──────────┘               │                        │
                            │  ┌── SchemaService     │
                            │  ├── ConfigService     │

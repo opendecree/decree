@@ -5,16 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"regexp"
 
-	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
 )
+
+var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// validUUID checks whether s is a valid UUID string.
+func validUUID(s string) bool {
+	return uuidRe.MatchString(s)
+}
 
 // Service implements the SchemaService gRPC server.
 type Service struct {
@@ -45,7 +52,7 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 		return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
 	}
 
-	schema, err := s.store.CreateSchema(ctx, dbstore.CreateSchemaParams{
+	schema, err := s.store.CreateSchema(ctx, CreateSchemaParams{
 		Name:        req.Name,
 		Description: ptrString(req.GetDescription()),
 	})
@@ -56,7 +63,7 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 
 	// Create initial version (v1).
 	checksum := computeChecksum(req.Fields)
-	version, err := s.store.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
+	version, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
 		SchemaID: schema.ID,
 		Version:  1,
 		Checksum: checksum,
@@ -78,30 +85,29 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 }
 
 func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.GetSchemaResponse, error) {
-	schemaID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, schemaID)
+	schema, err := s.store.GetSchemaByID(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get schema")
 	}
 
-	var version dbstore.SchemaVersion
+	var version domain.SchemaVersion
 	if req.Version != nil {
-		version, err = s.store.GetSchemaVersion(ctx, dbstore.GetSchemaVersionParams{
-			SchemaID: schemaID,
+		version, err = s.store.GetSchemaVersion(ctx, GetSchemaVersionParams{
+			SchemaID: req.Id,
 			Version:  *req.Version,
 		})
 	} else {
-		version, err = s.store.GetLatestSchemaVersion(ctx, schemaID)
+		version, err = s.store.GetLatestSchemaVersion(ctx, req.Id)
 	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema version not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get schema version")
@@ -126,7 +132,7 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 	var offset int32
 	// TODO: implement cursor-based pagination using req.PageToken.
 
-	schemas, err := s.store.ListSchemas(ctx, dbstore.ListSchemasParams{
+	schemas, err := s.store.ListSchemas(ctx, ListSchemasParams{
 		Limit:  pageSize,
 		Offset: offset,
 	})
@@ -154,21 +160,20 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 }
 
 func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest) (*pb.UpdateSchemaResponse, error) {
-	schemaID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, schemaID)
+	schema, err := s.store.GetSchemaByID(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get schema")
 	}
 
 	// Get latest version to derive from.
-	latestVersion, err := s.store.GetLatestSchemaVersion(ctx, schemaID)
+	latestVersion, err := s.store.GetLatestSchemaVersion(ctx, req.Id)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get latest version")
 	}
@@ -199,8 +204,8 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 	}
 
 	checksum := computeChecksum(mergedFields)
-	newVersion, err := s.store.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
-		SchemaID:      schemaID,
+	newVersion, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID:      req.Id,
 		Version:       latestVersion.Version + 1,
 		ParentVersion: &latestVersion.Version,
 		Description:   ptrString(req.GetVersionDescription()),
@@ -222,12 +227,11 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 }
 
 func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest) (*pb.DeleteSchemaResponse, error) {
-	schemaID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
-	if err := s.store.DeleteSchema(ctx, schemaID); err != nil {
+	if err := s.store.DeleteSchema(ctx, req.Id); err != nil {
 		s.logger.ErrorContext(ctx, "delete schema", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete schema")
 	}
@@ -236,25 +240,24 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 }
 
 func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaRequest) (*pb.PublishSchemaResponse, error) {
-	schemaID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, schemaID)
+	schema, err := s.store.GetSchemaByID(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get schema")
 	}
 
-	version, err := s.store.PublishSchemaVersion(ctx, dbstore.PublishSchemaVersionParams{
-		SchemaID: schemaID,
+	version, err := s.store.PublishSchemaVersion(ctx, PublishSchemaVersionParams{
+		SchemaID: req.Id,
 		Version:  req.Version,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema version not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to publish schema version")
@@ -282,18 +285,17 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
 	}
 
-	schemaID, err := parseUUID(req.SchemaId)
-	if err != nil {
+	if !validUUID(req.SchemaId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
 	// Verify schema version exists and is published.
-	version, err := s.store.GetSchemaVersion(ctx, dbstore.GetSchemaVersionParams{
-		SchemaID: schemaID,
+	version, err := s.store.GetSchemaVersion(ctx, GetSchemaVersionParams{
+		SchemaID: req.SchemaId,
 		Version:  req.SchemaVersion,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema version not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get schema version")
@@ -302,9 +304,9 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		return nil, status.Error(codes.FailedPrecondition, "schema version must be published before assigning to a tenant")
 	}
 
-	tenant, err := s.store.CreateTenant(ctx, dbstore.CreateTenantParams{
+	tenant, err := s.store.CreateTenant(ctx, CreateTenantParams{
 		Name:          req.Name,
-		SchemaID:      schemaID,
+		SchemaID:      req.SchemaId,
 		SchemaVersion: req.SchemaVersion,
 	})
 	if err != nil {
@@ -318,14 +320,13 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 }
 
 func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.GetTenantResponse, error) {
-	tenantID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	tenant, err := s.store.GetTenantByID(ctx, tenantID)
+	tenant, err := s.store.GetTenantByID(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "tenant not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get tenant")
@@ -342,21 +343,20 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 		pageSize = 50
 	}
 
-	var tenants []dbstore.Tenant
+	var tenants []domain.Tenant
 	var err error
 
 	if req.SchemaId != nil && *req.SchemaId != "" {
-		schemaID, parseErr := parseUUID(*req.SchemaId)
-		if parseErr != nil {
+		if !validUUID(*req.SchemaId) {
 			return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 		}
-		tenants, err = s.store.ListTenantsBySchema(ctx, dbstore.ListTenantsBySchemaParams{
-			SchemaID: schemaID,
+		tenants, err = s.store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{
+			SchemaID: *req.SchemaId,
 			Limit:    pageSize,
 			Offset:   0,
 		})
 	} else {
-		tenants, err = s.store.ListTenants(ctx, dbstore.ListTenantsParams{
+		tenants, err = s.store.ListTenants(ctx, ListTenantsParams{
 			Limit:  pageSize,
 			Offset: 0,
 		})
@@ -376,23 +376,23 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
-	tenantID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	var tenant dbstore.Tenant
+	var tenant domain.Tenant
 
 	if req.Name != nil && *req.Name != "" {
 		if !isValidSlug(*req.Name) {
 			return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
 		}
-		tenant, err = s.store.UpdateTenantName(ctx, dbstore.UpdateTenantNameParams{
-			ID:   tenantID,
+		var err error
+		tenant, err = s.store.UpdateTenantName(ctx, UpdateTenantNameParams{
+			ID:   req.Id,
 			Name: *req.Name,
 		})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, domain.ErrNotFound) {
 				return nil, status.Error(codes.NotFound, "tenant not found")
 			}
 			return nil, status.Error(codes.Internal, "failed to update tenant name")
@@ -400,12 +400,13 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	}
 
 	if req.SchemaVersion != nil {
-		tenant, err = s.store.UpdateTenantSchemaVersion(ctx, dbstore.UpdateTenantSchemaVersionParams{
-			ID:            tenantID,
+		var err error
+		tenant, err = s.store.UpdateTenantSchemaVersion(ctx, UpdateTenantSchemaVersionParams{
+			ID:            req.Id,
 			SchemaVersion: *req.SchemaVersion,
 		})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, domain.ErrNotFound) {
 				return nil, status.Error(codes.NotFound, "tenant not found")
 			}
 			return nil, status.Error(codes.Internal, "failed to update tenant schema version")
@@ -418,9 +419,10 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 
 	// If neither field was updated, just fetch current state.
 	if req.Name == nil && req.SchemaVersion == nil {
-		tenant, err = s.store.GetTenantByID(ctx, tenantID)
+		var err error
+		tenant, err = s.store.GetTenantByID(ctx, req.Id)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, domain.ErrNotFound) {
 				return nil, status.Error(codes.NotFound, "tenant not found")
 			}
 			return nil, status.Error(codes.Internal, "failed to get tenant")
@@ -433,12 +435,11 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
-	tenantID, err := parseUUID(req.Id)
-	if err != nil {
+	if !validUUID(req.Id) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	if err := s.store.DeleteTenant(ctx, tenantID); err != nil {
+	if err := s.store.DeleteTenant(ctx, req.Id); err != nil {
 		s.logger.ErrorContext(ctx, "delete tenant", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete tenant")
 	}
@@ -449,8 +450,7 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 // --- Field locking ---
 
 func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.LockFieldResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -459,8 +459,8 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 		lockedValues, _ = json.Marshal(req.LockedValues)
 	}
 
-	if err := s.store.CreateFieldLock(ctx, dbstore.CreateFieldLockParams{
-		TenantID:     tenantID,
+	if err := s.store.CreateFieldLock(ctx, CreateFieldLockParams{
+		TenantID:     req.TenantId,
 		FieldPath:    req.FieldPath,
 		LockedValues: lockedValues,
 	}); err != nil {
@@ -472,13 +472,12 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 }
 
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	if err := s.store.DeleteFieldLock(ctx, dbstore.DeleteFieldLockParams{
-		TenantID:  tenantID,
+	if err := s.store.DeleteFieldLock(ctx, DeleteFieldLockParams{
+		TenantID:  req.TenantId,
 		FieldPath: req.FieldPath,
 	}); err != nil {
 		s.logger.ErrorContext(ctx, "unlock field", "error", err)
@@ -489,12 +488,11 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 }
 
 func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequest) (*pb.ListFieldLocksResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	locks, err := s.store.GetFieldLocks(ctx, tenantID)
+	locks, err := s.store.GetFieldLocks(ctx, req.TenantId)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list field locks")
 	}
@@ -544,11 +542,11 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 
 	// Check if schema already exists by name.
 	existing, err := s.store.GetSchemaByName(ctx, doc.Name)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return nil, status.Error(codes.Internal, "failed to look up schema")
 	}
 
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, domain.ErrNotFound) {
 		// New schema — create with v1.
 		resp, err := s.importCreateNew(ctx, doc, fields, checksum)
 		if err != nil || !req.AutoPublish {
@@ -583,7 +581,7 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 }
 
 func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields []*pb.SchemaField, checksum string) (*pb.ImportSchemaResponse, error) {
-	schema, err := s.store.CreateSchema(ctx, dbstore.CreateSchemaParams{
+	schema, err := s.store.CreateSchema(ctx, CreateSchemaParams{
 		Name:        doc.Name,
 		Description: ptrString(doc.Description),
 	})
@@ -592,7 +590,7 @@ func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields [
 		return nil, status.Error(codes.Internal, "failed to create schema")
 	}
 
-	version, err := s.store.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
+	version, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
 		SchemaID:    schema.ID,
 		Version:     1,
 		Description: ptrString(doc.VersionDescription),
@@ -613,8 +611,8 @@ func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields [
 	}, nil
 }
 
-func (s *Service) importNewVersion(ctx context.Context, schema dbstore.Schema, latestVersion dbstore.SchemaVersion, doc *SchemaYAML, fields []*pb.SchemaField, checksum string) (*pb.ImportSchemaResponse, error) {
-	newVersion, err := s.store.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
+func (s *Service) importNewVersion(ctx context.Context, schema domain.Schema, latestVersion domain.SchemaVersion, doc *SchemaYAML, fields []*pb.SchemaField, checksum string) (*pb.ImportSchemaResponse, error) {
+	newVersion, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
 		SchemaID:      schema.ID,
 		Version:       latestVersion.Version + 1,
 		ParentVersion: &latestVersion.Version,
@@ -650,8 +648,8 @@ func (s *Service) autoPublish(ctx context.Context, resp *pb.ImportSchemaResponse
 	return &pb.ImportSchemaResponse{Schema: pubResp.Schema}, nil
 }
 
-func (s *Service) createFields(ctx context.Context, versionID pgUUID, fields []*pb.SchemaField) ([]dbstore.SchemaField, error) {
-	result := make([]dbstore.SchemaField, 0, len(fields))
+func (s *Service) createFields(ctx context.Context, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
+	result := make([]domain.SchemaField, 0, len(fields))
 	for _, f := range fields {
 		if err := validateFieldConstraints(f); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
@@ -662,10 +660,10 @@ func (s *Service) createFields(ctx context.Context, versionID pgUUID, fields []*
 			constraints, _ = json.Marshal(f.Constraints)
 		}
 
-		dbField, err := s.store.CreateSchemaField(ctx, dbstore.CreateSchemaFieldParams{
+		dbField, err := s.store.CreateSchemaField(ctx, CreateSchemaFieldParams{
 			SchemaVersionID: versionID,
 			Path:            f.Path,
-			FieldType:       protoFieldType(f.Type),
+			FieldType:       domain.FieldTypeFromProto(f.Type),
 			Constraints:     constraints,
 			Nullable:        f.Nullable,
 			Deprecated:      f.Deprecated,

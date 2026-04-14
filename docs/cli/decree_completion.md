@@ -32,11 +32,7 @@ See each sub-command's help for details on how to use the generated script.
 
 ### SEE ALSO
 
-<<<<<<< HEAD:docs/cli/decree_completion.md
 * [decree](decree.md)	 - OpenDecree CLI
-=======
-* [ccs](ccs.md)	 - Central Config Service CLI
->>>>>>> origin/main:docs/cli/ccs_completion.md
 * [decree completion bash](decree_completion_bash.md)	 - Generate the autocompletion script for bash
 * [decree completion fish](decree_completion_fish.md)	 - Generate the autocompletion script for fish
 * [decree completion powershell](decree_completion_powershell.md)	 - Generate the autocompletion script for powershell

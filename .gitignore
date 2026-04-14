@@ -6,6 +6,8 @@
 .vscode/
 
 # Go
+go.work
+go.work.sum
 bin/
 dist/
 *.exe
@@ -44,5 +46,6 @@ tmp/
 # MkDocs build output
 site/
 
-# CLI binary
-ccs
+# CLI binary (root-level only, not cmd/decree/)
+/ccs
+/decree

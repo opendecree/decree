@@ -3,40 +3,138 @@ package schema
 import (
 	"context"
 
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
+// CreateSchemaParams contains parameters for creating a schema.
+type CreateSchemaParams struct {
+	Name        string
+	Description *string
+}
+
+// CreateSchemaVersionParams contains parameters for creating a schema version.
+type CreateSchemaVersionParams struct {
+	SchemaID      string
+	Version       int32
+	ParentVersion *int32
+	Description   *string
+	Checksum      string
+}
+
+// GetSchemaVersionParams identifies a specific schema version.
+type GetSchemaVersionParams struct {
+	SchemaID string
+	Version  int32
+}
+
+// ListSchemasParams contains pagination parameters for listing schemas.
+type ListSchemasParams struct {
+	Limit  int32
+	Offset int32
+}
+
+// CreateSchemaFieldParams contains parameters for creating a schema field.
+type CreateSchemaFieldParams struct {
+	SchemaVersionID string
+	Path            string
+	FieldType       domain.FieldType
+	Constraints     []byte
+	Nullable        bool
+	Deprecated      bool
+	RedirectTo      *string
+	DefaultValue    *string
+	Description     *string
+}
+
+// DeleteSchemaFieldParams identifies a field to delete.
+type DeleteSchemaFieldParams struct {
+	SchemaVersionID string
+	Path            string
+}
+
+// PublishSchemaVersionParams identifies a schema version to publish.
+type PublishSchemaVersionParams struct {
+	SchemaID string
+	Version  int32
+}
+
+// CreateTenantParams contains parameters for creating a tenant.
+type CreateTenantParams struct {
+	Name          string
+	SchemaID      string
+	SchemaVersion int32
+}
+
+// ListTenantsParams contains pagination parameters for listing tenants.
+type ListTenantsParams struct {
+	Limit  int32
+	Offset int32
+}
+
+// ListTenantsBySchemaParams contains parameters for listing tenants by schema.
+type ListTenantsBySchemaParams struct {
+	SchemaID string
+	Limit    int32
+	Offset   int32
+}
+
+// UpdateTenantNameParams contains parameters for updating a tenant's name.
+type UpdateTenantNameParams struct {
+	ID   string
+	Name string
+}
+
+// UpdateTenantSchemaVersionParams contains parameters for updating a tenant's schema version.
+type UpdateTenantSchemaVersionParams struct {
+	ID            string
+	SchemaVersion int32
+}
+
+// CreateFieldLockParams contains parameters for creating a field lock.
+type CreateFieldLockParams struct {
+	TenantID     string
+	FieldPath    string
+	LockedValues []byte
+}
+
+// DeleteFieldLockParams identifies a field lock to delete.
+type DeleteFieldLockParams struct {
+	TenantID  string
+	FieldPath string
+}
+
 // Store defines the data access interface for schema operations.
+// Implementations must return [domain.ErrNotFound] when an entity is not found.
 type Store interface {
 	// Schema CRUD.
-	CreateSchema(ctx context.Context, arg dbstore.CreateSchemaParams) (dbstore.Schema, error)
-	GetSchemaByID(ctx context.Context, id pgUUID) (dbstore.Schema, error)
-	GetSchemaByName(ctx context.Context, name string) (dbstore.Schema, error)
-	ListSchemas(ctx context.Context, arg dbstore.ListSchemasParams) ([]dbstore.Schema, error)
-	DeleteSchema(ctx context.Context, id pgUUID) error
+	CreateSchema(ctx context.Context, arg CreateSchemaParams) (domain.Schema, error)
+	GetSchemaByID(ctx context.Context, id string) (domain.Schema, error)
+	GetSchemaByName(ctx context.Context, name string) (domain.Schema, error)
+	ListSchemas(ctx context.Context, arg ListSchemasParams) ([]domain.Schema, error)
+	DeleteSchema(ctx context.Context, id string) error
 
 	// Schema versions.
-	CreateSchemaVersion(ctx context.Context, arg dbstore.CreateSchemaVersionParams) (dbstore.SchemaVersion, error)
-	GetSchemaVersion(ctx context.Context, arg dbstore.GetSchemaVersionParams) (dbstore.SchemaVersion, error)
-	GetLatestSchemaVersion(ctx context.Context, schemaID pgUUID) (dbstore.SchemaVersion, error)
-	PublishSchemaVersion(ctx context.Context, arg dbstore.PublishSchemaVersionParams) (dbstore.SchemaVersion, error)
+	CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersionParams) (domain.SchemaVersion, error)
+	GetSchemaVersion(ctx context.Context, arg GetSchemaVersionParams) (domain.SchemaVersion, error)
+	GetLatestSchemaVersion(ctx context.Context, schemaID string) (domain.SchemaVersion, error)
+	PublishSchemaVersion(ctx context.Context, arg PublishSchemaVersionParams) (domain.SchemaVersion, error)
 
 	// Schema fields.
-	CreateSchemaField(ctx context.Context, arg dbstore.CreateSchemaFieldParams) (dbstore.SchemaField, error)
-	GetSchemaFields(ctx context.Context, schemaVersionID pgUUID) ([]dbstore.SchemaField, error)
-	DeleteSchemaField(ctx context.Context, arg dbstore.DeleteSchemaFieldParams) error
+	CreateSchemaField(ctx context.Context, arg CreateSchemaFieldParams) (domain.SchemaField, error)
+	GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error)
+	DeleteSchemaField(ctx context.Context, arg DeleteSchemaFieldParams) error
 
 	// Tenants.
-	CreateTenant(ctx context.Context, arg dbstore.CreateTenantParams) (dbstore.Tenant, error)
-	GetTenantByID(ctx context.Context, id pgUUID) (dbstore.Tenant, error)
-	ListTenants(ctx context.Context, arg dbstore.ListTenantsParams) ([]dbstore.Tenant, error)
-	ListTenantsBySchema(ctx context.Context, arg dbstore.ListTenantsBySchemaParams) ([]dbstore.Tenant, error)
-	UpdateTenantName(ctx context.Context, arg dbstore.UpdateTenantNameParams) (dbstore.Tenant, error)
-	UpdateTenantSchemaVersion(ctx context.Context, arg dbstore.UpdateTenantSchemaVersionParams) (dbstore.Tenant, error)
-	DeleteTenant(ctx context.Context, id pgUUID) error
+	CreateTenant(ctx context.Context, arg CreateTenantParams) (domain.Tenant, error)
+	GetTenantByID(ctx context.Context, id string) (domain.Tenant, error)
+	ListTenants(ctx context.Context, arg ListTenantsParams) ([]domain.Tenant, error)
+	ListTenantsBySchema(ctx context.Context, arg ListTenantsBySchemaParams) ([]domain.Tenant, error)
+	UpdateTenantName(ctx context.Context, arg UpdateTenantNameParams) (domain.Tenant, error)
+	UpdateTenantSchemaVersion(ctx context.Context, arg UpdateTenantSchemaVersionParams) (domain.Tenant, error)
+	DeleteTenant(ctx context.Context, id string) error
 
 	// Field locks.
-	CreateFieldLock(ctx context.Context, arg dbstore.CreateFieldLockParams) error
-	DeleteFieldLock(ctx context.Context, arg dbstore.DeleteFieldLockParams) error
-	GetFieldLocks(ctx context.Context, tenantID pgUUID) ([]dbstore.TenantFieldLock, error)
+	CreateFieldLock(ctx context.Context, arg CreateFieldLockParams) error
+	DeleteFieldLock(ctx context.Context, arg DeleteFieldLockParams) error
+	GetFieldLocks(ctx context.Context, tenantID string) ([]domain.TenantFieldLock, error)
 }

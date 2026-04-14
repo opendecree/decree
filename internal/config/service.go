@@ -7,8 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,7 +16,7 @@ import (
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/pubsub"
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
 )
@@ -55,8 +53,8 @@ func NewService(store Store, cache cache.ConfigCache, pub pubsub.Publisher, sub 
 // --- Read operations ---
 
 func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -65,6 +63,8 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 	if err != nil {
 		return nil, err
 	}
+
+	types := s.fieldTypeMap(ctx, tenantID)
 
 	// If descriptions not requested, try cache.
 	if !req.IncludeDescriptions {
@@ -75,7 +75,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 				v := val
 				values = append(values, &pb.ConfigValue{
 					FieldPath: path,
-					Value:     stringToTypedValue(&v, pb.FieldType_FIELD_TYPE_STRING),
+					Value:     stringToTypedValue(&v, lookupFieldType(types, path)),
 					Checksum:  computeChecksum(val),
 				})
 			}
@@ -87,7 +87,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 	}
 
 	// Fetch from DB.
-	rows, err := s.store.GetFullConfigAtVersion(ctx, dbstore.GetFullConfigAtVersionParams{
+	rows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID,
 		Version:  version,
 	})
@@ -100,7 +100,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 	for _, row := range rows {
 		cv := &pb.ConfigValue{
 			FieldPath: row.FieldPath,
-			Value:     stringToTypedValue(row.Value, pb.FieldType_FIELD_TYPE_STRING),
+			Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
 			Checksum:  derefString(row.Checksum),
 		}
 		if req.IncludeDescriptions && row.Description != nil {
@@ -123,8 +123,8 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 }
 
 func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.GetFieldResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -133,21 +133,22 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		return nil, err
 	}
 
-	row, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+	row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 		TenantID:  tenantID,
 		FieldPath: req.FieldPath,
 		Version:   version,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "field not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get field")
 	}
 
+	types := s.fieldTypeMap(ctx, tenantID)
 	cv := &pb.ConfigValue{
 		FieldPath: row.FieldPath,
-		Value:     stringToTypedValue(row.Value, pb.FieldType_FIELD_TYPE_STRING),
+		Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
 		Checksum:  derefString(row.Checksum),
 	}
 	if req.IncludeDescription && row.Description != nil {
@@ -158,8 +159,8 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 }
 
 func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.GetFieldsResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -168,22 +169,23 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		return nil, err
 	}
 
+	types := s.fieldTypeMap(ctx, tenantID)
 	values := make([]*pb.ConfigValue, 0, len(req.FieldPaths))
 	for _, path := range req.FieldPaths {
-		row, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+		row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 			TenantID:  tenantID,
 			FieldPath: path,
 			Version:   version,
 		})
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, domain.ErrNotFound) {
 				continue // Skip missing fields.
 			}
 			return nil, status.Error(codes.Internal, "failed to get field")
 		}
 		cv := &pb.ConfigValue{
 			FieldPath: row.FieldPath,
-			Value:     stringToTypedValue(row.Value, pb.FieldType_FIELD_TYPE_STRING),
+			Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
 			Checksum:  derefString(row.Checksum),
 		}
 		if req.IncludeDescriptions && row.Description != nil {
@@ -198,8 +200,8 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 // --- Write operations ---
 
 func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.SetFieldResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -214,7 +216,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	if err := s.checkFieldLock(ctx, tenantID, req.FieldPath); err != nil {
 		return nil, err
 	}
-	if err := s.validateField(ctx, tenantID, req.TenantId, req.FieldPath, req.Value); err != nil {
+	if err := s.validateField(ctx, tenantID, req.FieldPath, req.Value); err != nil {
 		return nil, err
 	}
 
@@ -225,10 +227,10 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	oldValue := s.getCurrentValue(ctx, tenantID, req.FieldPath, latestVersion)
 
 	// Transaction: version + value + audit.
-	var newVersion dbstore.ConfigVersion
+	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
-		newVersion, txErr = tx.CreateConfigVersion(ctx, dbstore.CreateConfigVersionParams{
+		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
 			Version:     latestVersion + 1,
 			Description: ptrString(req.GetDescription()),
@@ -239,7 +241,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		}
 
 		valStr := typedValueToString(req.Value)
-		if txErr = tx.SetConfigValue(ctx, dbstore.SetConfigValueParams{
+		if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
 			ConfigVersionID: newVersion.ID,
 			FieldPath:       req.FieldPath,
 			Value:           valStr,
@@ -250,7 +252,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		}
 
 		newValueStr := typedValueToString(req.Value)
-		return tx.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 			TenantID:      tenantID,
 			Actor:         actor,
 			Action:        "set_field",
@@ -277,8 +279,8 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 }
 
 func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.SetFieldsResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -294,7 +296,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		if err := s.checkFieldLock(ctx, tenantID, update.FieldPath); err != nil {
 			return nil, err
 		}
-		if err := s.validateField(ctx, tenantID, req.TenantId, update.FieldPath, update.Value); err != nil {
+		if err := s.validateField(ctx, tenantID, update.FieldPath, update.Value); err != nil {
 			return nil, err
 		}
 	}
@@ -320,10 +322,10 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	}
 
 	// Transaction: version + all values + all audit entries.
-	var newVersion dbstore.ConfigVersion
+	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
-		newVersion, txErr = tx.CreateConfigVersion(ctx, dbstore.CreateConfigVersionParams{
+		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
 			Version:     latestVersion + 1,
 			Description: ptrString(req.GetDescription()),
@@ -335,7 +337,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 
 		for i, update := range req.Updates {
 			updateValStr := typedValueToString(update.Value)
-			if txErr = tx.SetConfigValue(ctx, dbstore.SetConfigValueParams{
+			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       update.FieldPath,
 				Value:           updateValStr,
@@ -346,7 +348,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 			}
 
 			newValueStr := typedValueToString(update.Value)
-			if txErr = tx.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "set_field",
@@ -382,8 +384,8 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 // --- Version operations ---
 
 func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest) (*pb.ListVersionsResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -392,7 +394,7 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 		pageSize = 50
 	}
 
-	versions, err := s.store.ListConfigVersions(ctx, dbstore.ListConfigVersionsParams{
+	versions, err := s.store.ListConfigVersions(ctx, ListConfigVersionsParams{
 		TenantID: tenantID,
 		Limit:    pageSize,
 		Offset:   0,
@@ -410,17 +412,17 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 }
 
 func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*pb.GetVersionResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
-	version, err := s.store.GetConfigVersion(ctx, dbstore.GetConfigVersionParams{
+	version, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{
 		TenantID: tenantID,
 		Version:  req.Version,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "version not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get version")
@@ -430,15 +432,15 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 }
 
 func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersionRequest) (*pb.RollbackToVersionResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
 	actor := s.getActor(ctx)
 
 	// Pre-transaction reads.
-	targetRows, err := s.store.GetFullConfigAtVersion(ctx, dbstore.GetFullConfigAtVersionParams{
+	targetRows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID,
 		Version:  req.Version,
 	})
@@ -460,10 +462,10 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	}
 
 	// Transaction: new version + copied values + audit.
-	var newVersion dbstore.ConfigVersion
+	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
-		newVersion, txErr = tx.CreateConfigVersion(ctx, dbstore.CreateConfigVersionParams{
+		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
 			Version:     latest.Version + 1,
 			Description: &desc,
@@ -474,7 +476,7 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		}
 
 		for _, row := range targetRows {
-			if txErr = tx.SetConfigValue(ctx, dbstore.SetConfigValueParams{
+			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       row.FieldPath,
 				Value:           row.Value,
@@ -486,7 +488,7 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		}
 
 		newValue := fmt.Sprintf("v%d", req.Version)
-		return tx.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 			TenantID:      tenantID,
 			Actor:         actor,
 			Action:        "rollback",
@@ -516,12 +518,18 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamingServer[pb.SubscribeResponse]) error {
 	ctx := stream.Context()
 
+	tenantID := req.TenantId
+	if tenantID == "" {
+		return status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+
 	events, cancel, err := s.subscriber.Subscribe(ctx, req.TenantId)
 	if err != nil {
 		return status.Error(codes.Internal, "failed to subscribe")
 	}
 	defer cancel()
 
+	types := s.fieldTypeMap(ctx, tenantID)
 	filterPaths := make(map[string]struct{}, len(req.FieldPaths))
 	for _, p := range req.FieldPaths {
 		filterPaths[p] = struct{}{}
@@ -548,8 +556,8 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 					TenantId:  event.TenantID,
 					Version:   event.Version,
 					FieldPath: event.FieldPath,
-					OldValue:  stringToTypedValue(ptrString(event.OldValue), pb.FieldType_FIELD_TYPE_STRING),
-					NewValue:  stringToTypedValue(strPtr(event.NewValue), pb.FieldType_FIELD_TYPE_STRING),
+					OldValue:  stringToTypedValue(ptrString(event.OldValue), lookupFieldType(types, event.FieldPath)),
+					NewValue:  stringToTypedValue(strPtr(event.NewValue), lookupFieldType(types, event.FieldPath)),
 					ChangedBy: event.ChangedBy,
 					ChangedAt: timestamppb.New(event.ChangedAt),
 				},
@@ -563,8 +571,8 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 // --- Import/export ---
 
 func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest) (*pb.ExportConfigResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -583,7 +591,7 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 	}
 
 	// Fetch all config values at the requested version.
-	dbRows, err := s.store.GetFullConfigAtVersion(ctx, dbstore.GetFullConfigAtVersionParams{
+	dbRows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID,
 		Version:  version,
 	})
@@ -601,7 +609,7 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 
 	// Get version description.
 	var description string
-	cv, err := s.store.GetConfigVersion(ctx, dbstore.GetConfigVersionParams{
+	cv, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{
 		TenantID: tenantID,
 		Version:  version,
 	})
@@ -619,8 +627,8 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 }
 
 func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest) (*pb.ImportConfigResponse, error) {
-	tenantID, err := parseUUID(req.TenantId)
-	if err != nil {
+	tenantID := req.TenantId
+	if tenantID == "" {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
 
@@ -656,7 +664,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		// Convert string value to TypedValue for validation.
 		ft := fieldTypes[v.FieldPath]
 		tv := stringToTypedValue(&v.Value, ft)
-		if err := s.validateField(ctx, tenantID, req.TenantId, v.FieldPath, tv); err != nil {
+		if err := s.validateField(ctx, tenantID, v.FieldPath, tv); err != nil {
 			return nil, err
 		}
 	}
@@ -696,10 +704,10 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	}
 
 	// Transaction: version + all values + audit entries.
-	var newVersion dbstore.ConfigVersion
+	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
-		newVersion, txErr = tx.CreateConfigVersion(ctx, dbstore.CreateConfigVersionParams{
+		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
 			Version:     latestVersion + 1,
 			Description: &desc,
@@ -711,7 +719,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 		for i, v := range values {
 			importValStr := strPtr(v.Value)
-			if txErr = tx.SetConfigValue(ctx, dbstore.SetConfigValueParams{
+			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       v.FieldPath,
 				Value:           importValStr,
@@ -721,7 +729,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 				return fmt.Errorf("set config value %s: %w", v.FieldPath, txErr)
 			}
 
-			if txErr = tx.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "import",
@@ -755,7 +763,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 }
 
 // filterByImportMode filters config values based on the import mode.
-func (s *Service) filterByImportMode(ctx context.Context, tenantID pgtype.UUID, latestVersion int32, values []configValueImport, mode pb.ImportMode) []configValueImport {
+func (s *Service) filterByImportMode(ctx context.Context, tenantID string, latestVersion int32, values []configValueImport, mode pb.ImportMode) []configValueImport {
 	switch mode {
 	case pb.ImportMode_IMPORT_MODE_REPLACE:
 		// Replace: use all values as-is.
@@ -768,7 +776,7 @@ func (s *Service) filterByImportMode(ctx context.Context, tenantID pgtype.UUID, 
 			current := s.getCurrentValue(ctx, tenantID, v.FieldPath, latestVersion)
 			if current == "" {
 				// Check if the field truly has no value (not just empty string).
-				_, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+				_, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 					TenantID:  tenantID,
 					FieldPath: v.FieldPath,
 					Version:   latestVersion,
@@ -799,14 +807,14 @@ func (s *Service) filterByImportMode(ctx context.Context, tenantID pgtype.UUID, 
 	}
 }
 
-// getFieldTypeMap fetches the tenant's schema fields and builds a map of field path to proto FieldType.
-func (s *Service) getFieldTypeMap(ctx context.Context, tenantID pgtype.UUID) (map[string]pb.FieldType, error) {
+// getFieldTypeMap fetches the tenant's schema fields and builds a map of field path to domain FieldType.
+func (s *Service) getFieldTypeMap(ctx context.Context, tenantID string) (map[string]domain.FieldType, error) {
 	tenant, err := s.store.GetTenantByID(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "tenant not found")
 	}
 
-	sv, err := s.store.GetSchemaVersion(ctx, dbstore.GetSchemaVersionParams{
+	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
 		SchemaID: tenant.SchemaID,
 		Version:  tenant.SchemaVersion,
 	})
@@ -819,22 +827,22 @@ func (s *Service) getFieldTypeMap(ctx context.Context, tenantID pgtype.UUID) (ma
 		return nil, status.Error(codes.Internal, "failed to get schema fields")
 	}
 
-	result := make(map[string]pb.FieldType, len(fields))
+	result := make(map[string]domain.FieldType, len(fields))
 	for _, f := range fields {
-		result[f.Path] = dbFieldTypeToProto(f.FieldType)
+		result[f.Path] = f.FieldType
 	}
 	return result, nil
 }
 
 // --- Helpers ---
 
-func (s *Service) resolveVersion(ctx context.Context, tenantID pgtype.UUID, requested *int32) (int32, error) {
+func (s *Service) resolveVersion(ctx context.Context, tenantID string, requested *int32) (int32, error) {
 	if requested != nil {
 		return *requested, nil
 	}
 	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return 0, nil // No versions yet.
 		}
 		return 0, status.Error(codes.Internal, "failed to get latest version")
@@ -842,10 +850,10 @@ func (s *Service) resolveVersion(ctx context.Context, tenantID pgtype.UUID, requ
 	return latest.Version, nil
 }
 
-func (s *Service) getOrCreateVersion(ctx context.Context, tenantID pgtype.UUID) (int32, error) {
+func (s *Service) getOrCreateVersion(ctx context.Context, tenantID string) (int32, error) {
 	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return 0, nil
 		}
 		return 0, status.Error(codes.Internal, "failed to get latest version")
@@ -861,11 +869,11 @@ func (s *Service) getActor(ctx context.Context) string {
 	return claims.Subject
 }
 
-func (s *Service) getCurrentValue(ctx context.Context, tenantID pgtype.UUID, fieldPath string, version int32) string {
+func (s *Service) getCurrentValue(ctx context.Context, tenantID string, fieldPath string, version int32) string {
 	if version == 0 {
 		return ""
 	}
-	row, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+	row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 		TenantID:  tenantID,
 		FieldPath: fieldPath,
 		Version:   version,
@@ -876,21 +884,21 @@ func (s *Service) getCurrentValue(ctx context.Context, tenantID pgtype.UUID, fie
 	return derefString(row.Value)
 }
 
-func (s *Service) checkChecksum(ctx context.Context, tenantID pgtype.UUID, fieldPath, expected string) error {
+func (s *Service) checkChecksum(ctx context.Context, tenantID string, fieldPath, expected string) error {
 	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil // No existing value — checksum check passes.
 		}
 		return status.Error(codes.Internal, "failed to get latest version")
 	}
-	row, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+	row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 		TenantID:  tenantID,
 		FieldPath: fieldPath,
 		Version:   latest.Version,
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil // Field doesn't exist yet.
 		}
 		return status.Error(codes.Internal, "failed to get current value for checksum")
@@ -902,7 +910,7 @@ func (s *Service) checkChecksum(ctx context.Context, tenantID pgtype.UUID, field
 	return nil
 }
 
-func (s *Service) checkFieldLock(ctx context.Context, tenantID pgtype.UUID, fieldPath string) error {
+func (s *Service) checkFieldLock(ctx context.Context, tenantID string, fieldPath string) error {
 	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok || claims.Role == auth.RoleSuperAdmin {
 		return nil // SuperAdmin bypasses locks.
@@ -922,11 +930,11 @@ func (s *Service) checkFieldLock(ctx context.Context, tenantID pgtype.UUID, fiel
 
 // validateField validates a typed value against the schema constraints.
 // In strict mode, rejects fields not defined in the schema.
-func (s *Service) validateField(ctx context.Context, tenantID pgtype.UUID, tenantIDStr, fieldPath string, value *pb.TypedValue) error {
+func (s *Service) validateField(ctx context.Context, tenantID, fieldPath string, value *pb.TypedValue) error {
 	if s.validators == nil {
 		return nil
 	}
-	validators, err := s.validators.GetValidators(ctx, tenantID, tenantIDStr)
+	validators, err := s.validators.GetValidators(ctx, tenantID)
 	if err != nil {
 		s.logger.WarnContext(ctx, "failed to get validators", "error", err)
 		return nil // don't block writes on validator lookup failure
@@ -936,9 +944,39 @@ func (s *Service) validateField(ctx context.Context, tenantID pgtype.UUID, tenan
 		return status.Errorf(codes.InvalidArgument, "field %s is not defined in the schema", fieldPath)
 	}
 	if err := v.Validate(value); err != nil {
+		s.logger.DebugContext(ctx, "field validation failed", "field", fieldPath, "error", err)
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	return nil
+}
+
+// fieldTypeMap returns a map of field path -> domain field type for a tenant's schema.
+// Returns nil if validators are not configured (all fields treated as STRING).
+func (s *Service) fieldTypeMap(ctx context.Context, tenantID string) map[string]domain.FieldType {
+	if s.validators == nil {
+		return nil
+	}
+	validators, err := s.validators.GetValidators(ctx, tenantID)
+	if err != nil {
+		s.logger.DebugContext(ctx, "failed to get validators for field type lookup", "error", err)
+		return nil
+	}
+	m := make(map[string]domain.FieldType, len(validators))
+	for path, v := range validators {
+		m[path] = v.DomainFieldType()
+	}
+	s.logger.DebugContext(ctx, "resolved field types for tenant", "tenant", tenantID, "fields", len(m))
+	return m
+}
+
+// lookupFieldType returns the field type from a type map, defaulting to STRING.
+func lookupFieldType(types map[string]domain.FieldType, fieldPath string) domain.FieldType {
+	if types != nil {
+		if ft, ok := types[fieldPath]; ok {
+			return ft
+		}
+	}
+	return domain.FieldTypeString
 }
 
 func (s *Service) publishChange(ctx context.Context, tenantID string, version int32, fieldPath, oldValue, newValue, actor string) {

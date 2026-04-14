@@ -6,8 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -15,17 +13,16 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
-func testUUID(b byte) pgtype.UUID {
-	var id pgtype.UUID
-	id.Bytes[0] = b
-	id.Valid = true
-	return id
-}
+const (
+	testSchemaID  = "00000000-0000-0000-0000-000000000001"
+	testVersionID = "00000000-0000-0000-0000-000000000002"
+	testTenantID  = "00000000-0000-0000-0000-000000000003"
+)
 
 // --- CreateSchema ---
 
@@ -34,15 +31,12 @@ func TestCreateSchema_Success(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	versionID := testUUID(2)
-
-	store.On("CreateSchema", ctx, mock.AnythingOfType("dbstore.CreateSchemaParams")).
-		Return(dbstore.Schema{ID: schemaID, Name: "test-schema"}, nil)
-	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("dbstore.CreateSchemaVersionParams")).
-		Return(dbstore.SchemaVersion{ID: versionID, SchemaID: schemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("dbstore.CreateSchemaFieldParams")).
-		Return(dbstore.SchemaField{Path: "test.field", FieldType: "string"}, nil)
+	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
+		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
+	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
+		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
+	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
+		Return(domain.SchemaField{Path: "test.field", FieldType: "string"}, nil)
 
 	resp, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{
 		Name: "test-schema",
@@ -75,17 +69,14 @@ func TestGetSchema_LatestVersion(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	versionID := testUUID(2)
+	store.On("GetSchemaByID", ctx, testSchemaID).
+		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
+	store.On("GetLatestSchemaVersion", ctx, testSchemaID).
+		Return(domain.SchemaVersion{ID: testVersionID, Version: 3, Published: true}, nil)
+	store.On("GetSchemaFields", ctx, testVersionID).
+		Return([]domain.SchemaField{}, nil)
 
-	store.On("GetSchemaByID", ctx, schemaID).
-		Return(dbstore.Schema{ID: schemaID, Name: "test"}, nil)
-	store.On("GetLatestSchemaVersion", ctx, schemaID).
-		Return(dbstore.SchemaVersion{ID: versionID, Version: 3, Published: true}, nil)
-	store.On("GetSchemaFields", ctx, versionID).
-		Return([]dbstore.SchemaField{}, nil)
-
-	resp, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: uuidToString(schemaID)})
+	resp, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: testSchemaID})
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(3), resp.Schema.Version)
@@ -97,18 +88,16 @@ func TestGetSchema_SpecificVersion(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	versionID := testUUID(2)
 	v := int32(2)
 
-	store.On("GetSchemaByID", ctx, schemaID).
-		Return(dbstore.Schema{ID: schemaID, Name: "test"}, nil)
-	store.On("GetSchemaVersion", ctx, dbstore.GetSchemaVersionParams{SchemaID: schemaID, Version: 2}).
-		Return(dbstore.SchemaVersion{ID: versionID, Version: 2}, nil)
-	store.On("GetSchemaFields", ctx, versionID).
-		Return([]dbstore.SchemaField{}, nil)
+	store.On("GetSchemaByID", ctx, testSchemaID).
+		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
+	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 2}).
+		Return(domain.SchemaVersion{ID: testVersionID, Version: 2}, nil)
+	store.On("GetSchemaFields", ctx, testVersionID).
+		Return([]domain.SchemaField{}, nil)
 
-	resp, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: uuidToString(schemaID), Version: &v})
+	resp, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: testSchemaID, Version: &v})
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), resp.Schema.Version)
@@ -120,11 +109,10 @@ func TestGetSchema_NotFound(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	store.On("GetSchemaByID", ctx, schemaID).
-		Return(dbstore.Schema{}, pgx.ErrNoRows)
+	store.On("GetSchemaByID", ctx, testSchemaID).
+		Return(domain.Schema{}, domain.ErrNotFound)
 
-	_, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: uuidToString(schemaID)})
+	_, err := svc.GetSchema(ctx, &pb.GetSchemaRequest{Id: testSchemaID})
 
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
@@ -137,25 +125,24 @@ func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	oldVersionID := testUUID(2)
-	newVersionID := testUUID(3)
+	oldVersionID := "00000000-0000-0000-0000-000000000010"
+	newVersionID := "00000000-0000-0000-0000-000000000011"
 
-	store.On("GetSchemaByID", ctx, schemaID).
-		Return(dbstore.Schema{ID: schemaID, Name: "test"}, nil)
-	store.On("GetLatestSchemaVersion", ctx, schemaID).
-		Return(dbstore.SchemaVersion{ID: oldVersionID, Version: 1, Published: true}, nil)
+	store.On("GetSchemaByID", ctx, testSchemaID).
+		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
+	store.On("GetLatestSchemaVersion", ctx, testSchemaID).
+		Return(domain.SchemaVersion{ID: oldVersionID, Version: 1, Published: true}, nil)
 	store.On("GetSchemaFields", ctx, oldVersionID).
-		Return([]dbstore.SchemaField{
-			{Path: "existing.field", FieldType: "int"},
+		Return([]domain.SchemaField{
+			{Path: "existing.field", FieldType: "integer"},
 		}, nil)
-	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("dbstore.CreateSchemaVersionParams")).
-		Return(dbstore.SchemaVersion{ID: newVersionID, Version: 2, ParentVersion: ptrInt32(1)}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("dbstore.CreateSchemaFieldParams")).
-		Return(dbstore.SchemaField{}, nil)
+	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
+		Return(domain.SchemaVersion{ID: newVersionID, Version: 2, ParentVersion: ptrInt32(1)}, nil)
+	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
+		Return(domain.SchemaField{}, nil)
 
 	resp, err := svc.UpdateSchema(ctx, &pb.UpdateSchemaRequest{
-		Id: uuidToString(schemaID),
+		Id: testSchemaID,
 		Fields: []*pb.SchemaField{
 			{Path: "new.field", Type: pb.FieldType_FIELD_TYPE_STRING},
 		},
@@ -175,17 +162,14 @@ func TestPublishSchema_Success(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	versionID := testUUID(2)
+	store.On("GetSchemaByID", ctx, testSchemaID).
+		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
+	store.On("PublishSchemaVersion", ctx, PublishSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
+		Return(domain.SchemaVersion{ID: testVersionID, Version: 1, Published: true}, nil)
+	store.On("GetSchemaFields", ctx, testVersionID).
+		Return([]domain.SchemaField{}, nil)
 
-	store.On("GetSchemaByID", ctx, schemaID).
-		Return(dbstore.Schema{ID: schemaID, Name: "test"}, nil)
-	store.On("PublishSchemaVersion", ctx, dbstore.PublishSchemaVersionParams{SchemaID: schemaID, Version: 1}).
-		Return(dbstore.SchemaVersion{ID: versionID, Version: 1, Published: true}, nil)
-	store.On("GetSchemaFields", ctx, versionID).
-		Return([]dbstore.SchemaField{}, nil)
-
-	resp, err := svc.PublishSchema(ctx, &pb.PublishSchemaRequest{Id: uuidToString(schemaID), Version: 1})
+	resp, err := svc.PublishSchema(ctx, &pb.PublishSchemaRequest{Id: testSchemaID, Version: 1})
 
 	require.NoError(t, err)
 	assert.True(t, resp.Schema.Published)
@@ -199,14 +183,12 @@ func TestCreateTenant_RequiresPublishedSchema(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-
-	store.On("GetSchemaVersion", ctx, dbstore.GetSchemaVersionParams{SchemaID: schemaID, Version: 1}).
-		Return(dbstore.SchemaVersion{Published: false}, nil)
+	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
+		Return(domain.SchemaVersion{Published: false}, nil)
 
 	_, err := svc.CreateTenant(ctx, &pb.CreateTenantRequest{
 		Name:          "test-tenant",
-		SchemaId:      uuidToString(schemaID),
+		SchemaId:      testSchemaID,
 		SchemaVersion: 1,
 	})
 
@@ -219,17 +201,14 @@ func TestCreateTenant_Success(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 	ctx := context.Background()
 
-	schemaID := testUUID(1)
-	tenantID := testUUID(2)
-
-	store.On("GetSchemaVersion", ctx, dbstore.GetSchemaVersionParams{SchemaID: schemaID, Version: 1}).
-		Return(dbstore.SchemaVersion{Published: true}, nil)
-	store.On("CreateTenant", ctx, mock.AnythingOfType("dbstore.CreateTenantParams")).
-		Return(dbstore.Tenant{ID: tenantID, Name: "test-tenant", SchemaID: schemaID, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
+		Return(domain.SchemaVersion{Published: true}, nil)
+	store.On("CreateTenant", ctx, mock.AnythingOfType("schema.CreateTenantParams")).
+		Return(domain.Tenant{ID: testTenantID, Name: "test-tenant", SchemaID: testSchemaID, SchemaVersion: 1}, nil)
 
 	resp, err := svc.CreateTenant(ctx, &pb.CreateTenantRequest{
 		Name:          "test-tenant",
-		SchemaId:      uuidToString(schemaID),
+		SchemaId:      testSchemaID,
 		SchemaVersion: 1,
 	})
 

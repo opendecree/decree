@@ -6,14 +6,15 @@ toolchain go1.24.11
 
 require (
 	github.com/stretchr/testify v1.11.1
-	github.com/opendecree/decree/api v0.0.0-20260329141101-df497cbcb383
-	github.com/opendecree/decree/sdk/adminclient v0.0.0-20260329141101-df497cbcb383
-	github.com/opendecree/decree/sdk/configclient v0.0.0-20260329141101-df497cbcb383
+	github.com/opendecree/decree/api v0.1.2
+	github.com/opendecree/decree/sdk/adminclient v0.1.2
+	github.com/opendecree/decree/sdk/configclient v0.1.2
 	google.golang.org/grpc v1.79.3
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
@@ -22,3 +23,9 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/opendecree/decree/api => ../api
+
+replace github.com/opendecree/decree/sdk/adminclient => ../sdk/adminclient
+
+replace github.com/opendecree/decree/sdk/configclient => ../sdk/configclient

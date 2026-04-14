@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 func BenchmarkMarshalConfigYAML(b *testing.B) {
@@ -51,12 +51,12 @@ func BenchmarkConfigToYAML(b *testing.B) {
 		{FieldPath: "payments.retries", Value: "5"},
 		{FieldPath: "payments.timeout", Value: "24h"},
 	}
-	fieldTypes := map[string]pb.FieldType{
-		"payments.fee":      pb.FieldType_FIELD_TYPE_NUMBER,
-		"payments.currency": pb.FieldType_FIELD_TYPE_STRING,
-		"payments.enabled":  pb.FieldType_FIELD_TYPE_BOOL,
-		"payments.retries":  pb.FieldType_FIELD_TYPE_INT,
-		"payments.timeout":  pb.FieldType_FIELD_TYPE_DURATION,
+	fieldTypes := map[string]domain.FieldType{
+		"payments.fee":      domain.FieldTypeNumber,
+		"payments.currency": domain.FieldTypeString,
+		"payments.enabled":  domain.FieldTypeBool,
+		"payments.retries":  domain.FieldTypeInteger,
+		"payments.timeout":  domain.FieldTypeDuration,
 	}
 	for b.Loop() {
 		configToYAML(3, "test", rows, fieldTypes)

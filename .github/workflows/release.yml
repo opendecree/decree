@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -16,6 +16,109 @@ jobs:
   test:
     name: Validate
     uses: ./.github/workflows/ci.yml
+
+  release-notes:
+    name: Release notes
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Find previous tag
+        id: prev
+        run: |
+          PREV=$(git tag -l "v*" --sort=-v:refname | grep -v "^${GITHUB_REF_NAME}$" | head -1)
+          echo "tag=${PREV:-}" >> $GITHUB_OUTPUT
+          echo "Previous tag: ${PREV:-none}"
+
+      - name: Detect proto breaking changes
+        id: proto
+        if: steps.prev.outputs.tag != ''
+        run: |
+          make tools 2>/dev/null || true
+          BREAKING=$(docker run --rm \
+            -v "$PWD:/workspace" -w /workspace \
+            decree-tools \
+            buf breaking --against ".git#tag=${{ steps.prev.outputs.tag }}" 2>&1) || true
+          if [ -n "$BREAKING" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
+            echo "details<<${EOF_MARKER}" >> $GITHUB_OUTPUT
+            echo "$BREAKING" >> $GITHUB_OUTPUT
+            echo "${EOF_MARKER}" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect SDK API changes
+        id: sdk
+        if: steps.prev.outputs.tag != ''
+        run: |
+          go install golang.org/x/exp/cmd/apidiff@latest
+          NOTES=""
+          for mod in sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools; do
+            MOD_TAG="${mod}/$(echo $GITHUB_REF_NAME)"
+            PREV_TAG="${mod}/${{ steps.prev.outputs.tag }}"
+            # Check if both tags exist
+            if git rev-parse "$PREV_TAG" >/dev/null 2>&1; then
+              DIFF=$(cd "$mod" && apidiff "$PREV_TAG" "$MOD_TAG" 2>/dev/null) || true
+              if [ -n "$DIFF" ]; then
+                NOTES="${NOTES}\n### ${mod}\n\`\`\`\n${DIFF}\n\`\`\`\n"
+              fi
+            fi
+          done
+          if [ -n "$NOTES" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
+            echo "details<<${EOF_MARKER}" >> $GITHUB_OUTPUT
+            echo -e "$NOTES" >> $GITHUB_OUTPUT
+            echo "${EOF_MARKER}" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build release body
+        id: body
+        run: |
+          BODY=""
+
+          if [ "${{ steps.proto.outputs.found }}" = "true" ]; then
+            BODY="${BODY}## Proto Breaking Changes\n\n\`\`\`\n${{ steps.proto.outputs.details }}\n\`\`\`\n\n"
+          fi
+
+          if [ "${{ steps.sdk.outputs.found }}" = "true" ]; then
+            BODY="${BODY}## SDK API Changes\n\n${{ steps.sdk.outputs.details }}\n\n"
+          fi
+
+          BODY="${BODY}## Install\n\n"
+          BODY="${BODY}\`\`\`bash\n"
+          BODY="${BODY}# CLI\ngo install github.com/opendecree/decree/cmd/decree@${GITHUB_REF_NAME}\n\n"
+          BODY="${BODY}# SDK\ngo get github.com/opendecree/decree/sdk/configclient@${GITHUB_REF_NAME}\n"
+          BODY="${BODY}go get github.com/opendecree/decree/sdk/adminclient@${GITHUB_REF_NAME}\n\n"
+          BODY="${BODY}# Docker\ndocker pull ghcr.io/opendecree/decree:\${GITHUB_REF_NAME#v}\n"
+          BODY="${BODY}\`\`\`\n"
+
+          EOF_MARKER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64)
+          echo "content<<${EOF_MARKER}" >> $GITHUB_OUTPUT
+          echo -e "$BODY" >> $GITHUB_OUTPUT
+          echo "${EOF_MARKER}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes-start-tag "${{ steps.prev.outputs.tag }}" \
+            --notes "${{ steps.body.outputs.content }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   images:
     name: Build and push images
@@ -27,8 +130,8 @@ jobs:
           - image: decree
             dockerfile: build/Dockerfile
             context: .
-          - image: ccs
-            dockerfile: build/Dockerfile.ccs
+          - image: decree-cli
+            dockerfile: build/Dockerfile.decree
             context: .
     steps:
       - uses: actions/checkout@v6

@@ -98,7 +98,7 @@ func TestConstraintValidation(t *testing.T) {
 	t.Run("invalid url", func(t *testing.T) {
 		err := cfg.Set(ctx, tenant.ID, "app.webhook", "not-a-url")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
-		assert.Contains(t, err.Error(), "URL")
+		assert.Contains(t, err.Error(), "url")
 	})
 
 	// --- Strict mode: unknown fields rejected ---

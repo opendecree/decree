@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
-// Store defines the data access needed by the validator factory.
+// Store defines the read-only data access needed by the validator factory.
+// Implementations must return [domain.ErrNotFound] when an entity is not found.
+// This interface is a subset of the config.Store — any config store implementation
+// automatically satisfies it.
 type Store interface {
-	GetTenantByID(ctx context.Context, id pgtype.UUID) (dbstore.Tenant, error)
-	GetSchemaVersion(ctx context.Context, arg dbstore.GetSchemaVersionParams) (dbstore.SchemaVersion, error)
-	GetSchemaFields(ctx context.Context, schemaVersionID pgtype.UUID) ([]dbstore.SchemaField, error)
+	GetTenantByID(ctx context.Context, id string) (domain.Tenant, error)
+	GetSchemaVersion(ctx context.Context, arg domain.SchemaVersionKey) (domain.SchemaVersion, error)
+	GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error)
 }
 
 // ValidatorFactory builds and caches field validators per tenant.
@@ -38,8 +39,8 @@ func (f *ValidatorFactory) Cache() *ValidatorCache {
 
 // GetValidators returns validators for a tenant's schema fields.
 // Results are cached per tenant ID. Returns an error if the tenant or schema is not found.
-func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID pgtype.UUID, tenantIDStr string) (map[string]*FieldValidator, error) {
-	if cached, ok := f.cache.Get(tenantIDStr); ok {
+func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID string) (map[string]*FieldValidator, error) {
+	if cached, ok := f.cache.Get(tenantID); ok {
 		return cached, nil
 	}
 
@@ -48,7 +49,7 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID pgtype.UU
 		return nil, err
 	}
 
-	sv, err := f.store.GetSchemaVersion(ctx, dbstore.GetSchemaVersionParams{
+	sv, err := f.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
 		SchemaID: tenant.SchemaID,
 		Version:  tenant.SchemaVersion,
 	})
@@ -63,7 +64,7 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID pgtype.UU
 
 	validators := make(map[string]*FieldValidator, len(fields))
 	for _, field := range fields {
-		ft := dbFieldTypeToProto(field.FieldType)
+		ft := field.FieldType.ToProto()
 		var constraints *pb.FieldConstraints
 		if field.Constraints != nil {
 			constraints = &pb.FieldConstraints{}
@@ -72,30 +73,6 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID pgtype.UU
 		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, constraints)
 	}
 
-	f.cache.Set(tenantIDStr, validators)
+	f.cache.Set(tenantID, validators)
 	return validators, nil
-}
-
-// dbFieldTypeToProto converts a DB field type to proto enum.
-func dbFieldTypeToProto(t dbstore.FieldType) pb.FieldType {
-	switch t {
-	case dbstore.FieldTypeInteger:
-		return pb.FieldType_FIELD_TYPE_INT
-	case dbstore.FieldTypeNumber:
-		return pb.FieldType_FIELD_TYPE_NUMBER
-	case dbstore.FieldTypeString:
-		return pb.FieldType_FIELD_TYPE_STRING
-	case dbstore.FieldTypeBool:
-		return pb.FieldType_FIELD_TYPE_BOOL
-	case dbstore.FieldTypeTime:
-		return pb.FieldType_FIELD_TYPE_TIME
-	case dbstore.FieldTypeDuration:
-		return pb.FieldType_FIELD_TYPE_DURATION
-	case dbstore.FieldTypeUrl:
-		return pb.FieldType_FIELD_TYPE_URL
-	case dbstore.FieldTypeJson:
-		return pb.FieldType_FIELD_TYPE_JSON
-	default:
-		return pb.FieldType_FIELD_TYPE_UNSPECIFIED
-	}
 }

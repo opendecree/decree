@@ -31,5 +31,5 @@ OpenDecree manages **business-oriented configuration** — approval rules, fee s
 - [Concepts](concepts/overview.md) — understand the mental model
 - [API Reference](api/api-reference.md) — gRPC service and message definitions
 - [SDKs](sdk.md) — Go client libraries
-- [CLI Reference](cli/ccs.md) — `decree` command-line tool
+- [CLI Reference](cli/decree.md) — `decree` command-line tool
 - [Server Operations](server/configuration.md) — deployment and configuration

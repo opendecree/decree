@@ -208,5 +208,5 @@ All share the same schema but have independent config values. Runtime overrides 
 
 - [Getting Started](../getting-started.md) — step-by-step setup guide
 - [Schemas & Fields](../concepts/schemas-and-fields.md) — full schema YAML reference
-- [CLI Reference](../cli/ccs.md) — all CLI commands
+- [CLI Reference](../cli/decree.md) — all CLI commands
 - [SDKs](../sdk.md) — Go client libraries

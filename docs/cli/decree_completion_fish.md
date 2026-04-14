@@ -16,11 +16,7 @@ To load completions in your current shell session:
 
 To load completions for every new session, execute once:
 
-<<<<<<< HEAD:docs/cli/decree_completion_fish.md
 	decree completion fish > ~/.config/fish/completions/decree.fish
-=======
-	decree completion fish > ~/.config/fish/completions/ccs.fish
->>>>>>> origin/main:docs/cli/ccs_completion_fish.md
 
 You will need to start a new shell for this setup to take effect.
 

@@ -13,7 +13,7 @@ import (
 // --- Command structure ---
 
 func TestRootCommand_HasAllSubcommands(t *testing.T) {
-	expected := []string{"schema", "tenant", "config", "watch", "lock", "audit"}
+	expected := []string{"schema", "tenant", "config", "watch", "lock", "audit", "diff", "docgen", "validate", "seed", "dump"}
 	names := make([]string, 0, len(expected))
 	for _, cmd := range rootCmd.Commands() {
 		names = append(names, cmd.Name())

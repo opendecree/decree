@@ -157,8 +157,12 @@ func fieldsToProto(fields []Field) []*pb.SchemaField {
 		if f.Description != "" {
 			pf.Description = &f.Description
 		}
-		// Type is set by name lookup — caller is responsible for valid type names.
-		pf.Type = pb.FieldType(pb.FieldType_value["FIELD_TYPE_"+f.Type])
+		// Type is set by name lookup. Accept both "INT" and "FIELD_TYPE_INT".
+		typeName := f.Type
+		if _, ok := pb.FieldType_value[typeName]; !ok {
+			typeName = "FIELD_TYPE_" + typeName
+		}
+		pf.Type = pb.FieldType(pb.FieldType_value[typeName])
 		if f.Constraints != nil {
 			pf.Constraints = constraintsToProto(f.Constraints)
 		}

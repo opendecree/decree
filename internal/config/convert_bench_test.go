@@ -8,6 +8,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 func BenchmarkTypedValueToString_Integer(b *testing.B) {
@@ -55,7 +56,7 @@ func BenchmarkTypedValueToString_Duration(b *testing.B) {
 func BenchmarkStringToTypedValue_String(b *testing.B) {
 	s := "hello world"
 	for b.Loop() {
-		stringToTypedValue(&s, pb.FieldType_FIELD_TYPE_STRING) //nolint:unparam
+		stringToTypedValue(&s, domain.FieldTypeString) //nolint:unparam
 	}
 }
 

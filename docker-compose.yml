@@ -26,9 +26,7 @@ services:
       retries: 10
 
   migrate:
-    build:
-      context: .
-      dockerfile: build/Dockerfile.tools
+    image: ${TOOLS_IMAGE:-decree-tools}
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,6 +53,7 @@ services:
       - "14268:14268" # Jaeger collector
 
   service:
+    image: ${SERVICE_IMAGE:-decree-service}
     build:
       context: .
       dockerfile: build/Dockerfile
