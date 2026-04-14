@@ -1,0 +1,293 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+import "centralconfig/v1/types.proto";
+
+// SchemaService manages configuration schemas, tenants, and field-level locking.
+//
+// Schemas define the allowed fields and their types for tenant configurations.
+// Each schema is versioned — updates create new immutable versions that must be
+// published before tenants can use them.
+service SchemaService {
+  // Schema lifecycle.
+
+  // CreateSchema creates a new schema with an initial draft version (v1).
+  rpc CreateSchema(CreateSchemaRequest) returns (CreateSchemaResponse);
+  // GetSchema retrieves a schema by ID, optionally at a specific version.
+  rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse);
+  // ListSchemas returns all schemas, ordered by creation time (newest first).
+  rpc ListSchemas(ListSchemasRequest) returns (ListSchemasResponse);
+  // UpdateSchema creates a new draft version by merging field changes with the latest version.
+  rpc UpdateSchema(UpdateSchemaRequest) returns (UpdateSchemaResponse);
+  // DeleteSchema permanently deletes a schema and all its versions. Cascades to tenants.
+  rpc DeleteSchema(DeleteSchemaRequest) returns (DeleteSchemaResponse);
+  // PublishSchema marks a schema version as published and immutable.
+  // Only published versions can be assigned to tenants.
+  rpc PublishSchema(PublishSchemaRequest) returns (PublishSchemaResponse);
+
+  // Tenant lifecycle.
+
+  // CreateTenant creates a new tenant assigned to a published schema version.
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  // GetTenant retrieves a tenant by ID.
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+  // ListTenants returns tenants, optionally filtered by schema.
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+  // UpdateTenant updates a tenant's name or upgrades its schema version.
+  rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
+  // DeleteTenant permanently deletes a tenant and all its configuration data.
+  rpc DeleteTenant(DeleteTenantRequest) returns (DeleteTenantResponse);
+
+  // Field locking.
+  // Locked fields cannot be modified by admin or user roles.
+  // Superadmins bypass all field locks.
+
+  // LockField prevents a field from being modified.
+  rpc LockField(LockFieldRequest) returns (LockFieldResponse);
+  // UnlockField removes a field lock, allowing modifications again.
+  rpc UnlockField(UnlockFieldRequest) returns (UnlockFieldResponse);
+  // ListFieldLocks returns all active field locks for a tenant.
+  rpc ListFieldLocks(ListFieldLocksRequest) returns (ListFieldLocksResponse);
+
+  // Import/export.
+  // Schemas can be exported as YAML (syntax v1) for backup, review, or version control.
+
+  // ExportSchema serializes a schema version to YAML.
+  rpc ExportSchema(ExportSchemaRequest) returns (ExportSchemaResponse);
+  // ImportSchema creates a schema (or new version) from YAML.
+  // Full-replace semantics: the YAML defines the complete field set.
+  // Returns AlreadyExists if the imported fields are identical to the latest version.
+  rpc ImportSchema(ImportSchemaRequest) returns (ImportSchemaResponse);
+}
+
+// --- Schema requests/responses ---
+
+message CreateSchemaRequest {
+  // Unique name for the schema. Must be a valid slug: lowercase alphanumeric
+  // and hyphens, 1-63 characters (e.g. "payment-config", "settlement-rules").
+  string name = 1;
+
+  // Human-readable description of the schema's purpose.
+  optional string description = 2;
+
+  // Initial field definitions for version 1. At least one field is required.
+  repeated SchemaField fields = 3;
+}
+
+message CreateSchemaResponse {
+  // The created schema with version 1 (draft, unpublished).
+  Schema schema = 1;
+}
+
+message GetSchemaRequest {
+  // Schema ID (UUID).
+  string id = 1;
+
+  // Schema version to retrieve. If omitted, returns the latest version.
+  optional int32 version = 2;
+}
+
+message GetSchemaResponse {
+  Schema schema = 1;
+}
+
+message ListSchemasRequest {
+  // Filter schemas by name prefix. Currently reserved for future use.
+  optional string name_filter = 1;
+
+  // Maximum number of results to return. Defaults to 50, max 100.
+  int32 page_size = 2;
+
+  // Pagination token from a previous ListSchemasResponse.
+  string page_token = 3;
+}
+
+message ListSchemasResponse {
+  // Schemas with their latest version.
+  repeated Schema schemas = 1;
+
+  // Token for the next page. Empty if no more results.
+  string next_page_token = 2;
+}
+
+message UpdateSchemaRequest {
+  // Schema ID (UUID).
+  string id = 1;
+
+  // Description of what changed in this version.
+  optional string version_description = 2;
+
+  // Fields to add or modify. Existing fields not listed here are carried
+  // forward unchanged from the latest version.
+  repeated SchemaField fields = 3;
+
+  // Dot-separated paths of fields to remove from the new version.
+  repeated string remove_fields = 4;
+}
+
+message UpdateSchemaResponse {
+  // The new schema version (draft, unpublished).
+  Schema schema = 1;
+}
+
+message DeleteSchemaRequest {
+  // Schema ID (UUID). Cascades to all versions, fields, and associated tenants.
+  string id = 1;
+}
+
+message DeleteSchemaResponse {}
+
+message PublishSchemaRequest {
+  // Schema ID (UUID).
+  string id = 1;
+
+  // The version number to publish. Must be an existing draft version.
+  // Once published, the version is immutable.
+  int32 version = 2;
+}
+
+message PublishSchemaResponse {
+  // The published schema version.
+  Schema schema = 1;
+}
+
+// --- Tenant requests/responses ---
+
+message CreateTenantRequest {
+  // Unique name for the tenant. Must be a valid slug: lowercase alphanumeric
+  // and hyphens, 1-63 characters (e.g. "acme-corp", "tenant-42").
+  string name = 1;
+
+  // The schema to assign to this tenant (UUID).
+  string schema_id = 2;
+
+  // The schema version to use. Must be a published version.
+  int32 schema_version = 3;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+}
+
+message GetTenantRequest {
+  // Tenant ID (UUID).
+  string id = 1;
+}
+
+message GetTenantResponse {
+  Tenant tenant = 1;
+}
+
+message ListTenantsRequest {
+  // Filter by schema ID (UUID). If omitted, returns tenants across all schemas.
+  optional string schema_id = 1;
+
+  // Maximum number of results to return. Defaults to 50, max 100.
+  int32 page_size = 2;
+
+  // Pagination token from a previous ListTenantsResponse.
+  string page_token = 3;
+}
+
+message ListTenantsResponse {
+  repeated Tenant tenants = 1;
+
+  // Token for the next page. Empty if no more results.
+  string next_page_token = 2;
+}
+
+message UpdateTenantRequest {
+  // Tenant ID (UUID).
+  string id = 1;
+
+  // New name for the tenant. Must be a valid slug if provided.
+  optional string name = 2;
+
+  // Upgrade to a new schema version. The new version must belong to the
+  // same schema and must be published.
+  optional int32 schema_version = 3;
+}
+
+message UpdateTenantResponse {
+  Tenant tenant = 1;
+}
+
+message DeleteTenantRequest {
+  // Tenant ID (UUID). Cascades to all config versions, values, and field locks.
+  string id = 1;
+}
+
+message DeleteTenantResponse {}
+
+// --- Field lock requests/responses ---
+
+message LockFieldRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field path to lock (e.g. "payments.currency").
+  string field_path = 2;
+
+  // For enum fields: lock only these specific values. If empty, the
+  // entire field is locked regardless of value.
+  repeated string locked_values = 3;
+}
+
+message LockFieldResponse {}
+
+message UnlockFieldRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field path to unlock.
+  string field_path = 2;
+}
+
+message UnlockFieldResponse {}
+
+message ListFieldLocksRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+}
+
+message ListFieldLocksResponse {
+  // All active field locks for the tenant.
+  repeated FieldLock locks = 1;
+}
+
+// --- Import/export ---
+
+message ExportSchemaRequest {
+  // Schema ID (UUID).
+  string id = 1;
+
+  // Schema version to export. If omitted, exports the latest version.
+  optional int32 version = 2;
+}
+
+message ExportSchemaResponse {
+  // YAML-encoded schema (syntax v1). Includes schema name, description,
+  // version, and all field definitions with OAS-style constraint naming.
+  // Server-generated fields (id, checksum, published, created_at) are excluded.
+  bytes yaml_content = 1;
+}
+
+message ImportSchemaRequest {
+  // YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.
+  //
+  // Import uses full-replace semantics:
+  // - If no schema with this name exists: creates a new schema with version 1.
+  // - If a schema exists and fields differ from latest: creates the next version.
+  // - If a schema exists and fields are identical: returns AlreadyExists error.
+  //
+  // Imported versions are always created as drafts (unpublished).
+  // The `version` field in the YAML is informational — the server assigns
+  // the next version number automatically.
+  bytes yaml_content = 1;
+}
+
+message ImportSchemaResponse {
+  // The created (or existing, on AlreadyExists) schema version.
+  Schema schema = 1;
+}

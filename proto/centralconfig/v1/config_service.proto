@@ -1,0 +1,284 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+import "centralconfig/v1/types.proto";
+
+// ConfigService manages configuration values, versions, and real-time subscriptions.
+//
+// Configuration is stored per-tenant using delta versioning: each write creates a
+// new version containing only the changed fields. The full config at any version is
+// the union of all deltas up to that version (latest value per field wins).
+//
+// Read operations are cached in Redis. Write operations are atomic: the config
+// version, values, and audit log entry are committed in a single database transaction.
+service ConfigService {
+  // Read operations.
+  // Reads are served from Redis cache when possible. Setting include_descriptions
+  // bypasses the cache and reads directly from the database.
+
+  // GetConfig returns the full resolved configuration for a tenant.
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  // GetField returns a single configuration value by field path.
+  rpc GetField(GetFieldRequest) returns (GetFieldResponse);
+  // GetFields returns multiple configuration values by field paths.
+  // Fields that don't exist are silently omitted from the response.
+  rpc GetFields(GetFieldsRequest) returns (GetFieldsResponse);
+
+  // Write operations.
+  // Each write creates a new config version atomically with its audit log entry.
+  // Cache is invalidated and change events are published after the transaction commits.
+
+  // SetField sets a single configuration value, creating a new config version.
+  rpc SetField(SetFieldRequest) returns (SetFieldResponse);
+  // SetFields sets multiple configuration values in a single config version.
+  rpc SetFields(SetFieldsRequest) returns (SetFieldsResponse);
+
+  // Version operations.
+
+  // ListVersions returns config version history for a tenant (newest first).
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
+  // GetVersion retrieves metadata for a specific config version.
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse);
+  // RollbackToVersion creates a new version with the same values as the target version.
+  // This does not delete intermediate versions — it creates a new version that
+  // copies the target's values.
+  rpc RollbackToVersion(RollbackToVersionRequest) returns (RollbackToVersionResponse);
+
+  // Real-time subscriptions via server-streaming.
+
+  // Subscribe opens a server-streaming connection that pushes ConfigChange events
+  // whenever the tenant's configuration is modified. The stream remains open until
+  // the client disconnects or the server shuts down.
+  rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse);
+
+  // Import/export (not yet implemented).
+
+  // ExportConfig serializes a tenant's configuration to YAML.
+  rpc ExportConfig(ExportConfigRequest) returns (ExportConfigResponse);
+  // ImportConfig applies configuration values from YAML.
+  rpc ImportConfig(ImportConfigRequest) returns (ImportConfigResponse);
+}
+
+// --- Read requests/responses ---
+
+message GetConfigRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Config version to retrieve. If omitted, returns the latest version.
+  optional int32 version = 2;
+
+  // When true, includes value-level descriptions in the response.
+  // This bypasses the Redis cache and reads directly from the database.
+  bool include_descriptions = 3;
+}
+
+message GetConfigResponse {
+  // The full resolved configuration at the requested version.
+  Config config = 1;
+}
+
+message GetFieldRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field path (e.g. "payments.fee").
+  string field_path = 2;
+
+  // Config version to read from. If omitted, reads from the latest version.
+  optional int32 version = 3;
+
+  // When true, includes the value-level description.
+  // This bypasses the Redis cache and reads directly from the database.
+  bool include_description = 4;
+}
+
+message GetFieldResponse {
+  // The configuration value. Returns NOT_FOUND if the field has no value set.
+  ConfigValue value = 1;
+}
+
+message GetFieldsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field paths to retrieve.
+  repeated string field_paths = 2;
+
+  // Config version to read from. If omitted, reads from the latest version.
+  optional int32 version = 3;
+
+  // When true, includes value-level descriptions.
+  // This bypasses the Redis cache and reads directly from the database.
+  bool include_descriptions = 4;
+}
+
+message GetFieldsResponse {
+  // The requested values. Fields that don't exist are omitted (not an error).
+  repeated ConfigValue values = 1;
+}
+
+// --- Write requests/responses ---
+
+message SetFieldRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field path (e.g. "payments.fee").
+  string field_path = 2;
+
+  // The typed value. Omit to set the field to null.
+  TypedValue value = 3;
+
+  // Optimistic concurrency control: the checksum from a previous GetField/GetConfig
+  // response. If provided and the field's current checksum doesn't match, the
+  // request fails with ABORTED. This prevents lost updates when multiple actors
+  // modify the same field concurrently.
+  optional string expected_checksum = 4;
+
+  // Version-level description explaining why this change was made.
+  optional string description = 5;
+
+  // Value-level description explaining what this specific value means.
+  // Retrievable via include_description in read requests.
+  optional string value_description = 6;
+}
+
+message SetFieldResponse {
+  // The newly created config version.
+  ConfigVersion config_version = 1;
+}
+
+message SetFieldsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Field updates to apply. All updates are applied atomically in a single
+  // config version. If any update fails validation (checksum, field lock),
+  // no changes are committed.
+  repeated FieldUpdate updates = 2;
+
+  // Version-level description explaining why these changes were made.
+  optional string description = 3;
+}
+
+message SetFieldsResponse {
+  // The newly created config version.
+  ConfigVersion config_version = 1;
+}
+
+// FieldUpdate represents a single field change within a SetFields batch.
+message FieldUpdate {
+  // Dot-separated field path.
+  string field_path = 1;
+
+  // The typed value. Omit to set the field to null.
+  TypedValue value = 2;
+
+  // Optimistic concurrency control checksum for this specific field.
+  // See SetFieldRequest.expected_checksum for details.
+  optional string expected_checksum = 3;
+
+  // Value-level description for this specific field.
+  optional string value_description = 4;
+}
+
+// --- Version requests/responses ---
+
+message ListVersionsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Maximum number of results to return. Defaults to 50, max 100.
+  int32 page_size = 2;
+
+  // Pagination token from a previous ListVersionsResponse.
+  string page_token = 3;
+}
+
+message ListVersionsResponse {
+  // Config versions, ordered by version number descending (newest first).
+  repeated ConfigVersion versions = 1;
+
+  // Token for the next page. Empty if no more results.
+  string next_page_token = 2;
+}
+
+message GetVersionRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // The version number to retrieve.
+  int32 version = 2;
+}
+
+message GetVersionResponse {
+  ConfigVersion config_version = 1;
+}
+
+message RollbackToVersionRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // The target version to rollback to. The full config at this version
+  // is copied into a new version (the current version number + 1).
+  // The target version itself is not modified.
+  int32 version = 2;
+
+  // Description for the new rollback version. Defaults to
+  // "Rollback to version N" if omitted.
+  optional string description = 3;
+}
+
+message RollbackToVersionResponse {
+  // The newly created config version containing the rolled-back values.
+  ConfigVersion config_version = 1;
+}
+
+// --- Subscription ---
+
+message SubscribeRequest {
+  // Tenant ID (UUID) to subscribe to.
+  string tenant_id = 1;
+
+  // Field paths to filter on. If empty, receives changes for all fields.
+  // Changes to fields not in this list are silently dropped.
+  repeated string field_paths = 2;
+}
+
+message SubscribeResponse {
+  // A configuration change event. Delivered via Redis Pub/Sub internally.
+  ConfigChange change = 1;
+}
+
+// --- Import/export (not yet implemented) ---
+
+message ExportConfigRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Config version to export. If omitted, exports the latest version.
+  optional int32 version = 2;
+}
+
+message ExportConfigResponse {
+  // YAML-encoded configuration values.
+  bytes yaml_content = 1;
+}
+
+message ImportConfigRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // YAML-encoded configuration values to import.
+  bytes yaml_content = 2;
+
+  // Description for the new config version created by the import.
+  optional string description = 3;
+}
+
+message ImportConfigResponse {
+  // The config version created by the import.
+  ConfigVersion config_version = 1;
+}

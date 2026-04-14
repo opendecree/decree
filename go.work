@@ -1,0 +1,11 @@
+go 1.24.0
+
+use (
+	.
+	./api
+	./sdk/configclient
+	./sdk/adminclient
+	./sdk/configwatcher
+	./cmd/ccs
+	./e2e
+)

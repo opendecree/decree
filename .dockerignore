@@ -1,0 +1,8 @@
+bin/
+.git/
+.claude/
+.tools-image-built
+e2e/
+deploy/
+*.md
+LICENSE

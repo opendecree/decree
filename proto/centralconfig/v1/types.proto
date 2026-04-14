@@ -1,0 +1,326 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+// FieldType enumerates the supported configuration value types.
+// Each type maps to a specific field in the TypedValue oneof.
+enum FieldType {
+  FIELD_TYPE_UNSPECIFIED = 0;
+  // Integer value. Encoded as a decimal string (e.g. "42", "-1").
+  // Supports minimum/maximum constraints on the numeric value.
+  FIELD_TYPE_INT = 1;
+  // Free-form string value.
+  // Supports minimum/maximum constraints on string length, pattern (regex),
+  // and enum constraints.
+  FIELD_TYPE_STRING = 2;
+  // Timestamp value. Encoded as an RFC 3339 string (e.g. "2025-01-15T09:30:00Z").
+  FIELD_TYPE_TIME = 3;
+  // Duration value. Encoded as a Go-style duration string (e.g. "24h", "30m", "500ms").
+  // Supports minimum/maximum constraints on the duration in seconds.
+  FIELD_TYPE_DURATION = 4;
+  // URL value. Must be a valid absolute URL.
+  FIELD_TYPE_URL = 5;
+  // JSON value. Stored as a JSON-encoded string.
+  // Supports json_schema constraint for structural validation.
+  FIELD_TYPE_JSON = 6;
+  // Floating-point number value. Encoded as a decimal string (e.g. "3.14", "0.025").
+  // Supports minimum/maximum constraints on the numeric value.
+  FIELD_TYPE_NUMBER = 7;
+  // Boolean value. Encoded as "true" or "false".
+  FIELD_TYPE_BOOL = 8;
+}
+
+// FieldConstraints defines validation rules for a schema field.
+// Which constraints apply depends on the field's type — see FieldType docs.
+message FieldConstraints {
+  // For integer/number/duration: minimum allowed value (inclusive, >=).
+  optional double min = 1;
+
+  // For integer/number/duration: maximum allowed value (inclusive, <=).
+  optional double max = 2;
+
+  // Regular expression pattern the value must match.
+  // Applies to string-typed fields. Uses RE2 syntax.
+  optional string regex = 3;
+
+  // Allowed values. If non-empty, the value must be one of these.
+  // Applies to any field type.
+  repeated string enum_values = 4;
+
+  // JSON Schema document for structural validation of json-typed fields.
+  // Encoded as a JSON string.
+  optional string json_schema = 5;
+
+  // For integer/number/duration: exclusive minimum (strict, >).
+  optional double exclusive_min = 6;
+
+  // For integer/number/duration: exclusive maximum (strict, <).
+  optional double exclusive_max = 7;
+
+  // For string: minimum allowed length.
+  optional int32 min_length = 8;
+
+  // For string: maximum allowed length.
+  optional int32 max_length = 9;
+}
+
+// SchemaField defines a single field within a configuration schema.
+message SchemaField {
+  // Dot-separated hierarchical path (e.g. "payments.settlement.window").
+  // Must be unique within a schema version.
+  string path = 1;
+
+  // The value type for this field. Controls validation behavior.
+  FieldType type = 2;
+
+  // Validation constraints. Optional — when absent, any value of the
+  // correct type is accepted.
+  FieldConstraints constraints = 3;
+
+  // Whether this field accepts empty/null values.
+  bool nullable = 4;
+
+  // Whether this field is deprecated. Deprecated fields are still readable
+  // but clients should migrate to redirect_to if set.
+  bool deprecated = 5;
+
+  // When deprecated, reads of this field can be redirected to this path.
+  optional string redirect_to = 6;
+
+  // Default value for this field, encoded as a string matching the field type.
+  optional string default_value = 7;
+
+  // Human-readable description of the field's purpose.
+  optional string description = 8;
+}
+
+// Schema represents a configuration schema template.
+// Schemas define the allowed fields and their types for tenant configurations.
+// Each schema is versioned — updates create new immutable versions.
+message Schema {
+  // Server-assigned unique identifier (UUID).
+  string id = 1;
+
+  // Unique name for this schema. Must be a valid slug: lowercase alphanumeric
+  // characters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?.
+  string name = 2;
+
+  // Human-readable description of the schema's purpose.
+  string description = 3;
+
+  // Schema version number (monotonically increasing, starting at 1).
+  int32 version = 4;
+
+  // The version this was derived from. Absent for the initial version (v1).
+  optional int32 parent_version = 5;
+
+  // Description of what changed in this version.
+  string version_description = 6;
+
+  // Deterministic checksum of the field definitions (type, constraints, path).
+  // Used for change detection on import.
+  string checksum = 7;
+
+  // Whether this version is published. Only published versions can be
+  // assigned to tenants. Published versions are immutable.
+  bool published = 8;
+
+  // The fields defined in this schema version.
+  repeated SchemaField fields = 9;
+
+  // When this version was created.
+  google.protobuf.Timestamp created_at = 10;
+}
+
+// Tenant represents an organization or entity that has its own configuration
+// based on an assigned schema version.
+message Tenant {
+  // Server-assigned unique identifier (UUID).
+  string id = 1;
+
+  // Unique name for this tenant. Must be a valid slug: lowercase alphanumeric
+  // characters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?.
+  string name = 2;
+
+  // The schema this tenant's configuration is based on (UUID).
+  string schema_id = 3;
+
+  // The specific schema version assigned to this tenant.
+  // Must reference a published schema version.
+  int32 schema_version = 4;
+
+  // When the tenant was created.
+  google.protobuf.Timestamp created_at = 5;
+
+  // When the tenant was last updated (name or schema version change).
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// FieldLock prevents a configuration field from being modified by non-superadmin users.
+// Superadmins bypass all field locks.
+message FieldLock {
+  // The tenant this lock applies to (UUID).
+  string tenant_id = 1;
+
+  // The dot-separated field path that is locked.
+  string field_path = 2;
+
+  // For enum fields: the specific subset of values that are locked
+  // (not editable by admin). If empty, the entire field is locked.
+  repeated string locked_values = 3;
+}
+
+// TypedValue holds a configuration value with its native type.
+// An unset oneof (no field present) represents a null value.
+message TypedValue {
+  oneof kind {
+    // Integer value.
+    int64 integer_value = 1;
+    // Floating-point number value.
+    double number_value = 2;
+    // Free-form string value.
+    string string_value = 3;
+    // Boolean value.
+    bool bool_value = 4;
+    // Timestamp value.
+    google.protobuf.Timestamp time_value = 5;
+    // Duration value.
+    google.protobuf.Duration duration_value = 6;
+    // URL value (must be a valid absolute URL).
+    string url_value = 7;
+    // JSON value (must be valid JSON).
+    string json_value = 8;
+  }
+}
+
+// ConfigValue represents a single configuration value at a point in time.
+message ConfigValue {
+  // Dot-separated field path (e.g. "payments.fee").
+  string field_path = 1;
+
+  // The typed value. Absent when the field value is null.
+  TypedValue value = 2;
+
+  // Checksum of the value (xxHash). Used for optimistic concurrency control
+  // in SetField/SetFields via expected_checksum.
+  string checksum = 3;
+
+  // Human-readable description explaining this specific value.
+  // Only populated when include_description(s) is true in the request.
+  optional string description = 4;
+}
+
+// ConfigVersion represents a point-in-time snapshot of configuration changes.
+// Each write operation (SetField, SetFields, RollbackToVersion) creates a new
+// config version. Versions store only the changed fields (delta storage) — the
+// full config at any version is the union of all deltas up to that version.
+message ConfigVersion {
+  // Server-assigned unique identifier (UUID).
+  string id = 1;
+
+  // The tenant this version belongs to (UUID).
+  string tenant_id = 2;
+
+  // Version number (monotonically increasing, starting at 1).
+  int32 version = 3;
+
+  // Description of what changed in this version.
+  string description = 4;
+
+  // The actor who created this version (from JWT subject, or "unknown" if auth is disabled).
+  string created_by = 5;
+
+  // When this version was created.
+  google.protobuf.Timestamp created_at = 6;
+}
+
+// Config represents the full resolved configuration for a tenant at a specific version.
+message Config {
+  // The tenant this config belongs to (UUID).
+  string tenant_id = 1;
+
+  // The version number this config was resolved at.
+  int32 version = 2;
+
+  // All configuration values at this version.
+  repeated ConfigValue values = 3;
+}
+
+// ConfigChange represents a real-time change event pushed to subscribers
+// via the Subscribe streaming RPC.
+message ConfigChange {
+  // The tenant whose config changed (UUID).
+  string tenant_id = 1;
+
+  // The new config version number created by this change.
+  int32 version = 2;
+
+  // The field that was changed.
+  string field_path = 3;
+
+  // The previous value. Absent if field was newly created or was null.
+  TypedValue old_value = 4;
+
+  // The new value. Absent if field was set to null.
+  TypedValue new_value = 5;
+
+  // The actor who made the change.
+  string changed_by = 6;
+
+  // When the change occurred.
+  google.protobuf.Timestamp changed_at = 7;
+}
+
+// AuditEntry represents a write event recorded in the audit log.
+// Every config mutation (SetField, SetFields, RollbackToVersion) creates
+// one or more audit entries atomically with the config change.
+message AuditEntry {
+  // Server-assigned unique identifier (UUID).
+  string id = 1;
+
+  // The tenant affected (UUID).
+  string tenant_id = 2;
+
+  // The actor who performed the action (from JWT subject).
+  string actor = 3;
+
+  // The action type (e.g. "set_field", "rollback").
+  string action = 4;
+
+  // The field that was changed. Present for set_field actions.
+  optional string field_path = 5;
+
+  // The previous value. Present for set_field actions.
+  optional string old_value = 6;
+
+  // The new value. Present for set_field actions.
+  // For rollback actions, contains the target version (e.g. "v2").
+  optional string new_value = 7;
+
+  // The config version number created by this action.
+  optional int32 config_version = 8;
+
+  // When the audit entry was created.
+  google.protobuf.Timestamp created_at = 9;
+}
+
+// UsageStats represents aggregated read usage statistics for a config field.
+message UsageStats {
+  // The tenant (UUID).
+  string tenant_id = 1;
+
+  // The field path.
+  string field_path = 2;
+
+  // Total number of reads across the queried time range.
+  int64 read_count = 3;
+
+  // The last actor who read this field (if tracked).
+  optional string last_read_by = 4;
+
+  // When this field was last read (if tracked).
+  optional google.protobuf.Timestamp last_read_at = 5;
+}

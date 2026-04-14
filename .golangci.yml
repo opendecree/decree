@@ -1,0 +1,19 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - copyloopvar
+    - errname
+    - errorlint
+    - gocritic
+    - govet
+    - nilerr
+    - prealloc
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+formatters:
+  enable:
+    - gofumpt

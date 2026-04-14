@@ -1,0 +1,3 @@
+# Mark generated files — collapsed by default in GitHub PR diffs
+api/centralconfig/**/*.go linguist-generated=true
+internal/storage/dbstore/** linguist-generated=true

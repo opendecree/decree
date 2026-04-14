@@ -1,0 +1,42 @@
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+
+# Go
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+coverage.out
+coverage.html
+
+# Buf / Protobuf generated — committed to repo, but marked as generated in .gitattributes
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Docker
+docker-compose.override.yml
+
+# Make
+.tools-image-built
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+*.logsite/

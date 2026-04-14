@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+import "centralconfig/v1/types.proto";
+import "google/protobuf/timestamp.proto";
+
+// AuditService provides read-only access to the change history and usage
+// statistics for tenant configurations.
+//
+// Write events are recorded automatically by the ConfigService whenever
+// configuration values are modified (atomically with the config change).
+// Usage statistics are tracked asynchronously via batched read counters.
+service AuditService {
+  // QueryWriteLog searches the audit log for config change events.
+  // All filter parameters are optional — omit a filter to match all values.
+  rpc QueryWriteLog(QueryWriteLogRequest) returns (QueryWriteLogResponse);
+
+  // GetFieldUsage returns aggregated read statistics for a specific field.
+  rpc GetFieldUsage(GetFieldUsageRequest) returns (GetFieldUsageResponse);
+
+  // GetTenantUsage returns aggregated read statistics for all fields of a tenant.
+  rpc GetTenantUsage(GetTenantUsageRequest) returns (GetTenantUsageResponse);
+
+  // GetUnusedFields returns field paths that have not been read since the given time.
+  // Useful for identifying configuration fields that may be safe to deprecate.
+  rpc GetUnusedFields(GetUnusedFieldsRequest) returns (GetUnusedFieldsResponse);
+}
+
+// --- Write log queries ---
+
+message QueryWriteLogRequest {
+  // Filter by tenant ID (UUID). If omitted, returns entries across all tenants.
+  optional string tenant_id = 1;
+
+  // Filter by actor (JWT subject). If omitted, matches all actors.
+  optional string actor = 2;
+
+  // Filter by field path. If omitted, matches all fields.
+  optional string field_path = 3;
+
+  // Filter entries created at or after this time. If omitted, no lower bound.
+  optional google.protobuf.Timestamp start_time = 4;
+
+  // Filter entries created at or before this time. If omitted, no upper bound.
+  optional google.protobuf.Timestamp end_time = 5;
+
+  // Maximum number of results to return. Defaults to 50, max 100.
+  int32 page_size = 6;
+
+  // Pagination token from a previous QueryWriteLogResponse.
+  string page_token = 7;
+}
+
+message QueryWriteLogResponse {
+  // Audit entries matching the filters, ordered by created_at descending.
+  repeated AuditEntry entries = 1;
+
+  // Token for the next page. Empty if no more results.
+  string next_page_token = 2;
+}
+
+// --- Usage queries ---
+
+message GetFieldUsageRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Dot-separated field path to query.
+  string field_path = 2;
+
+  // Start of the time range. If omitted, includes all historical data.
+  optional google.protobuf.Timestamp start_time = 3;
+
+  // End of the time range. If omitted, includes up to the current time.
+  optional google.protobuf.Timestamp end_time = 4;
+}
+
+message GetFieldUsageResponse {
+  // Aggregated usage statistics across the queried time range.
+  UsageStats stats = 1;
+}
+
+message GetTenantUsageRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Start of the time range. If omitted, includes all historical data.
+  optional google.protobuf.Timestamp start_time = 2;
+
+  // End of the time range. If omitted, includes up to the current time.
+  optional google.protobuf.Timestamp end_time = 3;
+}
+
+message GetTenantUsageResponse {
+  // Per-field usage statistics, ordered by field path.
+  repeated UsageStats field_stats = 1;
+}
+
+message GetUnusedFieldsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Fields not read since this time are considered unused.
+  // Required — there is no "all time" default to avoid expensive full scans.
+  google.protobuf.Timestamp since = 2;
+}
+
+message GetUnusedFieldsResponse {
+  // Dot-separated paths of fields with no reads since the specified time.
+  repeated string field_paths = 1;
+}

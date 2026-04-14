@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/opendecree/central-config-service/schemas/schema-yaml.json",
+  "title": "Central Config Service Schema YAML",
+  "description": "Schema definition format for the Central Config Service (syntax v1).",
+  "type": "object",
+  "required": ["syntax", "name", "fields"],
+  "additionalProperties": false,
+  "properties": {
+    "syntax": {
+      "type": "string",
+      "const": "v1",
+      "description": "Schema syntax version. Must be \"v1\"."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+      "minLength": 1,
+      "maxLength": 63,
+      "description": "Unique schema name. Must be a slug: lowercase alphanumeric and hyphens, 1-63 characters."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the schema's purpose."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Informational — the server assigns the next version number on import."
+    },
+    "version_description": {
+      "type": "string",
+      "description": "Description of what changed in this version."
+    },
+    "fields": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Field definitions keyed by dot-separated path (e.g. \"payments.fee\").",
+      "additionalProperties": {
+        "$ref": "#/$defs/field"
+      }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["integer", "number", "string", "bool", "time", "duration", "url", "json"],
+          "description": "Field value type."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the field's purpose."
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value for this field, encoded as a string."
+        },
+        "nullable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this field accepts null values."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this field is deprecated."
+        },
+        "redirect_to": {
+          "type": "string",
+          "description": "When deprecated, reads can be redirected to this field path."
+        },
+        "constraints": {
+          "$ref": "#/$defs/constraints"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Validation constraints. Which constraints apply depends on the field type.",
+      "properties": {
+        "minimum": {
+          "type": "number",
+          "description": "For integer/number/duration: minimum allowed value (inclusive, >=)."
+        },
+        "maximum": {
+          "type": "number",
+          "description": "For integer/number/duration: maximum allowed value (inclusive, <=)."
+        },
+        "exclusiveMinimum": {
+          "type": "number",
+          "description": "For integer/number/duration: exclusive minimum (strict, >)."
+        },
+        "exclusiveMaximum": {
+          "type": "number",
+          "description": "For integer/number/duration: exclusive maximum (strict, <)."
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For string: minimum allowed length."
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For string: maximum allowed length."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regular expression the value must match. Applies to string fields. RE2 syntax."
+        },
+        "enum": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Allowed values. The value must be one of these. Applies to any field type."
+        },
+        "json_schema": {
+          "type": "string",
+          "description": "JSON Schema document for structural validation. Applies to json fields."
+        }
+      }
+    }
+  }
+}
