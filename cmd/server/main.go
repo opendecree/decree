@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -24,10 +26,14 @@ import (
 	"github.com/opendecree/decree/internal/schema"
 	"github.com/opendecree/decree/internal/server"
 	"github.com/opendecree/decree/internal/storage"
+	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
 	"github.com/opendecree/decree/internal/version"
 )
+
+//go:embed openapi.json
+var openAPISpec []byte
 
 func main() {
 	os.Exit(run())
@@ -64,45 +70,83 @@ func run() int {
 		)
 	}
 
-	// Database.
-	var dbOpts []storage.Option
-	if otelCfg.TracesDB {
-		dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
-	}
-	db, err := storage.NewDB(ctx, cfg.DBWriteURL, cfg.DBReadURL, dbOpts...)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to connect to database", "error", err)
-		return 1
-	}
-	defer db.Close()
-	logger.InfoContext(ctx, "connected to database")
+	// Storage backend.
+	var (
+		configStore    config.Store
+		schemaStoreVal schema.Store
+		auditStoreVal  audit.Store
+		configCache    cache.ConfigCache
+		publisher      pubsub.Publisher
+		subscriber     pubsub.Subscriber
+		validatorStore validation.Store
+	)
 
-	// Redis.
-	redisOpts, err := redis.ParseURL(cfg.RedisURL)
-	if err != nil {
-		logger.ErrorContext(ctx, "failed to parse redis url", "error", err)
-		return 1
-	}
-	redisClient := redis.NewClient(redisOpts)
-	defer func() { _ = redisClient.Close() }()
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logger.ErrorContext(ctx, "failed to connect to redis", "error", err)
-		return 1
-	}
-	if otelCfg.TracesRedis {
-		if err := redisotel.InstrumentTracing(redisClient); err != nil {
-			logger.ErrorContext(ctx, "failed to instrument redis tracing", "error", err)
+	if cfg.StorageBackend == "memory" {
+		logger.InfoContext(ctx, "using in-memory storage (no PostgreSQL or Redis required)")
+		memConfig := config.NewMemoryStore()
+		memSchema := schema.NewMemoryStore()
+		configStore = memConfig
+		schemaStoreVal = memSchema
+		auditStoreVal = audit.NewMemoryStore()
+		configCache = cache.NewMemoryCache()
+		memPubSub := pubsub.NewMemoryPubSub()
+		publisher = memPubSub
+		subscriber = memPubSub
+		defer func() { _ = publisher.Close() }()
+		// Validator needs tenant/schema data — use schema store via adapter.
+		validatorStore = &validation.SchemaStoreAdapter{
+			GetTenantByIDFn: memSchema.GetTenantByID,
+			GetSchemaVersionFn: func(ctx context.Context, schemaID string, version int32) (domain.SchemaVersion, error) {
+				return memSchema.GetSchemaVersion(ctx, schema.GetSchemaVersionParams{SchemaID: schemaID, Version: version})
+			},
+			GetSchemaFieldsFn: memSchema.GetSchemaFields,
+		}
+	} else {
+		// Database.
+		var dbOpts []storage.Option
+		if otelCfg.TracesDB {
+			dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
+		}
+		db, err := storage.NewDB(ctx, cfg.DBWriteURL, cfg.DBReadURL, dbOpts...)
+		if err != nil {
+			logger.ErrorContext(ctx, "failed to connect to database", "error", err)
 			return 1
 		}
-	}
-	logger.InfoContext(ctx, "connected to redis")
+		defer db.Close()
+		logger.InfoContext(ctx, "connected to database")
 
-	// Cache and pub/sub.
-	configCache := cache.NewRedisCache(redisClient)
-	publisher := pubsub.NewRedisPublisher(redisClient)
-	subscriber := pubsub.NewRedisSubscriber(redisClient, logger)
-	defer func() { _ = publisher.Close() }()
-	defer func() { _ = subscriber.Close() }()
+		// Redis.
+		redisOpts, err := redis.ParseURL(cfg.RedisURL)
+		if err != nil {
+			logger.ErrorContext(ctx, "failed to parse redis url", "error", err)
+			return 1
+		}
+		redisClient := redis.NewClient(redisOpts)
+		defer func() { _ = redisClient.Close() }()
+		if err := redisClient.Ping(ctx).Err(); err != nil {
+			logger.ErrorContext(ctx, "failed to connect to redis", "error", err)
+			return 1
+		}
+		if otelCfg.TracesRedis {
+			if err := redisotel.InstrumentTracing(redisClient); err != nil {
+				logger.ErrorContext(ctx, "failed to instrument redis tracing", "error", err)
+				return 1
+			}
+		}
+		logger.InfoContext(ctx, "connected to redis")
+
+		configStore = config.NewPGStore(db.WritePool, db.ReadPool)
+		schemaStoreVal = schema.NewPGStore(db.WritePool, db.ReadPool)
+		auditStoreVal = audit.NewPGStore(db.WritePool, db.ReadPool)
+		configCache = cache.NewRedisCache(redisClient)
+		publisher = pubsub.NewRedisPublisher(redisClient)
+		subscriber = pubsub.NewRedisSubscriber(redisClient, logger)
+		defer func() { _ = publisher.Close() }()
+		defer func() { _ = subscriber.Close() }()
+		validatorStore = configStore
+
+		telemetry.StartDBPoolMetrics(ctx, otelCfg, db.WritePool, db.ReadPool)
+	}
 
 	// Auth interceptor.
 	var authInterceptor server.GRPCInterceptor
@@ -142,16 +186,13 @@ func run() int {
 	cacheMetrics := telemetry.NewCacheMetrics(otelCfg)
 	configMetrics := telemetry.NewConfigMetrics(otelCfg)
 	schemaMetrics := telemetry.NewSchemaMetrics(otelCfg)
-	telemetry.StartDBPoolMetrics(ctx, otelCfg, db.WritePool, db.ReadPool)
 
 	// Validator factory (shared between schema + config services).
-	configStore := config.NewPGStore(db.WritePool, db.ReadPool)
-	validatorFactory := validation.NewValidatorFactory(configStore)
+	validatorFactory := validation.NewValidatorFactory(validatorStore)
 
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
-		schemaStore := schema.NewPGStore(db.WritePool, db.ReadPool)
-		schemaSvc := schema.NewService(schemaStore, logger, schemaMetrics, validatorFactory.Cache())
+		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory.Cache())
 		pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 		srv.SetServiceHealthy("centralconfig.v1.SchemaService")
 		logger.InfoContext(ctx, "schema service enabled")
@@ -163,18 +204,37 @@ func run() int {
 		logger.InfoContext(ctx, "config service enabled")
 	}
 	if srv.IsServiceEnabled("audit") {
-		auditStore := audit.NewPGStore(db.WritePool, db.ReadPool)
-		auditSvc := audit.NewService(auditStore, logger)
+		auditSvc := audit.NewService(auditStoreVal, logger)
 		pb.RegisterAuditServiceServer(srv.GRPCServer(), auditSvc)
 		srv.SetServiceHealthy("centralconfig.v1.AuditService")
 		logger.InfoContext(ctx, "audit service enabled")
 	}
 
+	// Optional HTTP gateway (REST/JSON proxy to gRPC).
+	var gw *server.Gateway
+	if cfg.HTTPPort != "" {
+		gw, err = server.NewGateway(ctx, server.GatewayConfig{
+			HTTPPort:    cfg.HTTPPort,
+			GRPCAddr:    fmt.Sprintf("localhost:%s", cfg.GRPCPort),
+			Logger:      logger,
+			OpenAPISpec: openAPISpec,
+		})
+		if err != nil {
+			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
+			return 1
+		}
+	}
+
 	// Start server in background.
-	errCh := make(chan error, 1)
+	errCh := make(chan error, 2)
 	go func() {
 		errCh <- srv.Serve(ctx)
 	}()
+	if gw != nil {
+		go func() {
+			errCh <- gw.Serve(ctx)
+		}()
+	}
 
 	// Wait for shutdown signal.
 	sigCh := make(chan os.Signal, 1)
@@ -188,6 +248,9 @@ func run() int {
 	}
 
 	cancel()
+	if gw != nil {
+		gw.Shutdown(ctx)
+	}
 	srv.GracefulStop(ctx)
 	logger.InfoContext(ctx, "decree stopped")
 	return 0
@@ -195,6 +258,8 @@ func run() int {
 
 type serverConfig struct {
 	GRPCPort       string
+	HTTPPort       string
+	StorageBackend string
 	DBWriteURL     string
 	DBReadURL      string
 	RedisURL       string
@@ -211,6 +276,8 @@ func loadConfig() serverConfig {
 
 	return serverConfig{
 		GRPCPort:       getEnv("GRPC_PORT", "9090"),
+		HTTPPort:       getEnv("HTTP_PORT", ""),
+		StorageBackend: getEnv("STORAGE_BACKEND", "postgres"),
 		DBWriteURL:     dbWriteURL,
 		DBReadURL:      dbReadURL,
 		RedisURL:       getEnv("REDIS_URL", ""),

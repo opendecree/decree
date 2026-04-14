@@ -46,6 +46,39 @@ var genDocsCmd = &cobra.Command{
 	},
 }
 
+var genManCmd = &cobra.Command{
+	Use:    "gen-man [output-dir]",
+	Short:  "Generate man pages",
+	Hidden: true,
+	Args:   cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		outDir := "docs/man"
+		if len(args) > 0 {
+			outDir = args[0]
+		}
+
+		if err := os.MkdirAll(outDir, 0o755); err != nil {
+			return fmt.Errorf("create output dir: %w", err)
+		}
+
+		header := &doc.GenManHeader{
+			Title:   "DECREE",
+			Section: "1",
+			Source:  "OpenDecree",
+			Manual:  "OpenDecree CLI",
+		}
+
+		rootCmd.DisableAutoGenTag = true
+		if err := doc.GenManTree(rootCmd, header, outDir); err != nil {
+			return fmt.Errorf("generate man pages: %w", err)
+		}
+
+		fmt.Printf("Man pages generated in %s/\n", outDir)
+		return nil
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(genDocsCmd)
+	rootCmd.AddCommand(genManCmd)
 }

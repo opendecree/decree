@@ -1,0 +1,2473 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "centralconfig/v1/types.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "AuditService"
+    },
+    {
+      "name": "ConfigService"
+    },
+    {
+      "name": "SchemaService"
+    },
+    {
+      "name": "VersionService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/audit/logs": {
+      "get": {
+        "summary": "QueryWriteLog searches the audit log for config change events.\nAll filter parameters are optional — omit a filter to match all values.",
+        "operationId": "AuditService_QueryWriteLog",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1QueryWriteLogResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Filter by tenant ID (UUID). If omitted, returns entries across all tenants.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "actor",
+            "description": "Filter by actor (JWT subject). If omitted, matches all actors.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "fieldPath",
+            "description": "Filter by field path. If omitted, matches all fields.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "startTime",
+            "description": "Filter entries created at or after this time. If omitted, no lower bound.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "endTime",
+            "description": "Filter entries created at or before this time. If omitted, no upper bound.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "pageSize",
+            "description": "Maximum number of results to return. Defaults to 50, max 100.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "description": "Pagination token from a previous QueryWriteLogResponse.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AuditService"
+        ]
+      }
+    },
+    "/v1/schemas": {
+      "get": {
+        "summary": "ListSchemas returns all schemas, ordered by creation time (newest first).",
+        "operationId": "SchemaService_ListSchemas",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListSchemasResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "nameFilter",
+            "description": "Filter schemas by name prefix. Currently reserved for future use.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "description": "Maximum number of results to return. Defaults to 50, max 100.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "description": "Pagination token from a previous ListSchemasResponse.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "post": {
+        "summary": "CreateSchema creates a new schema with an initial draft version (v1).",
+        "operationId": "SchemaService_CreateSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateSchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/schemas/import": {
+      "post": {
+        "summary": "ImportSchema creates a schema (or new version) from YAML.\nFull-replace semantics: the YAML defines the complete field set.\nReturns AlreadyExists if the imported fields are identical to the latest version.",
+        "operationId": "SchemaService_ImportSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ImportSchemaRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/schemas/{id}": {
+      "get": {
+        "summary": "GetSchema retrieves a schema by ID, optionally at a specific version.",
+        "operationId": "SchemaService_GetSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Schema ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Schema version to retrieve. If omitted, returns the latest version.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteSchema permanently deletes a schema and all its versions. Cascades to tenants.",
+        "operationId": "SchemaService_DeleteSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Schema ID (UUID). Cascades to all versions, fields, and associated tenants.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "patch": {
+        "summary": "UpdateSchema creates a new draft version by merging field changes with the latest version.",
+        "operationId": "SchemaService_UpdateSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Schema ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaServiceUpdateSchemaBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/schemas/{id}/export": {
+      "get": {
+        "summary": "ExportSchema serializes a schema version to YAML.",
+        "operationId": "SchemaService_ExportSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExportSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Schema ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Schema version to export. If omitted, exports the latest version.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/schemas/{id}/publish": {
+      "post": {
+        "summary": "PublishSchema marks a schema version as published and immutable.\nOnly published versions can be assigned to tenants.",
+        "operationId": "SchemaService_PublishSchema",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1PublishSchemaResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Schema ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaServicePublishSchemaBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/tenants": {
+      "get": {
+        "summary": "ListTenants returns tenants, optionally filtered by schema.",
+        "operationId": "SchemaService_ListTenants",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListTenantsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "schemaId",
+            "description": "Filter by schema ID (UUID). If omitted, returns tenants across all schemas.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "description": "Maximum number of results to return. Defaults to 50, max 100.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "description": "Pagination token from a previous ListTenantsResponse.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "post": {
+        "summary": "CreateTenant creates a new tenant assigned to a published schema version.",
+        "operationId": "SchemaService_CreateTenant",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1CreateTenantResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CreateTenantRequest"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/tenants/{id}": {
+      "get": {
+        "summary": "GetTenant retrieves a tenant by ID.",
+        "operationId": "SchemaService_GetTenant",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetTenantResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "delete": {
+        "summary": "DeleteTenant permanently deletes a tenant and all its configuration data.",
+        "operationId": "SchemaService_DeleteTenant",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteTenantResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Tenant ID (UUID). Cascades to all config versions, values, and field locks.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "patch": {
+        "summary": "UpdateTenant updates a tenant's name or upgrades its schema version.",
+        "operationId": "SchemaService_UpdateTenant",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UpdateTenantResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaServiceUpdateTenantBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config": {
+      "get": {
+        "summary": "GetConfig returns the full resolved configuration for a tenant.",
+        "operationId": "ConfigService_GetConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Config version to retrieve. If omitted, returns the latest version.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "includeDescriptions",
+            "description": "When true, includes value-level descriptions in the response.\nThis bypasses the Redis cache and reads directly from the database.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config/export": {
+      "get": {
+        "summary": "ExportConfig serializes a tenant's configuration to YAML.",
+        "operationId": "ConfigService_ExportConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ExportConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Config version to export. If omitted, exports the latest version.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config/fields/{fieldPath}": {
+      "get": {
+        "summary": "GetField returns a single configuration value by field path.",
+        "operationId": "ConfigService_GetField",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFieldResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fieldPath",
+            "description": "Dot-separated field path (e.g. \"payments.fee\").",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "Config version to read from. If omitted, reads from the latest version.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "includeDescription",
+            "description": "When true, includes the value-level description.\nThis bypasses the Redis cache and reads directly from the database.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      },
+      "put": {
+        "summary": "SetField sets a single configuration value, creating a new config version.",
+        "operationId": "ConfigService_SetField",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetFieldResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fieldPath",
+            "description": "Dot-separated field path (e.g. \"payments.fee\").",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ConfigServiceSetFieldBody"
+            }
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config/import": {
+      "post": {
+        "summary": "ImportConfig applies configuration values from YAML.",
+        "operationId": "ConfigService_ImportConfig",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ImportConfigResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ConfigServiceImportConfigBody"
+            }
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config:batchGet": {
+      "post": {
+        "summary": "GetFields returns multiple configuration values by field paths.\nFields that don't exist are silently omitted from the response.",
+        "operationId": "ConfigService_GetFields",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFieldsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ConfigServiceGetFieldsBody"
+            }
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config:batchSet": {
+      "post": {
+        "summary": "SetFields sets multiple configuration values in a single config version.",
+        "operationId": "ConfigService_SetFields",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SetFieldsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ConfigServiceSetFieldsBody"
+            }
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/config:subscribe": {
+      "get": {
+        "summary": "Subscribe opens a server-streaming connection that pushes ConfigChange events\nwhenever the tenant's configuration is modified. The stream remains open until\nthe client disconnects or the server shuts down.",
+        "operationId": "ConfigService_Subscribe",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1SubscribeResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1SubscribeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID) to subscribe to.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fieldPaths",
+            "description": "Field paths to filter on. If empty, receives changes for all fields.\nChanges to fields not in this list are silently dropped.",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/locks": {
+      "get": {
+        "summary": "ListFieldLocks returns all active field locks for a tenant.",
+        "operationId": "SchemaService_ListFieldLocks",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListFieldLocksResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      },
+      "post": {
+        "summary": "LockField prevents a field from being modified.",
+        "operationId": "SchemaService_LockField",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1LockFieldResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SchemaServiceLockFieldBody"
+            }
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/locks/{fieldPath}": {
+      "delete": {
+        "summary": "UnlockField removes a field lock, allowing modifications again.",
+        "operationId": "SchemaService_UnlockField",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UnlockFieldResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fieldPath",
+            "description": "Dot-separated field path to unlock.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "SchemaService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/unused-fields": {
+      "get": {
+        "summary": "GetUnusedFields returns field paths that have not been read since the given time.\nUseful for identifying configuration fields that may be safe to deprecate.",
+        "operationId": "AuditService_GetUnusedFields",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetUnusedFieldsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "since",
+            "description": "Fields not read since this time are considered unused.\nRequired — there is no \"all time\" default to avoid expensive full scans.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "AuditService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/usage": {
+      "get": {
+        "summary": "GetTenantUsage returns aggregated read statistics for all fields of a tenant.",
+        "operationId": "AuditService_GetTenantUsage",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetTenantUsageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "startTime",
+            "description": "Start of the time range. If omitted, includes all historical data.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "endTime",
+            "description": "End of the time range. If omitted, includes up to the current time.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "AuditService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/usage/{fieldPath}": {
+      "get": {
+        "summary": "GetFieldUsage returns aggregated read statistics for a specific field.",
+        "operationId": "AuditService_GetFieldUsage",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetFieldUsageResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fieldPath",
+            "description": "Dot-separated field path to query.",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "startTime",
+            "description": "Start of the time range. If omitted, includes all historical data.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          },
+          {
+            "name": "endTime",
+            "description": "End of the time range. If omitted, includes up to the current time.",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date-time"
+          }
+        ],
+        "tags": [
+          "AuditService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/versions": {
+      "get": {
+        "summary": "ListVersions returns config version history for a tenant (newest first).",
+        "operationId": "ConfigService_ListVersions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListVersionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "description": "Maximum number of results to return. Defaults to 50, max 100.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "description": "Pagination token from a previous ListVersionsResponse.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/versions/{version}": {
+      "get": {
+        "summary": "GetVersion retrieves metadata for a specific config version.",
+        "operationId": "ConfigService_GetVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVersionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "The version number to retrieve.",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/tenants/{tenantId}/versions/{version}:rollback": {
+      "post": {
+        "summary": "RollbackToVersion creates a new version with the same values as the target version.\nThis does not delete intermediate versions — it creates a new version that\ncopies the target's values.",
+        "operationId": "ConfigService_RollbackToVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RollbackToVersionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "description": "The target version to rollback to. The full config at this version\nis copied into a new version (the current version number + 1).\nThe target version itself is not modified.",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "description",
+            "description": "Description for the new rollback version. Defaults to\n\"Rollback to version N\" if omitted.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "summary": "GetServerVersion returns the server's build version and commit hash.",
+        "operationId": "VersionService_GetServerVersion",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServerVersionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "VersionService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "ConfigServiceGetFieldsBody": {
+      "type": "object",
+      "properties": {
+        "fieldPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Dot-separated field paths to retrieve."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Config version to read from. If omitted, reads from the latest version."
+        },
+        "includeDescriptions": {
+          "type": "boolean",
+          "description": "When true, includes value-level descriptions.\nThis bypasses the Redis cache and reads directly from the database."
+        }
+      }
+    },
+    "ConfigServiceImportConfigBody": {
+      "type": "object",
+      "properties": {
+        "yamlContent": {
+          "type": "string",
+          "format": "byte",
+          "description": "YAML-encoded configuration values to import."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description for the new config version created by the import."
+        },
+        "mode": {
+          "$ref": "#/definitions/v1ImportMode",
+          "description": "Import mode. Defaults to IMPORT_MODE_MERGE."
+        }
+      }
+    },
+    "ConfigServiceSetFieldBody": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/definitions/v1TypedValue",
+          "description": "The typed value. Omit to set the field to null."
+        },
+        "expectedChecksum": {
+          "type": "string",
+          "description": "Optimistic concurrency control: the checksum from a previous GetField/GetConfig\nresponse. If provided and the field's current checksum doesn't match, the\nrequest fails with ABORTED. This prevents lost updates when multiple actors\nmodify the same field concurrently."
+        },
+        "description": {
+          "type": "string",
+          "description": "Version-level description explaining why this change was made."
+        },
+        "valueDescription": {
+          "type": "string",
+          "description": "Value-level description explaining what this specific value means.\nRetrievable via include_description in read requests."
+        }
+      }
+    },
+    "ConfigServiceSetFieldsBody": {
+      "type": "object",
+      "properties": {
+        "updates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FieldUpdate"
+          },
+          "description": "Field updates to apply. All updates are applied atomically in a single\nconfig version. If any update fails validation (checksum, field lock),\nno changes are committed."
+        },
+        "description": {
+          "type": "string",
+          "description": "Version-level description explaining why these changes were made."
+        }
+      }
+    },
+    "SchemaServiceLockFieldBody": {
+      "type": "object",
+      "properties": {
+        "fieldPath": {
+          "type": "string",
+          "description": "Dot-separated field path to lock (e.g. \"payments.currency\")."
+        },
+        "lockedValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For enum fields: lock only these specific values. If empty, the\nentire field is locked regardless of value."
+        }
+      }
+    },
+    "SchemaServicePublishSchemaBody": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The version number to publish. Must be an existing draft version.\nOnce published, the version is immutable."
+        }
+      }
+    },
+    "SchemaServiceUpdateSchemaBody": {
+      "type": "object",
+      "properties": {
+        "versionDescription": {
+          "type": "string",
+          "description": "Description of what changed in this version."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SchemaField"
+          },
+          "description": "Fields to add or modify. Existing fields not listed here are carried\nforward unchanged from the latest version."
+        },
+        "removeFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Dot-separated paths of fields to remove from the new version."
+        }
+      }
+    },
+    "SchemaServiceUpdateTenantBody": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "New name for the tenant. Must be a valid slug if provided."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Upgrade to a new schema version. The new version must belong to the\nsame schema and must be published."
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1AuditEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Server-assigned unique identifier (UUID)."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant affected (UUID)."
+        },
+        "actor": {
+          "type": "string",
+          "description": "The actor who performed the action (from JWT subject)."
+        },
+        "action": {
+          "type": "string",
+          "description": "The action type (e.g. \"set_field\", \"rollback\")."
+        },
+        "fieldPath": {
+          "type": "string",
+          "description": "The field that was changed. Present for set_field actions."
+        },
+        "oldValue": {
+          "type": "string",
+          "description": "The previous value. Present for set_field actions."
+        },
+        "newValue": {
+          "type": "string",
+          "description": "The new value. Present for set_field actions.\nFor rollback actions, contains the target version (e.g. \"v2\")."
+        },
+        "configVersion": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The config version number created by this action."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the audit entry was created."
+        }
+      },
+      "description": "AuditEntry represents a write event recorded in the audit log.\nEvery config mutation (SetField, SetFields, RollbackToVersion) creates\none or more audit entries atomically with the config change."
+    },
+    "v1Config": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant this config belongs to (UUID)."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The version number this config was resolved at."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ConfigValue"
+          },
+          "description": "All configuration values at this version."
+        }
+      },
+      "description": "Config represents the full resolved configuration for a tenant at a specific version."
+    },
+    "v1ConfigChange": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant whose config changed (UUID)."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The new config version number created by this change."
+        },
+        "fieldPath": {
+          "type": "string",
+          "description": "The field that was changed."
+        },
+        "oldValue": {
+          "$ref": "#/definitions/v1TypedValue",
+          "description": "The previous value. Absent if field was newly created or was null."
+        },
+        "newValue": {
+          "$ref": "#/definitions/v1TypedValue",
+          "description": "The new value. Absent if field was set to null."
+        },
+        "changedBy": {
+          "type": "string",
+          "description": "The actor who made the change."
+        },
+        "changedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the change occurred."
+        }
+      },
+      "description": "ConfigChange represents a real-time change event pushed to subscribers\nvia the Subscribe streaming RPC."
+    },
+    "v1ConfigValue": {
+      "type": "object",
+      "properties": {
+        "fieldPath": {
+          "type": "string",
+          "description": "Dot-separated field path (e.g. \"payments.fee\")."
+        },
+        "value": {
+          "$ref": "#/definitions/v1TypedValue",
+          "description": "The typed value. Absent when the field value is null."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Checksum of the value (xxHash). Used for optimistic concurrency control\nin SetField/SetFields via expected_checksum."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description explaining this specific value.\nOnly populated when include_description(s) is true in the request."
+        }
+      },
+      "description": "ConfigValue represents a single configuration value at a point in time."
+    },
+    "v1ConfigVersion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Server-assigned unique identifier (UUID)."
+        },
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant this version belongs to (UUID)."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Version number (monotonically increasing, starting at 1)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what changed in this version."
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "The actor who created this version (from JWT subject, or \"unknown\" if auth is disabled)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this version was created."
+        }
+      },
+      "description": "ConfigVersion represents a point-in-time snapshot of configuration changes.\nEach write operation (SetField, SetFields, RollbackToVersion) creates a new\nconfig version. Versions store only the changed fields (delta storage) — the\nfull config at any version is the union of all deltas up to that version."
+    },
+    "v1CreateSchemaRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the schema. Must be a valid slug: lowercase alphanumeric\nand hyphens, 1-63 characters (e.g. \"payment-config\", \"settlement-rules\")."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the schema's purpose."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SchemaField"
+          },
+          "description": "Initial field definitions for version 1. At least one field is required."
+        }
+      }
+    },
+    "v1CreateSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/v1Schema",
+          "description": "The created schema with version 1 (draft, unpublished)."
+        }
+      }
+    },
+    "v1CreateTenantRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the tenant. Must be a valid slug: lowercase alphanumeric\nand hyphens, 1-63 characters (e.g. \"acme-corp\", \"tenant-42\")."
+        },
+        "schemaId": {
+          "type": "string",
+          "description": "The schema to assign to this tenant (UUID)."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The schema version to use. Must be a published version."
+        }
+      }
+    },
+    "v1CreateTenantResponse": {
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "$ref": "#/definitions/v1Tenant"
+        }
+      }
+    },
+    "v1DeleteSchemaResponse": {
+      "type": "object"
+    },
+    "v1DeleteTenantResponse": {
+      "type": "object"
+    },
+    "v1ExportConfigResponse": {
+      "type": "object",
+      "properties": {
+        "yamlContent": {
+          "type": "string",
+          "format": "byte",
+          "description": "YAML-encoded configuration values."
+        }
+      }
+    },
+    "v1ExportSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "yamlContent": {
+          "type": "string",
+          "format": "byte",
+          "description": "YAML-encoded schema (syntax v1). Includes schema name, description,\nversion, and all field definitions with OAS-style constraint naming.\nServer-generated fields (id, checksum, published, created_at) are excluded."
+        }
+      }
+    },
+    "v1ExternalDocs": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the external documentation."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the external documentation."
+        }
+      },
+      "title": "ExternalDocs links to external documentation.\nOAS: External Documentation Object"
+    },
+    "v1FieldConstraints": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "number",
+          "format": "double",
+          "description": "For integer/number/duration: minimum allowed value (inclusive, \u003e=)."
+        },
+        "max": {
+          "type": "number",
+          "format": "double",
+          "description": "For integer/number/duration: maximum allowed value (inclusive, \u003c=)."
+        },
+        "regex": {
+          "type": "string",
+          "description": "Regular expression pattern the value must match.\nApplies to string-typed fields. Uses RE2 syntax."
+        },
+        "enumValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed values. If non-empty, the value must be one of these.\nApplies to any field type."
+        },
+        "jsonSchema": {
+          "type": "string",
+          "description": "JSON Schema document for structural validation of json-typed fields.\nEncoded as a JSON string."
+        },
+        "exclusiveMin": {
+          "type": "number",
+          "format": "double",
+          "description": "For integer/number/duration: exclusive minimum (strict, \u003e)."
+        },
+        "exclusiveMax": {
+          "type": "number",
+          "format": "double",
+          "description": "For integer/number/duration: exclusive maximum (strict, \u003c)."
+        },
+        "minLength": {
+          "type": "integer",
+          "format": "int32",
+          "description": "For string: minimum allowed length."
+        },
+        "maxLength": {
+          "type": "integer",
+          "format": "int32",
+          "description": "For string: maximum allowed length."
+        }
+      },
+      "description": "FieldConstraints defines validation rules for a schema field.\nWhich constraints apply depends on the field's type — see FieldType docs."
+    },
+    "v1FieldExample": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The example value, encoded as a string matching the field type."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short description of what this example demonstrates."
+        }
+      },
+      "description": "FieldExample represents a named example value for a schema field."
+    },
+    "v1FieldLock": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant this lock applies to (UUID)."
+        },
+        "fieldPath": {
+          "type": "string",
+          "description": "The dot-separated field path that is locked."
+        },
+        "lockedValues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For enum fields: the specific subset of values that are locked\n(not editable by admin). If empty, the entire field is locked."
+        }
+      },
+      "description": "FieldLock prevents a configuration field from being modified by non-superadmin users.\nSuperadmins bypass all field locks."
+    },
+    "v1FieldType": {
+      "type": "string",
+      "enum": [
+        "FIELD_TYPE_UNSPECIFIED",
+        "FIELD_TYPE_INT",
+        "FIELD_TYPE_STRING",
+        "FIELD_TYPE_TIME",
+        "FIELD_TYPE_DURATION",
+        "FIELD_TYPE_URL",
+        "FIELD_TYPE_JSON",
+        "FIELD_TYPE_NUMBER",
+        "FIELD_TYPE_BOOL"
+      ],
+      "default": "FIELD_TYPE_UNSPECIFIED",
+      "description": "FieldType enumerates the supported configuration value types.\nEach type maps to a specific field in the TypedValue oneof.\n\n - FIELD_TYPE_INT: Integer value. Encoded as a decimal string (e.g. \"42\", \"-1\").\nSupports minimum/maximum constraints on the numeric value.\n - FIELD_TYPE_STRING: Free-form string value.\nSupports minimum/maximum constraints on string length, pattern (regex),\nand enum constraints.\n - FIELD_TYPE_TIME: Timestamp value. Encoded as an RFC 3339 string (e.g. \"2025-01-15T09:30:00Z\").\n - FIELD_TYPE_DURATION: Duration value. Encoded as a Go-style duration string (e.g. \"24h\", \"30m\", \"500ms\").\nSupports minimum/maximum constraints on the duration in seconds.\n - FIELD_TYPE_URL: URL value. Must be a valid absolute URL.\n - FIELD_TYPE_JSON: JSON value. Stored as a JSON-encoded string.\nSupports json_schema constraint for structural validation.\n - FIELD_TYPE_NUMBER: Floating-point number value. Encoded as a decimal string (e.g. \"3.14\", \"0.025\").\nSupports minimum/maximum constraints on the numeric value.\n - FIELD_TYPE_BOOL: Boolean value. Encoded as \"true\" or \"false\"."
+    },
+    "v1FieldUpdate": {
+      "type": "object",
+      "properties": {
+        "fieldPath": {
+          "type": "string",
+          "description": "Dot-separated field path."
+        },
+        "value": {
+          "$ref": "#/definitions/v1TypedValue",
+          "description": "The typed value. Omit to set the field to null."
+        },
+        "expectedChecksum": {
+          "type": "string",
+          "description": "Optimistic concurrency control checksum for this specific field.\nSee SetFieldRequest.expected_checksum for details."
+        },
+        "valueDescription": {
+          "type": "string",
+          "description": "Value-level description for this specific field."
+        }
+      },
+      "description": "FieldUpdate represents a single field change within a SetFields batch."
+    },
+    "v1GetConfigResponse": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/v1Config",
+          "description": "The full resolved configuration at the requested version."
+        }
+      }
+    },
+    "v1GetFieldResponse": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/definitions/v1ConfigValue",
+          "description": "The configuration value. Returns NOT_FOUND if the field has no value set."
+        }
+      }
+    },
+    "v1GetFieldUsageResponse": {
+      "type": "object",
+      "properties": {
+        "stats": {
+          "$ref": "#/definitions/v1UsageStats",
+          "description": "Aggregated usage statistics across the queried time range."
+        }
+      }
+    },
+    "v1GetFieldsResponse": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ConfigValue"
+          },
+          "description": "The requested values. Fields that don't exist are omitted (not an error)."
+        }
+      }
+    },
+    "v1GetSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/v1Schema"
+        }
+      }
+    },
+    "v1GetServerVersionResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Semantic version string (e.g. \"1.2.3\" or \"dev\")."
+        },
+        "commit": {
+          "type": "string",
+          "description": "Git commit hash."
+        }
+      }
+    },
+    "v1GetTenantResponse": {
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "$ref": "#/definitions/v1Tenant"
+        }
+      }
+    },
+    "v1GetTenantUsageResponse": {
+      "type": "object",
+      "properties": {
+        "fieldStats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1UsageStats"
+          },
+          "description": "Per-field usage statistics, ordered by field path."
+        }
+      }
+    },
+    "v1GetUnusedFieldsResponse": {
+      "type": "object",
+      "properties": {
+        "fieldPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Dot-separated paths of fields with no reads since the specified time."
+        }
+      }
+    },
+    "v1GetVersionResponse": {
+      "type": "object",
+      "properties": {
+        "configVersion": {
+          "$ref": "#/definitions/v1ConfigVersion"
+        }
+      }
+    },
+    "v1ImportConfigResponse": {
+      "type": "object",
+      "properties": {
+        "configVersion": {
+          "$ref": "#/definitions/v1ConfigVersion",
+          "description": "The config version created by the import."
+        }
+      }
+    },
+    "v1ImportMode": {
+      "type": "string",
+      "enum": [
+        "IMPORT_MODE_UNSPECIFIED",
+        "IMPORT_MODE_MERGE",
+        "IMPORT_MODE_REPLACE",
+        "IMPORT_MODE_DEFAULTS"
+      ],
+      "default": "IMPORT_MODE_UNSPECIFIED",
+      "description": "ImportMode controls how imported values interact with existing config.\n\n - IMPORT_MODE_UNSPECIFIED: Unspecified defaults to merge behavior.\n - IMPORT_MODE_MERGE: Merge: update fields from YAML that differ, keep runtime overrides\nfor fields not in the YAML.\n - IMPORT_MODE_REPLACE: Replace: full replace — all fields from YAML are set, fields not in YAML\nare not carried forward. Runtime overrides are wiped.\n - IMPORT_MODE_DEFAULTS: Defaults: only set fields that have no value yet. Fields that already have\na value are skipped regardless of the YAML content."
+    },
+    "v1ImportSchemaRequest": {
+      "type": "object",
+      "properties": {
+        "yamlContent": {
+          "type": "string",
+          "format": "byte",
+          "description": "YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.\n\nImport uses full-replace semantics:\n- If no schema with this name exists: creates a new schema with version 1.\n- If a schema exists and fields differ from latest: creates the next version.\n- If a schema exists and fields are identical: returns AlreadyExists error.\n\nImported versions are created as drafts (unpublished) unless auto_publish is true.\nThe `version` field in the YAML is informational — the server assigns\nthe next version number automatically."
+        },
+        "autoPublish": {
+          "type": "boolean",
+          "description": "When true, the imported version is automatically published after creation.\nIf the schema already exists and fields are identical (AlreadyExists), this has no effect."
+        }
+      }
+    },
+    "v1ImportSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/v1Schema",
+          "description": "The created (or existing, on AlreadyExists) schema version."
+        }
+      }
+    },
+    "v1ListFieldLocksResponse": {
+      "type": "object",
+      "properties": {
+        "locks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FieldLock"
+          },
+          "description": "All active field locks for the tenant."
+        }
+      }
+    },
+    "v1ListSchemasResponse": {
+      "type": "object",
+      "properties": {
+        "schemas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Schema"
+          },
+          "description": "Schemas with their latest version."
+        },
+        "nextPageToken": {
+          "type": "string",
+          "description": "Token for the next page. Empty if no more results."
+        }
+      }
+    },
+    "v1ListTenantsResponse": {
+      "type": "object",
+      "properties": {
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Tenant"
+          }
+        },
+        "nextPageToken": {
+          "type": "string",
+          "description": "Token for the next page. Empty if no more results."
+        }
+      }
+    },
+    "v1ListVersionsResponse": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ConfigVersion"
+          },
+          "description": "Config versions, ordered by version number descending (newest first)."
+        },
+        "nextPageToken": {
+          "type": "string",
+          "description": "Token for the next page. Empty if no more results."
+        }
+      }
+    },
+    "v1LockFieldResponse": {
+      "type": "object"
+    },
+    "v1PublishSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/v1Schema",
+          "description": "The published schema version."
+        }
+      }
+    },
+    "v1QueryWriteLogResponse": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuditEntry"
+          },
+          "description": "Audit entries matching the filters, ordered by created_at descending."
+        },
+        "nextPageToken": {
+          "type": "string",
+          "description": "Token for the next page. Empty if no more results."
+        }
+      }
+    },
+    "v1RollbackToVersionResponse": {
+      "type": "object",
+      "properties": {
+        "configVersion": {
+          "$ref": "#/definitions/v1ConfigVersion",
+          "description": "The newly created config version containing the rolled-back values."
+        }
+      }
+    },
+    "v1Schema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Server-assigned unique identifier (UUID)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Unique name for this schema. Must be a valid slug: lowercase alphanumeric\ncharacters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the schema's purpose."
+        },
+        "version": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Schema version number (monotonically increasing, starting at 1)."
+        },
+        "parentVersion": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The version this was derived from. Absent for the initial version (v1)."
+        },
+        "versionDescription": {
+          "type": "string",
+          "description": "Description of what changed in this version."
+        },
+        "checksum": {
+          "type": "string",
+          "description": "Deterministic checksum of the field definitions (type, constraints, path).\nUsed for change detection on import."
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether this version is published. Only published versions can be\nassigned to tenants. Published versions are immutable."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1SchemaField"
+          },
+          "description": "The fields defined in this schema version."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this version was created."
+        },
+        "info": {
+          "$ref": "#/definitions/v1SchemaInfo",
+          "description": "Optional schema metadata: ownership, contact, labels."
+        }
+      },
+      "description": "Schema represents a configuration schema template.\nSchemas define the allowed fields and their types for tenant configurations.\nEach schema is versioned — updates create new immutable versions."
+    },
+    "v1SchemaContact": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Contact name (person or team)."
+        },
+        "email": {
+          "type": "string",
+          "description": "Contact email address."
+        },
+        "url": {
+          "type": "string",
+          "description": "Contact URL (e.g. team wiki page)."
+        }
+      },
+      "title": "SchemaContact contains contact information for a schema owner.\nOAS: Contact Object"
+    },
+    "v1SchemaField": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Dot-separated hierarchical path (e.g. \"payments.settlement.window\").\nMust be unique within a schema version."
+        },
+        "type": {
+          "$ref": "#/definitions/v1FieldType",
+          "description": "The value type for this field. Controls validation behavior."
+        },
+        "constraints": {
+          "$ref": "#/definitions/v1FieldConstraints",
+          "description": "Validation constraints. Optional — when absent, any value of the\ncorrect type is accepted."
+        },
+        "nullable": {
+          "type": "boolean",
+          "description": "Whether this field accepts empty/null values."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Whether this field is deprecated. Deprecated fields are still readable\nbut clients should migrate to redirect_to if set."
+        },
+        "redirectTo": {
+          "type": "string",
+          "description": "When deprecated, reads of this field can be redirected to this path."
+        },
+        "defaultValue": {
+          "type": "string",
+          "description": "Default value for this field, encoded as a string matching the field type."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the field's purpose."
+        },
+        "title": {
+          "type": "string",
+          "title": "Human-friendly display name (e.g. \"Fee Rate\" for path \"payments.fee_rate\").\nOAS: title"
+        },
+        "example": {
+          "type": "string",
+          "title": "Single example value, encoded as a string matching the field type.\nOAS: example"
+        },
+        "examples": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1FieldExample"
+          },
+          "title": "Named examples with optional summary. Key is example name.\nOAS: examples"
+        },
+        "externalDocs": {
+          "$ref": "#/definitions/v1ExternalDocs",
+          "title": "Link to external documentation for this field.\nOAS: externalDocs"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags for grouping and categorization beyond the dot-prefix hierarchy.\nOAS: x-tags"
+        },
+        "format": {
+          "type": "string",
+          "title": "Semantic format hint within the base type (e.g. \"email\", \"semver\", \"percentage\").\nInformational — not enforced by validation.\nOAS: format"
+        },
+        "readOnly": {
+          "type": "boolean",
+          "title": "Whether this field is system-managed and not user-editable.\nOAS: readOnly"
+        },
+        "writeOnce": {
+          "type": "boolean",
+          "description": "Whether this field can only be set once and becomes immutable after."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "description": "Whether this field's value should be masked in logs and UI."
+        }
+      },
+      "description": "SchemaField defines a single field within a configuration schema."
+    },
+    "v1SchemaInfo": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "title": "Human-friendly display title for the schema.\nOAS: info.title"
+        },
+        "author": {
+          "type": "string",
+          "description": "Schema owner identifier (person, team, or service)."
+        },
+        "contact": {
+          "$ref": "#/definitions/v1SchemaContact",
+          "title": "Contact information for the schema owner.\nOAS: info.contact"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Key-value labels for filtering and categorization."
+        }
+      },
+      "title": "SchemaInfo contains optional metadata about a schema's ownership and context.\nOAS: Info Object"
+    },
+    "v1SetFieldResponse": {
+      "type": "object",
+      "properties": {
+        "configVersion": {
+          "$ref": "#/definitions/v1ConfigVersion",
+          "description": "The newly created config version."
+        }
+      }
+    },
+    "v1SetFieldsResponse": {
+      "type": "object",
+      "properties": {
+        "configVersion": {
+          "$ref": "#/definitions/v1ConfigVersion",
+          "description": "The newly created config version."
+        }
+      }
+    },
+    "v1SubscribeResponse": {
+      "type": "object",
+      "properties": {
+        "change": {
+          "$ref": "#/definitions/v1ConfigChange",
+          "description": "A configuration change event. Delivered via Redis Pub/Sub internally."
+        }
+      }
+    },
+    "v1Tenant": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Server-assigned unique identifier (UUID)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Unique name for this tenant. Must be a valid slug: lowercase alphanumeric\ncharacters and hyphens, 1-63 characters, matching [a-z0-9]([a-z0-9-]*[a-z0-9])?."
+        },
+        "schemaId": {
+          "type": "string",
+          "description": "The schema this tenant's configuration is based on (UUID)."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "format": "int32",
+          "description": "The specific schema version assigned to this tenant.\nMust reference a published schema version."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the tenant was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the tenant was last updated (name or schema version change)."
+        }
+      },
+      "description": "Tenant represents an organization or entity that has its own configuration\nbased on an assigned schema version."
+    },
+    "v1TypedValue": {
+      "type": "object",
+      "properties": {
+        "integerValue": {
+          "type": "string",
+          "format": "int64",
+          "description": "Integer value."
+        },
+        "numberValue": {
+          "type": "number",
+          "format": "double",
+          "description": "Floating-point number value."
+        },
+        "stringValue": {
+          "type": "string",
+          "description": "Free-form string value."
+        },
+        "boolValue": {
+          "type": "boolean",
+          "description": "Boolean value."
+        },
+        "timeValue": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp value."
+        },
+        "durationValue": {
+          "type": "string",
+          "description": "Duration value."
+        },
+        "urlValue": {
+          "type": "string",
+          "description": "URL value (must be a valid absolute URL)."
+        },
+        "jsonValue": {
+          "type": "string",
+          "description": "JSON value (must be valid JSON)."
+        }
+      },
+      "description": "TypedValue holds a configuration value with its native type.\nAn unset oneof (no field present) represents a null value."
+    },
+    "v1UnlockFieldResponse": {
+      "type": "object"
+    },
+    "v1UpdateSchemaResponse": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "$ref": "#/definitions/v1Schema",
+          "description": "The new schema version (draft, unpublished)."
+        }
+      }
+    },
+    "v1UpdateTenantResponse": {
+      "type": "object",
+      "properties": {
+        "tenant": {
+          "$ref": "#/definitions/v1Tenant"
+        }
+      }
+    },
+    "v1UsageStats": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "The tenant (UUID)."
+        },
+        "fieldPath": {
+          "type": "string",
+          "description": "The field path."
+        },
+        "readCount": {
+          "type": "string",
+          "format": "int64",
+          "description": "Total number of reads across the queried time range."
+        },
+        "lastReadBy": {
+          "type": "string",
+          "description": "The last actor who read this field (if tracked)."
+        },
+        "lastReadAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this field was last read (if tracked)."
+        }
+      },
+      "description": "UsageStats represents aggregated read usage statistics for a config field."
+    }
+  }
+}

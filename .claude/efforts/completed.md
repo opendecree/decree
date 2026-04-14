@@ -6,79 +6,72 @@ Summary of all completed efforts and their key decisions.
 
 ## Discovery & Design (efforts 00-02)
 
-Initial discovery, system design, and project structure. Established the core architecture:
+Core architecture: single Go binary, three gRPC services (Schema, Config, Audit), PostgreSQL (read/write pools) + Redis (cache + pub/sub), specs-first (proto + sqlc), multi-tenant with RBAC, config versioning with delta storage, Apache 2.0.
 
-- Single Go binary, three gRPC services (Schema, Config, Audit)
-- PostgreSQL (read/write pools) + Redis (cache + pub/sub)
-- Specs-first: proto defines API, sqlc defines DB, `make generate` for both
-- Multi-tenant with role-based access (superadmin/admin/user)
-- Config versioning with delta storage, rollback, optimistic concurrency
-- Apache 2.0 license
+## Implementation (effort 03)
+
+All core services, auth, validation, OTel, SDKs, CLI, benchmarks, docs, CI. Key decisions: Go 1.24, JWT opt-in, atomic config writes (RunInTx), slug names, TypedValue oneof, strict mode, xxHash checksums, config import modes (merge/replace/defaults), single version number.
 
 ## Schema YAML (effort 04)
 
-Schema import/export in YAML format:
-
-- Syntax v1 with OAS-style constraint naming (minimum/maximum/pattern/enum)
-- Full-replace semantics on import with checksum dedup
-- Slug names enforced on schema and tenant names
+Syntax v1 with OAS-style constraint naming, full-replace semantics on import, checksum dedup, slug enforcement.
 
 ## Instrumentation (effort 05)
 
-Feature-flagged OpenTelemetry:
+Feature-flagged OpenTelemetry: master switch + per-feature trace/metric flags, slog trace correlation, OTel Collector + Jaeger in docker-compose.
 
-- Master switch: `OTEL_ENABLED`
-- Trace flags: `OTEL_TRACES_GRPC`, `OTEL_TRACES_DB`, `OTEL_TRACES_REDIS`
-- Metric flags: `OTEL_METRICS_GRPC`, `OTEL_METRICS_DB_POOL`, `OTEL_METRICS_CACHE`, `OTEL_METRICS_CONFIG`, `OTEL_METRICS_SCHEMA`
-- slog trace correlation (trace_id/span_id in logs)
-- OTel Collector + Jaeger in docker-compose for local dev
+## Go SDKs (efforts 06, 06a-c)
 
-## SDKs (efforts 06, 06a-c)
-
-Three Go SDK modules, each independently installable:
-
-- **configclient** — runtime reads/writes, typed getters/setters, snapshots for consistent reads, GetForUpdate + Update for CAS
-- **adminclient** — schema/tenant/audit/config admin ops, auto-pagination, SDK-level types (not proto)
-- **configwatcher** — live `Value[T]` with generics, auto-reconnect, null support via `GetWithNull()`
-
-Key decisions: SDKs return native Go types (not proto), `ErrTypeMismatch` for wrong-type getters, connection passed in (not owned).
+Three independently installable modules: configclient (typed reads/writes, snapshots, CAS), adminclient (schema/tenant/audit, auto-pagination), configwatcher (live Value[T] with generics, auto-reconnect). SDKs return native Go types, connection passed in (not owned).
 
 ## Field Validation (effort 09)
 
-Three phases completed:
-
-1. **Null support** — `optional string` → `TypedValue` oneof with native proto types (int64, double, string, bool, Timestamp, Duration, url, json). Null = absent TypedValue.
-2. **Constraint validation** — factory + per-tenant cache. Validators: min/max, exclusiveMin/Max, minLength/maxLength, pattern, enum, URL validity, JSON Schema. Strict mode rejects unknown fields.
-3. **OAS constraint extensions** — separated string length (minLength/maxLength) from numeric range (minimum/maximum). Added exclusiveMinimum/exclusiveMaximum. Constraint/type compatibility validated at schema creation.
-
-Key decisions: DB stores strings (conversion at boundary), xxHash checksums stored in DB column, validators use nil-receiver pattern.
+Null support (TypedValue oneof), constraint validation (factory + per-tenant cache), OAS constraint extensions (exclusiveMin/Max, minLength/maxLength). DB stores strings, xxHash checksums.
 
 ## Benchmarks (efforts 10, 10a-b)
 
-Unit benchmarks (23) + E2E benchmarks (13):
-
-- Validation: 3ns (no constraints) to 1.7µs (JSON Schema)
-- Checksum (xxHash): ~50ns, 0 allocs
-- Cache hit: 17ns, parallel 110ns
-- YAML marshal: ~30µs for 5 fields
-- E2E: sequential + parallel (RunParallel) + mixed workload + import scaling
+Unit (23) + E2E (13): validation 3ns–1.7µs, checksum ~50ns, cache hit 17ns, YAML ~30µs.
 
 ## Documentation (effort 11)
 
-Stack: protoc-gen-doc (API) + cobra/doc (CLI) + MkDocs Material (site) + pkg.go.dev (SDKs).
-
-- All generators output markdown — portable, reviewable in PRs
-- Generated docs committed to repo (browsable on GitHub)
-- CI verifies `make docs` produces no diff
-- 14 hand-written pages + 37 generated CLI pages + 1 API reference
-- JSON Schema for schema YAML editor validation
+protoc-gen-doc (API) + cobra/doc (CLI) + MkDocs Material (site). All markdown, committed, CI-verified. JSON Schema for YAML editor validation.
 
 ## CI (effort 12)
 
-GitHub Actions with three workflows:
+Three workflows: ci.yml (PR validation), release.yml (ghcr.io images + release notes with apidiff), main.yml (bleeding edge images + docs deploy). Automated release notes with proto breaking change detection.
 
-- **ci.yml** — PR validation: lint (golangci-lint v2.8.0 + buf), tests, build, docs check, e2e
-- **release.yml** — build + push images to ghcr.io on version tags (semver + latest)
-- **main.yml** — bleeding edge :main images + docs deploy to GitHub Pages
+## CLI Phase 3 (effort 08)
 
-Tool versions pinned: golangci-lint-action@v9, MkDocs Material 9.7.6. Single version for server + CLI (injected via ldflags from git tags).
+31 commands: 6 groups (schema, tenant, config, watch, lock, audit) + 5 power tools (diff, docgen, validate, seed, dump) as reusable Go packages in sdk/tools. All packages 90%+ coverage. Offline tools have zero gRPC/proto deps.
+
+## Test Coverage (effort 14)
+
+Raised coverage across all public modules: tools 93-100%, configwatcher 61→91%, adminclient 36→89%, configclient 58→82%, CLI 58→82%. Coverage ratchet prevents regression. Internal 44% (cache/pubsub need Redis mocks).
+
+## In-Memory Storage (effort 15)
+
+In-memory backends for all pluggable interfaces: ConfigCache, Publisher/Subscriber, audit/schema/config Stores. Enables tests without Docker. sync.RWMutex, no external deps, auto-incrementing IDs. Coverage +8%.
+
+## Go Public (effort 13 — partial)
+
+Completed: secret scan (clean), LICENSE verified, README review + badges, module paths confirmed, git history cleaned, GitHub settings, repo flipped to public, v0.1.0 tagged (all submodules), branch protection, issue templates, SECURITY.md, Code of Conduct, GitHub Discussions, CI fixed. Remaining: pre-launch items (see effort 13).
+
+## REST/HTTP Gateway (effort 16)
+
+grpc-gateway embedded in server binary. google.api.http annotations on all 32 RPCs. Swagger UI at /docs. OpenAPI spec generated and embedded. Opt-in via HTTP_PORT env var. Auth headers forwarded from HTTP to gRPC metadata. 94.9% server coverage.
+
+## Schema YAML Enrichment (effort 20)
+
+OAS-inspired metadata: schema-level info block (title, author, contact, labels), field-level metadata (title, example, examples, externalDocs, tags, format, readOnly, writeOnce, sensitive). 4 new proto messages, all optional, backward compatible.
+
+## Additional Items (v0.3.0 cycle)
+
+- **BSR proto publishing** — buf.build/opendecree/decree, auto-push on release tags
+- **In-memory storage wiring** — STORAGE_BACKEND=memory, zero-dep evaluation mode, validator store adapter
+- **GitHub Project** — roadmap board with issues from efforts, CI auto-add workflow
+- **Shell completion** — bash/zsh/fish/powershell via cobra, flag value hints for --output/--role/--mode
+- **Helm chart** — deploy/helm/decree with full env var support, secrets, ingress, OTel, health probes
+- **Goreleaser** — cross-platform binaries (server: linux/mac, CLI: linux/mac/windows, amd64/arm64)
+- **Man pages** — 43 pages via cobra/doc, Long descriptions for parent commands
+- **Docker layer caching** — GHA cache for main.yml and release.yml image builds
+- **configclient retry** — generic retry[T] with exponential backoff + jitter, opt-in via WithRetry()

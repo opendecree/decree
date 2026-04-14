@@ -6,6 +6,10 @@ title: decree schema
 
 Manage configuration schemas
 
+### Synopsis
+
+Create, list, publish, import/export, and delete configuration schemas. Schemas define the allowed fields, types, and constraints for tenant configurations.
+
 ### Options
 
 ```

@@ -1,10 +1,16 @@
-# OpenDecree
+<p align="center">
+  <img src="https://raw.githubusercontent.com/opendecree/decree/main/assets/logo.png" alt="OpenDecree" width="150">
+</p>
 
-[![CI](https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg)](https://github.com/opendecree/decree/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go)](https://go.dev/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+<h1 align="center">OpenDecree</h1>
 
-Schema-driven business configuration management for multi-tenant services.
+<p align="center">
+  <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24-00ADD8?logo=go" alt="Go"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+</p>
+
+<p align="center">Schema-driven business configuration management for multi-tenant services.</p>
 
 ## What is this?
 
@@ -108,7 +114,20 @@ Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`
 
 ## Quick Start
 
-### Docker Compose (local development)
+### Try it instantly (no Docker needed)
+
+```bash
+go install github.com/opendecree/decree/cmd/server@latest
+
+# Start with in-memory storage — zero dependencies
+STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
+
+# Open http://localhost:8080/docs for Swagger UI
+# All requests need x-subject header:
+curl -H "x-subject: admin" http://localhost:8080/v1/schemas
+```
+
+### Docker Compose (production-like)
 
 ```bash
 git clone https://github.com/opendecree/decree.git
@@ -117,9 +136,32 @@ cd decree
 # Start the full stack (PostgreSQL + Redis + migrations + service)
 docker compose up -d --wait service
 
-# The gRPC service is now available at localhost:9090
+# gRPC at localhost:9090, REST/JSON at localhost:8080
 # No JWT required — metadata auth is the default
 ```
+
+### REST API
+
+The entire gRPC API is also available as REST/JSON (via grpc-gateway). Set `HTTP_PORT` to enable:
+
+```bash
+# Version check
+curl http://localhost:8080/v1/version
+
+# List schemas
+curl -H "x-subject: admin" http://localhost:8080/v1/schemas
+
+# Create a schema
+curl -X POST http://localhost:8080/v1/schemas \
+  -H "Content-Type: application/json" \
+  -H "x-subject: admin" \
+  -d '{"name":"payments","fields":[{"path":"fee","type":7}]}'
+
+# Get config
+curl -H "x-subject: admin" http://localhost:8080/v1/tenants/{id}/config
+```
+
+OpenAPI spec: [`docs/api/openapi.swagger.json`](docs/api/openapi.swagger.json)
 
 ### Using the CLI
 
@@ -163,7 +205,9 @@ Single binary exposing three gRPC services. Deploy with `ENABLE_SERVICES` to con
 | Variable | Description | Default |
 |----------|------------|---------|
 | `GRPC_PORT` | gRPC listen port | `9090` |
-| `DB_WRITE_URL` | PostgreSQL primary connection string | required |
+| `HTTP_PORT` | REST/JSON gateway port (disabled if empty) | disabled |
+| `STORAGE_BACKEND` | `postgres` or `memory` | `postgres` |
+| `DB_WRITE_URL` | PostgreSQL primary connection string | required (postgres) |
 | `DB_READ_URL` | PostgreSQL read replica connection string | `DB_WRITE_URL` |
 | `REDIS_URL` | Redis connection string | required |
 | `ENABLE_SERVICES` | Services to enable: `schema`, `config`, `audit` | all |

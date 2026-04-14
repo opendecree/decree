@@ -17,18 +17,55 @@ type SchemaYAML struct {
 	Description        string                     `yaml:"description,omitempty"`
 	Version            int32                      `yaml:"version,omitempty"`
 	VersionDescription string                     `yaml:"version_description,omitempty"`
+	Info               *SchemaInfoYAML            `yaml:"info,omitempty"`
 	Fields             map[string]SchemaFieldYAML `yaml:"fields"`
+}
+
+// SchemaInfoYAML contains optional schema-level metadata.
+type SchemaInfoYAML struct {
+	Title   string             `yaml:"title,omitempty"`
+	Author  string             `yaml:"author,omitempty"`
+	Contact *SchemaContactYAML `yaml:"contact,omitempty"`
+	Labels  map[string]string  `yaml:"labels,omitempty"`
+}
+
+// SchemaContactYAML contains contact information for a schema owner.
+type SchemaContactYAML struct {
+	Name  string `yaml:"name,omitempty"`
+	Email string `yaml:"email,omitempty"`
+	URL   string `yaml:"url,omitempty"`
 }
 
 // SchemaFieldYAML represents a single field in the YAML format.
 type SchemaFieldYAML struct {
-	Type        string           `yaml:"type"`
-	Description string           `yaml:"description,omitempty"`
-	Default     string           `yaml:"default,omitempty"`
-	Nullable    bool             `yaml:"nullable,omitempty"`
-	Deprecated  bool             `yaml:"deprecated,omitempty"`
-	RedirectTo  string           `yaml:"redirect_to,omitempty"`
-	Constraints *ConstraintsYAML `yaml:"constraints,omitempty"`
+	Type         string                 `yaml:"type"`
+	Description  string                 `yaml:"description,omitempty"`
+	Default      string                 `yaml:"default,omitempty"`
+	Nullable     bool                   `yaml:"nullable,omitempty"`
+	Deprecated   bool                   `yaml:"deprecated,omitempty"`
+	RedirectTo   string                 `yaml:"redirect_to,omitempty"`
+	Constraints  *ConstraintsYAML       `yaml:"constraints,omitempty"`
+	Title        string                 `yaml:"title,omitempty"`
+	Example      string                 `yaml:"example,omitempty"`
+	Examples     map[string]ExampleYAML `yaml:"examples,omitempty"`
+	ExternalDocs *ExternalDocsYAML      `yaml:"externalDocs,omitempty"`
+	Tags         []string               `yaml:"tags,omitempty"`
+	Format       string                 `yaml:"format,omitempty"`
+	ReadOnly     bool                   `yaml:"readOnly,omitempty"`
+	WriteOnce    bool                   `yaml:"writeOnce,omitempty"`
+	Sensitive    bool                   `yaml:"sensitive,omitempty"`
+}
+
+// ExampleYAML represents a named example value.
+type ExampleYAML struct {
+	Value   string `yaml:"value"`
+	Summary string `yaml:"summary,omitempty"`
+}
+
+// ExternalDocsYAML links to external documentation.
+type ExternalDocsYAML struct {
+	Description string `yaml:"description,omitempty"`
+	URL         string `yaml:"url"`
 }
 
 // ConstraintsYAML uses OAS-style naming for field constraints.
@@ -130,6 +167,7 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 		Description:        s.Description,
 		Version:            s.Version,
 		VersionDescription: s.VersionDescription,
+		Info:               schemaInfoToYAML(s.Info),
 		Fields:             make(map[string]SchemaFieldYAML, len(s.Fields)),
 	}
 
@@ -138,6 +176,9 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 			Type:       protoTypeToYAML(f.Type),
 			Nullable:   f.Nullable,
 			Deprecated: f.Deprecated,
+			ReadOnly:   f.ReadOnly,
+			WriteOnce:  f.WriteOnce,
+			Sensitive:  f.Sensitive,
 		}
 		if f.Description != nil {
 			yf.Description = *f.Description
@@ -148,6 +189,30 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 		if f.RedirectTo != nil {
 			yf.RedirectTo = *f.RedirectTo
 		}
+		if f.Title != nil {
+			yf.Title = *f.Title
+		}
+		if f.Example != nil {
+			yf.Example = *f.Example
+		}
+		if f.Format != nil {
+			yf.Format = *f.Format
+		}
+		if len(f.Tags) > 0 {
+			yf.Tags = f.Tags
+		}
+		if len(f.Examples) > 0 {
+			yf.Examples = make(map[string]ExampleYAML, len(f.Examples))
+			for k, v := range f.Examples {
+				yf.Examples[k] = ExampleYAML{Value: v.Value, Summary: v.Summary}
+			}
+		}
+		if f.ExternalDocs != nil {
+			yf.ExternalDocs = &ExternalDocsYAML{
+				Description: f.ExternalDocs.Description,
+				URL:         f.ExternalDocs.Url,
+			}
+		}
 		if f.Constraints != nil {
 			yf.Constraints = protoConstraintsToYAML(f.Constraints)
 		}
@@ -155,6 +220,30 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 	}
 
 	return doc
+}
+
+func schemaInfoToYAML(info *pb.SchemaInfo) *SchemaInfoYAML {
+	if info == nil {
+		return nil
+	}
+	yi := &SchemaInfoYAML{
+		Title:  info.Title,
+		Author: info.Author,
+	}
+	if info.Contact != nil {
+		yi.Contact = &SchemaContactYAML{
+			Name:  info.Contact.Name,
+			Email: info.Contact.Email,
+			URL:   info.Contact.Url,
+		}
+	}
+	if len(info.Labels) > 0 {
+		yi.Labels = info.Labels
+	}
+	if yi.Title == "" && yi.Author == "" && yi.Contact == nil && len(yi.Labels) == 0 {
+		return nil
+	}
+	return yi
 }
 
 func protoConstraintsToYAML(c *pb.FieldConstraints) *ConstraintsYAML {
@@ -195,6 +284,10 @@ func yamlToProtoFields(doc *SchemaYAML) []*pb.SchemaField {
 			Type:       ft,
 			Nullable:   yf.Nullable,
 			Deprecated: yf.Deprecated,
+			ReadOnly:   yf.ReadOnly,
+			WriteOnce:  yf.WriteOnce,
+			Sensitive:  yf.Sensitive,
+			Tags:       yf.Tags,
 		}
 		if yf.Description != "" {
 			f.Description = &yf.Description
@@ -204,6 +297,27 @@ func yamlToProtoFields(doc *SchemaYAML) []*pb.SchemaField {
 		}
 		if yf.RedirectTo != "" {
 			f.RedirectTo = &yf.RedirectTo
+		}
+		if yf.Title != "" {
+			f.Title = &yf.Title
+		}
+		if yf.Example != "" {
+			f.Example = &yf.Example
+		}
+		if yf.Format != "" {
+			f.Format = &yf.Format
+		}
+		if len(yf.Examples) > 0 {
+			f.Examples = make(map[string]*pb.FieldExample, len(yf.Examples))
+			for k, v := range yf.Examples {
+				f.Examples[k] = &pb.FieldExample{Value: v.Value, Summary: v.Summary}
+			}
+		}
+		if yf.ExternalDocs != nil {
+			f.ExternalDocs = &pb.ExternalDocs{
+				Description: yf.ExternalDocs.Description,
+				Url:         yf.ExternalDocs.URL,
+			}
 		}
 		if yf.Constraints != nil {
 			f.Constraints = yamlConstraintsToProto(yf.Constraints)

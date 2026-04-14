@@ -1,6 +1,6 @@
 # Subscriptions
 
-CCS supports real-time change streaming via gRPC server-side streaming. When a config value changes, subscribers receive the update instantly -- no polling required.
+OpenDecree supports real-time change streaming via gRPC server-side streaming. When a config value changes, subscribers receive the update instantly -- no polling required.
 
 ## How It Works
 
@@ -111,7 +111,7 @@ The configwatcher automatically reconnects if the gRPC stream drops. On reconnec
 
 ## Internal Architecture
 
-Internally, CCS uses Redis pub/sub for change propagation:
+Internally, OpenDecree uses Redis pub/sub for change propagation:
 
 - Each tenant has a Redis pub/sub channel
 - When the config service writes a value, it publishes the change event to the tenant's channel

@@ -9,6 +9,7 @@ import (
 var lockCmd = &cobra.Command{
 	Use:   "lock",
 	Short: "Manage field locks",
+	Long:  "Lock and unlock configuration fields. Locked fields cannot be modified by admin or user roles — only superadmins can bypass locks.",
 }
 
 var lockSetCmd = &cobra.Command{

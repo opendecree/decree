@@ -46,6 +46,7 @@ tmp/
 # MkDocs build output
 site/
 
-# CLI binary (root-level only, not cmd/decree/)
+# Binaries (root-level only, not cmd/ subdirs)
 /ccs
 /decree
+/server

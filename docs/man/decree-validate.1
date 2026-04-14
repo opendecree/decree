@@ -1,0 +1,63 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-validate - Validate a config YAML against a schema YAML (offline)
+
+
+.SH SYNOPSIS
+\fBdecree validate [flags]\fP
+
+
+.SH DESCRIPTION
+Validate a config YAML against a schema YAML (offline)
+
+
+.SH OPTIONS
+\fB--config\fP=""
+	config YAML file
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for validate
+
+.PP
+\fB--schema\fP=""
+	schema YAML file
+
+.PP
+\fB--strict\fP[=false]
+	reject unknown fields not in schema
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP

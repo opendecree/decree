@@ -14,6 +14,7 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Read and write configuration values",
+	Long:  "Get and set typed configuration values for tenants. Supports single and batch operations, versioning, rollback, and YAML import/export.",
 }
 
 var configGetCmd = &cobra.Command{
@@ -229,6 +230,9 @@ func init() {
 	configExportCmd.Flags().Int32("version", 0, "specific version (default: latest)")
 	configImportCmd.Flags().String("description", "", "version description")
 	configImportCmd.Flags().String("mode", "merge", "import mode: merge, replace, or defaults")
+	_ = configImportCmd.RegisterFlagCompletionFunc("mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"merge", "replace", "defaults"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	configCmd.AddCommand(configGetCmd)
 	configCmd.AddCommand(configGetAllCmd)

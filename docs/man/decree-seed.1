@@ -1,0 +1,55 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-seed - Bootstrap a schema, tenant, and config from a single YAML file
+
+
+.SH SYNOPSIS
+\fBdecree seed  [flags]\fP
+
+
+.SH DESCRIPTION
+Seed creates a schema, tenant, and initial configuration from a single YAML file. The operation is idempotent: existing schemas with identical fields are skipped, existing tenants are reused, and config values are merged.
+
+
+.SH OPTIONS
+\fB--auto-publish\fP[=false]
+	auto-publish the schema version
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for seed
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP

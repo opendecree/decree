@@ -1,0 +1,51 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-lock - Manage field locks
+
+
+.SH SYNOPSIS
+\fBdecree lock [flags]\fP
+
+
+.SH DESCRIPTION
+Lock and unlock configuration fields. Locked fields cannot be modified by admin or user roles — only superadmins can bypass locks.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for lock
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP, \fBdecree-lock-list(1)\fP, \fBdecree-lock-remove(1)\fP, \fBdecree-lock-set(1)\fP

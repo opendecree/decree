@@ -7,6 +7,7 @@
 package centralconfigv1
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -1640,7 +1641,7 @@ var File_centralconfig_v1_schema_service_proto protoreflect.FileDescriptor
 
 const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\n" +
-	"%centralconfig/v1/schema_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\"\x97\x01\n" +
+	"%centralconfig/v1/schema_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\x1a\x1cgoogle/api/annotations.proto\"\x97\x01\n" +
 	"\x13CreateSchemaRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12%\n" +
 	"\vdescription\x18\x02 \x01(\tH\x00R\vdescription\x88\x01\x01\x125\n" +
@@ -1738,24 +1739,24 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\x12!\n" +
 	"\fauto_publish\x18\x02 \x01(\bR\vautoPublish\"H\n" +
 	"\x14ImportSchemaResponse\x120\n" +
-	"\x06schema\x18\x01 \x01(\v2\x18.centralconfig.v1.SchemaR\x06schema2\xe4\v\n" +
-	"\rSchemaService\x12]\n" +
-	"\fCreateSchema\x12%.centralconfig.v1.CreateSchemaRequest\x1a&.centralconfig.v1.CreateSchemaResponse\x12T\n" +
-	"\tGetSchema\x12\".centralconfig.v1.GetSchemaRequest\x1a#.centralconfig.v1.GetSchemaResponse\x12Z\n" +
-	"\vListSchemas\x12$.centralconfig.v1.ListSchemasRequest\x1a%.centralconfig.v1.ListSchemasResponse\x12]\n" +
-	"\fUpdateSchema\x12%.centralconfig.v1.UpdateSchemaRequest\x1a&.centralconfig.v1.UpdateSchemaResponse\x12]\n" +
-	"\fDeleteSchema\x12%.centralconfig.v1.DeleteSchemaRequest\x1a&.centralconfig.v1.DeleteSchemaResponse\x12`\n" +
-	"\rPublishSchema\x12&.centralconfig.v1.PublishSchemaRequest\x1a'.centralconfig.v1.PublishSchemaResponse\x12]\n" +
-	"\fCreateTenant\x12%.centralconfig.v1.CreateTenantRequest\x1a&.centralconfig.v1.CreateTenantResponse\x12T\n" +
-	"\tGetTenant\x12\".centralconfig.v1.GetTenantRequest\x1a#.centralconfig.v1.GetTenantResponse\x12Z\n" +
-	"\vListTenants\x12$.centralconfig.v1.ListTenantsRequest\x1a%.centralconfig.v1.ListTenantsResponse\x12]\n" +
-	"\fUpdateTenant\x12%.centralconfig.v1.UpdateTenantRequest\x1a&.centralconfig.v1.UpdateTenantResponse\x12]\n" +
-	"\fDeleteTenant\x12%.centralconfig.v1.DeleteTenantRequest\x1a&.centralconfig.v1.DeleteTenantResponse\x12T\n" +
-	"\tLockField\x12\".centralconfig.v1.LockFieldRequest\x1a#.centralconfig.v1.LockFieldResponse\x12Z\n" +
-	"\vUnlockField\x12$.centralconfig.v1.UnlockFieldRequest\x1a%.centralconfig.v1.UnlockFieldResponse\x12c\n" +
-	"\x0eListFieldLocks\x12'.centralconfig.v1.ListFieldLocksRequest\x1a(.centralconfig.v1.ListFieldLocksResponse\x12]\n" +
-	"\fExportSchema\x12%.centralconfig.v1.ExportSchemaRequest\x1a&.centralconfig.v1.ExportSchemaResponse\x12]\n" +
-	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponseB\xca\x01\n" +
+	"\x06schema\x18\x01 \x01(\v2\x18.centralconfig.v1.SchemaR\x06schema2\xcd\x0f\n" +
+	"\rSchemaService\x12u\n" +
+	"\fCreateSchema\x12%.centralconfig.v1.CreateSchemaRequest\x1a&.centralconfig.v1.CreateSchemaResponse\"\x16\x82\xd3\xe4\x93\x02\x10:\x01*\"\v/v1/schemas\x12n\n" +
+	"\tGetSchema\x12\".centralconfig.v1.GetSchemaRequest\x1a#.centralconfig.v1.GetSchemaResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/schemas/{id}\x12o\n" +
+	"\vListSchemas\x12$.centralconfig.v1.ListSchemasRequest\x1a%.centralconfig.v1.ListSchemasResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/schemas\x12z\n" +
+	"\fUpdateSchema\x12%.centralconfig.v1.UpdateSchemaRequest\x1a&.centralconfig.v1.UpdateSchemaResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*2\x10/v1/schemas/{id}\x12w\n" +
+	"\fDeleteSchema\x12%.centralconfig.v1.DeleteSchemaRequest\x1a&.centralconfig.v1.DeleteSchemaResponse\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/v1/schemas/{id}\x12\x85\x01\n" +
+	"\rPublishSchema\x12&.centralconfig.v1.PublishSchemaRequest\x1a'.centralconfig.v1.PublishSchemaResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/v1/schemas/{id}/publish\x12u\n" +
+	"\fCreateTenant\x12%.centralconfig.v1.CreateTenantRequest\x1a&.centralconfig.v1.CreateTenantResponse\"\x16\x82\xd3\xe4\x93\x02\x10:\x01*\"\v/v1/tenants\x12n\n" +
+	"\tGetTenant\x12\".centralconfig.v1.GetTenantRequest\x1a#.centralconfig.v1.GetTenantResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/tenants/{id}\x12o\n" +
+	"\vListTenants\x12$.centralconfig.v1.ListTenantsRequest\x1a%.centralconfig.v1.ListTenantsResponse\"\x13\x82\xd3\xe4\x93\x02\r\x12\v/v1/tenants\x12z\n" +
+	"\fUpdateTenant\x12%.centralconfig.v1.UpdateTenantRequest\x1a&.centralconfig.v1.UpdateTenantResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*2\x10/v1/tenants/{id}\x12w\n" +
+	"\fDeleteTenant\x12%.centralconfig.v1.DeleteTenantRequest\x1a&.centralconfig.v1.DeleteTenantResponse\"\x18\x82\xd3\xe4\x93\x02\x12*\x10/v1/tenants/{id}\x12~\n" +
+	"\tLockField\x12\".centralconfig.v1.LockFieldRequest\x1a#.centralconfig.v1.LockFieldResponse\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/v1/tenants/{tenant_id}/locks\x12\x8e\x01\n" +
+	"\vUnlockField\x12$.centralconfig.v1.UnlockFieldRequest\x1a%.centralconfig.v1.UnlockFieldResponse\"2\x82\xd3\xe4\x93\x02,**/v1/tenants/{tenant_id}/locks/{field_path}\x12\x8a\x01\n" +
+	"\x0eListFieldLocks\x12'.centralconfig.v1.ListFieldLocksRequest\x1a(.centralconfig.v1.ListFieldLocksResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/v1/tenants/{tenant_id}/locks\x12~\n" +
+	"\fExportSchema\x12%.centralconfig.v1.ExportSchemaRequest\x1a&.centralconfig.v1.ExportSchemaResponse\"\x1f\x82\xd3\xe4\x93\x02\x19\x12\x17/v1/schemas/{id}/export\x12|\n" +
+	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/schemas/importB\xca\x01\n" +
 	"\x14com.centralconfig.v1B\x12SchemaServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (

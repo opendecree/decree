@@ -326,6 +326,122 @@ func TestQueryWriteLog_Success(t *testing.T) {
 	assert.Equal(t, "set_field", entries[0].Action)
 }
 
+func TestFieldFromProto_AllMetadata(t *testing.T) {
+	title := "Fee Rate"
+	example := "0.025"
+	format := "percentage"
+
+	pf := &pb.SchemaField{
+		Path:       "payments.fee",
+		Type:       pb.FieldType_FIELD_TYPE_NUMBER,
+		Nullable:   true,
+		Deprecated: true,
+		RedirectTo: ptrString("payments.new_fee"),
+		DefaultValue: ptrString("0.01"),
+		Description: ptrString("Transaction fee"),
+		Title:      &title,
+		Example:    &example,
+		Format:     &format,
+		Tags:       []string{"billing", "critical"},
+		ReadOnly:   true,
+		WriteOnce:  true,
+		Sensitive:  true,
+		Examples: map[string]*pb.FieldExample{
+			"low":  {Value: "0.01", Summary: "Low rate"},
+			"high": {Value: "0.99", Summary: "High rate"},
+		},
+		ExternalDocs: &pb.ExternalDocs{
+			Description: "Fee guide",
+			Url:         "https://docs.example.com/fees",
+		},
+	}
+
+	f := fieldFromProto(pf)
+	assert.Equal(t, "payments.fee", f.Path)
+	assert.Equal(t, "Fee Rate", f.Title)
+	assert.Equal(t, "0.025", f.Example)
+	assert.Equal(t, "percentage", f.Format)
+	assert.Equal(t, []string{"billing", "critical"}, f.Tags)
+	assert.True(t, f.ReadOnly)
+	assert.True(t, f.WriteOnce)
+	assert.True(t, f.Sensitive)
+	assert.True(t, f.Nullable)
+	assert.True(t, f.Deprecated)
+	assert.Equal(t, "payments.new_fee", f.RedirectTo)
+	assert.Equal(t, "0.01", f.Default)
+	assert.Equal(t, "Transaction fee", f.Description)
+
+	require.Len(t, f.Examples, 2)
+	assert.Equal(t, "0.01", f.Examples["low"].Value)
+	assert.Equal(t, "Low rate", f.Examples["low"].Summary)
+
+	require.NotNil(t, f.ExternalDocs)
+	assert.Equal(t, "Fee guide", f.ExternalDocs.Description)
+	assert.Equal(t, "https://docs.example.com/fees", f.ExternalDocs.URL)
+}
+
+func TestSchemaInfoFromProto(t *testing.T) {
+	t.Run("nil returns nil", func(t *testing.T) {
+		assert.Nil(t, schemaInfoFromProto(nil))
+	})
+
+	t.Run("full info", func(t *testing.T) {
+		info := schemaInfoFromProto(&pb.SchemaInfo{
+			Title:  "Payment Config",
+			Author: "payments-team",
+			Contact: &pb.SchemaContact{
+				Name:  "Payments Team",
+				Email: "pay@example.com",
+				Url:   "https://wiki.example.com",
+			},
+			Labels: map[string]string{"team": "payments"},
+		})
+		require.NotNil(t, info)
+		assert.Equal(t, "Payment Config", info.Title)
+		assert.Equal(t, "payments-team", info.Author)
+		assert.Equal(t, "pay@example.com", info.Contact.Email)
+		assert.Equal(t, "https://wiki.example.com", info.Contact.URL)
+		assert.Equal(t, "payments", info.Labels["team"])
+	})
+
+	t.Run("without contact", func(t *testing.T) {
+		info := schemaInfoFromProto(&pb.SchemaInfo{Author: "me"})
+		require.NotNil(t, info)
+		assert.Nil(t, info.Contact)
+	})
+}
+
+func TestFieldsToProto_AllMetadata(t *testing.T) {
+	fields := []Field{{
+		Path:      "x",
+		Type:      "STRING",
+		Title:     "The X",
+		Example:   "hello",
+		Format:    "email",
+		Tags:      []string{"core"},
+		ReadOnly:  true,
+		WriteOnce: true,
+		Sensitive: true,
+		Examples:  map[string]FieldExample{"ex1": {Value: "v1", Summary: "s1"}},
+		ExternalDocs: &ExternalDocs{Description: "docs", URL: "https://x.com"},
+	}}
+
+	result := fieldsToProto(fields)
+	require.Len(t, result, 1)
+	pf := result[0]
+	assert.Equal(t, "The X", pf.GetTitle())
+	assert.Equal(t, "hello", pf.GetExample())
+	assert.Equal(t, "email", pf.GetFormat())
+	assert.Equal(t, []string{"core"}, pf.Tags)
+	assert.True(t, pf.ReadOnly)
+	assert.True(t, pf.WriteOnce)
+	assert.True(t, pf.Sensitive)
+	assert.Len(t, pf.Examples, 1)
+	assert.Equal(t, "v1", pf.Examples["ex1"].Value)
+	assert.NotNil(t, pf.ExternalDocs)
+	assert.Equal(t, "https://x.com", pf.ExternalDocs.Url)
+}
+
 func TestServiceNotConfigured(t *testing.T) {
 	client := New(nil, nil, nil)
 	ctx := context.Background()

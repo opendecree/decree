@@ -1,0 +1,66 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-completion-powershell - Generate the autocompletion script for powershell
+
+
+.SH SYNOPSIS
+\fBdecree completion powershell [flags]\fP
+
+
+.SH DESCRIPTION
+Generate the autocompletion script for powershell.
+
+.PP
+To load completions in your current shell session:
+
+.EX
+decree completion powershell | Out-String | Invoke-Expression
+.EE
+
+.PP
+To load completions for every new session, add the output of the above command
+to your powershell profile.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for powershell
+
+.PP
+\fB--no-descriptions\fP[=false]
+	disable completion descriptions
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-completion(1)\fP

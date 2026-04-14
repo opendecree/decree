@@ -6,6 +6,10 @@ title: decree config
 
 Read and write configuration values
 
+### Synopsis
+
+Get and set typed configuration values for tenants. Supports single and batch operations, versioning, rollback, and YAML import/export.
+
 ### Options
 
 ```

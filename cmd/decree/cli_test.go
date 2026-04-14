@@ -168,3 +168,18 @@ func TestParseDuration_Invalid(t *testing.T) {
 	_, err := parseDuration("abc")
 	assert.Error(t, err)
 }
+
+// --- Completions ---
+
+func TestCompletionScripts(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
+		t.Run(shell, func(t *testing.T) {
+			var buf bytes.Buffer
+			rootCmd.SetOut(&buf)
+			rootCmd.SetArgs([]string{"completion", shell})
+			err := rootCmd.Execute()
+			require.NoError(t, err)
+			assert.NotEmpty(t, buf.String())
+		})
+	}
+}

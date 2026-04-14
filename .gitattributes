@@ -1,3 +1,6 @@
 # Mark generated files — collapsed by default in GitHub PR diffs
 api/centralconfig/**/*.go linguist-generated=true
 internal/storage/dbstore/** linguist-generated=true
+docs/api/openapi.swagger.json linguist-generated=true
+cmd/server/openapi.json linguist-generated=true
+docs/man/** linguist-generated=true

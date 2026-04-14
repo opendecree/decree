@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sort"
 	"sync"
@@ -13,8 +14,7 @@ import (
 // MemoryStore implements Store using in-memory maps.
 // Suitable for testing and development.
 type MemoryStore struct {
-	mu      sync.RWMutex
-	counter int
+	mu sync.RWMutex
 
 	schemas        map[string]domain.Schema            // id → Schema
 	schemaVersions map[string]domain.SchemaVersion     // id → SchemaVersion
@@ -35,8 +35,11 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (m *MemoryStore) nextID() string {
-	m.counter++
-	return fmt.Sprintf("mem-%08d", m.counter)
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 2
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 // --- Schema CRUD ---

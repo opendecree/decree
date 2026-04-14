@@ -1,6 +1,6 @@
 # Observability
 
-CCS integrates with OpenTelemetry for distributed tracing, metrics, and log correlation. All observability features are opt-in -- nothing is enabled by default.
+OpenDecree integrates with OpenTelemetry for distributed tracing, metrics, and log correlation. All observability features are opt-in -- nothing is enabled by default.
 
 ## Quick Setup
 
@@ -113,7 +113,7 @@ Useful for alerting on pool exhaustion.
 
 ### Cache Metrics (`OTEL_METRICS_CACHE`)
 
-- `ccs.cache.hit` -- counter of cache hits
+- `config.cache.hits` -- counter of cache hits
 - `ccs.cache.miss` -- counter of cache misses
 
 Monitor your cache hit ratio to tune TTL and capacity.
@@ -129,7 +129,7 @@ Monitor your cache hit ratio to tune TTL and capacity.
 
 ## Log Correlation
 
-When `OTEL_ENABLED` is true, CCS wraps the slog JSON handler to inject trace context into every log entry:
+When `OTEL_ENABLED` is true, OpenDecree wraps the slog JSON handler to inject trace context into every log entry:
 
 ```json
 {
@@ -146,13 +146,13 @@ This lets you correlate logs with traces in your observability backend -- click 
 
 ## OTel Collector
 
-The Docker Compose stack includes an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) that receives telemetry from CCS and exports it to backends. The collector config lives at `deploy/otel-collector.yaml`.
+The Docker Compose stack includes an [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) that receives telemetry from OpenDecree and exports it to backends. The collector config lives at `deploy/otel-collector.yaml`.
 
 The default setup exports traces to Jaeger. To export to other backends (Grafana Tempo, Datadog, etc.), modify the collector config.
 
 ### Standard OTel Environment Variables
 
-CCS respects standard OpenTelemetry SDK variables:
+OpenDecree respects standard OpenTelemetry SDK variables:
 
 | Variable | Default |
 |----------|---------|

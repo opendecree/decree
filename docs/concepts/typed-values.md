@@ -1,6 +1,6 @@
 # Typed Values
 
-CCS enforces type safety at every layer -- from the wire protocol to the database to the SDK. Every config value has a declared type, and the server rejects writes that don't match.
+OpenDecree enforces type safety at every layer -- from the wire protocol to the database to the SDK. Every config value has a declared type, and the server rejects writes that don't match.
 
 ## The 8 Field Types
 
@@ -51,7 +51,7 @@ This means integer fields carry actual `int64` values, not strings. The server v
 
 ## Null vs. Empty String
 
-CCS distinguishes between **null** (no value) and **empty string** (`""`):
+OpenDecree distinguishes between **null** (no value) and **empty string** (`""`):
 
 | State | TypedValue | Meaning |
 |-------|-----------|---------|

@@ -1,0 +1,82 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-completion-bash - Generate the autocompletion script for bash
+
+
+.SH SYNOPSIS
+\fBdecree completion bash\fP
+
+
+.SH DESCRIPTION
+Generate the autocompletion script for the bash shell.
+
+.PP
+This script depends on the 'bash-completion' package.
+If it is not installed already, you can install it via your OS's package manager.
+
+.PP
+To load completions in your current shell session:
+
+.EX
+source <(decree completion bash)
+.EE
+
+.PP
+To load completions for every new session, execute once:
+
+.SS Linux:
+.EX
+decree completion bash > /etc/bash_completion.d/decree
+.EE
+
+.SS macOS:
+.EX
+decree completion bash > $(brew --prefix)/etc/bash_completion.d/decree
+.EE
+
+.PP
+You will need to start a new shell for this setup to take effect.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for bash
+
+.PP
+\fB--no-descriptions\fP[=false]
+	disable completion descriptions
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-completion(1)\fP

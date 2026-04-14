@@ -3,6 +3,7 @@ syntax = "proto3";
 package centralconfig.v1;
 
 import "centralconfig/v1/types.proto";
+import "google/api/annotations.proto";
 
 // ConfigService manages configuration values, versions, and real-time subscriptions.
 //
@@ -18,46 +19,94 @@ service ConfigService {
   // bypasses the cache and reads directly from the database.
 
   // GetConfig returns the full resolved configuration for a tenant.
-  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/config"
+    };
+  }
   // GetField returns a single configuration value by field path.
-  rpc GetField(GetFieldRequest) returns (GetFieldResponse);
+  rpc GetField(GetFieldRequest) returns (GetFieldResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/config/fields/{field_path}"
+    };
+  }
   // GetFields returns multiple configuration values by field paths.
   // Fields that don't exist are silently omitted from the response.
-  rpc GetFields(GetFieldsRequest) returns (GetFieldsResponse);
+  rpc GetFields(GetFieldsRequest) returns (GetFieldsResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/config:batchGet"
+      body: "*"
+    };
+  }
 
   // Write operations.
   // Each write creates a new config version atomically with its audit log entry.
   // Cache is invalidated and change events are published after the transaction commits.
 
   // SetField sets a single configuration value, creating a new config version.
-  rpc SetField(SetFieldRequest) returns (SetFieldResponse);
+  rpc SetField(SetFieldRequest) returns (SetFieldResponse) {
+    option (google.api.http) = {
+      put: "/v1/tenants/{tenant_id}/config/fields/{field_path}"
+      body: "*"
+    };
+  }
   // SetFields sets multiple configuration values in a single config version.
-  rpc SetFields(SetFieldsRequest) returns (SetFieldsResponse);
+  rpc SetFields(SetFieldsRequest) returns (SetFieldsResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/config:batchSet"
+      body: "*"
+    };
+  }
 
   // Version operations.
 
   // ListVersions returns config version history for a tenant (newest first).
-  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse);
+  rpc ListVersions(ListVersionsRequest) returns (ListVersionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/versions"
+    };
+  }
   // GetVersion retrieves metadata for a specific config version.
-  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse);
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/versions/{version}"
+    };
+  }
   // RollbackToVersion creates a new version with the same values as the target version.
   // This does not delete intermediate versions — it creates a new version that
   // copies the target's values.
-  rpc RollbackToVersion(RollbackToVersionRequest) returns (RollbackToVersionResponse);
+  rpc RollbackToVersion(RollbackToVersionRequest) returns (RollbackToVersionResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/versions/{version}:rollback"
+    };
+  }
 
   // Real-time subscriptions via server-streaming.
 
   // Subscribe opens a server-streaming connection that pushes ConfigChange events
   // whenever the tenant's configuration is modified. The stream remains open until
   // the client disconnects or the server shuts down.
-  rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse);
+  rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/config:subscribe"
+    };
+  }
 
-  // Import/export (not yet implemented).
+  // Import/export.
 
   // ExportConfig serializes a tenant's configuration to YAML.
-  rpc ExportConfig(ExportConfigRequest) returns (ExportConfigResponse);
+  rpc ExportConfig(ExportConfigRequest) returns (ExportConfigResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/config/export"
+    };
+  }
   // ImportConfig applies configuration values from YAML.
-  rpc ImportConfig(ImportConfigRequest) returns (ImportConfigResponse);
+  rpc ImportConfig(ImportConfigRequest) returns (ImportConfigResponse) {
+    option (google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/config/import"
+      body: "*"
+    };
+  }
 }
 
 // --- Read requests/responses ---
@@ -252,7 +301,7 @@ message SubscribeResponse {
   ConfigChange change = 1;
 }
 
-// --- Import/export (not yet implemented) ---
+// --- Import/export ---
 
 message ExportConfigRequest {
   // Tenant ID (UUID).

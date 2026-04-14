@@ -10,6 +10,7 @@ import (
 var tenantCmd = &cobra.Command{
 	Use:   "tenant",
 	Short: "Manage tenants",
+	Long:  "Create, list, and delete tenants. Each tenant is assigned a published schema version and has its own configuration values, locks, and audit history.",
 }
 
 var tenantCreateCmd = &cobra.Command{

@@ -19,10 +19,12 @@ $(TOOLS_SENTINEL): build/Dockerfile.tools
 ## generate: Generate code from protobuf and SQL specs
 generate: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) sh -c 'buf generate && cd db && sqlc generate'
+	cp docs/api/openapi.swagger.json cmd/server/openapi.json
 
 ## generate-proto: Generate Go code from protobuf definitions
 generate-proto: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) buf generate
+	cp docs/api/openapi.swagger.json cmd/server/openapi.json
 
 ## generate-sqlc: Generate Go code from SQL queries
 generate-sqlc: $(TOOLS_SENTINEL)
@@ -86,8 +88,8 @@ bench-e2e:
 	cd e2e && go test -tags=e2e -bench=. -benchmem -count=3 -run=^$ -timeout=300s ./... || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
-## docs: Generate all documentation (API + CLI)
-docs: docs-api docs-cli
+## docs: Generate all documentation (API + CLI + man pages)
+docs: docs-api docs-cli docs-man
 
 ## docs-api: Generate proto API reference markdown
 docs-api: $(TOOLS_SENTINEL)
@@ -97,6 +99,10 @@ docs-api: $(TOOLS_SENTINEL)
 ## docs-cli: Generate CLI reference markdown
 docs-cli:
 	cd cmd/decree && go build -ldflags '$(CLI_LDFLAGS)' -o ../../$(BUILD_DIR)/decree . && cd ../.. && $(BUILD_DIR)/decree gen-docs docs/cli
+
+## docs-man: Generate man pages
+docs-man:
+	cd cmd/decree && go build -ldflags '$(CLI_LDFLAGS)' -o ../../$(BUILD_DIR)/decree . && cd ../.. && $(BUILD_DIR)/decree gen-man docs/man
 
 ## docs-serve: Local MkDocs preview (Docker) at http://localhost:8000
 docs-serve:

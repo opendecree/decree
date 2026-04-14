@@ -14,19 +14,56 @@ type Schema struct {
 	Name        string
 	Description string
 	Version     int32
+	Info        *SchemaInfo
 	Fields      []Field
+}
+
+// SchemaInfo contains optional schema-level metadata.
+type SchemaInfo struct {
+	Title   string
+	Author  string
+	Contact *SchemaContact
+	Labels  map[string]string
+}
+
+// SchemaContact contains contact information for a schema owner.
+type SchemaContact struct {
+	Name  string
+	Email string
+	URL   string
 }
 
 // Field describes a single schema field for documentation purposes.
 type Field struct {
-	Path        string
-	Type        string // short name: "string", "integer", "number", "bool", "time", "duration", "url", "json"
+	Path         string
+	Type         string // short name: "string", "integer", "number", "bool", "time", "duration", "url", "json"
+	Description  string
+	Default      string
+	Nullable     bool
+	Deprecated   bool
+	RedirectTo   string
+	Constraints  *Constraints
+	Title        string
+	Example      string
+	Examples     map[string]FieldExample
+	ExternalDocs *ExternalDocs
+	Tags         []string
+	Format       string
+	ReadOnly     bool
+	WriteOnce    bool
+	Sensitive    bool
+}
+
+// FieldExample represents a named example value.
+type FieldExample struct {
+	Value   string
+	Summary string
+}
+
+// ExternalDocs links to external documentation.
+type ExternalDocs struct {
 	Description string
-	Default     string
-	Nullable    bool
-	Deprecated  bool
-	RedirectTo  string
-	Constraints *Constraints
+	URL         string
 }
 
 // Constraints defines validation rules for a field.
@@ -97,12 +134,20 @@ func Generate(schema Schema, opts ...Option) string {
 	})
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s\n\n", schema.Name)
+	// Use info.title if available, otherwise schema name.
+	title := schema.Name
+	if schema.Info != nil && schema.Info.Title != "" {
+		title = schema.Info.Title
+	}
+	fmt.Fprintf(&b, "# %s\n\n", title)
 	if schema.Description != "" {
 		fmt.Fprintf(&b, "%s\n\n", schema.Description)
 	}
 	if schema.Version > 0 {
 		fmt.Fprintf(&b, "**Version:** %d\n\n", schema.Version)
+	}
+	if schema.Info != nil {
+		writeSchemaInfo(&b, schema.Info)
 	}
 
 	if cfg.groupByPrefix {
@@ -151,16 +196,55 @@ func groupByPrefix(fields []Field) []fieldGroup {
 	return groups
 }
 
+func writeSchemaInfo(b *strings.Builder, info *SchemaInfo) {
+	if info.Author != "" {
+		fmt.Fprintf(b, "**Author:** %s\n\n", info.Author)
+	}
+	if info.Contact != nil {
+		if info.Contact.Email != "" {
+			fmt.Fprintf(b, "**Contact:** %s <%s>\n\n", info.Contact.Name, info.Contact.Email)
+		} else if info.Contact.URL != "" {
+			fmt.Fprintf(b, "**Contact:** [%s](%s)\n\n", info.Contact.Name, info.Contact.URL)
+		} else if info.Contact.Name != "" {
+			fmt.Fprintf(b, "**Contact:** %s\n\n", info.Contact.Name)
+		}
+	}
+	if len(info.Labels) > 0 {
+		var labels []string
+		for k, v := range info.Labels {
+			labels = append(labels, fmt.Sprintf("`%s: %s`", k, v))
+		}
+		sort.Strings(labels)
+		fmt.Fprintf(b, "**Labels:** %s\n\n", strings.Join(labels, ", "))
+	}
+}
+
 func writeField(b *strings.Builder, f Field, cfg *config) {
-	fmt.Fprintf(b, "### `%s`\n\n", f.Path)
+	if f.Title != "" {
+		fmt.Fprintf(b, "### %s (`%s`)\n\n", f.Title, f.Path)
+	} else {
+		fmt.Fprintf(b, "### `%s`\n\n", f.Path)
+	}
 
 	// Property table.
 	fmt.Fprintln(b, "| Property | Value |")
 	fmt.Fprintln(b, "|----------|-------|")
 	fmt.Fprintf(b, "| Type | %s |\n", f.Type)
+	if f.Format != "" {
+		fmt.Fprintf(b, "| Format | %s |\n", f.Format)
+	}
 	fmt.Fprintf(b, "| Nullable | %s |\n", yesNo(f.Nullable))
 	if f.Default != "" {
 		fmt.Fprintf(b, "| Default | `%s` |\n", f.Default)
+	}
+	if f.ReadOnly {
+		fmt.Fprint(b, "| Read-only | yes |\n")
+	}
+	if f.WriteOnce {
+		fmt.Fprint(b, "| Write-once | yes |\n")
+	}
+	if f.Sensitive {
+		fmt.Fprint(b, "| Sensitive | yes |\n")
 	}
 	if f.Deprecated {
 		fmt.Fprint(b, "| Deprecated | yes |\n")
@@ -168,10 +252,38 @@ func writeField(b *strings.Builder, f Field, cfg *config) {
 			fmt.Fprintf(b, "| Redirect | `%s` |\n", f.RedirectTo)
 		}
 	}
+	if len(f.Tags) > 0 {
+		fmt.Fprintf(b, "| Tags | %s |\n", strings.Join(f.Tags, ", "))
+	}
 	fmt.Fprintln(b)
 
 	if f.Description != "" {
 		fmt.Fprintf(b, "%s\n\n", f.Description)
+	}
+
+	// Example(s).
+	if f.Example != "" {
+		fmt.Fprintf(b, "**Example:** `%s`\n\n", f.Example)
+	}
+	if len(f.Examples) > 0 {
+		fmt.Fprintln(b, "**Examples:**")
+		for name, ex := range f.Examples {
+			if ex.Summary != "" {
+				fmt.Fprintf(b, "- **%s:** `%s` — %s\n", name, ex.Value, ex.Summary)
+			} else {
+				fmt.Fprintf(b, "- **%s:** `%s`\n", name, ex.Value)
+			}
+		}
+		fmt.Fprintln(b)
+	}
+
+	// External docs link.
+	if f.ExternalDocs != nil && f.ExternalDocs.URL != "" {
+		if f.ExternalDocs.Description != "" {
+			fmt.Fprintf(b, "**See also:** [%s](%s)\n\n", f.ExternalDocs.Description, f.ExternalDocs.URL)
+		} else {
+			fmt.Fprintf(b, "**See also:** %s\n\n", f.ExternalDocs.URL)
+		}
 	}
 
 	if cfg.includeConstraints && f.Constraints != nil {

@@ -44,13 +44,29 @@ func baseMock() *mockClient {
 		getSchemaVersionFn: func(_ context.Context, _ string, _ int32) (*adminclient.Schema, error) {
 			return &adminclient.Schema{
 				ID: "s1", Name: "payments", Description: "Payment config", Version: 2,
+				Info: &adminclient.SchemaInfo{
+					Title:  "Payment Configuration",
+					Author: "billing-team",
+					Contact: &adminclient.SchemaContact{
+						Name: "Billing", Email: "billing@example.com",
+					},
+					Labels: map[string]string{"team": "billing"},
+				},
 				Fields: []adminclient.Field{
 					{
 						Path: "rate", Type: "FIELD_TYPE_NUMBER", Description: "Rate",
-						Nullable: true,
+						Nullable: true, Title: "Fee Rate", Example: "0.025",
+						Format: "percentage", Tags: []string{"billing"},
+						ReadOnly: true, Sensitive: true,
+						Examples: map[string]adminclient.FieldExample{
+							"low": {Value: "0.01", Summary: "Low"},
+						},
+						ExternalDocs: &adminclient.ExternalDocs{
+							Description: "Guide", URL: "https://docs.example.com",
+						},
 						Constraints: &adminclient.FieldConstraints{Min: &min},
 					},
-					{Path: "name", Type: "FIELD_TYPE_STRING", Default: "default"},
+					{Path: "name", Type: "FIELD_TYPE_STRING", Default: "default", WriteOnce: true},
 				},
 			}, nil
 		},
@@ -109,6 +125,23 @@ func TestRun_FullDump(t *testing.T) {
 		t.Errorf("lock values = %v", file.Locks[0].LockedValues)
 	}
 
+	// Verify schema info.
+	if file.Schema.Info == nil {
+		t.Fatal("schema.info is nil")
+	}
+	if file.Schema.Info.Title != "Payment Configuration" {
+		t.Errorf("info.title = %q", file.Schema.Info.Title)
+	}
+	if file.Schema.Info.Author != "billing-team" {
+		t.Errorf("info.author = %q", file.Schema.Info.Author)
+	}
+	if file.Schema.Info.Contact == nil || file.Schema.Info.Contact.Email != "billing@example.com" {
+		t.Error("info.contact missing or wrong")
+	}
+	if file.Schema.Info.Labels["team"] != "billing" {
+		t.Errorf("info.labels = %v", file.Schema.Info.Labels)
+	}
+
 	// Verify schema field details.
 	rate := file.Schema.Fields["rate"]
 	if rate.Type != "number" {
@@ -116,6 +149,30 @@ func TestRun_FullDump(t *testing.T) {
 	}
 	if !rate.Nullable {
 		t.Error("rate should be nullable")
+	}
+	if rate.Title != "Fee Rate" {
+		t.Errorf("rate.title = %q", rate.Title)
+	}
+	if rate.Example != "0.025" {
+		t.Errorf("rate.example = %q", rate.Example)
+	}
+	if rate.Format != "percentage" {
+		t.Errorf("rate.format = %q", rate.Format)
+	}
+	if !rate.ReadOnly {
+		t.Error("rate should be readOnly")
+	}
+	if !rate.Sensitive {
+		t.Error("rate should be sensitive")
+	}
+	if len(rate.Tags) != 1 || rate.Tags[0] != "billing" {
+		t.Errorf("rate.tags = %v", rate.Tags)
+	}
+	if len(rate.Examples) != 1 {
+		t.Errorf("rate.examples count = %d", len(rate.Examples))
+	}
+	if rate.ExternalDocs == nil || rate.ExternalDocs.URL != "https://docs.example.com" {
+		t.Error("rate.externalDocs missing or wrong")
 	}
 	if rate.Constraints == nil || rate.Constraints.Minimum == nil {
 		t.Error("rate constraints missing")
@@ -127,6 +184,9 @@ func TestRun_FullDump(t *testing.T) {
 	}
 	if name.Default != "default" {
 		t.Errorf("name.default = %q", name.Default)
+	}
+	if !name.WriteOnce {
+		t.Error("name should be writeOnce")
 	}
 }
 

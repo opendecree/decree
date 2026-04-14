@@ -1,12 +1,12 @@
 # Authentication & Authorization
 
-CCS supports two authentication modes: **metadata headers** (the default) and **JWT** (opt-in). Authorization uses three roles with field-level locking for fine-grained control.
+OpenDecree supports two authentication modes: **metadata headers** (the default) and **JWT** (opt-in). Authorization uses three roles with field-level locking for fine-grained control.
 
 ## Two Auth Modes
 
 ### Metadata Headers (Default)
 
-By default, CCS trusts identity from gRPC metadata headers. This is designed for development, internal services behind a trusted gateway, or environments where auth is handled upstream.
+By default, OpenDecree trusts identity from gRPC metadata headers. This is designed for development, internal services behind a trusted gateway, or environments where auth is handled upstream.
 
 | Header | Required | Description |
 |--------|----------|-------------|
@@ -26,7 +26,7 @@ export DECREE_TENANT=<tenant-id>           # x-tenant-id (optional)
 
 ### JWT (Opt-in)
 
-Enable JWT validation by setting the `JWT_JWKS_URL` environment variable. When enabled, CCS validates the JWT token from the `authorization` header against the JWKS endpoint.
+Enable JWT validation by setting the `JWT_JWKS_URL` environment variable. When enabled, OpenDecree validates the JWT token from the `authorization` header against the JWKS endpoint.
 
 ```bash
 JWT_JWKS_URL=https://auth.example.com/.well-known/jwks.json

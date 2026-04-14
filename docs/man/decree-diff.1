@@ -1,0 +1,67 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-diff - Show differences between two config versions or files
+
+
+.SH SYNOPSIS
+\fBdecree diff [flags]\fP
+
+
+.SH DESCRIPTION
+Compare two configuration snapshots and show the differences.
+
+.PP
+Server mode (compare two versions of a tenant's config):
+  decree diff   
+
+.PP
+File mode (compare two local config YAML files):
+  decree diff --old config-v1.yaml --new config-v2.yaml
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for diff
+
+.PP
+\fB--new\fP=""
+	new config YAML file (file mode)
+
+.PP
+\fB--old\fP=""
+	old config YAML file (file mode)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP

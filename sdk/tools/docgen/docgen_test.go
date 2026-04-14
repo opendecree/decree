@@ -178,6 +178,159 @@ func TestFieldTypeName(t *testing.T) {
 	}
 }
 
+func TestGenerate_SchemaInfo(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Info: &SchemaInfo{
+			Title:  "Test Configuration",
+			Author: "platform-team",
+			Contact: &SchemaContact{
+				Name:  "Platform Team",
+				Email: "platform@example.com",
+			},
+			Labels: map[string]string{"team": "platform", "env": "prod"},
+		},
+		Fields: []Field{{Path: "x", Type: "string"}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "# Test Configuration")
+	assertContains(t, md, "**Author:** platform-team")
+	assertContains(t, md, "**Contact:** Platform Team <platform@example.com>")
+	assertContains(t, md, "`env: prod`")
+	assertContains(t, md, "`team: platform`")
+}
+
+func TestGenerate_SchemaInfoContactURL(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Info: &SchemaInfo{
+			Contact: &SchemaContact{Name: "Wiki", URL: "https://wiki.example.com"},
+		},
+		Fields: []Field{{Path: "x", Type: "string"}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "[Wiki](https://wiki.example.com)")
+}
+
+func TestGenerate_SchemaInfoContactNameOnly(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Info: &SchemaInfo{
+			Contact: &SchemaContact{Name: "Alice"},
+		},
+		Fields: []Field{{Path: "x", Type: "string"}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**Contact:** Alice")
+}
+
+func TestGenerate_Title(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "payments.fee", Type: "number", Title: "Fee Rate"},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "### Fee Rate (`payments.fee`)")
+}
+
+func TestGenerate_Example(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "x", Type: "string", Example: "hello"},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**Example:** `hello`")
+}
+
+func TestGenerate_Examples(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "x", Type: "number", Examples: map[string]FieldExample{
+				"low":  {Value: "0.01", Summary: "Low rate"},
+				"high": {Value: "0.99"},
+			}},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**Examples:**")
+	assertContains(t, md, "**low:** `0.01` — Low rate")
+	assertContains(t, md, "**high:** `0.99`")
+}
+
+func TestGenerate_ExternalDocs(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "x", Type: "string", ExternalDocs: &ExternalDocs{
+				Description: "Full guide",
+				URL:         "https://docs.example.com",
+			}},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "[Full guide](https://docs.example.com)")
+}
+
+func TestGenerate_ExternalDocsURLOnly(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "x", Type: "string", ExternalDocs: &ExternalDocs{URL: "https://docs.example.com"}},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**See also:** https://docs.example.com")
+}
+
+func TestGenerate_Tags(t *testing.T) {
+	schema := Schema{
+		Name:   "test",
+		Fields: []Field{{Path: "x", Type: "string", Tags: []string{"billing", "critical"}}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "| Tags | billing, critical |")
+}
+
+func TestGenerate_Format(t *testing.T) {
+	schema := Schema{
+		Name:   "test",
+		Fields: []Field{{Path: "x", Type: "string", Format: "email"}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "| Format | email |")
+}
+
+func TestGenerate_ReadOnlyWriteOnceSensitive(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "a", Type: "string", ReadOnly: true},
+			{Path: "b", Type: "string", WriteOnce: true},
+			{Path: "c", Type: "string", Sensitive: true},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "| Read-only | yes |")
+	assertContains(t, md, "| Write-once | yes |")
+	assertContains(t, md, "| Sensitive | yes |")
+}
+
 func assertContains(t *testing.T, s, substr string) {
 	t.Helper()
 	if !strings.Contains(s, substr) {

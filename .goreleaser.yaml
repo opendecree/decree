@@ -1,0 +1,69 @@
+version: 2
+
+builds:
+  - id: decree-server
+    main: ./cmd/server
+    binary: decree-server
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/opendecree/decree/internal/version.Version={{.Version}}
+      - -X github.com/opendecree/decree/internal/version.Commit={{.ShortCommit}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  - id: decree
+    dir: cmd/decree
+    binary: decree
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.cliVersion={{.Version}}
+      - -X main.cliCommit={{.ShortCommit}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: decree-server
+    ids:
+      - decree-server
+    name_template: "decree-server_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+  - id: decree
+    ids:
+      - decree
+    name_template: "decree_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  disable: true
+
+release:
+  draft: false
+  prerelease: auto
+  mode: append

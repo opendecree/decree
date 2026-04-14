@@ -3,6 +3,7 @@ syntax = "proto3";
 package centralconfig.v1;
 
 import "centralconfig/v1/types.proto";
+import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
 // AuditService provides read-only access to the change history and usage
@@ -14,17 +15,33 @@ import "google/protobuf/timestamp.proto";
 service AuditService {
   // QueryWriteLog searches the audit log for config change events.
   // All filter parameters are optional — omit a filter to match all values.
-  rpc QueryWriteLog(QueryWriteLogRequest) returns (QueryWriteLogResponse);
+  rpc QueryWriteLog(QueryWriteLogRequest) returns (QueryWriteLogResponse) {
+    option (google.api.http) = {
+      get: "/v1/audit/logs"
+    };
+  }
 
   // GetFieldUsage returns aggregated read statistics for a specific field.
-  rpc GetFieldUsage(GetFieldUsageRequest) returns (GetFieldUsageResponse);
+  rpc GetFieldUsage(GetFieldUsageRequest) returns (GetFieldUsageResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/usage/{field_path}"
+    };
+  }
 
   // GetTenantUsage returns aggregated read statistics for all fields of a tenant.
-  rpc GetTenantUsage(GetTenantUsageRequest) returns (GetTenantUsageResponse);
+  rpc GetTenantUsage(GetTenantUsageRequest) returns (GetTenantUsageResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/usage"
+    };
+  }
 
   // GetUnusedFields returns field paths that have not been read since the given time.
   // Useful for identifying configuration fields that may be safe to deprecate.
-  rpc GetUnusedFields(GetUnusedFieldsRequest) returns (GetUnusedFieldsResponse);
+  rpc GetUnusedFields(GetUnusedFieldsRequest) returns (GetUnusedFieldsResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/unused-fields"
+    };
+  }
 }
 
 // --- Write log queries ---

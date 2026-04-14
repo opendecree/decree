@@ -1,0 +1,75 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-docgen - Generate markdown documentation from a schema
+
+
+.SH SYNOPSIS
+\fBdecree docgen [schema-id] [flags]\fP
+
+
+.SH DESCRIPTION
+Generate markdown documentation from a schema. Provide a schema-id to fetch from the server, or --file to use a local YAML file.
+
+
+.SH OPTIONS
+\fB--file\fP=""
+	schema YAML file (offline mode)
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for docgen
+
+.PP
+\fB--no-constraints\fP[=false]
+	omit constraint details
+
+.PP
+\fB--no-deprecated\fP[=false]
+	exclude deprecated fields
+
+.PP
+\fB--no-grouping\fP[=false]
+	flat list instead of grouped by prefix
+
+.PP
+\fB--output-file\fP=""
+	write output to file instead of stdout
+
+.PP
+\fB--version\fP=0
+	schema version (default: latest)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP

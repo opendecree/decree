@@ -9,10 +9,16 @@
     - [ConfigChange](#centralconfig-v1-ConfigChange)
     - [ConfigValue](#centralconfig-v1-ConfigValue)
     - [ConfigVersion](#centralconfig-v1-ConfigVersion)
+    - [ExternalDocs](#centralconfig-v1-ExternalDocs)
     - [FieldConstraints](#centralconfig-v1-FieldConstraints)
+    - [FieldExample](#centralconfig-v1-FieldExample)
     - [FieldLock](#centralconfig-v1-FieldLock)
     - [Schema](#centralconfig-v1-Schema)
+    - [SchemaContact](#centralconfig-v1-SchemaContact)
     - [SchemaField](#centralconfig-v1-SchemaField)
+    - [SchemaField.ExamplesEntry](#centralconfig-v1-SchemaField-ExamplesEntry)
+    - [SchemaInfo](#centralconfig-v1-SchemaInfo)
+    - [SchemaInfo.LabelsEntry](#centralconfig-v1-SchemaInfo-LabelsEntry)
     - [Tenant](#centralconfig-v1-Tenant)
     - [TypedValue](#centralconfig-v1-TypedValue)
     - [UsageStats](#centralconfig-v1-UsageStats)
@@ -218,6 +224,23 @@ full config at any version is the union of all deltas up to that version.
 
 
 
+<a name="centralconfig-v1-ExternalDocs"></a>
+
+### ExternalDocs
+ExternalDocs links to external documentation.
+OAS: External Documentation Object
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| description | [string](#string) |  | Human-readable description of the external documentation. |
+| url | [string](#string) |  | URL to the external documentation. |
+
+
+
+
+
+
 <a name="centralconfig-v1-FieldConstraints"></a>
 
 ### FieldConstraints
@@ -236,6 +259,22 @@ Which constraints apply depends on the field&#39;s type — see FieldType docs.
 | exclusive_max | [double](#double) | optional | For integer/number/duration: exclusive maximum (strict, &lt;). |
 | min_length | [int32](#int32) | optional | For string: minimum allowed length. |
 | max_length | [int32](#int32) | optional | For string: maximum allowed length. |
+
+
+
+
+
+
+<a name="centralconfig-v1-FieldExample"></a>
+
+### FieldExample
+FieldExample represents a named example value for a schema field.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| value | [string](#string) |  | The example value, encoded as a string matching the field type. |
+| summary | [string](#string) |  | Short description of what this example demonstrates. |
 
 
 
@@ -280,6 +319,25 @@ Each schema is versioned — updates create new immutable versions.
 | published | [bool](#bool) |  | Whether this version is published. Only published versions can be assigned to tenants. Published versions are immutable. |
 | fields | [SchemaField](#centralconfig-v1-SchemaField) | repeated | The fields defined in this schema version. |
 | created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | When this version was created. |
+| info | [SchemaInfo](#centralconfig-v1-SchemaInfo) |  | Optional schema metadata: ownership, contact, labels. |
+
+
+
+
+
+
+<a name="centralconfig-v1-SchemaContact"></a>
+
+### SchemaContact
+SchemaContact contains contact information for a schema owner.
+OAS: Contact Object
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| name | [string](#string) |  | Contact name (person or team). |
+| email | [string](#string) |  | Contact email address. |
+| url | [string](#string) |  | Contact URL (e.g. team wiki page). |
 
 
 
@@ -302,6 +360,66 @@ SchemaField defines a single field within a configuration schema.
 | redirect_to | [string](#string) | optional | When deprecated, reads of this field can be redirected to this path. |
 | default_value | [string](#string) | optional | Default value for this field, encoded as a string matching the field type. |
 | description | [string](#string) | optional | Human-readable description of the field&#39;s purpose. |
+| title | [string](#string) | optional | Human-friendly display name (e.g. &#34;Fee Rate&#34; for path &#34;payments.fee_rate&#34;). OAS: title |
+| example | [string](#string) | optional | Single example value, encoded as a string matching the field type. OAS: example |
+| examples | [SchemaField.ExamplesEntry](#centralconfig-v1-SchemaField-ExamplesEntry) | repeated | Named examples with optional summary. Key is example name. OAS: examples |
+| external_docs | [ExternalDocs](#centralconfig-v1-ExternalDocs) |  | Link to external documentation for this field. OAS: externalDocs |
+| tags | [string](#string) | repeated | Tags for grouping and categorization beyond the dot-prefix hierarchy. OAS: x-tags |
+| format | [string](#string) | optional | Semantic format hint within the base type (e.g. &#34;email&#34;, &#34;semver&#34;, &#34;percentage&#34;). Informational — not enforced by validation. OAS: format |
+| read_only | [bool](#bool) |  | Whether this field is system-managed and not user-editable. OAS: readOnly |
+| write_once | [bool](#bool) |  | Whether this field can only be set once and becomes immutable after. |
+| sensitive | [bool](#bool) |  | Whether this field&#39;s value should be masked in logs and UI. |
+
+
+
+
+
+
+<a name="centralconfig-v1-SchemaField-ExamplesEntry"></a>
+
+### SchemaField.ExamplesEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [FieldExample](#centralconfig-v1-FieldExample) |  |  |
+
+
+
+
+
+
+<a name="centralconfig-v1-SchemaInfo"></a>
+
+### SchemaInfo
+SchemaInfo contains optional metadata about a schema&#39;s ownership and context.
+OAS: Info Object
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| title | [string](#string) |  | Human-friendly display title for the schema. OAS: info.title |
+| author | [string](#string) |  | Schema owner identifier (person, team, or service). |
+| contact | [SchemaContact](#centralconfig-v1-SchemaContact) |  | Contact information for the schema owner. OAS: info.contact |
+| labels | [SchemaInfo.LabelsEntry](#centralconfig-v1-SchemaInfo-LabelsEntry) | repeated | Key-value labels for filtering and categorization. |
+
+
+
+
+
+
+<a name="centralconfig-v1-SchemaInfo-LabelsEntry"></a>
+
+### SchemaInfo.LabelsEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
 
 
 

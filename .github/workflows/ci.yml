@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch main branch for buf breaking
-        if: github.event_name == 'pull_request'
+        if: github.ref != 'refs/heads/main'
         run: git fetch origin main:main
 
       - uses: actions/setup-go@v6
@@ -139,8 +139,8 @@ jobs:
 
       - name: Check docs are up-to-date
         run: |
-          if ! git diff --exit-code docs/; then
-            echo "::error::Generated docs are out of date. Run 'make docs' and commit."
+          if ! git diff --exit-code docs/ cmd/server/openapi.json; then
+            echo "::error::Generated docs or OpenAPI spec are out of date. Run 'make docs' and commit."
             exit 1
           fi
 

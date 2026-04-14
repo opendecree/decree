@@ -1,0 +1,67 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-audit-query - Query the config change audit log
+
+
+.SH SYNOPSIS
+\fBdecree audit query [flags]\fP
+
+
+.SH DESCRIPTION
+Query the config change audit log
+
+
+.SH OPTIONS
+\fB--actor\fP=""
+	filter by actor
+
+.PP
+\fB--field\fP=""
+	filter by field path
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for query
+
+.PP
+\fB--since\fP=""
+	show entries from the last duration (e.g. 24h, 7d)
+
+.PP
+\fB--tenant\fP=""
+	filter by tenant ID
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-audit(1)\fP

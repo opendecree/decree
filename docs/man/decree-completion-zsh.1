@@ -1,0 +1,86 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-completion-zsh - Generate the autocompletion script for zsh
+
+
+.SH SYNOPSIS
+\fBdecree completion zsh [flags]\fP
+
+
+.SH DESCRIPTION
+Generate the autocompletion script for the zsh shell.
+
+.PP
+If shell completion is not already enabled in your environment you will need
+to enable it.  You can execute the following once:
+
+.EX
+echo "autoload -U compinit; compinit" >> ~/.zshrc
+.EE
+
+.PP
+To load completions in your current shell session:
+
+.EX
+source <(decree completion zsh)
+.EE
+
+.PP
+To load completions for every new session, execute once:
+
+.SS Linux:
+.EX
+decree completion zsh > "${fpath[1]}/_decree"
+.EE
+
+.SS macOS:
+.EX
+decree completion zsh > $(brew --prefix)/share/zsh/site-functions/_decree
+.EE
+
+.PP
+You will need to start a new shell for this setup to take effect.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for zsh
+
+.PP
+\fB--no-descriptions\fP[=false]
+	disable completion descriptions
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-completion(1)\fP

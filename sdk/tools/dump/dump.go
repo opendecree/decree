@@ -132,6 +132,7 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 	def := seed.SchemaDef{
 		Name:        s.Name,
 		Description: s.Description,
+		Info:        convertSchemaInfo(s.Info),
 		Fields:      make(map[string]seed.FieldDef, len(s.Fields)),
 	}
 
@@ -143,6 +144,25 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 			Nullable:    f.Nullable,
 			Deprecated:  f.Deprecated,
 			RedirectTo:  f.RedirectTo,
+			Title:       f.Title,
+			Example:     f.Example,
+			Format:      f.Format,
+			ReadOnly:    f.ReadOnly,
+			WriteOnce:   f.WriteOnce,
+			Sensitive:   f.Sensitive,
+			Tags:        f.Tags,
+		}
+		if len(f.Examples) > 0 {
+			fd.Examples = make(map[string]seed.ExampleDef, len(f.Examples))
+			for k, v := range f.Examples {
+				fd.Examples[k] = seed.ExampleDef{Value: v.Value, Summary: v.Summary}
+			}
+		}
+		if f.ExternalDocs != nil {
+			fd.ExternalDocs = &seed.ExternalDocsDef{
+				Description: f.ExternalDocs.Description,
+				URL:         f.ExternalDocs.URL,
+			}
 		}
 		if f.Constraints != nil {
 			fd.Constraints = convertConstraints(f.Constraints)
@@ -151,6 +171,25 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 	}
 
 	return def
+}
+
+func convertSchemaInfo(info *adminclient.SchemaInfo) *seed.SchemaInfoDef {
+	if info == nil {
+		return nil
+	}
+	r := &seed.SchemaInfoDef{
+		Title:  info.Title,
+		Author: info.Author,
+		Labels: info.Labels,
+	}
+	if info.Contact != nil {
+		r.Contact = &seed.SchemaContactDef{
+			Name:  info.Contact.Name,
+			Email: info.Contact.Email,
+			URL:   info.Contact.URL,
+		}
+	}
+	return r
 }
 
 func convertConstraints(c *adminclient.FieldConstraints) *seed.ConstraintsDef {

@@ -1,0 +1,51 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-config - Read and write configuration values
+
+
+.SH SYNOPSIS
+\fBdecree config [flags]\fP
+
+
+.SH DESCRIPTION
+Get and set typed configuration values for tenants. Supports single and batch operations, versioning, rollback, and YAML import/export.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for config
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP, \fBdecree-config-export(1)\fP, \fBdecree-config-get(1)\fP, \fBdecree-config-get-all(1)\fP, \fBdecree-config-import(1)\fP, \fBdecree-config-rollback(1)\fP, \fBdecree-config-set(1)\fP, \fBdecree-config-set-many(1)\fP, \fBdecree-config-versions(1)\fP

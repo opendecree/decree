@@ -1,0 +1,51 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-tenant - Manage tenants
+
+
+.SH SYNOPSIS
+\fBdecree tenant [flags]\fP
+
+
+.SH DESCRIPTION
+Create, list, and delete tenants. Each tenant is assigned a published schema version and has its own configuration values, locks, and audit history.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for tenant
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree(1)\fP, \fBdecree-tenant-create(1)\fP, \fBdecree-tenant-delete(1)\fP, \fBdecree-tenant-get(1)\fP, \fBdecree-tenant-list(1)\fP

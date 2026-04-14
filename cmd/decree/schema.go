@@ -13,6 +13,7 @@ import (
 var schemaCmd = &cobra.Command{
 	Use:   "schema",
 	Short: "Manage configuration schemas",
+	Long:  "Create, list, publish, import/export, and delete configuration schemas. Schemas define the allowed fields, types, and constraints for tenant configurations.",
 }
 
 var schemaCreateCmd = &cobra.Command{

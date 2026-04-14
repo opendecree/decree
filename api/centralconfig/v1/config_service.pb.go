@@ -7,6 +7,7 @@
 package centralconfigv1
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -1395,7 +1396,7 @@ var File_centralconfig_v1_config_service_proto protoreflect.FileDescriptor
 
 const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\n" +
-	"%centralconfig/v1/config_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\"\x8d\x01\n" +
+	"%centralconfig/v1/config_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\x1a\x1cgoogle/api/annotations.proto\"\x8d\x01\n" +
 	"\x10GetConfigRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
 	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01\x121\n" +
@@ -1498,20 +1499,20 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\x17IMPORT_MODE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11IMPORT_MODE_MERGE\x10\x01\x12\x17\n" +
 	"\x13IMPORT_MODE_REPLACE\x10\x02\x12\x18\n" +
-	"\x14IMPORT_MODE_DEFAULTS\x10\x032\xf3\a\n" +
-	"\rConfigService\x12T\n" +
-	"\tGetConfig\x12\".centralconfig.v1.GetConfigRequest\x1a#.centralconfig.v1.GetConfigResponse\x12Q\n" +
-	"\bGetField\x12!.centralconfig.v1.GetFieldRequest\x1a\".centralconfig.v1.GetFieldResponse\x12T\n" +
-	"\tGetFields\x12\".centralconfig.v1.GetFieldsRequest\x1a#.centralconfig.v1.GetFieldsResponse\x12Q\n" +
-	"\bSetField\x12!.centralconfig.v1.SetFieldRequest\x1a\".centralconfig.v1.SetFieldResponse\x12T\n" +
-	"\tSetFields\x12\".centralconfig.v1.SetFieldsRequest\x1a#.centralconfig.v1.SetFieldsResponse\x12]\n" +
-	"\fListVersions\x12%.centralconfig.v1.ListVersionsRequest\x1a&.centralconfig.v1.ListVersionsResponse\x12W\n" +
+	"\x14IMPORT_MODE_DEFAULTS\x10\x032\xb6\f\n" +
+	"\rConfigService\x12|\n" +
+	"\tGetConfig\x12\".centralconfig.v1.GetConfigRequest\x1a#.centralconfig.v1.GetConfigResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/tenants/{tenant_id}/config\x12\x8d\x01\n" +
+	"\bGetField\x12!.centralconfig.v1.GetFieldRequest\x1a\".centralconfig.v1.GetFieldResponse\":\x82\xd3\xe4\x93\x024\x122/v1/tenants/{tenant_id}/config/fields/{field_path}\x12\x88\x01\n" +
+	"\tGetFields\x12\".centralconfig.v1.GetFieldsRequest\x1a#.centralconfig.v1.GetFieldsResponse\"2\x82\xd3\xe4\x93\x02,:\x01*\"'/v1/tenants/{tenant_id}/config:batchGet\x12\x90\x01\n" +
+	"\bSetField\x12!.centralconfig.v1.SetFieldRequest\x1a\".centralconfig.v1.SetFieldResponse\"=\x82\xd3\xe4\x93\x027:\x01*\x1a2/v1/tenants/{tenant_id}/config/fields/{field_path}\x12\x88\x01\n" +
+	"\tSetFields\x12\".centralconfig.v1.SetFieldsRequest\x1a#.centralconfig.v1.SetFieldsResponse\"2\x82\xd3\xe4\x93\x02,:\x01*\"'/v1/tenants/{tenant_id}/config:batchSet\x12\x87\x01\n" +
+	"\fListVersions\x12%.centralconfig.v1.ListVersionsRequest\x1a&.centralconfig.v1.ListVersionsResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/tenants/{tenant_id}/versions\x12\x8b\x01\n" +
 	"\n" +
-	"GetVersion\x12#.centralconfig.v1.GetVersionRequest\x1a$.centralconfig.v1.GetVersionResponse\x12l\n" +
-	"\x11RollbackToVersion\x12*.centralconfig.v1.RollbackToVersionRequest\x1a+.centralconfig.v1.RollbackToVersionResponse\x12V\n" +
-	"\tSubscribe\x12\".centralconfig.v1.SubscribeRequest\x1a#.centralconfig.v1.SubscribeResponse0\x01\x12]\n" +
-	"\fExportConfig\x12%.centralconfig.v1.ExportConfigRequest\x1a&.centralconfig.v1.ExportConfigResponse\x12]\n" +
-	"\fImportConfig\x12%.centralconfig.v1.ImportConfigRequest\x1a&.centralconfig.v1.ImportConfigResponseB\xca\x01\n" +
+	"GetVersion\x12#.centralconfig.v1.GetVersionRequest\x1a$.centralconfig.v1.GetVersionResponse\"2\x82\xd3\xe4\x93\x02,\x12*/v1/tenants/{tenant_id}/versions/{version}\x12\xa9\x01\n" +
+	"\x11RollbackToVersion\x12*.centralconfig.v1.RollbackToVersionRequest\x1a+.centralconfig.v1.RollbackToVersionResponse\";\x82\xd3\xe4\x93\x025\"3/v1/tenants/{tenant_id}/versions/{version}:rollback\x12\x88\x01\n" +
+	"\tSubscribe\x12\".centralconfig.v1.SubscribeRequest\x1a#.centralconfig.v1.SubscribeResponse\"0\x82\xd3\xe4\x93\x02*\x12(/v1/tenants/{tenant_id}/config:subscribe0\x01\x12\x8c\x01\n" +
+	"\fExportConfig\x12%.centralconfig.v1.ExportConfigRequest\x1a&.centralconfig.v1.ExportConfigResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/config/export\x12\x8f\x01\n" +
+	"\fImportConfig\x12%.centralconfig.v1.ImportConfigRequest\x1a&.centralconfig.v1.ImportConfigResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/tenants/{tenant_id}/config/importB\xca\x01\n" +
 	"\x14com.centralconfig.v1B\x12ConfigServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (

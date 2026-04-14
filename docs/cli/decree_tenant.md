@@ -6,6 +6,10 @@ title: decree tenant
 
 Manage tenants
 
+### Synopsis
+
+Create, list, and delete tenants. Each tenant is assigned a published schema version and has its own configuration values, locks, and audit history.
+
 ### Options
 
 ```

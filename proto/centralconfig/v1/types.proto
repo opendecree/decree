@@ -95,6 +95,91 @@ message SchemaField {
 
   // Human-readable description of the field's purpose.
   optional string description = 8;
+
+  // Human-friendly display name (e.g. "Fee Rate" for path "payments.fee_rate").
+  // OAS: title
+  optional string title = 9;
+
+  // Single example value, encoded as a string matching the field type.
+  // OAS: example
+  optional string example = 10;
+
+  // Named examples with optional summary. Key is example name.
+  // OAS: examples
+  map<string, FieldExample> examples = 11;
+
+  // Link to external documentation for this field.
+  // OAS: externalDocs
+  ExternalDocs external_docs = 12;
+
+  // Tags for grouping and categorization beyond the dot-prefix hierarchy.
+  // OAS: x-tags
+  repeated string tags = 13;
+
+  // Semantic format hint within the base type (e.g. "email", "semver", "percentage").
+  // Informational — not enforced by validation.
+  // OAS: format
+  optional string format = 14;
+
+  // Whether this field is system-managed and not user-editable.
+  // OAS: readOnly
+  bool read_only = 15;
+
+  // Whether this field can only be set once and becomes immutable after.
+  bool write_once = 16;
+
+  // Whether this field's value should be masked in logs and UI.
+  bool sensitive = 17;
+}
+
+// FieldExample represents a named example value for a schema field.
+message FieldExample {
+  // The example value, encoded as a string matching the field type.
+  string value = 1;
+
+  // Short description of what this example demonstrates.
+  string summary = 2;
+}
+
+// ExternalDocs links to external documentation.
+// OAS: External Documentation Object
+message ExternalDocs {
+  // Human-readable description of the external documentation.
+  string description = 1;
+
+  // URL to the external documentation.
+  string url = 2;
+}
+
+// SchemaInfo contains optional metadata about a schema's ownership and context.
+// OAS: Info Object
+message SchemaInfo {
+  // Human-friendly display title for the schema.
+  // OAS: info.title
+  string title = 1;
+
+  // Schema owner identifier (person, team, or service).
+  string author = 2;
+
+  // Contact information for the schema owner.
+  // OAS: info.contact
+  SchemaContact contact = 3;
+
+  // Key-value labels for filtering and categorization.
+  map<string, string> labels = 4;
+}
+
+// SchemaContact contains contact information for a schema owner.
+// OAS: Contact Object
+message SchemaContact {
+  // Contact name (person or team).
+  string name = 1;
+
+  // Contact email address.
+  string email = 2;
+
+  // Contact URL (e.g. team wiki page).
+  string url = 3;
 }
 
 // Schema represents a configuration schema template.
@@ -133,6 +218,9 @@ message Schema {
 
   // When this version was created.
   google.protobuf.Timestamp created_at = 10;
+
+  // Optional schema metadata: ownership, contact, labels.
+  SchemaInfo info = 11;
 }
 
 // Tenant represents an organization or entity that has its own configuration

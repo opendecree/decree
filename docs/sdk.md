@@ -9,7 +9,7 @@ Runtime config reads and writes for application code.
 - **Install:** `go get github.com/opendecree/decree/sdk/configclient@latest`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/configclient](https://pkg.go.dev/github.com/opendecree/decree/sdk/configclient)
 
-Features: Get, GetAll, GetFields, Set, SetMany, typed getters/setters (GetInt, SetBool, etc.), Snapshot for pinned-version reads, GetForUpdate + Update for optimistic concurrency, null support.
+Features: Get, GetAll, GetFields, Set, SetMany, typed getters/setters (GetInt, SetBool, etc.), Snapshot for pinned-version reads, GetForUpdate + Update for optimistic concurrency, null support, opt-in retry with exponential backoff (`WithRetry`).
 
 ## adminclient
 
@@ -28,3 +28,12 @@ Live typed configuration values with automatic subscription and reconnect.
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/configwatcher](https://pkg.go.dev/github.com/opendecree/decree/sdk/configwatcher)
 
 Features: `Value[T]` generic type with `Get()`, `GetWithNull()`, `Changes()` channel. Typed accessors (String, Int, Float, Bool, Duration). Auto-reconnect with exponential backoff. Thread-safe.
+
+## tools
+
+Reusable power tools for config management — importable as Go packages for integration into servers, CI, or custom tooling.
+
+- **Install:** `go get github.com/opendecree/decree/sdk/tools@latest`
+- **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/tools](https://pkg.go.dev/github.com/opendecree/decree/sdk/tools)
+
+Packages: `diff` (config version diffing), `docgen` (schema → markdown), `validate` (offline YAML validation), `seed` (bootstrap from YAML), `dump` (full tenant backup). Offline tools have zero gRPC/proto dependencies.

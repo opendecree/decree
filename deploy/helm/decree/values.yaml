@@ -1,0 +1,123 @@
+# OpenDecree Helm chart values.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/opendecree/decree
+  tag: ""  # defaults to Chart.appVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Service configuration ---
+
+config:
+  # Storage backend: "postgres" (default) or "memory" (no external deps, data not persisted).
+  storageBackend: postgres
+
+  # gRPC port inside the container.
+  grpcPort: 9090
+
+  # HTTP/REST gateway port. Set to enable the REST API + Swagger UI.
+  # Leave empty to disable the gateway.
+  httpPort: "8080"
+
+  # Services to enable (comma-separated): schema, config, audit.
+  enableServices: "schema,config,audit"
+
+  # Log level: debug, info, warn, error.
+  logLevel: info
+
+# --- Database (required when storageBackend=postgres) ---
+
+database:
+  # PostgreSQL connection string for writes.
+  writeUrl: ""
+  # PostgreSQL connection string for reads (defaults to writeUrl).
+  readUrl: ""
+  # Use an existing secret for database URLs instead of plain values.
+  existingSecret: ""
+  # Key in the existing secret for DB_WRITE_URL.
+  writeUrlKey: "DB_WRITE_URL"
+  # Key in the existing secret for DB_READ_URL.
+  readUrlKey: "DB_READ_URL"
+
+# --- Redis (required when storageBackend=postgres) ---
+
+redis:
+  # Redis connection URL.
+  url: ""
+  # Use an existing secret for the Redis URL.
+  existingSecret: ""
+  # Key in the existing secret for REDIS_URL.
+  urlKey: "REDIS_URL"
+
+# --- Authentication ---
+
+auth:
+  # JWT JWKS URL. Leave empty for metadata-based auth (default).
+  jwksUrl: ""
+  # Expected JWT issuer (optional, only used with JWT).
+  jwtIssuer: ""
+
+# --- Observability (all opt-in) ---
+
+otel:
+  enabled: false
+  tracesGrpc: false
+  tracesDb: false
+  tracesRedis: false
+  metricsGrpc: false
+  metricsDbPool: false
+  metricsCache: false
+  metricsConfig: false
+  metricsSchema: false
+
+# --- Kubernetes resources ---
+
+service:
+  type: ClusterIP
+  grpcPort: 9090
+  httpPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: decree.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 256Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

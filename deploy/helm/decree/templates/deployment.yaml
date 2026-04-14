@@ -1,0 +1,154 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "decree.fullname" . }}
+  labels:
+    {{- include "decree.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "decree.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "decree.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "decree.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: decree
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "decree.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.config.grpcPort }}
+              protocol: TCP
+            {{- if .Values.config.httpPort }}
+            - name: http
+              containerPort: {{ .Values.config.httpPort }}
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: GRPC_PORT
+              value: {{ .Values.config.grpcPort | quote }}
+            {{- if .Values.config.httpPort }}
+            - name: HTTP_PORT
+              value: {{ .Values.config.httpPort | quote }}
+            {{- end }}
+            - name: STORAGE_BACKEND
+              value: {{ .Values.config.storageBackend | quote }}
+            - name: ENABLE_SERVICES
+              value: {{ .Values.config.enableServices | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            {{- if eq .Values.config.storageBackend "postgres" }}
+            {{- if .Values.database.existingSecret }}
+            - name: DB_WRITE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.writeUrlKey }}
+            - name: DB_READ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: {{ .Values.database.readUrlKey }}
+            {{- else }}
+            - name: DB_WRITE_URL
+              value: {{ .Values.database.writeUrl | quote }}
+            - name: DB_READ_URL
+              value: {{ .Values.database.readUrl | default .Values.database.writeUrl | quote }}
+            {{- end }}
+            {{- if .Values.redis.existingSecret }}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret }}
+                  key: {{ .Values.redis.urlKey }}
+            {{- else }}
+            - name: REDIS_URL
+              value: {{ .Values.redis.url | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.auth.jwksUrl }}
+            - name: JWT_JWKS_URL
+              value: {{ .Values.auth.jwksUrl | quote }}
+            {{- end }}
+            {{- if .Values.auth.jwtIssuer }}
+            - name: JWT_ISSUER
+              value: {{ .Values.auth.jwtIssuer | quote }}
+            {{- end }}
+            {{- if .Values.otel.enabled }}
+            - name: OTEL_ENABLED
+              value: "true"
+            {{- if .Values.otel.tracesGrpc }}
+            - name: OTEL_TRACES_GRPC
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.tracesDb }}
+            - name: OTEL_TRACES_DB
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.tracesRedis }}
+            - name: OTEL_TRACES_REDIS
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsGrpc }}
+            - name: OTEL_METRICS_GRPC
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsDbPool }}
+            - name: OTEL_METRICS_DB_POOL
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsCache }}
+            - name: OTEL_METRICS_CACHE
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsConfig }}
+            - name: OTEL_METRICS_CONFIG
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsSchema }}
+            - name: OTEL_METRICS_SCHEMA
+              value: "true"
+            {{- end }}
+            {{- end }}
+          readinessProbe:
+            grpc:
+              port: {{ .Values.config.grpcPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: {{ .Values.config.grpcPort }}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

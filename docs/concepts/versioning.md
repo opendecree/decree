@@ -1,6 +1,6 @@
 # Versioning
 
-Every config change in CCS creates a new **version**. Versions are immutable snapshots -- you can read config at any past version, compare versions, and roll back.
+Every config change in OpenDecree creates a new **version**. Versions are immutable snapshots -- you can read config at any past version, compare versions, and roll back.
 
 ## How Versions Work
 
@@ -17,7 +17,7 @@ Versions start at 1 for each tenant and increment by 1 for every write operation
 
 ## Delta Storage
 
-CCS uses **delta storage** -- each version stores only the fields that changed, not a full copy of the config. This keeps storage efficient even with frequent changes.
+OpenDecree uses **delta storage** -- each version stores only the fields that changed, not a full copy of the config. This keeps storage efficient even with frequent changes.
 
 ```
 Version 1: {payments.enabled: true, payments.fee_rate: 0.025}
@@ -117,7 +117,7 @@ The output shows each version's number, description, who created it, and when.
 
 ## Optimistic Concurrency
 
-CCS supports optimistic concurrency control via checksums. Each config value includes a checksum (xxHash). When writing, you can pass the expected checksum -- the write succeeds only if the current checksum matches:
+OpenDecree supports optimistic concurrency control via checksums. Each config value includes a checksum (xxHash). When writing, you can pass the expected checksum -- the write succeeds only if the current checksum matches:
 
 ```go
 // Read-modify-write with automatic retry

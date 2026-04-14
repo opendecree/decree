@@ -6,6 +6,10 @@ title: decree lock
 
 Manage field locks
 
+### Synopsis
+
+Lock and unlock configuration fields. Locked fields cannot be modified by admin or user roles — only superadmins can bypass locks.
+
 ### Options
 
 ```

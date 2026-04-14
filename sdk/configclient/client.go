@@ -37,10 +37,12 @@ func New(client pb.ConfigServiceClient, opts ...Option) *Client {
 type Option func(*options)
 
 type options struct {
-	subject     string
-	role        string
-	tenantID    string
-	bearerToken string
+	subject      string
+	role         string
+	tenantID     string
+	bearerToken  string
+	retryEnabled bool
+	retry        RetryConfig
 }
 
 // WithSubject sets the x-subject metadata header on every call.

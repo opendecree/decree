@@ -1,0 +1,55 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-config-export - Export config to YAML
+
+
+.SH SYNOPSIS
+\fBdecree config export  [flags]\fP
+
+
+.SH DESCRIPTION
+Export config to YAML
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for export
+
+.PP
+\fB--version\fP=0
+	specific version (default: latest)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-config(1)\fP

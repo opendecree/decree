@@ -1,6 +1,6 @@
 # Config as Code
 
-Manage your schemas and baseline config values in git, with runtime overrides via CCS.
+Manage your schemas and baseline config values in git, with runtime overrides via OpenDecree.
 
 ## When to use this
 
@@ -9,7 +9,7 @@ You have a single service (or a small number of services) where:
 - The config **structure** (schema) is defined by developers and should be version-controlled
 - **Baseline values** differ per environment (dev, staging, prod) and live in git
 - **Operators** need to change values at runtime without redeploying
-- You want a single source of truth for structure (git) with a runtime override layer (CCS)
+- You want a single source of truth for structure (git) with a runtime override layer (OpenDecree)
 
 ## Project layout
 
@@ -163,7 +163,7 @@ Best for: first-time bootstrap, adding new fields with initial values without to
 
 ## Priority chain
 
-When reading a config value, CCS resolves it in this order:
+When reading a config value, OpenDecree resolves it in this order:
 
 ```
 Runtime override (decree config set / SDK)  →  highest priority

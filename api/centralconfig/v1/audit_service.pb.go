@@ -7,6 +7,7 @@
 package centralconfigv1
 
 import (
+	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -504,7 +505,7 @@ var File_centralconfig_v1_audit_service_proto protoreflect.FileDescriptor
 
 const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
 	"\n" +
-	"$centralconfig/v1/audit_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf2\x02\n" +
+	"$centralconfig/v1/audit_service.proto\x12\x10centralconfig.v1\x1a\x1ccentralconfig/v1/types.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xf2\x02\n" +
 	"\x14QueryWriteLogRequest\x12 \n" +
 	"\ttenant_id\x18\x01 \x01(\tH\x00R\btenantId\x88\x01\x01\x12\x19\n" +
 	"\x05actor\x18\x02 \x01(\tH\x01R\x05actor\x88\x01\x01\x12\"\n" +
@@ -551,12 +552,12 @@ const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
 	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\":\n" +
 	"\x17GetUnusedFieldsResponse\x12\x1f\n" +
 	"\vfield_paths\x18\x01 \x03(\tR\n" +
-	"fieldPaths2\x9f\x03\n" +
-	"\fAuditService\x12`\n" +
-	"\rQueryWriteLog\x12&.centralconfig.v1.QueryWriteLogRequest\x1a'.centralconfig.v1.QueryWriteLogResponse\x12`\n" +
-	"\rGetFieldUsage\x12&.centralconfig.v1.GetFieldUsageRequest\x1a'.centralconfig.v1.GetFieldUsageResponse\x12c\n" +
-	"\x0eGetTenantUsage\x12'.centralconfig.v1.GetTenantUsageRequest\x1a(.centralconfig.v1.GetTenantUsageResponse\x12f\n" +
-	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponseB\xc9\x01\n" +
+	"fieldPaths2\xc4\x04\n" +
+	"\fAuditService\x12x\n" +
+	"\rQueryWriteLog\x12&.centralconfig.v1.QueryWriteLogRequest\x1a'.centralconfig.v1.QueryWriteLogResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/audit/logs\x12\x94\x01\n" +
+	"\rGetFieldUsage\x12&.centralconfig.v1.GetFieldUsageRequest\x1a'.centralconfig.v1.GetFieldUsageResponse\"2\x82\xd3\xe4\x93\x02,\x12*/v1/tenants/{tenant_id}/usage/{field_path}\x12\x8a\x01\n" +
+	"\x0eGetTenantUsage\x12'.centralconfig.v1.GetTenantUsageRequest\x1a(.centralconfig.v1.GetTenantUsageResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/v1/tenants/{tenant_id}/usage\x12\x95\x01\n" +
+	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/unused-fieldsB\xc9\x01\n" +
 	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (

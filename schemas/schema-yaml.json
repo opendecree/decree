@@ -32,6 +32,9 @@
       "type": "string",
       "description": "Description of what changed in this version."
     },
+    "info": {
+      "$ref": "#/$defs/info"
+    },
     "fields": {
       "type": "object",
       "minProperties": 1,
@@ -42,6 +45,50 @@
     }
   },
   "$defs": {
+    "info": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional schema-level metadata: ownership, contact, labels.",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Human-friendly display title for the schema."
+        },
+        "author": {
+          "type": "string",
+          "description": "Schema owner identifier (person, team, or service)."
+        },
+        "contact": {
+          "$ref": "#/$defs/contact"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Key-value labels for filtering and categorization."
+        }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Contact information for the schema owner.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Contact name (person or team)."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Contact email address."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Contact URL (e.g. team wiki page)."
+        }
+      }
+    },
     "field": {
       "type": "object",
       "required": ["type"],
@@ -76,6 +123,80 @@
         },
         "constraints": {
           "$ref": "#/$defs/constraints"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-friendly display name (e.g. \"Fee Rate\" for payments.fee_rate)."
+        },
+        "example": {
+          "type": "string",
+          "description": "Single example value, encoded as a string."
+        },
+        "examples": {
+          "type": "object",
+          "description": "Named examples with value and optional summary.",
+          "additionalProperties": {
+            "$ref": "#/$defs/example"
+          }
+        },
+        "externalDocs": {
+          "$ref": "#/$defs/externalDocs"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags for grouping and categorization."
+        },
+        "format": {
+          "type": "string",
+          "description": "Semantic format hint (e.g. \"email\", \"semver\", \"percentage\"). Not enforced."
+        },
+        "readOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "System-managed field, not user-editable."
+        },
+        "writeOnce": {
+          "type": "boolean",
+          "default": false,
+          "description": "Field can only be set once, immutable after."
+        },
+        "sensitive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Value should be masked in logs and UI."
+        }
+      }
+    },
+    "example": {
+      "type": "object",
+      "required": ["value"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "string",
+          "description": "The example value."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short description of what this example demonstrates."
+        }
+      }
+    },
+    "externalDocs": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "description": "Link to external documentation.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the external documentation."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to the external documentation."
         }
       }
     },

@@ -1,6 +1,18 @@
 # Deployment
 
-CCS is a single Go binary with two external dependencies: PostgreSQL and Redis. This page covers local development with Docker Compose, building the Docker image, and Kubernetes deployment.
+OpenDecree is a single Go binary with two external dependencies: PostgreSQL and Redis (or zero dependencies in memory mode). This page covers local development, Docker, Helm, and raw Kubernetes deployment.
+
+## Quick Start (No Docker)
+
+Run with in-memory storage — zero external dependencies:
+
+```bash
+go install github.com/opendecree/decree/cmd/server@latest
+STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
+
+# Swagger UI: http://localhost:8080/docs
+# gRPC: localhost:9090
+```
 
 ## Docker Compose (Local Development)
 
@@ -21,9 +33,9 @@ This starts:
 | `postgres` | 5432 | PostgreSQL 17 database |
 | `redis` | 6379 | Redis 7 for cache + pub/sub |
 | `migrate` | -- | Runs goose migrations, then exits |
-| `service` | 9090 | CCS gRPC server |
+| `service` | 9090 (gRPC), 8080 (HTTP) | OpenDecree server |
 
-The service is ready when `docker compose up --wait` returns. No JWT configuration needed -- metadata auth is the default.
+The service is ready when `docker compose up --wait` returns. No JWT configuration needed — metadata auth is the default.
 
 ### Adding Observability
 
@@ -49,26 +61,93 @@ docker compose down        # stop containers
 docker compose down -v     # stop containers and delete volumes (database data)
 ```
 
-## Building the Docker Image
+## Docker Image
 
 The repository includes a multi-stage Dockerfile at `build/Dockerfile`:
 
 ```bash
 docker build -f build/Dockerfile -t decree:latest .
+
+# Run with in-memory storage
+docker run -p 9090:9090 -p 8080:8080 \
+  -e STORAGE_BACKEND=memory -e HTTP_PORT=8080 \
+  decree:latest
+
+# Run with PostgreSQL + Redis
+docker run -p 9090:9090 -p 8080:8080 \
+  -e DB_WRITE_URL=postgres://... \
+  -e REDIS_URL=redis://... \
+  -e HTTP_PORT=8080 \
+  decree:latest
 ```
 
-The resulting image contains only the compiled binary -- no Go toolchain or source code.
+Pre-built images are available on ghcr.io:
+
+```bash
+docker pull ghcr.io/opendecree/decree:latest       # server
+docker pull ghcr.io/opendecree/decree-cli:latest    # CLI
+```
+
+## Helm Chart
+
+A Helm chart is provided at `deploy/helm/decree/`.
+
+### Quick Install
+
+```bash
+# In-memory mode (no external deps — good for evaluation)
+helm install decree deploy/helm/decree \
+  --set config.storageBackend=memory
+
+# With PostgreSQL and Redis (production)
+helm install decree deploy/helm/decree \
+  --set database.existingSecret=db-creds \
+  --set redis.existingSecret=redis-creds
+```
+
+### Key Values
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `config.storageBackend` | `postgres` or `memory` | `postgres` |
+| `config.grpcPort` | gRPC port | `9090` |
+| `config.httpPort` | REST gateway port (empty = disabled) | `8080` |
+| `config.enableServices` | Comma-separated services | `schema,config,audit` |
+| `database.existingSecret` | Secret with DB_WRITE_URL / DB_READ_URL | `""` |
+| `redis.existingSecret` | Secret with REDIS_URL | `""` |
+| `auth.jwksUrl` | JWKS URL for JWT auth | `""` (metadata auth) |
+| `ingress.enabled` | Enable Ingress | `false` |
+| `otel.enabled` | Enable OpenTelemetry | `false` |
+| `resources` | CPU/memory limits | `{}` |
+| `replicaCount` | Number of replicas | `1` |
+
+See [`deploy/helm/decree/values.yaml`](https://github.com/opendecree/decree/blob/main/deploy/helm/decree/values.yaml) for all options.
+
+### Split Deployments
+
+Use `config.enableServices` to run specialized instances:
+
+```bash
+# High-traffic config reads
+helm install decree-config deploy/helm/decree \
+  --set config.enableServices=config \
+  --set replicaCount=3
+
+# Admin operations (lower traffic)
+helm install decree-admin deploy/helm/decree \
+  --set config.enableServices="schema,audit"
+```
 
 ## Database Migrations
 
-CCS uses [goose](https://github.com/pressly/goose) for database migrations. Migrations live in `db/migrations/`.
+OpenDecree uses [goose](https://github.com/pressly/goose) for database migrations. Migrations live in `db/migrations/`.
 
 ### Running Migrations Manually
 
 ```bash
 # Using the tools Docker image
-docker build -f build/Dockerfile.tools -t ccs-tools:latest .
-docker run --rm ccs-tools:latest \
+docker build -f build/Dockerfile.tools -t decree-tools:latest .
+docker run --rm decree-tools:latest \
   goose -dir /migrations postgres \
   "postgres://user:pass@host:5432/centralconfig?sslmode=disable" up
 ```
@@ -77,11 +156,9 @@ docker run --rm ccs-tools:latest \
 
 The `migrate` service in `docker-compose.yml` runs migrations automatically before the service starts. It waits for PostgreSQL to be healthy, runs `goose up`, and exits.
 
-## Kubernetes
+## Kubernetes (Raw Manifests)
 
-### Environment Variable Configuration
-
-Configure CCS via environment variables in your Kubernetes manifests:
+If you prefer raw manifests over Helm:
 
 ```yaml
 apiVersion: apps/v1
@@ -94,32 +171,32 @@ spec:
     spec:
       containers:
         - name: decree
-          image: decree:latest
+          image: ghcr.io/opendecree/decree:latest
           ports:
             - containerPort: 9090
+              protocol: TCP
+            - containerPort: 8080
               protocol: TCP
           env:
             - name: GRPC_PORT
               value: "9090"
+            - name: HTTP_PORT
+              value: "8080"
             - name: DB_WRITE_URL
               valueFrom:
                 secretKeyRef:
-                  name: ccs-db
+                  name: decree-db
                   key: write-url
             - name: DB_READ_URL
               valueFrom:
                 secretKeyRef:
-                  name: ccs-db
+                  name: decree-db
                   key: read-url
             - name: REDIS_URL
               valueFrom:
                 secretKeyRef:
-                  name: ccs-redis
+                  name: decree-redis
                   key: url
-            - name: JWT_JWKS_URL
-              value: "https://auth.example.com/.well-known/jwks.json"
-            - name: LOG_LEVEL
-              value: "info"
           readinessProbe:
             grpc:
               port: 9090
@@ -132,31 +209,11 @@ spec:
             periodSeconds: 30
 ```
 
-CCS exposes the standard gRPC health checking protocol, so Kubernetes gRPC probes work out of the box.
-
-### Split Deployments
-
-Use `ENABLE_SERVICES` to run specialized instances:
-
-```yaml
-# High-traffic config reads
-- name: ENABLE_SERVICES
-  value: "config"
-
-# Admin operations (lower traffic)
-- name: ENABLE_SERVICES
-  value: "schema,audit"
-```
-
-All instances must connect to the same PostgreSQL database and Redis instance.
-
-### Helm Chart
-
-A Helm chart is planned under `deploy/helm/`. For now, use the Kubernetes manifests above as a starting point.
+OpenDecree exposes the standard gRPC health checking protocol, so Kubernetes gRPC probes work out of the box.
 
 ## Health Checks
 
-CCS registers each enabled service with the gRPC health checking protocol. Services report `SERVING` once fully initialized:
+Each enabled service registers with the gRPC health checking protocol. Services report `SERVING` once fully initialized:
 
 - `centralconfig.v1.SchemaService`
 - `centralconfig.v1.ConfigService`
@@ -166,6 +223,6 @@ Use `grpc-health-probe` or Kubernetes native gRPC probes to check readiness.
 
 ## Related
 
-- [Server Configuration](configuration.md) -- all environment variables
-- [Observability](observability.md) -- OTel setup with Docker Compose
-- [Getting Started](../getting-started.md) -- quick start walkthrough
+- [Server Configuration](configuration.md) — all environment variables
+- [Observability](observability.md) — OTel setup with Docker Compose
+- [Getting Started](../getting-started.md) — quick start walkthrough

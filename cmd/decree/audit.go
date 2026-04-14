@@ -12,6 +12,7 @@ import (
 var auditCmd = &cobra.Command{
 	Use:   "audit",
 	Short: "Query audit logs and usage statistics",
+	Long:  "Query the configuration change history and field read usage statistics. Useful for compliance auditing and identifying unused fields.",
 }
 
 var auditQueryCmd = &cobra.Command{

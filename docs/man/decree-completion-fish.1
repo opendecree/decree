@@ -1,0 +1,72 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-completion-fish - Generate the autocompletion script for fish
+
+
+.SH SYNOPSIS
+\fBdecree completion fish [flags]\fP
+
+
+.SH DESCRIPTION
+Generate the autocompletion script for the fish shell.
+
+.PP
+To load completions in your current shell session:
+
+.EX
+decree completion fish | source
+.EE
+
+.PP
+To load completions for every new session, execute once:
+
+.EX
+decree completion fish > ~/.config/fish/completions/decree.fish
+.EE
+
+.PP
+You will need to start a new shell for this setup to take effect.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for fish
+
+.PP
+\fB--no-descriptions\fP[=false]
+	disable completion descriptions
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-completion(1)\fP

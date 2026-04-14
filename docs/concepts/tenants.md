@@ -4,7 +4,7 @@ A **tenant** is a consumer of configuration -- an organization, environment, or 
 
 ## What Tenants Represent
 
-Tenants are the multi-tenancy boundary in CCS. Each tenant:
+Tenants are the multi-tenancy boundary in OpenDecree. Each tenant:
 
 - Is bound to exactly one schema at a specific published version
 - Has its own independent set of config values

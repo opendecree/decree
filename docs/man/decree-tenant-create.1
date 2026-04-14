@@ -1,0 +1,63 @@
+.nh
+.TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-tenant-create - Create a new tenant on a published schema version
+
+
+.SH SYNOPSIS
+\fBdecree tenant create [flags]\fP
+
+
+.SH DESCRIPTION
+Create a new tenant on a published schema version
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for create
+
+.PP
+\fB--name\fP=""
+	tenant name (slug)
+
+.PP
+\fB--schema\fP=""
+	schema ID
+
+.PP
+\fB--schema-version\fP=0
+	published schema version
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+
+.SH SEE ALSO
+\fBdecree-tenant(1)\fP

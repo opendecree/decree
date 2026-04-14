@@ -38,6 +38,14 @@ func init() {
 	pf.StringVarP(&flagOutput, "output", "o", "table", "output format: table, json, yaml")
 	pf.BoolVar(&flagInsecure, "insecure", envOrDefault("DECREE_INSECURE", "true") == "true", "skip TLS verification")
 
+	// Flag completions.
+	_ = rootCmd.RegisterFlagCompletionFunc("output", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"table", "json", "yaml"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = rootCmd.RegisterFlagCompletionFunc("role", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"superadmin", "admin", "user"}, cobra.ShellCompDirectiveNoFileComp
+	})
+
 	rootCmd.AddCommand(schemaCmd)
 	rootCmd.AddCommand(tenantCmd)
 	rootCmd.AddCommand(configCmd)

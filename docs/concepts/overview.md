@@ -1,10 +1,10 @@
 # Overview
 
-OpenDecree (CCS) manages **business-oriented configuration** for multi-tenant services. Think approval rules, fee structures, settlement windows, feature parameters -- the kind of config that sits between your infrastructure settings and your application code.
+OpenDecree manages **business-oriented configuration** for multi-tenant services. Think approval rules, fee structures, settlement windows, feature parameters -- the kind of config that sits between your infrastructure settings and your application code.
 
 ## Mental Model
 
-CCS follows a four-step flow:
+OpenDecree follows a four-step flow:
 
 ```
 Schema  -->  Tenant  -->  Config  -->  Subscribe
@@ -16,9 +16,9 @@ Schema  -->  Tenant  -->  Config  -->  Subscribe
 3. **Config** -- set typed values for the tenant. Every write creates a new version. Values are validated against the schema.
 4. **Subscribe** -- applications consume config via typed reads or real-time streaming. Changes propagate instantly.
 
-## When to Use CCS
+## When to Use OpenDecree
 
-CCS is a good fit when you need:
+OpenDecree is a good fit when you need:
 
 - **Typed, validated configuration** -- not just string key-value pairs, but integers, durations, URLs, JSON with constraints enforced on every write.
 - **Multi-tenancy** -- different organizations or environments sharing the same schema but with independent config values.
@@ -26,9 +26,9 @@ CCS is a good fit when you need:
 - **Audit and rollback** -- full history of who changed what and when, with the ability to roll back to any previous state.
 - **Real-time propagation** -- services that need to react to config changes without polling or restarting.
 
-## When NOT to Use CCS
+## When NOT to Use OpenDecree
 
-CCS is not the right tool for:
+OpenDecree is not the right tool for:
 
 | Need | Better tool |
 |------|-------------|
@@ -38,11 +38,11 @@ CCS is not the right tool for:
 | Application environment variables | `.env` files, Kubernetes Secrets |
 | Transient state or session data | Redis, Memcached |
 
-CCS occupies the space between infrastructure config and application logic -- structured business parameters that change at runtime, need validation, and must be auditable.
+OpenDecree occupies the space between infrastructure config and application logic -- structured business parameters that change at runtime, need validation, and must be auditable.
 
 ## Architecture at a Glance
 
-CCS is a single Go binary exposing three gRPC services:
+OpenDecree is a single Go binary exposing three gRPC services:
 
 | Service | Purpose |
 |---------|---------|

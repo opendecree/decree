@@ -22,21 +22,31 @@ import (
 
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
-	Syntax      string                `yaml:"syntax"`
-	Name        string                `yaml:"name"`
-	Description string                `yaml:"description,omitempty"`
-	Fields      map[string]FieldDef   `yaml:"fields"`
+	Syntax      string              `yaml:"syntax"`
+	Name        string              `yaml:"name"`
+	Description string              `yaml:"description,omitempty"`
+	Info        any                 `yaml:"info,omitempty"`
+	Fields      map[string]FieldDef `yaml:"fields"`
 }
 
 // FieldDef describes a single field in the schema YAML.
 type FieldDef struct {
-	Type        string          `yaml:"type"`
-	Description string          `yaml:"description,omitempty"`
-	Default     string          `yaml:"default,omitempty"`
-	Nullable    bool            `yaml:"nullable,omitempty"`
-	Deprecated  bool            `yaml:"deprecated,omitempty"`
-	RedirectTo  string          `yaml:"redirect_to,omitempty"`
-	Constraints *ConstraintsDef `yaml:"constraints,omitempty"`
+	Type         string          `yaml:"type"`
+	Description  string          `yaml:"description,omitempty"`
+	Default      string          `yaml:"default,omitempty"`
+	Nullable     bool            `yaml:"nullable,omitempty"`
+	Deprecated   bool            `yaml:"deprecated,omitempty"`
+	RedirectTo   string          `yaml:"redirect_to,omitempty"`
+	Constraints  *ConstraintsDef `yaml:"constraints,omitempty"`
+	Title        string          `yaml:"title,omitempty"`
+	Example      string          `yaml:"example,omitempty"`
+	Examples     any             `yaml:"examples,omitempty"`
+	ExternalDocs any             `yaml:"externalDocs,omitempty"`
+	Tags         []string        `yaml:"tags,omitempty"`
+	Format       string          `yaml:"format,omitempty"`
+	ReadOnly     bool            `yaml:"readOnly,omitempty"`
+	WriteOnce    bool            `yaml:"writeOnce,omitempty"`
+	Sensitive    bool            `yaml:"sensitive,omitempty"`
 }
 
 // ConstraintsDef uses OAS-style naming for field constraints.

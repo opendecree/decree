@@ -20,19 +20,55 @@ type Schema struct {
 	Published          bool
 	Fields             []Field
 	CreatedAt          time.Time
+	Info               *SchemaInfo
+}
+
+// SchemaInfo contains optional schema-level metadata.
+type SchemaInfo struct {
+	Title   string
+	Author  string
+	Contact *SchemaContact
+	Labels  map[string]string
+}
+
+// SchemaContact contains contact information for a schema owner.
+type SchemaContact struct {
+	Name  string
+	Email string
+	URL   string
 }
 
 // Field represents a single field definition within a schema.
-// Field represents a single field definition within a schema.
 type Field struct {
-	Path        string
-	Type        string
-	Nullable    bool
-	Deprecated  bool
-	RedirectTo  string
-	Default     string
+	Path         string
+	Type         string
+	Nullable     bool
+	Deprecated   bool
+	RedirectTo   string
+	Default      string
+	Description  string
+	Constraints  *FieldConstraints
+	Title        string
+	Example      string
+	Examples     map[string]FieldExample
+	ExternalDocs *ExternalDocs
+	Tags         []string
+	Format       string
+	ReadOnly     bool
+	WriteOnce    bool
+	Sensitive    bool
+}
+
+// FieldExample represents a named example value.
+type FieldExample struct {
+	Value   string
+	Summary string
+}
+
+// ExternalDocs links to external documentation.
+type ExternalDocs struct {
 	Description string
-	Constraints *FieldConstraints
+	URL         string
 }
 
 // FieldConstraints defines validation rules for a field.
@@ -114,9 +150,29 @@ func schemaFromProto(s *pb.Schema) *Schema {
 		Published:          s.Published,
 		Fields:             make([]Field, len(s.Fields)),
 		CreatedAt:          s.CreatedAt.AsTime(),
+		Info:               schemaInfoFromProto(s.Info),
 	}
 	for i, f := range s.Fields {
 		r.Fields[i] = fieldFromProto(f)
+	}
+	return r
+}
+
+func schemaInfoFromProto(info *pb.SchemaInfo) *SchemaInfo {
+	if info == nil {
+		return nil
+	}
+	r := &SchemaInfo{
+		Title:  info.Title,
+		Author: info.Author,
+		Labels: info.Labels,
+	}
+	if info.Contact != nil {
+		r.Contact = &SchemaContact{
+			Name:  info.Contact.Name,
+			Email: info.Contact.Email,
+			URL:   info.Contact.Url,
+		}
 	}
 	return r
 }
@@ -127,6 +183,10 @@ func fieldFromProto(f *pb.SchemaField) Field {
 		Type:       f.Type.String(),
 		Nullable:   f.Nullable,
 		Deprecated: f.Deprecated,
+		ReadOnly:   f.ReadOnly,
+		WriteOnce:  f.WriteOnce,
+		Sensitive:  f.Sensitive,
+		Tags:       f.Tags,
 	}
 	if f.RedirectTo != nil {
 		r.RedirectTo = *f.RedirectTo
@@ -136,6 +196,27 @@ func fieldFromProto(f *pb.SchemaField) Field {
 	}
 	if f.Description != nil {
 		r.Description = *f.Description
+	}
+	if f.Title != nil {
+		r.Title = *f.Title
+	}
+	if f.Example != nil {
+		r.Example = *f.Example
+	}
+	if f.Format != nil {
+		r.Format = *f.Format
+	}
+	if len(f.Examples) > 0 {
+		r.Examples = make(map[string]FieldExample, len(f.Examples))
+		for k, v := range f.Examples {
+			r.Examples[k] = FieldExample{Value: v.Value, Summary: v.Summary}
+		}
+	}
+	if f.ExternalDocs != nil {
+		r.ExternalDocs = &ExternalDocs{
+			Description: f.ExternalDocs.Description,
+			URL:         f.ExternalDocs.Url,
+		}
 	}
 	return r
 }
@@ -147,6 +228,10 @@ func fieldsToProto(fields []Field) []*pb.SchemaField {
 			Path:       f.Path,
 			Nullable:   f.Nullable,
 			Deprecated: f.Deprecated,
+			ReadOnly:   f.ReadOnly,
+			WriteOnce:  f.WriteOnce,
+			Sensitive:  f.Sensitive,
+			Tags:       f.Tags,
 		}
 		if f.RedirectTo != "" {
 			pf.RedirectTo = &f.RedirectTo
@@ -156,6 +241,24 @@ func fieldsToProto(fields []Field) []*pb.SchemaField {
 		}
 		if f.Description != "" {
 			pf.Description = &f.Description
+		}
+		if f.Title != "" {
+			pf.Title = &f.Title
+		}
+		if f.Example != "" {
+			pf.Example = &f.Example
+		}
+		if f.Format != "" {
+			pf.Format = &f.Format
+		}
+		if len(f.Examples) > 0 {
+			pf.Examples = make(map[string]*pb.FieldExample, len(f.Examples))
+			for k, v := range f.Examples {
+				pf.Examples[k] = &pb.FieldExample{Value: v.Value, Summary: v.Summary}
+			}
+		}
+		if f.ExternalDocs != nil {
+			pf.ExternalDocs = &pb.ExternalDocs{Description: f.ExternalDocs.Description, Url: f.ExternalDocs.URL}
 		}
 		// Type is set by name lookup. Accept both "INT" and "FIELD_TYPE_INT".
 		typeName := f.Type

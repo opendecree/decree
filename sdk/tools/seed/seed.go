@@ -31,18 +31,55 @@ type File struct {
 type SchemaDef struct {
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description,omitempty"`
+	Info        *SchemaInfoDef      `yaml:"info,omitempty"`
 	Fields      map[string]FieldDef `yaml:"fields"`
+}
+
+// SchemaInfoDef contains optional schema-level metadata.
+type SchemaInfoDef struct {
+	Title   string              `yaml:"title,omitempty"`
+	Author  string              `yaml:"author,omitempty"`
+	Contact *SchemaContactDef   `yaml:"contact,omitempty"`
+	Labels  map[string]string   `yaml:"labels,omitempty"`
+}
+
+// SchemaContactDef contains contact information for a schema owner.
+type SchemaContactDef struct {
+	Name  string `yaml:"name,omitempty"`
+	Email string `yaml:"email,omitempty"`
+	URL   string `yaml:"url,omitempty"`
 }
 
 // FieldDef describes a single schema field.
 type FieldDef struct {
-	Type        string          `yaml:"type"`
-	Description string          `yaml:"description,omitempty"`
-	Default     string          `yaml:"default,omitempty"`
-	Nullable    bool            `yaml:"nullable,omitempty"`
-	Deprecated  bool            `yaml:"deprecated,omitempty"`
-	RedirectTo  string          `yaml:"redirect_to,omitempty"`
-	Constraints *ConstraintsDef `yaml:"constraints,omitempty"`
+	Type         string              `yaml:"type"`
+	Description  string              `yaml:"description,omitempty"`
+	Default      string              `yaml:"default,omitempty"`
+	Nullable     bool                `yaml:"nullable,omitempty"`
+	Deprecated   bool                `yaml:"deprecated,omitempty"`
+	RedirectTo   string              `yaml:"redirect_to,omitempty"`
+	Constraints  *ConstraintsDef     `yaml:"constraints,omitempty"`
+	Title        string              `yaml:"title,omitempty"`
+	Example      string              `yaml:"example,omitempty"`
+	Examples     map[string]ExampleDef `yaml:"examples,omitempty"`
+	ExternalDocs *ExternalDocsDef    `yaml:"externalDocs,omitempty"`
+	Tags         []string            `yaml:"tags,omitempty"`
+	Format       string              `yaml:"format,omitempty"`
+	ReadOnly     bool                `yaml:"readOnly,omitempty"`
+	WriteOnce    bool                `yaml:"writeOnce,omitempty"`
+	Sensitive    bool                `yaml:"sensitive,omitempty"`
+}
+
+// ExampleDef represents a named example value.
+type ExampleDef struct {
+	Value   string `yaml:"value"`
+	Summary string `yaml:"summary,omitempty"`
+}
+
+// ExternalDocsDef links to external documentation.
+type ExternalDocsDef struct {
+	Description string `yaml:"description,omitempty"`
+	URL         string `yaml:"url"`
 }
 
 // ConstraintsDef uses OAS-style naming for field constraints.

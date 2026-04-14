@@ -6,6 +6,10 @@ title: decree audit
 
 Query audit logs and usage statistics
 
+### Synopsis
+
+Query the configuration change history and field read usage statistics. Useful for compliance auditing and identifying unused fields.
+
 ### Options
 
 ```
