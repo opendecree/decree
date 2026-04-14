@@ -1,8 +1,38 @@
-bin/
+# Git
 .git/
+.gitignore
+.gitattributes
+
+# CI/IDE
+.github/
 .claude/
+.idea/
+.vscode/
+
+# Build artifacts
+bin/
+dist/
+site/
 .tools-image-built
-e2e/
-deploy/
+ccs
+
+# Note: e2e/ is NOT excluded — go.work references it and the workspace
+# needs all modules present. Test files won't compile (build tag guarded).
+
+# Docs (not needed in images)
+docs/
+mkdocs.yml
+schemas/
 *.md
 LICENSE
+
+# Deploy configs (not needed inside images)
+deploy/
+
+# Environment & secrets
+.env
+.env.*
+
+# Temporary
+tmp/
+*.log

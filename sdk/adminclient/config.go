@@ -3,7 +3,7 @@ package adminclient
 import (
 	"context"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // ListConfigVersions returns all config versions for a tenant, newest first.
@@ -82,17 +82,34 @@ func (c *Client) ExportConfig(ctx context.Context, tenantID string, version *int
 	return resp.YamlContent, nil
 }
 
+// ImportMode controls how imported values interact with existing config.
+type ImportMode int32
+
+const (
+	// ImportModeMerge updates fields from YAML that differ, keeps runtime overrides.
+	ImportModeMerge ImportMode = 1
+	// ImportModeReplace does a full replace — all fields from YAML, runtime overrides wiped.
+	ImportModeReplace ImportMode = 2
+	// ImportModeDefaults only sets fields that have no value yet.
+	ImportModeDefaults ImportMode = 3
+)
+
 // ImportConfig applies configuration values from YAML, creating a new version.
 // The description is optional — pass an empty string to use the default.
-func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string) (*Version, error) {
+// Mode defaults to ImportModeMerge if not specified.
+func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...ImportMode) (*Version, error) {
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.config.ImportConfig(c.withAuth(ctx), &pb.ImportConfigRequest{
+	req := &pb.ImportConfigRequest{
 		TenantId:    tenantID,
 		YamlContent: yamlContent,
 		Description: ptrString(description),
-	})
+	}
+	if len(mode) > 0 {
+		req.Mode = pb.ImportMode(mode[0])
+	}
+	resp, err := c.config.ImportConfig(c.withAuth(ctx), req)
 	if err != nil {
 		return nil, mapError(err)
 	}

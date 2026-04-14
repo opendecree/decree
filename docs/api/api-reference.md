@@ -56,6 +56,8 @@
     - [SubscribeRequest](#centralconfig-v1-SubscribeRequest)
     - [SubscribeResponse](#centralconfig-v1-SubscribeResponse)
   
+    - [ImportMode](#centralconfig-v1-ImportMode)
+  
     - [ConfigService](#centralconfig-v1-ConfigService)
   
 - [centralconfig/v1/schema_service.proto](#centralconfig_v1_schema_service-proto)
@@ -93,6 +95,12 @@
     - [UpdateTenantResponse](#centralconfig-v1-UpdateTenantResponse)
   
     - [SchemaService](#centralconfig-v1-SchemaService)
+  
+- [centralconfig/v1/version_service.proto](#centralconfig_v1_version_service-proto)
+    - [GetServerVersionRequest](#centralconfig-v1-GetServerVersionRequest)
+    - [GetServerVersionResponse](#centralconfig-v1-GetServerVersionResponse)
+  
+    - [VersionService](#centralconfig-v1-VersionService)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -755,6 +763,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
 | yaml_content | [bytes](#bytes) |  | YAML-encoded configuration values to import. |
 | description | [string](#string) | optional | Description for the new config version created by the import. |
+| mode | [ImportMode](#centralconfig-v1-ImportMode) |  | Import mode. Defaults to IMPORT_MODE_MERGE. |
 
 
 
@@ -939,6 +948,20 @@ FieldUpdate represents a single field change within a SetFields batch.
 
 
  
+
+
+<a name="centralconfig-v1-ImportMode"></a>
+
+### ImportMode
+ImportMode controls how imported values interact with existing config.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| IMPORT_MODE_UNSPECIFIED | 0 | Unspecified defaults to merge behavior. |
+| IMPORT_MODE_MERGE | 1 | Merge: update fields from YAML that differ, keep runtime overrides for fields not in the YAML. |
+| IMPORT_MODE_REPLACE | 2 | Replace: full replace — all fields from YAML are set, fields not in YAML are not carried forward. Runtime overrides are wiped. |
+| IMPORT_MODE_DEFAULTS | 3 | Defaults: only set fields that have no value yet. Fields that already have a value are skipped regardless of the YAML content. |
+
 
  
 
@@ -1204,7 +1227,8 @@ bypasses the cache and reads directly from the database.
 
 Import uses full-replace semantics: - If no schema with this name exists: creates a new schema with version 1. - If a schema exists and fields differ from latest: creates the next version. - If a schema exists and fields are identical: returns AlreadyExists error.
 
-Imported versions are always created as drafts (unpublished). The `version` field in the YAML is informational — the server assigns the next version number automatically. |
+Imported versions are created as drafts (unpublished) unless auto_publish is true. The `version` field in the YAML is informational — the server assigns the next version number automatically. |
+| auto_publish | [bool](#bool) |  | When true, the imported version is automatically published after creation. If the schema already exists and fields are identical (AlreadyExists), this has no effect. |
 
 
 
@@ -1506,6 +1530,58 @@ Schema lifecycle.
 | ListFieldLocks | [ListFieldLocksRequest](#centralconfig-v1-ListFieldLocksRequest) | [ListFieldLocksResponse](#centralconfig-v1-ListFieldLocksResponse) | ListFieldLocks returns all active field locks for a tenant. |
 | ExportSchema | [ExportSchemaRequest](#centralconfig-v1-ExportSchemaRequest) | [ExportSchemaResponse](#centralconfig-v1-ExportSchemaResponse) | ExportSchema serializes a schema version to YAML. |
 | ImportSchema | [ImportSchemaRequest](#centralconfig-v1-ImportSchemaRequest) | [ImportSchemaResponse](#centralconfig-v1-ImportSchemaResponse) | ImportSchema creates a schema (or new version) from YAML. Full-replace semantics: the YAML defines the complete field set. Returns AlreadyExists if the imported fields are identical to the latest version. |
+
+ 
+
+
+
+<a name="centralconfig_v1_version_service-proto"></a>
+<p align="right"><a href="#top">Top</a></p>
+
+## centralconfig/v1/version_service.proto
+
+
+
+<a name="centralconfig-v1-GetServerVersionRequest"></a>
+
+### GetServerVersionRequest
+
+
+
+
+
+
+
+<a name="centralconfig-v1-GetServerVersionResponse"></a>
+
+### GetServerVersionResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| version | [string](#string) |  | Semantic version string (e.g. &#34;1.2.3&#34; or &#34;dev&#34;). |
+| commit | [string](#string) |  | Git commit hash. |
+
+
+
+
+
+ 
+
+ 
+
+ 
+
+
+<a name="centralconfig-v1-VersionService"></a>
+
+### VersionService
+VersionService provides server version information.
+
+| Method Name | Request Type | Response Type | Description |
+| ----------- | ------------ | ------------- | ------------|
+| GetServerVersion | [GetServerVersionRequest](#centralconfig-v1-GetServerVersionRequest) | [GetServerVersionResponse](#centralconfig-v1-GetServerVersionResponse) | GetServerVersion returns the server&#39;s build version and commit hash. |
 
  
 

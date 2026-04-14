@@ -1,4 +1,4 @@
-# Central Config Service — Claude Context
+# OpenDecree — Claude Context
 
 ## Overview
 
@@ -32,7 +32,7 @@ Go 1.24+, Docker, Make. All generators run in Docker.
 make generate    # buf + sqlc code generation (Docker)
 make test        # go test ./...
 make lint        # golangci-lint + buf lint + buf breaking
-make build       # go build → bin/central-config-service
+make build       # go build → bin/decree
 make e2e         # docker compose → migrate → e2e tests → teardown
 make clean       # remove bin/ and generated code
 ```

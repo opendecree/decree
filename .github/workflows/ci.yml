@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history for buf breaking
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Go lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.8.0
+
+      - name: Build tools image
+        run: make tools
+
+      - name: Proto lint + breaking
+        run: make lint-proto
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Unit tests
+        run: go test ./internal/... -race -count=1
+
+      - name: SDK tests
+        run: |
+          go test ./sdk/configclient/... -count=1
+          go test ./sdk/adminclient/... -count=1
+          go test ./sdk/configwatcher/... -count=1
+
+      - name: CLI tests
+        run: cd cmd/ccs && go test ./... -count=1
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Build server
+        run: go build -o bin/decree ./cmd/server
+
+      - name: Build CLI
+        run: cd cmd/ccs && go build -o ../../bin/ccs .
+
+  docs:
+    name: Docs check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Build tools image
+        run: make tools
+
+      - name: Regenerate docs
+        run: make docs
+
+      - name: Check docs are up-to-date
+        run: |
+          if ! git diff --exit-code docs/; then
+            echo "::error::Generated docs are out of date. Run 'make docs' and commit."
+            exit 1
+          fi
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+
+      - name: Run E2E tests
+        run: make e2e

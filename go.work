@@ -6,6 +6,6 @@ use (
 	./sdk/configclient
 	./sdk/adminclient
 	./sdk/configwatcher
-	./cmd/ccs
+	./cmd/decree
 	./e2e
 )

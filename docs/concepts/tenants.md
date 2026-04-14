@@ -34,17 +34,17 @@ Multiple tenants can share the same schema version. Each tenant's config values 
 A common pattern is to create one tenant per deployment environment:
 
 ```bash
-ccs tenant create --name myapp-dev     --schema <id> --schema-version 1
-ccs tenant create --name myapp-staging --schema <id> --schema-version 1
-ccs tenant create --name myapp-prod    --schema <id> --schema-version 1
+decree tenant create --name myapp-dev     --schema <id> --schema-version 1
+decree tenant create --name myapp-staging --schema <id> --schema-version 1
+decree tenant create --name myapp-prod    --schema <id> --schema-version 1
 ```
 
 Each environment gets its own config values, version history, and audit trail. You can set aggressive values in dev, conservative values in prod, and promote config between environments using export/import:
 
 ```bash
 # Export staging config and import into prod
-ccs config export staging-tenant-id > config.yaml
-ccs config import prod-tenant-id config.yaml
+decree config export staging-tenant-id > config.yaml
+decree config import prod-tenant-id config.yaml
 ```
 
 ## Schema Version Pinning
@@ -62,7 +62,7 @@ This matters because schema versions can add, remove, or change fields. Pinning 
 To upgrade a tenant to a newer schema version:
 
 ```bash
-ccs tenant update <tenant-id> --schema-version 2
+decree tenant update <tenant-id> --schema-version 2
 ```
 
 What happens during an upgrade:
@@ -79,7 +79,7 @@ You can upgrade tenants one at a time -- dev first, then staging, then prod -- t
 Tenants are created via the CLI, SDK, or gRPC API:
 
 ```bash
-ccs tenant create --name acme --schema <schema-id> --schema-version 1
+decree tenant create --name acme --schema <schema-id> --schema-version 1
 ```
 
 The schema ID and version must reference an existing, published schema version. The server returns the tenant ID (a UUID) which you use for all subsequent config operations.
@@ -88,10 +88,10 @@ The schema ID and version must reference an existing, published schema version. 
 
 ```bash
 # List all tenants
-ccs tenant list
+decree tenant list
 
 # Get details for a specific tenant
-ccs tenant get <tenant-id>
+decree tenant get <tenant-id>
 ```
 
 ## Related
@@ -100,4 +100,4 @@ ccs tenant get <tenant-id>
 - [Versioning](versioning.md) -- how config versions work within a tenant
 - [Auth](auth.md) -- role-based access and field locks per tenant
 - [API Reference](../api/api-reference.md) -- full RPC details for tenant operations
-- [CLI -- ccs tenant](../cli/ccs_tenant.md) -- tenant commands
+- [CLI -- decree tenant](../cli/decree_tenant.md) -- tenant commands

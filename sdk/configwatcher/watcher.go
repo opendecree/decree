@@ -36,8 +36,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/sdk/configclient"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 // Watcher monitors a tenant's configuration via a gRPC subscription stream.
@@ -73,7 +73,7 @@ type options struct {
 // New creates a new watcher for the given tenant's configuration.
 // Register typed field accessors (String, Int, Bool, etc.) before calling Start.
 //
-// The conn parameter is the gRPC client connection to the Central Config Service.
+// The conn parameter is the gRPC client connection to the OpenDecree.
 func New(conn grpc.ClientConnInterface, tenantID string, opts ...Option) *Watcher {
 	o := options{
 		role:       "superadmin",

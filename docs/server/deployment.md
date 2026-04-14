@@ -7,8 +7,12 @@ CCS is a single Go binary with two external dependencies: PostgreSQL and Redis. 
 The repository includes a `docker-compose.yml` that starts the full stack:
 
 ```bash
-git clone https://github.com/zeevdr/central-config-service.git
+git clone https://github.com/opendecree/decree.git
+<<<<<<< HEAD
+cd decree
+=======
 cd central-config-service
+>>>>>>> origin/main
 
 # Start everything: PostgreSQL, Redis, migrations, and the service
 docker compose up -d --wait service
@@ -54,7 +58,7 @@ docker compose down -v     # stop containers and delete volumes (database data)
 The repository includes a multi-stage Dockerfile at `build/Dockerfile`:
 
 ```bash
-docker build -f build/Dockerfile -t central-config-service:latest .
+docker build -f build/Dockerfile -t decree:latest .
 ```
 
 The resulting image contains only the compiled binary -- no Go toolchain or source code.
@@ -87,14 +91,18 @@ Configure CCS via environment variables in your Kubernetes manifests:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: central-config-service
+  name: decree
 spec:
   replicas: 2
   template:
     spec:
       containers:
-        - name: ccs
+        - name: decree
+<<<<<<< HEAD
+          image: decree:latest
+=======
           image: central-config-service:latest
+>>>>>>> origin/main
           ports:
             - containerPort: 9090
               protocol: TCP

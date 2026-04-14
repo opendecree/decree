@@ -39,4 +39,10 @@ Thumbs.db
 
 # Temporary
 tmp/
-*.logsite/
+*.log
+
+# MkDocs build output
+site/
+
+# CLI binary
+ccs

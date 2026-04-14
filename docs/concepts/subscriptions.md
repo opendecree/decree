@@ -30,10 +30,10 @@ The simplest way to watch for changes:
 
 ```bash
 # Watch all changes for a tenant
-ccs watch <tenant-id>
+decree watch <tenant-id>
 
 # Watch specific fields
-ccs watch <tenant-id> --fields payments.fee_rate,payments.enabled
+decree watch <tenant-id> --fields payments.fee_rate,payments.enabled
 ```
 
 The CLI prints each change as it happens, showing the field path, old value, new value, who made the change, and when.

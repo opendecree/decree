@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/sdk/adminclient"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/sdk/adminclient"
 )
 
 // --- Streaming Subscription (raw proto — Subscribe is not in configclient SDK) ---

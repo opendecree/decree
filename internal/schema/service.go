@@ -10,10 +10,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
-	"github.com/zeevdr/central-config-service/internal/telemetry"
-	"github.com/zeevdr/central-config-service/internal/validation"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/telemetry"
+	"github.com/opendecree/decree/internal/validation"
 )
 
 // Service implements the SchemaService gRPC server.
@@ -550,7 +550,11 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		// New schema — create with v1.
-		return s.importCreateNew(ctx, doc, fields, checksum)
+		resp, err := s.importCreateNew(ctx, doc, fields, checksum)
+		if err != nil || !req.AutoPublish {
+			return resp, err
+		}
+		return s.autoPublish(ctx, resp)
 	}
 
 	// Existing schema — check if identical to latest version.
@@ -571,7 +575,11 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	}
 
 	// Create new version.
-	return s.importNewVersion(ctx, existing, latestVersion, doc, fields, checksum)
+	resp, err := s.importNewVersion(ctx, existing, latestVersion, doc, fields, checksum)
+	if err != nil || !req.AutoPublish {
+		return resp, err
+	}
+	return s.autoPublish(ctx, resp)
 }
 
 func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields []*pb.SchemaField, checksum string) (*pb.ImportSchemaResponse, error) {
@@ -629,6 +637,18 @@ func (s *Service) importNewVersion(ctx context.Context, schema dbstore.Schema, l
 }
 
 // --- Helpers ---
+
+func (s *Service) autoPublish(ctx context.Context, resp *pb.ImportSchemaResponse) (*pb.ImportSchemaResponse, error) {
+	schema := resp.Schema
+	pubResp, err := s.PublishSchema(ctx, &pb.PublishSchemaRequest{
+		Id:      schema.Id,
+		Version: schema.Version,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ImportSchemaResponse{Schema: pubResp.Schema}, nil
+}
 
 func (s *Service) createFields(ctx context.Context, versionID pgUUID, fields []*pb.SchemaField) ([]dbstore.SchemaField, error) {
 	result := make([]dbstore.SchemaField, 0, len(fields))

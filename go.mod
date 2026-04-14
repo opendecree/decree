@@ -1,4 +1,4 @@
-module github.com/zeevdr/central-config-service
+module github.com/opendecree/decree
 
 go 1.24.0
 
@@ -13,7 +13,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/stretchr/testify v1.11.1
-	github.com/zeevdr/central-config-service/api v0.0.0-20260326103949-f4bc9e9e1e51
+	github.com/opendecree/decree/api v0.0.0-20260329141101-df497cbcb383
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0
 	go.opentelemetry.io/otel v1.41.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.39.0

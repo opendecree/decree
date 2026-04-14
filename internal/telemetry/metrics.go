@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const meterName = "central-config-service"
+const meterName = "decree"
 
 // CacheMetrics records cache hit/miss counters.
 type CacheMetrics struct {

@@ -1,10 +1,10 @@
-# Central Config Service
+# OpenDecree
 
 Schema-driven business configuration management for multi-tenant services.
 
 ## What is this?
 
-Central Config Service manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
+OpenDecree manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
 
 ### How is this different?
 
@@ -14,7 +14,7 @@ Central Config Service manages **business-oriented configuration** — approval 
 
 **Cloud config services** (AWS AppConfig, Azure App Configuration) offer some validation but lack schema registries, gRPC APIs, real-time subscriptions, and are vendor-locked.
 
-**What makes Central Config Service unique:**
+**What makes OpenDecree unique:**
 
 No existing open-source tool combines a schema-first approach to typed configuration with native multi-tenancy, constraint validation, field-level locking, gRPC streaming, and versioned rollback — all in a single Go binary.
 
@@ -67,29 +67,28 @@ for change := range fee.Changes() { ... }
 
 Install only what you need:
 ```bash
-go get github.com/zeevdr/central-config-service/sdk/configclient@latest
-go get github.com/zeevdr/central-config-service/sdk/adminclient@latest
-go get github.com/zeevdr/central-config-service/sdk/configwatcher@latest
+go get github.com/opendecree/decree/sdk/configclient@latest
+go get github.com/opendecree/decree/sdk/adminclient@latest
+go get github.com/opendecree/decree/sdk/configwatcher@latest
 ```
 
 ## CLI
 
 ```bash
-go install github.com/zeevdr/central-config-service/cmd/ccs@latest
+go install github.com/opendecree/decree/cmd/ccs@latest
 
-ccs schema list
-ccs schema import schema.yaml
-ccs schema publish <schema-id> 1
+decree schema list
+decree schema import --publish schema.yaml      # import + auto-publish
 
-ccs tenant create --name acme --schema <id> --schema-version 1
-ccs config set <tenant-id> payments.fee 0.5%
-ccs config get-all <tenant-id>
-ccs config versions <tenant-id>
-ccs config rollback <tenant-id> 2
+decree tenant create --name acme --schema <id> --schema-version 1
+decree config set <tenant-id> payments.fee 0.5%
+decree config get-all <tenant-id>
+decree config versions <tenant-id>
+decree config rollback <tenant-id> 2
 
-ccs watch <tenant-id>                          # live stream
-ccs lock set <tenant-id> payments.currency     # lock field
-ccs audit query --tenant <tenant-id> --since 24h
+decree watch <tenant-id>                          # live stream
+decree lock set <tenant-id> payments.currency     # lock field
+decree audit query --tenant <tenant-id> --since 24h
 ```
 
 Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`
@@ -99,8 +98,8 @@ Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`
 ### Docker Compose (local development)
 
 ```bash
-git clone https://github.com/zeevdr/central-config-service.git
-cd central-config-service
+git clone https://github.com/opendecree/decree.git
+cd decree
 
 # Start the full stack (PostgreSQL + Redis + migrations + service)
 docker compose up -d --wait service
@@ -113,23 +112,22 @@ docker compose up -d --wait service
 
 ```bash
 # Set auth identity
-export CCS_SUBJECT=admin@example.com
+export DECREE_SUBJECT=admin@example.com
 
 # Create and publish a schema
-ccs schema import examples/schema.yaml
-ccs schema publish <schema-id> 1
+decree schema import --publish examples/schema.yaml
 
 # Create a tenant and set config
-ccs tenant create --name acme --schema <schema-id> --schema-version 1
-ccs config set <tenant-id> payments.fee "0.5%"
-ccs config get-all <tenant-id>
+decree tenant create --name acme --schema <schema-id> --schema-version 1
+decree config set <tenant-id> payments.fee "0.5%"
+decree config get-all <tenant-id>
 ```
 
 ## Architecture
 
 ```
 ┌──────────┐     gRPC      ┌────────────────────────┐
-│  Clients ├──────────────►│  Central Config Service │
+│  Clients ├──────────────►│  OpenDecree │
 └──────────┘               │                        │
                            │  ┌── SchemaService     │
                            │  ├── ConfigService     │

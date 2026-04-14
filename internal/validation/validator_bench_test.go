@@ -3,7 +3,7 @@ package validation
 import (
 	"testing"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 func ptr64(v float64) *float64 { return &v }

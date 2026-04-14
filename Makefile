@@ -1,8 +1,10 @@
-BINARY_NAME := central-config-service
+BINARY_NAME := decree-server
 BUILD_DIR := bin
 TOOLS_IMAGE := central-config-tools
 TOOLS_SENTINEL := .tools-image-built
 DOCKER_RUN_TOOLS := docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CURDIR):/workspace -w /workspace $(TOOLS_IMAGE)
+MKDOCS_IMAGE := $(MKDOCS_IMAGE):9.7.6
+GOLANGCI_LINT_VERSION := v2.8.0
 
 .PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e bench bench-e2e docs docs-api docs-cli docs-serve docs-deploy clean tools help
 
@@ -42,8 +44,14 @@ lint-proto: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) sh -c 'buf lint && buf breaking --against ".git#branch=main"'
 
 ## build: Build the service binary
+GIT_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+SERVER_LDFLAGS := -X github.com/opendecree/decree/internal/version.Version=$(GIT_VERSION) -X github.com/opendecree/decree/internal/version.Commit=$(GIT_COMMIT)
+CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
+
 build:
-	go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/server
+	go build -ldflags '$(SERVER_LDFLAGS)' -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/server
+	cd cmd/decree && go build -ldflags '$(CLI_LDFLAGS)' -o ../../$(BUILD_DIR)/decree .
 
 ## image: Build the Docker image
 image:
@@ -83,15 +91,15 @@ docs-api: $(TOOLS_SENTINEL)
 
 ## docs-cli: Generate CLI reference markdown
 docs-cli:
-	go build -o $(BUILD_DIR)/ccs ./cmd/ccs && $(BUILD_DIR)/ccs gen-docs docs/cli
+	cd cmd/decree && go build -ldflags '$(CLI_LDFLAGS)' -o ../../$(BUILD_DIR)/decree . && cd ../.. && $(BUILD_DIR)/decree gen-docs docs/cli
 
 ## docs-serve: Local MkDocs preview (Docker) at http://localhost:8000
 docs-serve:
-	docker run --rm -p 8000:8000 -v $(CURDIR):/docs squidfunk/mkdocs-material serve --dev-addr=0.0.0.0:8000
+	docker run --rm -p 8000:8000 -v $(CURDIR):/docs $(MKDOCS_IMAGE) serve --dev-addr=0.0.0.0:8000
 
 ## docs-deploy: Deploy docs to GitHub Pages
 docs-deploy:
-	docker run --rm -v $(CURDIR):/docs squidfunk/mkdocs-material gh-deploy --force
+	docker run --rm -v $(CURDIR):/docs $(MKDOCS_IMAGE) gh-deploy --force
 
 ## clean: Remove build artifacts and generated code
 clean:

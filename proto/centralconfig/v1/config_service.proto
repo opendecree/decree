@@ -267,6 +267,21 @@ message ExportConfigResponse {
   bytes yaml_content = 1;
 }
 
+// ImportMode controls how imported values interact with existing config.
+enum ImportMode {
+  // Unspecified defaults to merge behavior.
+  IMPORT_MODE_UNSPECIFIED = 0;
+  // Merge: update fields from YAML that differ, keep runtime overrides
+  // for fields not in the YAML.
+  IMPORT_MODE_MERGE = 1;
+  // Replace: full replace — all fields from YAML are set, fields not in YAML
+  // are not carried forward. Runtime overrides are wiped.
+  IMPORT_MODE_REPLACE = 2;
+  // Defaults: only set fields that have no value yet. Fields that already have
+  // a value are skipped regardless of the YAML content.
+  IMPORT_MODE_DEFAULTS = 3;
+}
+
 message ImportConfigRequest {
   // Tenant ID (UUID).
   string tenant_id = 1;
@@ -276,6 +291,9 @@ message ImportConfigRequest {
 
   // Description for the new config version created by the import.
   optional string description = 3;
+
+  // Import mode. Defaults to IMPORT_MODE_MERGE.
+  ImportMode mode = 4;
 }
 
 message ImportConfigResponse {

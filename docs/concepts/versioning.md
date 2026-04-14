@@ -42,9 +42,9 @@ This resolution happens automatically -- `GetAllFields` and `GetField` always re
 Every version can include a human-readable description explaining why the change was made:
 
 ```bash
-ccs config set <tenant-id> payments.fee_rate 0.03 --description "Increase fee for Q2"
+decree config set <tenant-id> payments.fee_rate 0.03 --description "Increase fee for Q2"
 
-ccs config set-many <tenant-id> \
+decree config set-many <tenant-id> \
   payments.enabled=true \
   payments.timeout=60s \
   --description "Re-enable payments with longer timeout"
@@ -58,10 +58,10 @@ You can read config at any past version:
 
 ```bash
 # Current config
-ccs config get-all <tenant-id>
+decree config get-all <tenant-id>
 
 # Config as it was at version 2
-ccs config get-all <tenant-id> --version 2
+decree config get-all <tenant-id> --version 2
 ```
 
 In the SDK:
@@ -92,7 +92,7 @@ Without a snapshot, two sequential `Get` calls could return values from differen
 Rolling back restores config to a previous version's state. Rollback does not delete history -- it creates a **new version** with the values from the target version:
 
 ```bash
-ccs config rollback <tenant-id> 2
+decree config rollback <tenant-id> 2
 ```
 
 If the current version is 4, rolling back to version 2 creates version 5 with the same resolved values as version 2. The full history is preserved:
@@ -110,7 +110,7 @@ This means rollback is safe and auditable. You can even roll back a rollback.
 ## Listing Versions
 
 ```bash
-ccs config versions <tenant-id>
+decree config versions <tenant-id>
 ```
 
 The output shows each version's number, description, who created it, and when.
@@ -135,4 +135,4 @@ This prevents lost updates when multiple actors modify the same field concurrent
 - [Tenants](tenants.md) -- schema version pinning per tenant
 - [Subscriptions](subscriptions.md) -- streaming version changes in real time
 - [API Reference](../api/api-reference.md) -- version-related RPCs
-- [CLI -- ccs config](../cli/ccs_config.md) -- version and rollback commands
+- [CLI -- decree config](../cli/decree_config.md) -- version and rollback commands

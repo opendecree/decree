@@ -1,5 +1,5 @@
 // Package adminclient provides an ergonomic Go client for administrative
-// operations on the Central Config Service: schema management, tenant management,
+// operations on the OpenDecree: schema management, tenant management,
 // field locks, audit queries, and config versioning/import/export.
 //
 // For application-runtime config reads and writes, see the configclient package.
@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // Client wraps the generated SchemaService, ConfigService, and AuditService

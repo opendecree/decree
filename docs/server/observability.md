@@ -157,7 +157,7 @@ CCS respects standard OpenTelemetry SDK variables:
 | Variable | Default |
 |----------|---------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4317` |
-| `OTEL_SERVICE_NAME` | `central-config-service` |
+| `OTEL_SERVICE_NAME` | `decree` |
 | `OTEL_RESOURCE_ATTRIBUTES` | -- |
 
 ## Recommended Production Setup

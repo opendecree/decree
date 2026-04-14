@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+// VersionService provides server version information.
+service VersionService {
+  // GetServerVersion returns the server's build version and commit hash.
+  rpc GetServerVersion(GetServerVersionRequest) returns (GetServerVersionResponse);
+}
+
+message GetServerVersionRequest {}
+
+message GetServerVersionResponse {
+  // Semantic version string (e.g. "1.2.3" or "dev").
+  string version = 1;
+
+  // Git commit hash.
+  string commit = 2;
+}

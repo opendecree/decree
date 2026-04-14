@@ -1,4 +1,4 @@
-module github.com/zeevdr/central-config-service/sdk/configwatcher
+module github.com/opendecree/decree/sdk/configwatcher
 
 go 1.24
 
@@ -6,8 +6,8 @@ toolchain go1.24.11
 
 require (
 	github.com/stretchr/testify v1.11.1
-	github.com/zeevdr/central-config-service/api v0.0.0-20260326105448-de2e7e82d90a
-	github.com/zeevdr/central-config-service/sdk/configclient v0.0.0-20260326105448-de2e7e82d90a
+	github.com/opendecree/decree/api v0.0.0-20260329141101-df497cbcb383
+	github.com/opendecree/decree/sdk/configclient v0.0.0-20260329141101-df497cbcb383
 	google.golang.org/grpc v1.79.3
 )
 

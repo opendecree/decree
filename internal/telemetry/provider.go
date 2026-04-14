@@ -13,7 +13,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
-const serviceName = "central-config-service"
+const serviceName = "decree"
 
 // Init initializes OpenTelemetry providers and returns a shutdown function.
 // The shutdown function flushes pending telemetry and releases resources.

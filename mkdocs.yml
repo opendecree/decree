@@ -1,7 +1,7 @@
-site_name: Central Config Service
+site_name: OpenDecree
 site_description: Schema-driven business configuration management
-repo_url: https://github.com/zeevdr/central-config-service
-repo_name: zeevdr/central-config-service
+repo_url: https://github.com/opendecree/decree
+repo_name: opendecree/decree
 
 theme:
   name: material
@@ -46,43 +46,43 @@ nav:
   - API Reference: api/api-reference.md
   - SDKs: sdk.md
   - CLI Reference:
-      - ccs: cli/ccs.md
+      - decree: cli/decree.md
       - Schema:
-          - ccs schema: cli/ccs_schema.md
-          - ccs schema create: cli/ccs_schema_create.md
-          - ccs schema get: cli/ccs_schema_get.md
-          - ccs schema list: cli/ccs_schema_list.md
-          - ccs schema publish: cli/ccs_schema_publish.md
-          - ccs schema delete: cli/ccs_schema_delete.md
-          - ccs schema export: cli/ccs_schema_export.md
-          - ccs schema import: cli/ccs_schema_import.md
+          - ccs schema: cli/decree_schema.md
+          - ccs schema create: cli/decree_schema_create.md
+          - ccs schema get: cli/decree_schema_get.md
+          - ccs schema list: cli/decree_schema_list.md
+          - ccs schema publish: cli/decree_schema_publish.md
+          - ccs schema delete: cli/decree_schema_delete.md
+          - ccs schema export: cli/decree_schema_export.md
+          - ccs schema import: cli/decree_schema_import.md
       - Tenant:
-          - ccs tenant: cli/ccs_tenant.md
-          - ccs tenant create: cli/ccs_tenant_create.md
-          - ccs tenant get: cli/ccs_tenant_get.md
-          - ccs tenant list: cli/ccs_tenant_list.md
-          - ccs tenant delete: cli/ccs_tenant_delete.md
+          - ccs tenant: cli/decree_tenant.md
+          - ccs tenant create: cli/decree_tenant_create.md
+          - ccs tenant get: cli/decree_tenant_get.md
+          - ccs tenant list: cli/decree_tenant_list.md
+          - ccs tenant delete: cli/decree_tenant_delete.md
       - Config:
-          - ccs config: cli/ccs_config.md
-          - ccs config get: cli/ccs_config_get.md
-          - ccs config get-all: cli/ccs_config_get-all.md
-          - ccs config set: cli/ccs_config_set.md
-          - ccs config set-many: cli/ccs_config_set-many.md
-          - ccs config versions: cli/ccs_config_versions.md
-          - ccs config rollback: cli/ccs_config_rollback.md
-          - ccs config export: cli/ccs_config_export.md
-          - ccs config import: cli/ccs_config_import.md
-      - Watch: cli/ccs_watch.md
+          - ccs config: cli/decree_config.md
+          - ccs config get: cli/decree_config_get.md
+          - ccs config get-all: cli/decree_config_get-all.md
+          - ccs config set: cli/decree_config_set.md
+          - ccs config set-many: cli/decree_config_set-many.md
+          - ccs config versions: cli/decree_config_versions.md
+          - ccs config rollback: cli/decree_config_rollback.md
+          - ccs config export: cli/decree_config_export.md
+          - ccs config import: cli/decree_config_import.md
+      - Watch: cli/decree_watch.md
       - Lock:
-          - ccs lock: cli/ccs_lock.md
-          - ccs lock set: cli/ccs_lock_set.md
-          - ccs lock remove: cli/ccs_lock_remove.md
-          - ccs lock list: cli/ccs_lock_list.md
+          - ccs lock: cli/decree_lock.md
+          - ccs lock set: cli/decree_lock_set.md
+          - ccs lock remove: cli/decree_lock_remove.md
+          - ccs lock list: cli/decree_lock_list.md
       - Audit:
-          - ccs audit: cli/ccs_audit.md
-          - ccs audit query: cli/ccs_audit_query.md
-          - ccs audit usage: cli/ccs_audit_usage.md
-          - ccs audit unused: cli/ccs_audit_unused.md
+          - ccs audit: cli/decree_audit.md
+          - ccs audit query: cli/decree_audit_query.md
+          - ccs audit usage: cli/decree_audit_usage.md
+          - ccs audit unused: cli/decree_audit_unused.md
   - Use Cases:
       - Config as Code: usecases/config-as-code.md
   - Server:

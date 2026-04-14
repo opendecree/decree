@@ -3,7 +3,7 @@ package adminclient
 import (
 	"context"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // CreateTenant creates a new tenant assigned to a published schema version.

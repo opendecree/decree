@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/sdk/adminclient"
-	"github.com/zeevdr/central-config-service/sdk/configclient"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 func serviceAddr() string {

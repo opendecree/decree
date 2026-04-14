@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/zeevdr/central-config-service/sdk/adminclient"
-	"github.com/zeevdr/central-config-service/sdk/configclient"
+	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 // benchEnv sets up a schema + tenant for benchmarks and returns cleanup func.

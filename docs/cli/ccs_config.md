@@ -1,8 +1,8 @@
 ---
-title: ccs config
+title: decree config
 ---
 
-## ccs config
+## decree config
 
 Read and write configuration values
 
@@ -27,12 +27,12 @@ Read and write configuration values
 ### SEE ALSO
 
 * [ccs](ccs.md)	 - Central Config Service CLI
-* [ccs config export](ccs_config_export.md)	 - Export config to YAML
-* [ccs config get](ccs_config_get.md)	 - Get a single config value
-* [ccs config get-all](ccs_config_get-all.md)	 - Get all config values for a tenant
-* [ccs config import](ccs_config_import.md)	 - Import config from a YAML file
-* [ccs config rollback](ccs_config_rollback.md)	 - Rollback config to a previous version
-* [ccs config set](ccs_config_set.md)	 - Set a single config value
-* [ccs config set-many](ccs_config_set-many.md)	 - Set multiple config values atomically
-* [ccs config versions](ccs_config_versions.md)	 - List config versions
+* [decree config export](decree_config_export.md)	 - Export config to YAML
+* [decree config get](decree_config_get.md)	 - Get a single config value
+* [decree config get-all](decree_config_get-all.md)	 - Get all config values for a tenant
+* [decree config import](decree_config_import.md)	 - Import config from a YAML file
+* [decree config rollback](decree_config_rollback.md)	 - Rollback config to a previous version
+* [decree config set](decree_config_set.md)	 - Set a single config value
+* [decree config set-many](decree_config_set-many.md)	 - Set multiple config values atomically
+* [decree config versions](decree_config_versions.md)	 - List config versions
 

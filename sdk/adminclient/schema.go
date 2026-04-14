@@ -3,7 +3,7 @@ package adminclient
 import (
 	"context"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // CreateSchema creates a new schema with an initial draft version (v1).
@@ -142,13 +142,21 @@ func (c *Client) ExportSchema(ctx context.Context, id string, version *int32) ([
 // Full-replace semantics: the YAML defines the complete field set.
 // Returns [ErrAlreadyExists] if the imported fields are identical to the latest version.
 // Imported versions are always created as drafts (unpublished).
-func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte) (*Schema, error) {
+// ImportSchema creates a schema (or new version) from YAML content.
+// Full-replace semantics: the YAML defines the complete field set.
+// Returns [ErrAlreadyExists] if the imported fields are identical to the latest version.
+// Imported versions are always created as drafts (unpublished) unless autoPublish is true.
+func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.ImportSchema(c.withAuth(ctx), &pb.ImportSchemaRequest{
+	req := &pb.ImportSchemaRequest{
 		YamlContent: yamlContent,
-	})
+	}
+	if len(autoPublish) > 0 && autoPublish[0] {
+		req.AutoPublish = true
+	}
+	resp, err := c.schema.ImportSchema(c.withAuth(ctx), req)
 	if err != nil {
 		return nil, mapError(err)
 	}

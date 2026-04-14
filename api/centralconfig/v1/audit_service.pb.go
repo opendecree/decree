@@ -556,8 +556,8 @@ const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
 	"\rQueryWriteLog\x12&.centralconfig.v1.QueryWriteLogRequest\x1a'.centralconfig.v1.QueryWriteLogResponse\x12`\n" +
 	"\rGetFieldUsage\x12&.centralconfig.v1.GetFieldUsageRequest\x1a'.centralconfig.v1.GetFieldUsageResponse\x12c\n" +
 	"\x0eGetTenantUsage\x12'.centralconfig.v1.GetTenantUsageRequest\x1a(.centralconfig.v1.GetTenantUsageResponse\x12f\n" +
-	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponseB\xd9\x01\n" +
-	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01ZMgithub.com/zeevdr/central-config-service/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponseB\xc9\x01\n" +
+	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_audit_service_proto_rawDescOnce sync.Once

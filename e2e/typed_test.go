@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zeevdr/central-config-service/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/adminclient"
 )
 
 // --- Typed Values + Null Handling ---

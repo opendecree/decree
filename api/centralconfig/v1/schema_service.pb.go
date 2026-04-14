@@ -1536,10 +1536,13 @@ type ImportSchemaRequest struct {
 	// - If a schema exists and fields differ from latest: creates the next version.
 	// - If a schema exists and fields are identical: returns AlreadyExists error.
 	//
-	// Imported versions are always created as drafts (unpublished).
+	// Imported versions are created as drafts (unpublished) unless auto_publish is true.
 	// The `version` field in the YAML is informational — the server assigns
 	// the next version number automatically.
-	YamlContent   []byte `protobuf:"bytes,1,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
+	YamlContent []byte `protobuf:"bytes,1,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
+	// When true, the imported version is automatically published after creation.
+	// If the schema already exists and fields are identical (AlreadyExists), this has no effect.
+	AutoPublish   bool `protobuf:"varint,2,opt,name=auto_publish,json=autoPublish,proto3" json:"auto_publish,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1579,6 +1582,13 @@ func (x *ImportSchemaRequest) GetYamlContent() []byte {
 		return x.YamlContent
 	}
 	return nil
+}
+
+func (x *ImportSchemaRequest) GetAutoPublish() bool {
+	if x != nil {
+		return x.AutoPublish
+	}
+	return false
 }
 
 type ImportSchemaResponse struct {
@@ -1723,9 +1733,10 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\n" +
 	"\b_version\"9\n" +
 	"\x14ExportSchemaResponse\x12!\n" +
-	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\"8\n" +
+	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\"[\n" +
 	"\x13ImportSchemaRequest\x12!\n" +
-	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\"H\n" +
+	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\x12!\n" +
+	"\fauto_publish\x18\x02 \x01(\bR\vautoPublish\"H\n" +
 	"\x14ImportSchemaResponse\x120\n" +
 	"\x06schema\x18\x01 \x01(\v2\x18.centralconfig.v1.SchemaR\x06schema2\xe4\v\n" +
 	"\rSchemaService\x12]\n" +
@@ -1744,8 +1755,8 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\vUnlockField\x12$.centralconfig.v1.UnlockFieldRequest\x1a%.centralconfig.v1.UnlockFieldResponse\x12c\n" +
 	"\x0eListFieldLocks\x12'.centralconfig.v1.ListFieldLocksRequest\x1a(.centralconfig.v1.ListFieldLocksResponse\x12]\n" +
 	"\fExportSchema\x12%.centralconfig.v1.ExportSchemaRequest\x1a&.centralconfig.v1.ExportSchemaResponse\x12]\n" +
-	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponseB\xda\x01\n" +
-	"\x14com.centralconfig.v1B\x12SchemaServiceProtoP\x01ZMgithub.com/zeevdr/central-config-service/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
+	"\fImportSchema\x12%.centralconfig.v1.ImportSchemaRequest\x1a&.centralconfig.v1.ImportSchemaResponseB\xca\x01\n" +
+	"\x14com.centralconfig.v1B\x12SchemaServiceProtoP\x01Z=github.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
 	file_centralconfig_v1_schema_service_proto_rawDescOnce sync.Once

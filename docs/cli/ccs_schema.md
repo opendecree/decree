@@ -1,8 +1,8 @@
 ---
-title: ccs schema
+title: decree schema
 ---
 
-## ccs schema
+## decree schema
 
 Manage configuration schemas
 
@@ -27,11 +27,11 @@ Manage configuration schemas
 ### SEE ALSO
 
 * [ccs](ccs.md)	 - Central Config Service CLI
-* [ccs schema create](ccs_schema_create.md)	 - Create a new schema from a YAML file
-* [ccs schema delete](ccs_schema_delete.md)	 - Delete a schema and all its versions (cascades to tenants)
-* [ccs schema export](ccs_schema_export.md)	 - Export a schema to YAML
-* [ccs schema get](ccs_schema_get.md)	 - Show a schema
-* [ccs schema import](ccs_schema_import.md)	 - Import a schema from a YAML file
-* [ccs schema list](ccs_schema_list.md)	 - List all schemas
-* [ccs schema publish](ccs_schema_publish.md)	 - Publish a schema version (makes it immutable and assignable to tenants)
+* [decree schema create](decree_schema_create.md)	 - Create a new schema from a YAML file
+* [decree schema delete](decree_schema_delete.md)	 - Delete a schema and all its versions (cascades to tenants)
+* [decree schema export](decree_schema_export.md)	 - Export a schema to YAML
+* [decree schema get](decree_schema_get.md)	 - Show a schema
+* [decree schema import](decree_schema_import.md)	 - Import a schema from a YAML file
+* [decree schema list](decree_schema_list.md)	 - List all schemas
+* [decree schema publish](decree_schema_publish.md)	 - Publish a schema version (makes it immutable and assignable to tenants)
 

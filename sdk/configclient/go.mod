@@ -1,4 +1,4 @@
-module github.com/zeevdr/central-config-service/sdk/configclient
+module github.com/opendecree/decree/sdk/configclient
 
 go 1.24.0
 
@@ -6,7 +6,7 @@ toolchain go1.24.11
 
 require (
 	github.com/stretchr/testify v1.11.1
-	github.com/zeevdr/central-config-service/api v0.0.0-20260326102011-0e791f66ec24
+	github.com/opendecree/decree/api v0.0.0-20260329141101-df497cbcb383
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 )

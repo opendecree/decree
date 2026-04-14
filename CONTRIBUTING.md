@@ -1,4 +1,4 @@
-# Contributing to Central Config Service
+# Contributing to OpenDecree
 
 Thank you for your interest in contributing! This guide covers how to set up your development environment, build, test, and submit changes.
 
@@ -14,8 +14,8 @@ That's it. All other tools (buf, sqlc, goose, protoc plugins) run inside Docker 
 
 ```bash
 # Clone the repository
-git clone https://github.com/zeevdr/central-config-service.git
-cd central-config-service
+git clone https://github.com/opendecree/decree.git
+cd decree
 
 # Generate code from protobuf and SQL specs
 make generate
@@ -137,7 +137,7 @@ make build
 DB_WRITE_URL="postgres://centralconfig:localdev@localhost:5432/centralconfig?sslmode=disable" \
 DB_READ_URL="postgres://centralconfig:localdev@localhost:5432/centralconfig?sslmode=disable" \
 REDIS_URL="redis://localhost:6379" \
-./bin/central-config-service
+./bin/decree
 ```
 
 No JWT setup needed — the service defaults to metadata-based auth. Pass `x-subject` in gRPC metadata.

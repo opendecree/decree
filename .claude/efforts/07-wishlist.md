@@ -8,8 +8,9 @@ Items roughly prioritized. Not committed to — this is a living list of ideas.
 
 ## Infrastructure
 
+- [ ] **Docker images on ghcr.io** — publish server (`ghcr.io/opendecree/decree`) and CLI (`ghcr.io/opendecree/decree`) images. CLI needs its own Dockerfile (distroless). Manual push initially, CI-automated later.
 - [ ] **Helm chart** — Kubernetes deployment with configurable replicas, resource limits, env vars
-- [ ] **CI (GitHub Actions)** — lint, test, build, e2e on PR; image push on merge
+- [ ] **CI (GitHub Actions)** — lint, test, build, e2e on PR; image push on tag/release to ghcr.io
 - [ ] **Usage stats recording** — async batched read tracking (deferred from AuditService)
 
 ## Contrib Integrations
@@ -27,7 +28,7 @@ Items roughly prioritized. Not committed to — this is a living list of ideas.
 
 ## Service Features
 
-- [ ] **Field validation on write** — validate values against schema constraints server-side (currently schema defines constraints but ConfigService doesn't enforce them)
+- [x] ~~**Field validation on write**~~ — done (effort 09)
 - [ ] **Webhook notifications** — HTTP webhook callbacks on config changes (alternative to gRPC streaming)
 - [ ] **Config diffing** — API to diff two config versions and return changed fields
 - [ ] **Schema migration assistant** — tooling to help migrate config values when schema changes
@@ -41,7 +42,6 @@ Items roughly prioritized. Not committed to — this is a living list of ideas.
 
 ## Documentation
 
-- [ ] **godoc site** — hosted godoc for all SDK packages
-- [ ] **API reference** — generated from proto comments
-- [ ] **Getting started guide** — end-to-end tutorial: schema → tenant → config → SDK usage
+- [x] ~~**API reference**~~ — done (protoc-gen-doc, effort 11)
+- [x] ~~**Getting started guide**~~ — done (effort 11)
 - [ ] **Architecture decision records (ADRs)** — formalize key decisions from efforts into ADR format

@@ -14,13 +14,13 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/internal/auth"
-	"github.com/zeevdr/central-config-service/internal/cache"
-	"github.com/zeevdr/central-config-service/internal/pubsub"
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
-	"github.com/zeevdr/central-config-service/internal/telemetry"
-	"github.com/zeevdr/central-config-service/internal/validation"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/cache"
+	"github.com/opendecree/decree/internal/pubsub"
+	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/telemetry"
+	"github.com/opendecree/decree/internal/validation"
 )
 
 const defaultCacheTTL = 5 * time.Minute
@@ -666,6 +666,12 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		return nil, err
 	}
 
+	// Filter values based on import mode.
+	values = s.filterByImportMode(ctx, tenantID, latestVersion, values, req.Mode)
+	if len(values) == 0 {
+		return nil, status.Error(codes.AlreadyExists, "no changes to apply")
+	}
+
 	// Collect old values for audit and change events.
 	type changeRecord struct {
 		fieldPath string
@@ -746,6 +752,51 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	s.metrics.RecordVersion(ctx, req.TenantId, int64(newVersion.Version))
 
 	return &pb.ImportConfigResponse{ConfigVersion: configVersionToProto(newVersion)}, nil
+}
+
+// filterByImportMode filters config values based on the import mode.
+func (s *Service) filterByImportMode(ctx context.Context, tenantID pgtype.UUID, latestVersion int32, values []configValueImport, mode pb.ImportMode) []configValueImport {
+	switch mode {
+	case pb.ImportMode_IMPORT_MODE_REPLACE:
+		// Replace: use all values as-is.
+		return values
+
+	case pb.ImportMode_IMPORT_MODE_DEFAULTS:
+		// Defaults: only include values for fields that have no current value.
+		var filtered []configValueImport
+		for _, v := range values {
+			current := s.getCurrentValue(ctx, tenantID, v.FieldPath, latestVersion)
+			if current == "" {
+				// Check if the field truly has no value (not just empty string).
+				_, err := s.store.GetConfigValueAtVersion(ctx, dbstore.GetConfigValueAtVersionParams{
+					TenantID:  tenantID,
+					FieldPath: v.FieldPath,
+					Version:   latestVersion,
+				})
+				if err != nil {
+					// Field doesn't exist — include it.
+					filtered = append(filtered, v)
+				}
+				// Field exists (even if empty) — skip.
+			}
+			// Field has a non-empty value — skip.
+		}
+		return filtered
+
+	default:
+		// Merge (default): only include values that differ from current.
+		if latestVersion == 0 {
+			return values // No existing config — include all.
+		}
+		var filtered []configValueImport
+		for _, v := range values {
+			current := s.getCurrentValue(ctx, tenantID, v.FieldPath, latestVersion)
+			if current != v.Value {
+				filtered = append(filtered, v)
+			}
+		}
+		return filtered
+	}
 }
 
 // getFieldTypeMap fetches the tenant's schema fields and builds a map of field path to proto FieldType.

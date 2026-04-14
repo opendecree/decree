@@ -1,5 +1,5 @@
 // Package configclient provides an ergonomic Go client for reading and writing
-// configuration values via the Central Config Service gRPC API.
+// configuration values via the OpenDecree gRPC API.
 //
 // This is an application-runtime SDK — for admin operations (schema management,
 // import/export, rollback) see the adminclient package.

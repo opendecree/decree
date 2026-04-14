@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // GRPCInterceptor provides unary and stream interceptors for gRPC.
@@ -53,6 +55,7 @@ func New(cfg Config) (*Server, error) {
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
 	reflection.Register(grpcServer)
+	pb.RegisterVersionServiceServer(grpcServer, &VersionService{})
 
 	return &Server{
 		grpcServer:   grpcServer,

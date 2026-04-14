@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/dbstore"
 )
 
 // PGStore implements Store using PostgreSQL via sqlc-generated queries.

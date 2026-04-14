@@ -113,11 +113,11 @@ TENANT_ID="${TENANT_ID:?TENANT_ID is required}"
 ENV="${ENV:-prod}"
 
 # Sync schema — imports and auto-publishes if changed, skips if unchanged
-ccs schema import --publish config/schema.yaml
+decree schema import --publish config/schema.yaml
 
 # Apply baseline values (merge mode — default)
 # Updates changed values from YAML, preserves runtime overrides for other fields
-ccs config import "$TENANT_ID" "config/values.${ENV}.yaml" \
+decree config import "$TENANT_ID" "config/values.${ENV}.yaml" \
   --description "deploy $(git rev-parse --short HEAD)"
 ```
 
@@ -128,7 +128,7 @@ The `--mode` flag controls how YAML values interact with existing config:
 ### Merge (default)
 
 ```bash
-ccs config import <tenant-id> values.yaml --mode merge
+decree config import <tenant-id> values.yaml --mode merge
 ```
 
 - Fields in YAML that differ from current → **updated**
@@ -141,7 +141,7 @@ Best for: regular deploys where you want git changes to flow through without wip
 ### Replace
 
 ```bash
-ccs config import <tenant-id> values.yaml --mode replace
+decree config import <tenant-id> values.yaml --mode replace
 ```
 
 - All fields from YAML are set (new version with all values)
@@ -153,7 +153,7 @@ Best for: resetting to a known state, disaster recovery, fresh environments.
 ### Defaults
 
 ```bash
-ccs config import <tenant-id> values.yaml --mode defaults
+decree config import <tenant-id> values.yaml --mode defaults
 ```
 
 - Fields with no current value → **set from YAML**
@@ -166,8 +166,8 @@ Best for: first-time bootstrap, adding new fields with initial values without to
 When reading a config value, CCS resolves it in this order:
 
 ```
-Runtime override (ccs config set / SDK)  →  highest priority
-YAML baseline (ccs config import)        →  applied on deploy
+Runtime override (decree config set / SDK)  →  highest priority
+YAML baseline (decree config import)        →  applied on deploy
 Schema default (field default in YAML)   →  used if no value set
 ```
 
@@ -197,9 +197,9 @@ w.Start(ctx)
 Create separate tenants for each environment:
 
 ```bash
-ccs tenant create --name myapp-dev     --schema <id> --schema-version 1
-ccs tenant create --name myapp-staging --schema <id> --schema-version 1
-ccs tenant create --name myapp-prod    --schema <id> --schema-version 1
+decree tenant create --name myapp-dev     --schema <id> --schema-version 1
+decree tenant create --name myapp-staging --schema <id> --schema-version 1
+decree tenant create --name myapp-prod    --schema <id> --schema-version 1
 ```
 
 All share the same schema but have independent config values. Runtime overrides in prod don't affect dev.

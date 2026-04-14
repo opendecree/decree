@@ -69,8 +69,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/zeebo/xxh3 v1.0.2 h1:xZmwmqxHZA8AI603jOQ0tMqmBr9lPeFwGg6d+xy9DC0=
 github.com/zeebo/xxh3 v1.0.2/go.mod h1:5NWz9Sef7zIDm2JHfFlcQvNekmcEl9ekUZQQKCYaDcA=
-github.com/zeevdr/central-config-service/api v0.0.0-20260326103949-f4bc9e9e1e51 h1:qaex5TleeZtDmZNUqt03I0SbM9HE8QQpzkpS3C99VZA=
-github.com/zeevdr/central-config-service/api v0.0.0-20260326103949-f4bc9e9e1e51/go.mod h1:QRewnn86egi10owtBMb6/wyVldqEAvICB2HiK8p57NY=
+github.com/opendecree/decree/api v0.0.0-20260326103949-f4bc9e9e1e51 h1:qaex5TleeZtDmZNUqt03I0SbM9HE8QQpzkpS3C99VZA=
+github.com/opendecree/decree/api v0.0.0-20260326103949-f4bc9e9e1e51/go.mod h1:QRewnn86egi10owtBMb6/wyVldqEAvICB2HiK8p57NY=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0 h1:RN3ifU8y4prNWeEnQp2kRRHz8UwonAEYZl8tUzHEXAk=

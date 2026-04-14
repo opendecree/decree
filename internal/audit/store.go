@@ -3,7 +3,7 @@ package audit
 import (
 	"context"
 
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/dbstore"
 )
 
 // Store defines the data access interface for audit operations.

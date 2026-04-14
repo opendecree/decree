@@ -1,0 +1,56 @@
+name: Main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  images:
+    name: Push bleeding-edge images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: decree
+            dockerfile: build/Dockerfile
+          - image: ccs
+            dockerfile: build/Dockerfile.ccs
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:main
+
+  docs:
+    name: Deploy docs
+    runs-on: ubuntu-latest
+    if: contains(join(github.event.commits.*.modified, ','), 'docs/')
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Deploy to GitHub Pages
+        run: >
+          docker run --rm
+          -v ${{ github.workspace }}:/docs
+          squidfunk/mkdocs-material:9.7.6
+          gh-deploy --force

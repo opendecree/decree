@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide walks you through setting up Central Config Service, creating your first schema and tenant, setting config values, and reading them from a Go application.
+This guide walks you through setting up OpenDecree, creating your first schema and tenant, setting config values, and reading them from a Go application.
 
 ## Prerequisites
 
@@ -10,8 +10,12 @@ This guide walks you through setting up Central Config Service, creating your fi
 ## 1. Start the service
 
 ```bash
-git clone https://github.com/zeevdr/central-config-service.git
+git clone https://github.com/opendecree/decree.git
+<<<<<<< HEAD
+cd decree
+=======
 cd central-config-service
+>>>>>>> origin/main
 
 # Start PostgreSQL, Redis, run migrations, and start the service
 docker compose up -d --wait service
@@ -22,13 +26,13 @@ The gRPC service is now available at `localhost:9090`. No JWT setup needed — t
 ## 2. Install the CLI
 
 ```bash
-go install github.com/zeevdr/central-config-service/cmd/ccs@latest
+go install github.com/opendecree/decree/cmd/ccs@latest
 ```
 
 Set your identity (required for all operations):
 
 ```bash
-export CCS_SUBJECT=admin@example.com
+export DECREE_SUBJECT=admin@example.com
 ```
 
 ## 3. Define a schema
@@ -73,11 +77,15 @@ fields:
 Import and publish it:
 
 ```bash
-# Import creates the schema as a draft (v1)
-ccs schema import payments.yaml
+# Import and auto-publish in one step
+decree schema import --publish payments.yaml
+```
 
-# Note the schema ID from the output, then publish it
-ccs schema publish <schema-id> 1
+Or import as draft first, then publish separately:
+
+```bash
+decree schema import payments.yaml
+decree schema publish <schema-id> 1
 ```
 
 Only published schema versions can be assigned to tenants.
@@ -87,7 +95,7 @@ Only published schema versions can be assigned to tenants.
 A tenant is a consumer of configuration — an organization, environment, or service instance bound to a schema version:
 
 ```bash
-ccs tenant create --name acme --schema <schema-id> --schema-version 1
+decree tenant create --name acme --schema <schema-id> --schema-version 1
 ```
 
 Note the tenant ID from the output — you'll use it for all config operations.
@@ -96,14 +104,14 @@ Note the tenant ID from the output — you'll use it for all config operations.
 
 ```bash
 # Set individual values
-ccs config set <tenant-id> payments.enabled true
-ccs config set <tenant-id> payments.fee_rate 0.025
-ccs config set <tenant-id> payments.currency USD
-ccs config set <tenant-id> payments.max_retries 3
-ccs config set <tenant-id> payments.timeout 30s
+decree config set <tenant-id> payments.enabled true
+decree config set <tenant-id> payments.fee_rate 0.025
+decree config set <tenant-id> payments.currency USD
+decree config set <tenant-id> payments.max_retries 3
+decree config set <tenant-id> payments.timeout 30s
 
 # Or set multiple values at once
-ccs config set-many <tenant-id> \
+decree config set-many <tenant-id> \
   payments.enabled=true \
   payments.fee_rate=0.025 \
   payments.currency=USD \
@@ -113,7 +121,7 @@ ccs config set-many <tenant-id> \
 Read them back:
 
 ```bash
-ccs config get-all <tenant-id>
+decree config get-all <tenant-id>
 ```
 
 ## 6. Read config from Go
@@ -121,7 +129,7 @@ ccs config get-all <tenant-id>
 Install the SDK:
 
 ```bash
-go get github.com/zeevdr/central-config-service/sdk/configclient@latest
+go get github.com/opendecree/decree/sdk/configclient@latest
 ```
 
 Read configuration values with typed getters:
@@ -137,8 +145,8 @@ import (
     "google.golang.org/grpc"
     "google.golang.org/grpc/credentials/insecure"
 
-    pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-    "github.com/zeevdr/central-config-service/sdk/configclient"
+    pb "github.com/opendecree/decree/api/centralconfig/v1"
+    "github.com/opendecree/decree/sdk/configclient"
 )
 
 func main() {
@@ -194,11 +202,11 @@ currency, _ := snap.Get(ctx, "payments.currency")
 For long-running services that need to react to config changes in real-time, use the configwatcher SDK:
 
 ```bash
-go get github.com/zeevdr/central-config-service/sdk/configwatcher@latest
+go get github.com/opendecree/decree/sdk/configwatcher@latest
 ```
 
 ```go
-import "github.com/zeevdr/central-config-service/sdk/configwatcher"
+import "github.com/opendecree/decree/sdk/configwatcher"
 
 // Register typed fields with defaults
 w := configwatcher.New(conn, tenantID,
@@ -229,10 +237,10 @@ Every config change creates a new version. You can list versions and rollback:
 
 ```bash
 # List versions
-ccs config versions <tenant-id>
+decree config versions <tenant-id>
 
 # Rollback to version 1
-ccs config rollback <tenant-id> 1
+decree config rollback <tenant-id> 1
 ```
 
 ## 10. Export and import
@@ -241,10 +249,10 @@ Export your config for backup, review, or migration between environments:
 
 ```bash
 # Export config as YAML
-ccs config export <tenant-id> > config-backup.yaml
+decree config export <tenant-id> > config-backup.yaml
 
 # Import into another tenant or environment
-ccs config import <other-tenant-id> config-backup.yaml
+decree config import <other-tenant-id> config-backup.yaml
 ```
 
 ## What's next?
@@ -252,5 +260,5 @@ ccs config import <other-tenant-id> config-backup.yaml
 - [Concepts](concepts/overview.md) — understand schemas, tenants, typed values, and versioning in depth
 - [API Reference](api/api-reference.md) — full gRPC service and message definitions
 - [SDKs](sdk.md) — configclient, adminclient, and configwatcher documentation
-- [CLI Reference](cli/ccs.md) — all `ccs` commands
+- [CLI Reference](cli/ccs.md) — all `decree` commands
 - [Server Configuration](server/configuration.md) — environment variables and deployment

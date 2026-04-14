@@ -19,9 +19,9 @@ When `x-role` is omitted, the request defaults to `superadmin`. This makes local
 With the CLI:
 
 ```bash
-export CCS_SUBJECT=admin@example.com    # x-subject
-export CCS_ROLE=admin                   # x-role (optional)
-export CCS_TENANT=<tenant-id>           # x-tenant-id (optional)
+export DECREE_SUBJECT=admin@example.com    # x-subject
+export DECREE_ROLE=admin                   # x-role (optional)
+export DECREE_TENANT=<tenant-id>           # x-tenant-id (optional)
 ```
 
 ### JWT (Opt-in)
@@ -57,13 +57,13 @@ Field locks prevent specific config fields from being modified by non-superadmin
 
 ```bash
 # Lock a field — only superadmin can change it
-ccs lock set <tenant-id> payments.currency
+decree lock set <tenant-id> payments.currency
 
 # Unlock it
-ccs lock remove <tenant-id> payments.currency
+decree lock remove <tenant-id> payments.currency
 
 # List all locks for a tenant
-ccs lock list <tenant-id>
+decree lock list <tenant-id>
 ```
 
 When an `admin` tries to write to a locked field, the server returns a `PermissionDenied` error. Superadmins bypass all field locks.
@@ -74,7 +74,7 @@ For enum fields, you can lock specific values rather than the entire field:
 
 ```bash
 # Lock specific enum values — admin cannot set currency to GBP or JPY
-ccs lock set <tenant-id> payments.currency --values GBP,JPY
+decree lock set <tenant-id> payments.currency --values GBP,JPY
 ```
 
 The admin can still change the field to other allowed enum values (e.g., USD, EUR) but cannot select locked values.
@@ -86,8 +86,12 @@ The admin can still change the field to other allowed enum values (e.g., USD, EU
 No configuration needed. Metadata auth is the default:
 
 ```bash
+<<<<<<< HEAD
+export DECREE_SUBJECT=dev@example.com
+=======
 export CCS_SUBJECT=dev@example.com
-ccs config get-all <tenant-id>
+>>>>>>> origin/main
+decree config get-all <tenant-id>
 ```
 
 ### For Staging / Internal Services

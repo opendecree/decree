@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/zeevdr/central-config-service/internal/pubsub"
+	"github.com/opendecree/decree/internal/pubsub"
 )
 
 // mockCache implements cache.ConfigCache for testing.

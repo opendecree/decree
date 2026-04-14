@@ -1,10 +1,10 @@
-# Central Config Service
+# OpenDecree
 
 **Schema-driven business configuration management for multi-tenant services.**
 
 ## What is this?
 
-Central Config Service manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
+OpenDecree manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
 
 ### How is this different?
 
@@ -14,7 +14,7 @@ Central Config Service manages **business-oriented configuration** — approval 
 | **Infra config** | etcd, Consul, Spring Cloud Config | Low-level KV stores — no typed schemas, validation, or multi-tenancy |
 | **Cloud config** | AWS AppConfig, Azure App Config | Some validation, but vendor-locked, no schema registry, no gRPC streaming |
 
-**Central Config Service** is the first open-source tool to combine:
+**OpenDecree** is the first open-source tool to combine:
 
 - **Schema-first design** — define your config structure, types, and constraints before setting values
 - **Native typed values** — integer, number, string, bool, timestamp, duration, url, json at the wire level
@@ -31,5 +31,5 @@ Central Config Service manages **business-oriented configuration** — approval 
 - [Concepts](concepts/overview.md) — understand the mental model
 - [API Reference](api/api-reference.md) — gRPC service and message definitions
 - [SDKs](sdk.md) — Go client libraries
-- [CLI Reference](cli/ccs.md) — `ccs` command-line tool
+- [CLI Reference](cli/ccs.md) — `decree` command-line tool
 - [Server Operations](server/configuration.md) — deployment and configuration

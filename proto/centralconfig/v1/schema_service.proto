@@ -281,10 +281,14 @@ message ImportSchemaRequest {
   // - If a schema exists and fields differ from latest: creates the next version.
   // - If a schema exists and fields are identical: returns AlreadyExists error.
   //
-  // Imported versions are always created as drafts (unpublished).
+  // Imported versions are created as drafts (unpublished) unless auto_publish is true.
   // The `version` field in the YAML is informational — the server assigns
   // the next version number automatically.
   bytes yaml_content = 1;
+
+  // When true, the imported version is automatically published after creation.
+  // If the schema already exists and fields are identical (AlreadyExists), this has no effect.
+  bool auto_publish = 2;
 }
 
 message ImportSchemaResponse {

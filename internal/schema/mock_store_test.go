@@ -6,7 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/storage/dbstore"
 )
 
 type mockStore struct {

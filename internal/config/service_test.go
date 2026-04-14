@@ -14,10 +14,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
-	"github.com/zeevdr/central-config-service/internal/auth"
-	"github.com/zeevdr/central-config-service/internal/storage/dbstore"
-	"github.com/zeevdr/central-config-service/internal/validation"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/storage/dbstore"
+	"github.com/opendecree/decree/internal/validation"
 )
 
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -452,4 +452,133 @@ values:
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Contains(t, err.Error(), "maximum")
+}
+
+// --- ImportConfig modes ---
+
+func TestImportConfig_MergeMode_SkipsSameValues(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := context.Background()
+
+	tenantID := testUUID(1)
+	tenantIDStr := uuidToString(tenantID)
+	schemaID := testUUID(10)
+	schemaVersionID := testUUID(11)
+	newVersionID := testUUID(20)
+
+	yamlContent := []byte(`
+syntax: "v1"
+values:
+  app.name:
+    value: "same"
+  app.other:
+    value: "changed"
+`)
+
+	store.On("GetTenantByID", ctx, tenantID).
+		Return(dbstore.Tenant{SchemaID: schemaID, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, dbstore.GetSchemaVersionParams{SchemaID: schemaID, Version: 1}).
+		Return(dbstore.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]dbstore.SchemaField{
+			{Path: "app.name", FieldType: dbstore.FieldTypeString},
+			{Path: "app.other", FieldType: dbstore.FieldTypeString},
+		}, nil)
+	store.On("GetFieldLocks", ctx, tenantID).
+		Return([]dbstore.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID).
+		Return(dbstore.ConfigVersion{Version: 1}, nil)
+
+	// app.name has same value → should be skipped in merge mode
+	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p dbstore.GetConfigValueAtVersionParams) bool {
+		return p.FieldPath == "app.name"
+	})).Return(dbstore.GetConfigValueAtVersionRow{Value: strPtr("same")}, nil)
+
+	// app.other has different value → should be included
+	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p dbstore.GetConfigValueAtVersionParams) bool {
+		return p.FieldPath == "app.other"
+	})).Return(dbstore.GetConfigValueAtVersionRow{Value: strPtr("old")}, nil)
+
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("dbstore.CreateConfigVersionParams")).
+		Return(dbstore.ConfigVersion{ID: newVersionID, TenantID: tenantID, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("dbstore.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("dbstore.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", ctx, tenantIDStr).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	resp, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantIDStr,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_MERGE,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), resp.ConfigVersion.Version)
+	// Only app.other should be set (app.name skipped — same value)
+	store.AssertNumberOfCalls(t, "SetConfigValue", 1)
+}
+
+func TestImportConfig_DefaultsMode_SkipsExistingValues(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := context.Background()
+
+	tenantID := testUUID(1)
+	tenantIDStr := uuidToString(tenantID)
+	schemaID := testUUID(10)
+	schemaVersionID := testUUID(11)
+
+	yamlContent := []byte(`
+syntax: "v1"
+values:
+  app.existing:
+    value: "new-from-yaml"
+  app.missing:
+    value: "default-value"
+`)
+
+	store.On("GetTenantByID", ctx, tenantID).
+		Return(dbstore.Tenant{SchemaID: schemaID, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, dbstore.GetSchemaVersionParams{SchemaID: schemaID, Version: 1}).
+		Return(dbstore.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]dbstore.SchemaField{
+			{Path: "app.existing", FieldType: dbstore.FieldTypeString},
+			{Path: "app.missing", FieldType: dbstore.FieldTypeString},
+		}, nil)
+	store.On("GetFieldLocks", ctx, tenantID).
+		Return([]dbstore.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID).
+		Return(dbstore.ConfigVersion{Version: 1}, nil)
+
+	// app.existing has a value → should be skipped in defaults mode
+	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p dbstore.GetConfigValueAtVersionParams) bool {
+		return p.FieldPath == "app.existing"
+	})).Return(dbstore.GetConfigValueAtVersionRow{Value: strPtr("already-set")}, nil)
+
+	// app.missing has no value → should be included
+	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p dbstore.GetConfigValueAtVersionParams) bool {
+		return p.FieldPath == "app.missing"
+	})).Return(dbstore.GetConfigValueAtVersionRow{}, pgx.ErrNoRows)
+
+	newVersionID := testUUID(20)
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("dbstore.CreateConfigVersionParams")).
+		Return(dbstore.ConfigVersion{ID: newVersionID, TenantID: tenantID, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("dbstore.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("dbstore.InsertAuditWriteLogParams")).Return(nil)
+	cache := &mockCache{}
+	pub := &mockPublisher{}
+	svc.cache = cache
+	svc.publisher = pub
+	cache.On("Invalidate", ctx, tenantIDStr).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantIDStr,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_DEFAULTS,
+	})
+
+	require.NoError(t, err)
+	// Only app.missing should be set
+	store.AssertNumberOfCalls(t, "SetConfigValue", 1)
 }

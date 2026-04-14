@@ -73,7 +73,7 @@ CCS respects standard OpenTelemetry SDK environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP exporter endpoint. | `http://localhost:4317` |
-| `OTEL_SERVICE_NAME` | Service name reported in traces and metrics. | `central-config-service` |
+| `OTEL_SERVICE_NAME` | Service name reported in traces and metrics. | `decree` |
 | `OTEL_RESOURCE_ATTRIBUTES` | Additional resource attributes (e.g., `deployment.environment=prod`). | -- |
 
 See [Observability](observability.md) for setup instructions and trace viewing.

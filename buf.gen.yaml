@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/zeevdr/central-config-service/api
+      value: github.com/opendecree/decree/api
 plugins:
   - local: protoc-gen-go
     out: api

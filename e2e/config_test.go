@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/zeevdr/central-config-service/sdk/adminclient"
-	"github.com/zeevdr/central-config-service/sdk/configclient"
+	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 // --- Full Flow: Schema → Tenant → Config → Audit (adminclient + configclient) ---

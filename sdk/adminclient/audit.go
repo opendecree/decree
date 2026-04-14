@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	pb "github.com/zeevdr/central-config-service/api/centralconfig/v1"
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // AuditFilter configures which audit entries to retrieve.
