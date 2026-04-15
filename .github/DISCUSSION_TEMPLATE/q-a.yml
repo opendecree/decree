@@ -1,0 +1,34 @@
+title: "[Q&A] "
+labels: []
+body:
+  - type: checkboxes
+    attributes:
+      label: Before posting
+      options:
+        - label: I searched existing discussions and issues
+          required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do you need help with?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Server
+        - CLI
+        - Go SDK
+        - Python SDK
+        - TypeScript SDK
+        - Admin GUI
+        - Deployment
+        - Other
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Environment details, what you've tried, relevant config or code snippets.
