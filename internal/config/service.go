@@ -94,7 +94,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 
 	// If descriptions not requested, try cache.
 	if !req.IncludeDescriptions {
-		if cached, err := s.cache.Get(ctx, req.TenantId, version); err == nil && cached != nil {
+		if cached, err := s.cache.Get(ctx, tenantID, version); err == nil && cached != nil {
 			s.cacheMetrics.Hit(ctx)
 			values := make([]*pb.ConfigValue, 0, len(cached))
 			for path, val := range cached {
@@ -106,7 +106,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 				})
 			}
 			return &pb.GetConfigResponse{
-				Config: &pb.Config{TenantId: req.TenantId, Version: version, Values: values},
+				Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
 			}, nil
 		}
 		s.cacheMetrics.Miss(ctx)
@@ -138,13 +138,13 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 
 	// Populate cache (values only, no descriptions).
 	if !req.IncludeDescriptions {
-		if err := s.cache.Set(ctx, req.TenantId, version, cacheMap, defaultCacheTTL); err != nil {
+		if err := s.cache.Set(ctx, tenantID, version, cacheMap, defaultCacheTTL); err != nil {
 			s.logger.WarnContext(ctx, "failed to populate cache", "error", err)
 		}
 	}
 
 	return &pb.GetConfigResponse{
-		Config: &pb.Config{TenantId: req.TenantId, Version: version, Values: values},
+		Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
 	}, nil
 }
 
@@ -320,13 +320,13 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	}
 
 	// Post-transaction side effects.
-	if err := s.cache.Invalidate(ctx, req.TenantId); err != nil {
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
-	s.publishChange(ctx, req.TenantId, newVersion.Version, req.FieldPath, oldValue, typedValueToDisplayString(req.Value), actor)
+	s.publishChange(ctx, tenantID, newVersion.Version, req.FieldPath, oldValue, typedValueToDisplayString(req.Value), actor)
 
-	s.metrics.RecordWrite(ctx, req.TenantId, "set_field")
-	s.metrics.RecordVersion(ctx, req.TenantId, int64(newVersion.Version))
+	s.metrics.RecordWrite(ctx, tenantID, "set_field")
+	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
 
 	return &pb.SetFieldResponse{ConfigVersion: configVersionToProto(newVersion)}, nil
 }
@@ -430,15 +430,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	}
 
 	// Post-transaction side effects.
-	if err := s.cache.Invalidate(ctx, req.TenantId); err != nil {
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
 	for _, ch := range changes {
-		s.publishChange(ctx, req.TenantId, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
+		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
 	}
 
-	s.metrics.RecordWrite(ctx, req.TenantId, "set_fields")
-	s.metrics.RecordVersion(ctx, req.TenantId, int64(newVersion.Version))
+	s.metrics.RecordWrite(ctx, tenantID, "set_fields")
+	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
 
 	return &pb.SetFieldsResponse{ConfigVersion: configVersionToProto(newVersion)}, nil
 }
@@ -592,12 +592,12 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	}
 
 	// Post-transaction side effects.
-	if err := s.cache.Invalidate(ctx, req.TenantId); err != nil {
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
 
-	s.metrics.RecordWrite(ctx, req.TenantId, "rollback")
-	s.metrics.RecordVersion(ctx, req.TenantId, int64(newVersion.Version))
+	s.metrics.RecordWrite(ctx, tenantID, "rollback")
+	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
 
 	return &pb.RollbackToVersionResponse{ConfigVersion: configVersionToProto(newVersion)}, nil
 }
@@ -865,15 +865,15 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	}
 
 	// Post-transaction side effects.
-	if err := s.cache.Invalidate(ctx, req.TenantId); err != nil {
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
 	for _, ch := range changes {
-		s.publishChange(ctx, req.TenantId, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
+		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
 	}
 
-	s.metrics.RecordWrite(ctx, req.TenantId, "import")
-	s.metrics.RecordVersion(ctx, req.TenantId, int64(newVersion.Version))
+	s.metrics.RecordWrite(ctx, tenantID, "import")
+	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
 
 	return &pb.ImportConfigResponse{ConfigVersion: configVersionToProto(newVersion)}, nil
 }
