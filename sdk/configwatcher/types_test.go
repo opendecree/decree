@@ -1,10 +1,10 @@
 package configwatcher
 
 import (
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -33,7 +33,9 @@ func TestTypedValueToString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, typedValueToString(tt.input))
+			if got := typedValueToString(tt.input); got != tt.expected {
+				t.Errorf("got %v, want %v", got, tt.expected)
+			}
 		})
 	}
 }
@@ -42,57 +44,87 @@ func TestTypedValueToString_Time(t *testing.T) {
 	ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
 	tv := &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}}
 	result := typedValueToString(tv)
-	assert.Contains(t, result, "2026-03-30")
+	if !strings.Contains(result, "2026-03-30") {
+		t.Errorf("expected %q to contain %q", result, "2026-03-30")
+	}
 }
 
 func TestParseFunctions(t *testing.T) {
 	t.Run("parseString", func(t *testing.T) {
 		v, err := parseString("hello")
-		assert.NoError(t, err)
-		assert.Equal(t, "hello", v)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := v; got != "hello" {
+			t.Errorf("got %v, want %v", got, "hello")
+		}
 	})
 
 	t.Run("parseInt valid", func(t *testing.T) {
 		v, err := parseInt("42")
-		assert.NoError(t, err)
-		assert.Equal(t, int64(42), v)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := v; got != int64(42) {
+			t.Errorf("got %v, want %v", got, int64(42))
+		}
 	})
 
 	t.Run("parseInt invalid", func(t *testing.T) {
 		_, err := parseInt("abc")
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 
 	t.Run("parseFloat valid", func(t *testing.T) {
 		v, err := parseFloat("3.14")
-		assert.NoError(t, err)
-		assert.Equal(t, 3.14, v)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := v; got != 3.14 {
+			t.Errorf("got %v, want %v", got, 3.14)
+		}
 	})
 
 	t.Run("parseFloat invalid", func(t *testing.T) {
 		_, err := parseFloat("abc")
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 
 	t.Run("parseBool valid", func(t *testing.T) {
 		v, err := parseBool("true")
-		assert.NoError(t, err)
-		assert.True(t, v)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !v {
+			t.Error("expected true, got false")
+		}
 	})
 
 	t.Run("parseBool invalid", func(t *testing.T) {
 		_, err := parseBool("maybe")
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 
 	t.Run("parseDuration valid", func(t *testing.T) {
 		v, err := parseDuration("5m30s")
-		assert.NoError(t, err)
-		assert.Equal(t, 5*time.Minute+30*time.Second, v)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := v; got != 5*time.Minute+30*time.Second {
+			t.Errorf("got %v, want %v", got, 5*time.Minute+30*time.Second)
+		}
 	})
 
 	t.Run("parseDuration invalid", func(t *testing.T) {
 		_, err := parseDuration("nope")
-		assert.Error(t, err)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
 	})
 }

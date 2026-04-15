@@ -2,12 +2,10 @@ package main
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // --- Command structure ---
@@ -19,7 +17,9 @@ func TestRootCommand_HasAllSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing subcommand: %s", exp)
+		}
 	}
 }
 
@@ -30,7 +30,9 @@ func TestSchemaCommand_HasSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing schema subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing schema subcommand: %s", exp)
+		}
 	}
 }
 
@@ -41,7 +43,9 @@ func TestConfigCommand_HasSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing config subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing config subcommand: %s", exp)
+		}
 	}
 }
 
@@ -52,7 +56,9 @@ func TestTenantCommand_HasSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing tenant subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing tenant subcommand: %s", exp)
+		}
 	}
 }
 
@@ -63,7 +69,9 @@ func TestLockCommand_HasSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing lock subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing lock subcommand: %s", exp)
+		}
 	}
 }
 
@@ -74,7 +82,9 @@ func TestAuditCommand_HasSubcommands(t *testing.T) {
 		names = append(names, cmd.Name())
 	}
 	for _, exp := range expected {
-		assert.Contains(t, names, exp, "missing audit subcommand: %s", exp)
+		if !slices.Contains(names, exp) {
+			t.Errorf("missing audit subcommand: %s", exp)
+		}
 	}
 }
 
@@ -83,29 +93,45 @@ func TestAuditCommand_HasSubcommands(t *testing.T) {
 func TestSchemaGet_RequiresSchemaID(t *testing.T) {
 	rootCmd.SetArgs([]string{"schema", "get"})
 	err := rootCmd.Execute()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "accepts 1 arg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "accepts 1 arg") {
+		t.Errorf("expected error to contain %q, got %q", "accepts 1 arg", err.Error())
+	}
 }
 
 func TestConfigGet_RequiresTenantAndField(t *testing.T) {
 	rootCmd.SetArgs([]string{"config", "get", "only-one-arg"})
 	err := rootCmd.Execute()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "accepts 2 arg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "accepts 2 arg") {
+		t.Errorf("expected error to contain %q, got %q", "accepts 2 arg", err.Error())
+	}
 }
 
 func TestConfigSet_RequiresThreeArgs(t *testing.T) {
 	rootCmd.SetArgs([]string{"config", "set", "tenant", "field"})
 	err := rootCmd.Execute()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "accepts 3 arg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "accepts 3 arg") {
+		t.Errorf("expected error to contain %q, got %q", "accepts 3 arg", err.Error())
+	}
 }
 
 func TestWatch_RequiresTenantID(t *testing.T) {
 	rootCmd.SetArgs([]string{"watch"})
 	err := rootCmd.Execute()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "requires at least 1 arg")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires at least 1 arg") {
+		t.Errorf("expected error to contain %q, got %q", "requires at least 1 arg", err.Error())
+	}
 }
 
 // --- Output formatting ---
@@ -118,55 +144,85 @@ func TestPrintTable(t *testing.T) {
 		[]string{"settlement", "1"},
 	)
 	err := printTable(&buf, rows)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	output := buf.String()
-	assert.Contains(t, output, "NAME")
-	assert.Contains(t, output, "payments")
-	assert.Contains(t, output, "settlement")
+	if !strings.Contains(output, "NAME") {
+		t.Errorf("expected output to contain %q", "NAME")
+	}
+	if !strings.Contains(output, "payments") {
+		t.Errorf("expected output to contain %q", "payments")
+	}
+	if !strings.Contains(output, "settlement") {
+		t.Errorf("expected output to contain %q", "settlement")
+	}
 	// Should have separator line.
 	lines := strings.Split(output, "\n")
-	assert.GreaterOrEqual(t, len(lines), 4) // header + sep + 2 rows
+	if len(lines) < 4 {
+		t.Errorf("got len %d, want >= %v", len(lines), 4)
+	}
 }
 
 func TestPrintJSON(t *testing.T) {
 	var buf bytes.Buffer
 	data := map[string]string{"key": "value"}
 	err := printJSON(&buf, data)
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), `"key": "value"`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"key": "value"`) {
+		t.Errorf("expected %q to contain %q", buf.String(), `"key": "value"`)
+	}
 }
 
 func TestPrintYAML(t *testing.T) {
 	var buf bytes.Buffer
 	data := map[string]string{"key": "value"}
 	err := printYAML(&buf, data)
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "key: value")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "key: value") {
+		t.Errorf("expected %q to contain %q", buf.String(), "key: value")
+	}
 }
 
 func TestTableRows_Empty(t *testing.T) {
 	rows := tableRows([]string{"A", "B"})
-	assert.Len(t, rows, 1) // just headers
+	if len(rows) != 1 {
+		t.Errorf("got len %d, want %d", len(rows), 1)
+	}
 }
 
 // --- Helpers ---
 
 func TestParseDuration_Standard(t *testing.T) {
 	d, err := parseDuration("24h")
-	require.NoError(t, err)
-	assert.Equal(t, 24*time.Hour, d)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := d; got != 24*time.Hour {
+		t.Errorf("got %v, want %v", got, 24*time.Hour)
+	}
 }
 
 func TestParseDuration_Days(t *testing.T) {
 	d, err := parseDuration("7d")
-	require.NoError(t, err)
-	assert.Equal(t, 7*24*time.Hour, d)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := d; got != 7*24*time.Hour {
+		t.Errorf("got %v, want %v", got, 7*24*time.Hour)
+	}
 }
 
 func TestParseDuration_Invalid(t *testing.T) {
 	_, err := parseDuration("abc")
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
 }
 
 // --- Completions ---
@@ -186,8 +242,12 @@ func TestCompletionScripts(t *testing.T) {
 			case "powershell":
 				err = rootCmd.GenPowerShellCompletion(&buf)
 			}
-			require.NoError(t, err)
-			assert.NotEmpty(t, buf.String())
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(buf.String()) == 0 {
+				t.Error("expected non-empty completion output")
+			}
 		})
 	}
 }

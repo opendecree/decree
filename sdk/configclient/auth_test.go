@@ -2,36 +2,45 @@ package configclient
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
 func TestWithSubject(t *testing.T) {
 	c := New(nil, WithSubject("alice"))
-	assert.Equal(t, "alice", c.opts.subject)
+	if got := c.opts.subject; got != "alice" {
+		t.Errorf("got %v, want %v", got, "alice")
+	}
 }
 
 func TestWithRole(t *testing.T) {
 	c := New(nil, WithRole("admin"))
-	assert.Equal(t, "admin", c.opts.role)
+	if got := c.opts.role; got != "admin" {
+		t.Errorf("got %v, want %v", got, "admin")
+	}
 }
 
 func TestWithRole_Default(t *testing.T) {
 	c := New(nil)
-	assert.Equal(t, "superadmin", c.opts.role)
+	if got := c.opts.role; got != "superadmin" {
+		t.Errorf("got %v, want %v", got, "superadmin")
+	}
 }
 
 func TestWithTenantID(t *testing.T) {
 	c := New(nil, WithTenantID("t1"))
-	assert.Equal(t, "t1", c.opts.tenantID)
+	if got := c.opts.tenantID; got != "t1" {
+		t.Errorf("got %v, want %v", got, "t1")
+	}
 }
 
 func TestWithBearerToken(t *testing.T) {
 	c := New(nil, WithBearerToken("jwt-token"))
-	assert.Equal(t, "jwt-token", c.opts.bearerToken)
+	if got := c.opts.bearerToken; got != "jwt-token" {
+		t.Errorf("got %v, want %v", got, "jwt-token")
+	}
 }
 
 func TestWithAuth_MetadataHeaders(t *testing.T) {
@@ -39,10 +48,18 @@ func TestWithAuth_MetadataHeaders(t *testing.T) {
 	ctx := c.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"alice"}, md.Get("x-subject"))
-	assert.Equal(t, []string{"admin"}, md.Get("x-role"))
-	assert.Equal(t, []string{"t1"}, md.Get("x-tenant-id"))
+	if !ok {
+		t.Fatal("expected outgoing metadata to be present")
+	}
+	if got, want := md.Get("x-subject"), []string{"alice"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if got, want := md.Get("x-role"), []string{"admin"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if got, want := md.Get("x-tenant-id"), []string{"t1"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
 }
 
 func TestWithAuth_BearerTokenOverridesMetadata(t *testing.T) {
@@ -50,9 +67,15 @@ func TestWithAuth_BearerTokenOverridesMetadata(t *testing.T) {
 	ctx := c.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"Bearer jwt-token"}, md.Get("authorization"))
-	assert.Empty(t, md.Get("x-subject"), "metadata headers should not be set when bearer token is used")
+	if !ok {
+		t.Fatal("expected outgoing metadata to be present")
+	}
+	if got, want := md.Get("authorization"), []string{"Bearer jwt-token"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if got := md.Get("x-subject"); len(got) != 0 {
+		t.Errorf("expected empty x-subject when bearer token is used, got %v", got)
+	}
 }
 
 func TestWithAuth_NoOptions(t *testing.T) {
@@ -62,5 +85,7 @@ func TestWithAuth_NoOptions(t *testing.T) {
 	ctx := c.withAuth(context.Background())
 
 	_, ok := metadata.FromOutgoingContext(ctx)
-	assert.False(t, ok, "no metadata should be set when all options are empty")
+	if ok {
+		t.Error("expected no metadata when all options are empty")
+	}
 }
