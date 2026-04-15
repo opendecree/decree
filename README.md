@@ -340,6 +340,10 @@ Coverage badges reflect **business logic only** — infrastructure wrappers that
 
 Run `./scripts/coverage.sh` to calculate the server coverage, or `./scripts/coverage.sh -v` for a per-function breakdown.
 
+## Demos
+
+Want to see OpenDecree in action without reading docs? The [demos repo](https://github.com/opendecree/demos) has self-contained, runnable examples — from a 5-minute quickstart to production patterns. Each demo runs with a single `docker compose up`.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, build instructions, and contribution guidelines.
