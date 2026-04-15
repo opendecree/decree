@@ -40,6 +40,26 @@ func (s *Service) resolveTenant(ctx context.Context, idOrName string) (domain.Te
 	return s.store.GetTenantByName(ctx, idOrName)
 }
 
+// resolveTenantWithAccess resolves a tenant by UUID or slug, then checks
+// that the caller has access to it. Returns the resolved tenant or a gRPC
+// status error. Use this at the top of any tenant-scoped RPC handler.
+func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) (domain.Tenant, error) {
+	if idOrName == "" {
+		return domain.Tenant{}, status.Error(codes.InvalidArgument, "tenant id or name required")
+	}
+	tenant, err := s.resolveTenant(ctx, idOrName)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.Tenant{}, status.Error(codes.NotFound, "tenant not found")
+		}
+		return domain.Tenant{}, status.Error(codes.Internal, "failed to resolve tenant")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
+		return domain.Tenant{}, err
+	}
+	return tenant, nil
+}
+
 func containsStr(slice []string, s string) bool {
 	for _, v := range slice {
 		if v == s {
@@ -353,25 +373,11 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 }
 
 func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.GetTenantResponse, error) {
-	if req.Id == "" {
-		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-	}
-
-	// Resolve slug to UUID first — access checks require the canonical UUID.
-	tenant, err := s.resolveTenant(ctx, req.Id)
+	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get tenant")
-	}
-	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
-
-	return &pb.GetTenantResponse{
-		Tenant: tenantToProto(tenant),
-	}, nil
+	return &pb.GetTenantResponse{Tenant: tenantToProto(tenant)}, nil
 }
 
 func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (*pb.ListTenantsResponse, error) {
@@ -418,22 +424,11 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
-	if req.Id == "" {
-		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-	}
-	// Resolve slug to UUID first — access checks require the canonical UUID,
-	// and all downstream store operations use UUIDs as primary keys.
-	resolved, err := s.resolveTenant(ctx, req.Id)
+	resolved, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	tenantID := resolved.ID
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
 		return nil, err
 	}
+	tenantID := resolved.ID
 
 	var tenant domain.Tenant
 
@@ -490,18 +485,8 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
-	if req.Id == "" {
-		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-	}
-	// Resolve slug to UUID first — access checks require the canonical UUID.
-	tenant, err := s.resolveTenant(ctx, req.Id)
+	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
 
