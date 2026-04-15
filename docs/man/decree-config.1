@@ -46,6 +46,14 @@ Get and set typed configuration values for tenants. Supports single and batch op
 \fB--token\fP=""
 	JWT bearer token
 
+.PP
+\fB--wait\fP[=false]
+	wait for the server to be ready before executing the command
+
+.PP
+\fB--wait-timeout\fP="60s"
+	maximum time to wait for server readiness
+
 
 .SH SEE ALSO
 \fBdecree(1)\fP, \fBdecree-config-export(1)\fP, \fBdecree-config-get(1)\fP, \fBdecree-config-get-all(1)\fP, \fBdecree-config-import(1)\fP, \fBdecree-config-rollback(1)\fP, \fBdecree-config-set(1)\fP, \fBdecree-config-set-many(1)\fP, \fBdecree-config-versions(1)\fP
