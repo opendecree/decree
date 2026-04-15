@@ -4,54 +4,79 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
 
 func TestNew_Defaults(t *testing.T) {
 	w := New(nil, "tenant-1")
-	assert.Equal(t, "tenant-1", w.tenantID)
-	assert.Equal(t, "superadmin", w.opts.role)
-	assert.Equal(t, 500*time.Millisecond, w.opts.minBackoff)
-	assert.Equal(t, 30*time.Second, w.opts.maxBackoff)
-	assert.NotNil(t, w.opts.logger)
-	assert.NotNil(t, w.fields)
+	if got := w.tenantID; got != "tenant-1" {
+		t.Errorf("got %v, want %v", got, "tenant-1")
+	}
+	if got := w.opts.role; got != "superadmin" {
+		t.Errorf("got %v, want %v", got, "superadmin")
+	}
+	if got := w.opts.minBackoff; got != 500*time.Millisecond {
+		t.Errorf("got %v, want %v", got, 500*time.Millisecond)
+	}
+	if got := w.opts.maxBackoff; got != 30*time.Second {
+		t.Errorf("got %v, want %v", got, 30*time.Second)
+	}
+	if w.opts.logger == nil {
+		t.Fatal("expected non-nil logger")
+	}
+	if w.fields == nil {
+		t.Fatal("expected non-nil fields")
+	}
 }
 
 func TestWithSubject(t *testing.T) {
 	w := New(nil, "t1", WithSubject("alice"))
-	assert.Equal(t, "alice", w.opts.subject)
+	if got := w.opts.subject; got != "alice" {
+		t.Errorf("got %v, want %v", got, "alice")
+	}
 }
 
 func TestWithRole(t *testing.T) {
 	w := New(nil, "t1", WithRole("admin"))
-	assert.Equal(t, "admin", w.opts.role)
+	if got := w.opts.role; got != "admin" {
+		t.Errorf("got %v, want %v", got, "admin")
+	}
 }
 
 func TestWithTenantID(t *testing.T) {
 	w := New(nil, "t1", WithTenantID("override"))
-	assert.Equal(t, "override", w.opts.tenantID)
+	if got := w.opts.tenantID; got != "override" {
+		t.Errorf("got %v, want %v", got, "override")
+	}
 }
 
 func TestWithBearerToken(t *testing.T) {
 	w := New(nil, "t1", WithBearerToken("jwt"))
-	assert.Equal(t, "jwt", w.opts.bearerToken)
+	if got := w.opts.bearerToken; got != "jwt" {
+		t.Errorf("got %v, want %v", got, "jwt")
+	}
 }
 
 func TestWithReconnectBackoff(t *testing.T) {
 	w := New(nil, "t1", WithReconnectBackoff(1*time.Second, 1*time.Minute))
-	assert.Equal(t, 1*time.Second, w.opts.minBackoff)
-	assert.Equal(t, 1*time.Minute, w.opts.maxBackoff)
+	if got := w.opts.minBackoff; got != 1*time.Second {
+		t.Errorf("got %v, want %v", got, 1*time.Second)
+	}
+	if got := w.opts.maxBackoff; got != 1*time.Minute {
+		t.Errorf("got %v, want %v", got, 1*time.Minute)
+	}
 }
 
 func TestWithLogger(t *testing.T) {
 	l := slog.Default()
 	w := New(nil, "t1", WithLogger(l))
-	assert.Equal(t, l, w.opts.logger)
+	if got := w.opts.logger; got != l {
+		t.Errorf("got %v, want %v", got, l)
+	}
 }
 
 func TestWithAuth_MetadataHeaders(t *testing.T) {
@@ -59,10 +84,18 @@ func TestWithAuth_MetadataHeaders(t *testing.T) {
 	ctx := w.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"alice"}, md.Get("x-subject"))
-	assert.Equal(t, []string{"admin"}, md.Get("x-role"))
-	assert.Equal(t, []string{"t2"}, md.Get("x-tenant-id"))
+	if !ok {
+		t.Fatal("expected outgoing metadata")
+	}
+	if got := md.Get("x-subject"); !reflect.DeepEqual(got, []string{"alice"}) {
+		t.Errorf("got %v, want %v", got, []string{"alice"})
+	}
+	if got := md.Get("x-role"); !reflect.DeepEqual(got, []string{"admin"}) {
+		t.Errorf("got %v, want %v", got, []string{"admin"})
+	}
+	if got := md.Get("x-tenant-id"); !reflect.DeepEqual(got, []string{"t2"}) {
+		t.Errorf("got %v, want %v", got, []string{"t2"})
+	}
 }
 
 func TestWithAuth_BearerToken(t *testing.T) {
@@ -70,16 +103,24 @@ func TestWithAuth_BearerToken(t *testing.T) {
 	ctx := w.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"Bearer jwt"}, md.Get("authorization"))
-	assert.Empty(t, md.Get("x-subject"))
+	if !ok {
+		t.Fatal("expected outgoing metadata")
+	}
+	if got := md.Get("authorization"); !reflect.DeepEqual(got, []string{"Bearer jwt"}) {
+		t.Errorf("got %v, want %v", got, []string{"Bearer jwt"})
+	}
+	if got := md.Get("x-subject"); len(got) != 0 {
+		t.Errorf("expected empty, got %v", got)
+	}
 }
 
 func TestWithAuth_NoOptions(t *testing.T) {
 	w := &Watcher{opts: options{}}
 	ctx := w.withAuth(context.Background())
 	_, ok := metadata.FromOutgoingContext(ctx)
-	assert.False(t, ok)
+	if ok {
+		t.Error("expected no outgoing metadata")
+	}
 }
 
 func TestFieldRegistration(t *testing.T) {
@@ -92,15 +133,29 @@ func TestFieldRegistration(t *testing.T) {
 	durVal := w.Duration("app.timeout", time.Second)
 	rawVal := w.Raw("app.raw", "raw-default")
 
-	assert.Equal(t, "default", strVal.Get())
-	assert.Equal(t, int64(3), intVal.Get())
-	assert.Equal(t, 0.01, floatVal.Get())
-	assert.False(t, boolVal.Get())
-	assert.Equal(t, time.Second, durVal.Get())
-	assert.Equal(t, "raw-default", rawVal.Get())
+	if got := strVal.Get(); got != "default" {
+		t.Errorf("got %v, want %v", got, "default")
+	}
+	if got := intVal.Get(); got != int64(3) {
+		t.Errorf("got %v, want %v", got, int64(3))
+	}
+	if got := floatVal.Get(); got != 0.01 {
+		t.Errorf("got %v, want %v", got, 0.01)
+	}
+	if boolVal.Get() {
+		t.Error("expected false, got true")
+	}
+	if got := durVal.Get(); got != time.Second {
+		t.Errorf("got %v, want %v", got, time.Second)
+	}
+	if got := rawVal.Get(); got != "raw-default" {
+		t.Errorf("got %v, want %v", got, "raw-default")
+	}
 
 	paths := w.registeredPaths()
-	assert.Len(t, paths, 6)
+	if len(paths) != 6 {
+		t.Errorf("got len %d, want %d", len(paths), 6)
+	}
 }
 
 func TestValue_Close(t *testing.T) {
@@ -112,7 +167,9 @@ func TestValue_Close(t *testing.T) {
 	for range v.Changes() {
 		count++
 	}
-	assert.Equal(t, 0, count)
+	if got := count; got != 0 {
+		t.Errorf("got %v, want %v", got, 0)
+	}
 }
 
 func TestValue_ChannelOverflow(t *testing.T) {
@@ -124,5 +181,7 @@ func TestValue_ChannelOverflow(t *testing.T) {
 	}
 
 	// Should still have a value — not stuck.
-	assert.Equal(t, int64(19), v.Get())
+	if got := v.Get(); got != int64(19) {
+		t.Errorf("got %v, want %v", got, int64(19))
+	}
 }
