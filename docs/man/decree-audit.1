@@ -46,6 +46,14 @@ Query the configuration change history and field read usage statistics. Useful f
 \fB--token\fP=""
 	JWT bearer token
 
+.PP
+\fB--wait\fP[=false]
+	wait for the server to be ready before executing the command
+
+.PP
+\fB--wait-timeout\fP="60s"
+	maximum time to wait for server readiness
+
 
 .SH SEE ALSO
 \fBdecree(1)\fP, \fBdecree-audit-query(1)\fP, \fBdecree-audit-unused(1)\fP, \fBdecree-audit-usage(1)\fP

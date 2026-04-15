@@ -46,6 +46,14 @@ Lock and unlock configuration fields. Locked fields cannot be modified by admin 
 \fB--token\fP=""
 	JWT bearer token
 
+.PP
+\fB--wait\fP[=false]
+	wait for the server to be ready before executing the command
+
+.PP
+\fB--wait-timeout\fP="60s"
+	maximum time to wait for server readiness
+
 
 .SH SEE ALSO
 \fBdecree(1)\fP, \fBdecree-lock-list(1)\fP, \fBdecree-lock-remove(1)\fP, \fBdecree-lock-set(1)\fP

@@ -1,19 +1,23 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 )
 
 var (
-	flagServer   string
-	flagSubject  string
-	flagRole     string
-	flagTenantID string
-	flagToken    string
-	flagOutput   string
-	flagInsecure bool
+	flagServer      string
+	flagSubject     string
+	flagRole        string
+	flagTenantID    string
+	flagToken       string
+	flagOutput      string
+	flagInsecure    bool
+	flagWait        bool
+	flagWaitTimeout string
 )
 
 func main() {
@@ -26,6 +30,26 @@ var rootCmd = &cobra.Command{
 	Use:   "decree",
 	Short: "OpenDecree CLI",
 	Long:  "Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.",
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		if !flagWait {
+			return nil
+		}
+		timeout, err := time.ParseDuration(flagWaitTimeout)
+		if err != nil {
+			return fmt.Errorf("invalid --wait-timeout: %w", err)
+		}
+		conn, err := dialServer()
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for server %s (timeout %s)...\n", flagServer, timeout)
+		if err := waitForServer(conn, timeout); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "Server ready.\n")
+		return nil
+	},
 }
 
 func init() {
@@ -37,6 +61,8 @@ func init() {
 	pf.StringVar(&flagToken, "token", envOrDefault("DECREE_TOKEN", ""), "JWT bearer token")
 	pf.StringVarP(&flagOutput, "output", "o", "table", "output format: table, json, yaml")
 	pf.BoolVar(&flagInsecure, "insecure", envOrDefault("DECREE_INSECURE", "true") == "true", "skip TLS verification")
+	pf.BoolVar(&flagWait, "wait", false, "wait for the server to be ready before executing the command")
+	pf.StringVar(&flagWaitTimeout, "wait-timeout", envOrDefault("DECREE_WAIT_TIMEOUT", "60s"), "maximum time to wait for server readiness")
 
 	// Flag completions.
 	_ = rootCmd.RegisterFlagCompletionFunc("output", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
