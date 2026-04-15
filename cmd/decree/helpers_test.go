@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -37,7 +37,9 @@ func TestTypedValueDisplay(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, typedValueDisplay(tt.input))
+			if got := typedValueDisplay(tt.input); got != tt.expected {
+				t.Errorf("got %v, want %v", got, tt.expected)
+			}
 		})
 	}
 }
@@ -45,7 +47,9 @@ func TestTypedValueDisplay(t *testing.T) {
 func TestTypedValueDisplay_Time(t *testing.T) {
 	ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
 	tv := &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}}
-	assert.Contains(t, typedValueDisplay(tv), "2026-03-30")
+	if !strings.Contains(typedValueDisplay(tv), "2026-03-30") {
+		t.Errorf("expected %q to contain %q", typedValueDisplay(tv), "2026-03-30")
+	}
 }
 
 // --- printTable edge cases ---
@@ -53,23 +57,37 @@ func TestTypedValueDisplay_Time(t *testing.T) {
 func TestPrintTable_NonTableData(t *testing.T) {
 	var buf bytes.Buffer
 	err := printTable(&buf, map[string]string{"key": "val"})
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "key") {
+		t.Errorf("expected %q to contain %q", buf.String(), "key")
+	}
 }
 
 func TestPrintTable_Empty(t *testing.T) {
 	var buf bytes.Buffer
 	err := printTable(&buf, [][]string{})
-	require.NoError(t, err)
-	assert.Empty(t, buf.String())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(buf.String()) != 0 {
+		t.Errorf("expected empty, got %v", buf.String())
+	}
 }
 
 // --- versionOrEmpty ---
 
 func TestVersionOrEmpty(t *testing.T) {
-	assert.Equal(t, "", versionOrEmpty(0))
-	assert.Equal(t, "v1", versionOrEmpty(1))
-	assert.Equal(t, "v42", versionOrEmpty(42))
+	if got := versionOrEmpty(0); got != "" {
+		t.Errorf("got %v, want %v", got, "")
+	}
+	if got := versionOrEmpty(1); got != "v1" {
+		t.Errorf("got %v, want %v", got, "v1")
+	}
+	if got := versionOrEmpty(42); got != "v42" {
+		t.Errorf("got %v, want %v", got, "v42")
+	}
 }
 
 // --- parseConfigValues ---
@@ -85,21 +103,35 @@ values:
     value: true
 `
 	m := parseConfigValues([]byte(yaml))
-	require.NotNil(t, m)
-	assert.Equal(t, "MyApp", m["app.name"])
-	assert.Equal(t, "3", m["app.retries"])
-	assert.Equal(t, "true", m["app.enabled"])
+	if m == nil {
+		t.Fatal("expected non-nil")
+	}
+	if got := m["app.name"]; got != "MyApp" {
+		t.Errorf("got %v, want %v", got, "MyApp")
+	}
+	if got := m["app.retries"]; got != "3" {
+		t.Errorf("got %v, want %v", got, "3")
+	}
+	if got := m["app.enabled"]; got != "true" {
+		t.Errorf("got %v, want %v", got, "true")
+	}
 }
 
 func TestParseConfigValues_Invalid(t *testing.T) {
 	m := parseConfigValues([]byte("not: [valid: yaml"))
-	assert.Nil(t, m)
+	if m != nil {
+		t.Errorf("expected nil, got %v", m)
+	}
 }
 
 func TestParseConfigValues_Empty(t *testing.T) {
 	m := parseConfigValues([]byte("syntax: v1\n"))
-	assert.NotNil(t, m)
-	assert.Empty(t, m)
+	if m == nil {
+		t.Fatal("expected non-nil")
+	}
+	if len(m) != 0 {
+		t.Errorf("expected empty, got %v", m)
+	}
 }
 
 // --- adminSchemaToDocgen ---
@@ -131,21 +163,47 @@ func TestAdminSchemaToDocgen(t *testing.T) {
 	}
 
 	ds := adminSchemaToDocgen(s)
-	assert.Equal(t, "payments", ds.Name)
-	assert.Equal(t, "test", ds.Description)
-	assert.Equal(t, int32(2), ds.Version)
-	assert.Len(t, ds.Fields, 2)
+	if got := ds.Name; got != "payments" {
+		t.Errorf("got %v, want %v", got, "payments")
+	}
+	if got := ds.Description; got != "test" {
+		t.Errorf("got %v, want %v", got, "test")
+	}
+	if got := ds.Version; got != int32(2) {
+		t.Errorf("got %v, want %v", got, int32(2))
+	}
+	if len(ds.Fields) != 2 {
+		t.Fatalf("got len %d, want %d", len(ds.Fields), 2)
+	}
 
 	f := ds.Fields[0]
-	assert.Equal(t, "app.retries", f.Path)
-	assert.Equal(t, "retry count", f.Description)
-	assert.Equal(t, "3", f.Default)
-	assert.True(t, f.Nullable)
-	assert.True(t, f.Deprecated)
-	assert.Equal(t, "app.max_retries", f.RedirectTo)
-	require.NotNil(t, f.Constraints)
-	assert.Equal(t, &min, f.Constraints.Min)
-	assert.Equal(t, []string{"1", "2", "3"}, f.Constraints.Enum)
+	if got := f.Path; got != "app.retries" {
+		t.Errorf("got %v, want %v", got, "app.retries")
+	}
+	if got := f.Description; got != "retry count" {
+		t.Errorf("got %v, want %v", got, "retry count")
+	}
+	if got := f.Default; got != "3" {
+		t.Errorf("got %v, want %v", got, "3")
+	}
+	if !f.Nullable {
+		t.Error("expected Nullable to be true")
+	}
+	if !f.Deprecated {
+		t.Error("expected Deprecated to be true")
+	}
+	if got := f.RedirectTo; got != "app.max_retries" {
+		t.Errorf("got %v, want %v", got, "app.max_retries")
+	}
+	if f.Constraints == nil {
+		t.Fatal("expected non-nil Constraints")
+	}
+	if got := f.Constraints.Min; !reflect.DeepEqual(got, &min) {
+		t.Errorf("got %v, want %v", got, &min)
+	}
+	if got := f.Constraints.Enum; !reflect.DeepEqual(got, []string{"1", "2", "3"}) {
+		t.Errorf("got %v, want %v", got, []string{"1", "2", "3"})
+	}
 }
 
 func TestAdminSchemaToDocgen_NoConstraints(t *testing.T) {
@@ -154,7 +212,9 @@ func TestAdminSchemaToDocgen_NoConstraints(t *testing.T) {
 		Fields: []adminclient.Field{{Path: "x", Type: "STRING"}},
 	}
 	ds := adminSchemaToDocgen(s)
-	assert.Nil(t, ds.Fields[0].Constraints)
+	if ds.Fields[0].Constraints != nil {
+		t.Errorf("expected nil, got %v", ds.Fields[0].Constraints)
+	}
 }
 
 // --- schemaFromYAML ---
@@ -177,10 +237,18 @@ fields:
     type: string
 `
 	s, err := schemaFromYAML([]byte(yaml))
-	require.NoError(t, err)
-	assert.Equal(t, "payments", s.Name)
-	assert.Equal(t, "Payment config", s.Description)
-	assert.Len(t, s.Fields, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := s.Name; got != "payments" {
+		t.Errorf("got %v, want %v", got, "payments")
+	}
+	if got := s.Description; got != "Payment config" {
+		t.Errorf("got %v, want %v", got, "Payment config")
+	}
+	if len(s.Fields) != 2 {
+		t.Fatalf("got len %d, want %d", len(s.Fields), 2)
+	}
 
 	// Find the fee field.
 	var fee *docgen.Field
@@ -190,22 +258,42 @@ fields:
 			break
 		}
 	}
-	require.NotNil(t, fee)
-	assert.Equal(t, "number", fee.Type)
-	assert.True(t, fee.Nullable)
-	require.NotNil(t, fee.Constraints)
-	assert.Equal(t, 0.0, *fee.Constraints.Min)
-	assert.Equal(t, 1.0, *fee.Constraints.Max)
+	if fee == nil {
+		t.Fatal("expected non-nil fee field")
+	}
+	if got := fee.Type; got != "number" {
+		t.Errorf("got %v, want %v", got, "number")
+	}
+	if !fee.Nullable {
+		t.Error("expected Nullable to be true")
+	}
+	if fee.Constraints == nil {
+		t.Fatal("expected non-nil Constraints")
+	}
+	if got := *fee.Constraints.Min; got != 0.0 {
+		t.Errorf("got %v, want %v", got, 0.0)
+	}
+	if got := *fee.Constraints.Max; got != 1.0 {
+		t.Errorf("got %v, want %v", got, 1.0)
+	}
 }
 
 func TestSchemaFromYAML_Invalid(t *testing.T) {
 	_, err := schemaFromYAML([]byte("not: [valid"))
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
 }
 
 func TestSchemaFromYAML_Empty(t *testing.T) {
 	s, err := schemaFromYAML([]byte("name: test\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "test", s.Name)
-	assert.Empty(t, s.Fields)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := s.Name; got != "test" {
+		t.Errorf("got %v, want %v", got, "test")
+	}
+	if len(s.Fields) != 0 {
+		t.Errorf("expected empty, got %v", s.Fields)
+	}
 }

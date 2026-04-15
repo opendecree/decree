@@ -3,19 +3,15 @@ package configwatcher
 import (
 	"context"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/configclient"
 )
-
-func sp(s string) *string { return &s }
 
 func sv(s string) *pb.TypedValue {
 	return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: s}}
@@ -25,32 +21,50 @@ func sv(s string) *pb.TypedValue {
 
 func TestValue_Get_Default(t *testing.T) {
 	v := newValue(42, parseInt)
-	assert.Equal(t, int64(42), v.Get())
+	if got := v.Get(); got != int64(42) {
+		t.Errorf("got %v, want %v", got, int64(42))
+	}
 
 	val, ok := v.GetWithNull()
-	assert.Equal(t, int64(42), val)
-	assert.False(t, ok)
+	if got := val; got != int64(42) {
+		t.Errorf("got %v, want %v", got, int64(42))
+	}
+	if ok {
+		t.Error("expected false for null flag on default value")
+	}
 }
 
 func TestValue_Update_Set(t *testing.T) {
 	v := newValue(0.0, parseFloat)
 	v.update("3.14", true)
 
-	assert.Equal(t, 3.14, v.Get())
+	if got := v.Get(); got != 3.14 {
+		t.Errorf("got %v, want %v", got, 3.14)
+	}
 	val, ok := v.GetWithNull()
-	assert.Equal(t, 3.14, val)
-	assert.True(t, ok)
+	if got := val; got != 3.14 {
+		t.Errorf("got %v, want %v", got, 3.14)
+	}
+	if !ok {
+		t.Error("expected true for non-null value")
+	}
 }
 
 func TestValue_Update_Null(t *testing.T) {
 	v := newValue("default", parseString)
 	v.update("hello", true)
-	assert.Equal(t, "hello", v.Get())
+	if got := v.Get(); got != "hello" {
+		t.Errorf("got %v, want %v", got, "hello")
+	}
 
 	v.update("", false) // null
-	assert.Equal(t, "default", v.Get())
+	if got := v.Get(); got != "default" {
+		t.Errorf("got %v, want %v", got, "default")
+	}
 	_, ok := v.GetWithNull()
-	assert.False(t, ok)
+	if ok {
+		t.Error("expected false for null value")
+	}
 }
 
 func TestValue_Update_ParseError(t *testing.T) {
@@ -58,9 +72,13 @@ func TestValue_Update_ParseError(t *testing.T) {
 	v.update("not-a-number", true)
 
 	// Falls back to default on parse error.
-	assert.Equal(t, int64(99), v.Get())
+	if got := v.Get(); got != int64(99) {
+		t.Errorf("got %v, want %v", got, int64(99))
+	}
 	_, ok := v.GetWithNull()
-	assert.False(t, ok)
+	if ok {
+		t.Error("expected false after parse error fallback")
+	}
 }
 
 func TestValue_Changes_Channel(t *testing.T) {
@@ -69,10 +87,18 @@ func TestValue_Changes_Channel(t *testing.T) {
 
 	select {
 	case ch := <-v.Changes():
-		assert.True(t, ch.WasNull)
-		assert.False(t, ch.IsNull)
-		assert.False(t, ch.Old)
-		assert.True(t, ch.New)
+		if !ch.WasNull {
+			t.Error("expected WasNull to be true")
+		}
+		if ch.IsNull {
+			t.Error("expected IsNull to be false")
+		}
+		if ch.Old {
+			t.Error("expected Old to be false")
+		}
+		if !ch.New {
+			t.Error("expected New to be true")
+		}
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("expected change on channel")
 	}
@@ -81,71 +107,67 @@ func TestValue_Changes_Channel(t *testing.T) {
 func TestValue_Duration(t *testing.T) {
 	v := newValue(time.Second, parseDuration)
 	v.update("24h", true)
-	assert.Equal(t, 24*time.Hour, v.Get())
+	if got := v.Get(); got != 24*time.Hour {
+		t.Errorf("got %v, want %v", got, 24*time.Hour)
+	}
 }
 
-// --- Mock gRPC client for watcher integration tests ---
+// --- Hand-written mock gRPC client for watcher integration tests ---
 
 type mockRPC struct {
-	mock.Mock
+	mu              sync.Mutex
+	getConfigResp   *pb.GetConfigResponse
+	getConfigErr    error
+	subscribeStream grpc.ServerStreamingClient[pb.SubscribeResponse]
+	subscribeErr    error
 }
 
-func (m *mockRPC) GetConfig(ctx context.Context, in *pb.GetConfigRequest, opts ...grpc.CallOption) (*pb.GetConfigResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.GetConfigResponse), args.Error(1)
+func (m *mockRPC) GetConfig(_ context.Context, _ *pb.GetConfigRequest, _ ...grpc.CallOption) (*pb.GetConfigResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.getConfigResp, m.getConfigErr
 }
 
-func (m *mockRPC) GetField(ctx context.Context, in *pb.GetFieldRequest, opts ...grpc.CallOption) (*pb.GetFieldResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.GetFieldResponse), args.Error(1)
+func (m *mockRPC) GetField(_ context.Context, _ *pb.GetFieldRequest, _ ...grpc.CallOption) (*pb.GetFieldResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) GetFields(ctx context.Context, in *pb.GetFieldsRequest, opts ...grpc.CallOption) (*pb.GetFieldsResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.GetFieldsResponse), args.Error(1)
+func (m *mockRPC) GetFields(_ context.Context, _ *pb.GetFieldsRequest, _ ...grpc.CallOption) (*pb.GetFieldsResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) SetField(ctx context.Context, in *pb.SetFieldRequest, opts ...grpc.CallOption) (*pb.SetFieldResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.SetFieldResponse), args.Error(1)
+func (m *mockRPC) SetField(_ context.Context, _ *pb.SetFieldRequest, _ ...grpc.CallOption) (*pb.SetFieldResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) SetFields(ctx context.Context, in *pb.SetFieldsRequest, opts ...grpc.CallOption) (*pb.SetFieldsResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.SetFieldsResponse), args.Error(1)
+func (m *mockRPC) SetFields(_ context.Context, _ *pb.SetFieldsRequest, _ ...grpc.CallOption) (*pb.SetFieldsResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) ListVersions(ctx context.Context, in *pb.ListVersionsRequest, opts ...grpc.CallOption) (*pb.ListVersionsResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.ListVersionsResponse), args.Error(1)
+func (m *mockRPC) ListVersions(_ context.Context, _ *pb.ListVersionsRequest, _ ...grpc.CallOption) (*pb.ListVersionsResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) GetVersion(ctx context.Context, in *pb.GetVersionRequest, opts ...grpc.CallOption) (*pb.GetVersionResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.GetVersionResponse), args.Error(1)
+func (m *mockRPC) GetVersion(_ context.Context, _ *pb.GetVersionRequest, _ ...grpc.CallOption) (*pb.GetVersionResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) RollbackToVersion(ctx context.Context, in *pb.RollbackToVersionRequest, opts ...grpc.CallOption) (*pb.RollbackToVersionResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.RollbackToVersionResponse), args.Error(1)
+func (m *mockRPC) RollbackToVersion(_ context.Context, _ *pb.RollbackToVersionRequest, _ ...grpc.CallOption) (*pb.RollbackToVersionResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) Subscribe(ctx context.Context, in *pb.SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[pb.SubscribeResponse], error) {
-	args := m.Called(ctx, in)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(grpc.ServerStreamingClient[pb.SubscribeResponse]), args.Error(1)
+func (m *mockRPC) Subscribe(_ context.Context, _ *pb.SubscribeRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[pb.SubscribeResponse], error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.subscribeStream, m.subscribeErr
 }
 
-func (m *mockRPC) ExportConfig(ctx context.Context, in *pb.ExportConfigRequest, opts ...grpc.CallOption) (*pb.ExportConfigResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.ExportConfigResponse), args.Error(1)
+func (m *mockRPC) ExportConfig(_ context.Context, _ *pb.ExportConfigRequest, _ ...grpc.CallOption) (*pb.ExportConfigResponse, error) {
+	return nil, nil
 }
 
-func (m *mockRPC) ImportConfig(ctx context.Context, in *pb.ImportConfigRequest, opts ...grpc.CallOption) (*pb.ImportConfigResponse, error) {
-	args := m.Called(ctx, in)
-	return args.Get(0).(*pb.ImportConfigResponse), args.Error(1)
+func (m *mockRPC) ImportConfig(_ context.Context, _ *pb.ImportConfigRequest, _ ...grpc.CallOption) (*pb.ImportConfigResponse, error) {
+	return nil, nil
 }
 
 // mockStream simulates a gRPC server stream.
@@ -178,7 +200,18 @@ func (s *mockStream) send(change *pb.ConfigChange) {
 // --- Watcher integration tests ---
 
 func TestWatcher_SnapshotAndStream(t *testing.T) {
-	rpc := &mockRPC{}
+	ctx, cancel := context.WithCancel(context.Background())
+	stream := newMockStream(ctx)
+
+	rpc := &mockRPC{
+		getConfigResp: &pb.GetConfigResponse{
+			Config: &pb.Config{TenantId: "t1", Version: 1, Values: []*pb.ConfigValue{
+				{FieldPath: "payments.fee", Value: sv("0.025")},
+				{FieldPath: "payments.enabled", Value: sv("true")},
+			}},
+		},
+		subscribeStream: stream,
+	}
 
 	// Build watcher manually with injected mock.
 	w := &Watcher{
@@ -194,25 +227,18 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 	fee := w.Float("payments.fee", 0.01)
 	enabled := w.Bool("payments.enabled", false)
 
-	// Mock snapshot (GetConfig for configclient.GetAll).
-	rpc.On("GetConfig", mock.Anything, mock.Anything).Return(&pb.GetConfigResponse{
-		Config: &pb.Config{TenantId: "t1", Version: 1, Values: []*pb.ConfigValue{
-			{FieldPath: "payments.fee", Value: sv("0.025")},
-			{FieldPath: "payments.enabled", Value: sv("true")},
-		}},
-	}, nil)
-
-	// Mock Subscribe stream.
-	ctx, cancel := context.WithCancel(context.Background())
-	stream := newMockStream(ctx)
-	rpc.On("Subscribe", mock.Anything, mock.Anything).Return(stream, nil)
-
 	err := w.Start(ctx)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Verify initial snapshot values.
-	assert.Equal(t, 0.025, fee.Get())
-	assert.True(t, enabled.Get())
+	if got := fee.Get(); got != 0.025 {
+		t.Errorf("got %v, want %v", got, 0.025)
+	}
+	if !enabled.Get() {
+		t.Error("expected enabled to be true after snapshot")
+	}
 
 	// Simulate a stream change.
 	stream.send(&pb.ConfigChange{
@@ -233,7 +259,9 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 
 	// Read updated value.
 	time.Sleep(10 * time.Millisecond) // let stream update propagate
-	assert.Equal(t, 0.05, fee.Get())
+	if got := fee.Get(); got != 0.05 {
+		t.Errorf("got %v, want %v", got, 0.05)
+	}
 
 	cancel()
 	_ = w.Close()

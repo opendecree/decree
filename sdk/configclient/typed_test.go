@@ -2,12 +2,11 @@ package configclient
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -21,12 +20,15 @@ func TestSetTime_Success(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("SetField", mock.Anything, mock.MatchedBy(func(r *pb.SetFieldRequest) bool {
+	rpc.on("SetField", func(args ...any) bool {
+		r := args[0].(*pb.SetFieldRequest)
 		_, ok := r.Value.Kind.(*pb.TypedValue_TimeValue)
 		return ok && r.FieldPath == "x"
-	})).Return(&pb.SetFieldResponse{}, nil)
+	}, &pb.SetFieldResponse{}, nil)
 
-	require.NoError(t, client.SetTime(ctx, "t1", "x", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+	if err := client.SetTime(ctx, "t1", "x", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestSetDuration_Success(t *testing.T) {
@@ -34,12 +36,15 @@ func TestSetDuration_Success(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("SetField", mock.Anything, mock.MatchedBy(func(r *pb.SetFieldRequest) bool {
+	rpc.on("SetField", func(args ...any) bool {
+		r := args[0].(*pb.SetFieldRequest)
 		v, ok := r.Value.Kind.(*pb.TypedValue_DurationValue)
 		return ok && v.DurationValue.AsDuration() == 30*time.Second
-	})).Return(&pb.SetFieldResponse{}, nil)
+	}, &pb.SetFieldResponse{}, nil)
 
-	require.NoError(t, client.SetDuration(ctx, "t1", "x", 30*time.Second))
+	if err := client.SetDuration(ctx, "t1", "x", 30*time.Second); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestSetTyped_Success(t *testing.T) {
@@ -47,9 +52,11 @@ func TestSetTyped_Success(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("SetField", mock.Anything, mock.Anything).Return(&pb.SetFieldResponse{}, nil)
+	rpc.on("SetField", nil, &pb.SetFieldResponse{}, nil)
 
-	require.NoError(t, client.SetTyped(ctx, "t1", "x", StringValue("hello")))
+	if err := client.SetTyped(ctx, "t1", "x", StringValue("hello")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // --- Typed getters ---
@@ -60,7 +67,7 @@ func TestGetTime_Success(t *testing.T) {
 	ctx := context.Background()
 
 	ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			FieldPath: "x",
 			Value:     &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}},
@@ -68,8 +75,12 @@ func TestGetTime_Success(t *testing.T) {
 	}, nil)
 
 	got, err := client.GetTime(ctx, "t1", "x")
-	require.NoError(t, err)
-	assert.Equal(t, ts, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.Equal(ts) {
+		t.Errorf("got %v, want %v", got, ts)
+	}
 }
 
 func TestGetTime_TypeMismatch(t *testing.T) {
@@ -77,14 +88,16 @@ func TestGetTime_TypeMismatch(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "not-a-time"}},
 		},
 	}, nil)
 
 	_, err := client.GetTime(ctx, "t1", "x")
-	assert.ErrorIs(t, err, ErrTypeMismatch)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("got error %v, want %v", err, ErrTypeMismatch)
+	}
 }
 
 func TestGetTime_Null(t *testing.T) {
@@ -92,13 +105,17 @@ func TestGetTime_Null(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{Value: nil},
 	}, nil)
 
 	got, err := client.GetTime(ctx, "t1", "x")
-	require.NoError(t, err)
-	assert.True(t, got.IsZero())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.IsZero() {
+		t.Errorf("expected zero time, got %v", got)
+	}
 }
 
 func TestGetDuration_Success(t *testing.T) {
@@ -106,15 +123,19 @@ func TestGetDuration_Success(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			Value: &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(5 * time.Minute)}},
 		},
 	}, nil)
 
 	got, err := client.GetDuration(ctx, "t1", "x")
-	require.NoError(t, err)
-	assert.Equal(t, 5*time.Minute, got)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 5*time.Minute {
+		t.Errorf("got %v, want %v", got, 5*time.Minute)
+	}
 }
 
 func TestGetDuration_TypeMismatch(t *testing.T) {
@@ -122,14 +143,16 @@ func TestGetDuration_TypeMismatch(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			Value: &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 42}},
 		},
 	}, nil)
 
 	_, err := client.GetDuration(ctx, "t1", "x")
-	assert.ErrorIs(t, err, ErrTypeMismatch)
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("got error %v, want %v", err, ErrTypeMismatch)
+	}
 }
 
 func TestGetFields_Success(t *testing.T) {
@@ -137,7 +160,7 @@ func TestGetFields_Success(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetFields", mock.Anything, mock.Anything).Return(&pb.GetFieldsResponse{
+	rpc.on("GetFields", nil, &pb.GetFieldsResponse{
 		Values: []*pb.ConfigValue{
 			{FieldPath: "a", Value: StringValue("1")},
 			{FieldPath: "b", Value: StringValue("2")},
@@ -145,9 +168,15 @@ func TestGetFields_Success(t *testing.T) {
 	}, nil)
 
 	vals, err := client.GetFields(ctx, "t1", []string{"a", "b"})
-	require.NoError(t, err)
-	assert.Equal(t, "1", vals["a"])
-	assert.Equal(t, "2", vals["b"])
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := vals["a"]; got != "1" {
+		t.Errorf("got %v, want %v", got, "1")
+	}
+	if got := vals["b"]; got != "2" {
+		t.Errorf("got %v, want %v", got, "2")
+	}
 }
 
 func TestGetBoolNullable_Present(t *testing.T) {
@@ -155,16 +184,22 @@ func TestGetBoolNullable_Present(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			Value: &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: true}},
 		},
 	}, nil)
 
 	val, err := client.GetBoolNullable(ctx, "t1", "x")
-	require.NoError(t, err)
-	require.NotNil(t, val)
-	assert.True(t, *val)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val == nil {
+		t.Fatal("expected non-nil")
+	}
+	if !*val {
+		t.Error("expected true, got false")
+	}
 }
 
 func TestGetStringNullable_CoercesAnyType(t *testing.T) {
@@ -172,24 +207,34 @@ func TestGetStringNullable_CoercesAnyType(t *testing.T) {
 	client := New(rpc, WithSubject("test"))
 	ctx := context.Background()
 
-	rpc.On("GetField", mock.Anything, mock.Anything).Return(&pb.GetFieldResponse{
+	rpc.on("GetField", nil, &pb.GetFieldResponse{
 		Value: &pb.ConfigValue{
 			Value: &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 42}},
 		},
 	}, nil)
 
 	val, err := client.GetStringNullable(ctx, "t1", "x")
-	require.NoError(t, err)
-	require.NotNil(t, val)
-	assert.Equal(t, "42", *val)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val == nil {
+		t.Fatal("expected non-nil")
+	}
+	if *val != "42" {
+		t.Errorf("got %v, want %v", *val, "42")
+	}
 }
 
 // --- Helper functions ---
 
 func TestDerefString(t *testing.T) {
 	s := "hello"
-	assert.Equal(t, "hello", derefString(&s))
-	assert.Equal(t, "", derefString(nil))
+	if got := derefString(&s); got != "hello" {
+		t.Errorf("got %v, want %v", got, "hello")
+	}
+	if got := derefString(nil); got != "" {
+		t.Errorf("got %v, want %v", got, "")
+	}
 }
 
 func TestTypedValueToString(t *testing.T) {
@@ -212,7 +257,9 @@ func TestTypedValueToString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, typedValueToString(tt.input))
+			if got := typedValueToString(tt.input); got != tt.expected {
+				t.Errorf("got %v, want %v", got, tt.expected)
+			}
 		})
 	}
 }
@@ -220,5 +267,7 @@ func TestTypedValueToString(t *testing.T) {
 func TestTypedValueToString_Time(t *testing.T) {
 	ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
 	tv := &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}}
-	assert.Contains(t, typedValueToString(tv), "2026-03-30")
+	if got := typedValueToString(tv); !strings.Contains(got, "2026-03-30") {
+		t.Errorf("expected %q to contain %q", got, "2026-03-30")
+	}
 }

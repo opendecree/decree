@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -17,27 +15,37 @@ import (
 
 func TestWithSubject(t *testing.T) {
 	c := New(nil, nil, nil, WithSubject("alice"))
-	assert.Equal(t, "alice", c.opts.subject)
+	if got := c.opts.subject; got != "alice" {
+		t.Errorf("got subject %v, want %v", got, "alice")
+	}
 }
 
 func TestWithRole(t *testing.T) {
 	c := New(nil, nil, nil, WithRole("admin"))
-	assert.Equal(t, "admin", c.opts.role)
+	if got := c.opts.role; got != "admin" {
+		t.Errorf("got role %v, want %v", got, "admin")
+	}
 }
 
 func TestWithRole_Default(t *testing.T) {
 	c := New(nil, nil, nil)
-	assert.Equal(t, "superadmin", c.opts.role)
+	if got := c.opts.role; got != "superadmin" {
+		t.Errorf("got role %v, want %v", got, "superadmin")
+	}
 }
 
 func TestWithTenantID(t *testing.T) {
 	c := New(nil, nil, nil, WithTenantID("t1"))
-	assert.Equal(t, "t1", c.opts.tenantID)
+	if got := c.opts.tenantID; got != "t1" {
+		t.Errorf("got tenantID %v, want %v", got, "t1")
+	}
 }
 
 func TestWithBearerToken(t *testing.T) {
 	c := New(nil, nil, nil, WithBearerToken("jwt"))
-	assert.Equal(t, "jwt", c.opts.bearerToken)
+	if got := c.opts.bearerToken; got != "jwt" {
+		t.Errorf("got bearerToken %v, want %v", got, "jwt")
+	}
 }
 
 func TestWithAuth_Metadata(t *testing.T) {
@@ -45,10 +53,18 @@ func TestWithAuth_Metadata(t *testing.T) {
 	ctx := c.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"alice"}, md.Get("x-subject"))
-	assert.Equal(t, []string{"admin"}, md.Get("x-role"))
-	assert.Equal(t, []string{"t1"}, md.Get("x-tenant-id"))
+	if !ok {
+		t.Fatal("expected outgoing metadata to be present")
+	}
+	if got, want := md.Get("x-subject"), []string{"alice"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("got x-subject %v, want %v", got, want)
+	}
+	if got, want := md.Get("x-role"), []string{"admin"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("got x-role %v, want %v", got, want)
+	}
+	if got, want := md.Get("x-tenant-id"), []string{"t1"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("got x-tenant-id %v, want %v", got, want)
+	}
 }
 
 func TestWithAuth_BearerOverrides(t *testing.T) {
@@ -56,16 +72,24 @@ func TestWithAuth_BearerOverrides(t *testing.T) {
 	ctx := c.withAuth(context.Background())
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	require.True(t, ok)
-	assert.Equal(t, []string{"Bearer jwt"}, md.Get("authorization"))
-	assert.Empty(t, md.Get("x-subject"))
+	if !ok {
+		t.Fatal("expected outgoing metadata to be present")
+	}
+	if got, want := md.Get("authorization"), []string{"Bearer jwt"}; len(got) != len(want) || got[0] != want[0] {
+		t.Errorf("got authorization %v, want %v", got, want)
+	}
+	if got := md.Get("x-subject"); len(got) != 0 {
+		t.Errorf("expected empty x-subject, got %v", got)
+	}
 }
 
 func TestWithAuth_Empty(t *testing.T) {
 	c := New(nil, nil, nil, WithRole(""))
 	ctx := c.withAuth(context.Background())
 	_, ok := metadata.FromOutgoingContext(ctx)
-	assert.False(t, ok)
+	if ok {
+		t.Error("expected no outgoing metadata")
+	}
 }
 
 // --- Proto conversion ---
@@ -82,18 +106,36 @@ func TestSchemaFromProto(t *testing.T) {
 		},
 	})
 
-	assert.Equal(t, "s1", s.ID)
-	assert.Equal(t, "payments", s.Name)
-	assert.Equal(t, int32(2), s.Version)
-	assert.True(t, s.Published)
-	assert.Len(t, s.Fields, 2)
-	assert.Equal(t, "FIELD_TYPE_INT", s.Fields[0].Type)
-	assert.Equal(t, "field desc", s.Fields[0].Description)
-	assert.True(t, s.Fields[1].Nullable)
+	if got := s.ID; got != "s1" {
+		t.Errorf("got ID %v, want %v", got, "s1")
+	}
+	if got := s.Name; got != "payments" {
+		t.Errorf("got Name %v, want %v", got, "payments")
+	}
+	if got := s.Version; got != int32(2) {
+		t.Errorf("got Version %v, want %v", got, int32(2))
+	}
+	if !s.Published {
+		t.Error("expected Published to be true")
+	}
+	if len(s.Fields) != 2 {
+		t.Errorf("got len %d, want %d", len(s.Fields), 2)
+	}
+	if got := s.Fields[0].Type; got != "FIELD_TYPE_INT" {
+		t.Errorf("got Fields[0].Type %v, want %v", got, "FIELD_TYPE_INT")
+	}
+	if got := s.Fields[0].Description; got != "field desc" {
+		t.Errorf("got Fields[0].Description %v, want %v", got, "field desc")
+	}
+	if !s.Fields[1].Nullable {
+		t.Error("expected Fields[1].Nullable to be true")
+	}
 }
 
 func TestSchemaFromProto_Nil(t *testing.T) {
-	assert.Nil(t, schemaFromProto(nil))
+	if got := schemaFromProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 }
 
 func TestFieldsToProto_TypeMapping(t *testing.T) {
@@ -111,7 +153,9 @@ func TestFieldsToProto_TypeMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := fieldsToProto([]Field{{Path: "x", Type: tt.input}})
-			assert.Equal(t, tt.expected, result[0].Type)
+			if got := result[0].Type; got != tt.expected {
+				t.Errorf("got Type %v, want %v", got, tt.expected)
+			}
 		})
 	}
 }
@@ -130,13 +174,27 @@ func TestFieldsToProto_WithConstraints(t *testing.T) {
 	}})
 
 	c := result[0].Constraints
-	require.NotNil(t, c)
-	assert.Equal(t, &min, c.Min)
-	assert.Equal(t, &max, c.Max)
-	assert.Equal(t, &minLen, c.MinLength)
-	assert.Equal(t, "^[a-z]+$", *c.Regex)
-	assert.Equal(t, []string{"a", "b"}, c.EnumValues)
-	assert.Equal(t, `{"type":"object"}`, *c.JsonSchema)
+	if c == nil {
+		t.Fatal("expected non-nil Constraints")
+	}
+	if got := c.Min; got != &min {
+		t.Errorf("got Min %v, want %v", got, &min)
+	}
+	if got := c.Max; got != &max {
+		t.Errorf("got Max %v, want %v", got, &max)
+	}
+	if got := c.MinLength; got != &minLen {
+		t.Errorf("got MinLength %v, want %v", got, &minLen)
+	}
+	if got := *c.Regex; got != "^[a-z]+$" {
+		t.Errorf("got Regex %v, want %v", got, "^[a-z]+$")
+	}
+	if got, want := c.EnumValues, []string{"a", "b"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("got EnumValues %v, want %v", got, want)
+	}
+	if got := *c.JsonSchema; got != `{"type":"object"}` {
+		t.Errorf("got JsonSchema %v, want %v", got, `{"type":"object"}`)
+	}
 }
 
 func TestFieldsToProto_OptionalFields(t *testing.T) {
@@ -147,9 +205,15 @@ func TestFieldsToProto_OptionalFields(t *testing.T) {
 		Description: "a field",
 	}})
 
-	assert.Equal(t, "y", *result[0].RedirectTo)
-	assert.Equal(t, "hello", *result[0].DefaultValue)
-	assert.Equal(t, "a field", *result[0].Description)
+	if got := *result[0].RedirectTo; got != "y" {
+		t.Errorf("got RedirectTo %v, want %v", got, "y")
+	}
+	if got := *result[0].DefaultValue; got != "hello" {
+		t.Errorf("got DefaultValue %v, want %v", got, "hello")
+	}
+	if got := *result[0].Description; got != "a field" {
+		t.Errorf("got Description %v, want %v", got, "a field")
+	}
 }
 
 func TestTenantFromProto(t *testing.T) {
@@ -158,12 +222,18 @@ func TestTenantFromProto(t *testing.T) {
 		Id: "t1", Name: "acme", SchemaId: "s1", SchemaVersion: 2,
 		CreatedAt: now, UpdatedAt: now,
 	})
-	assert.Equal(t, "acme", tenant.Name)
-	assert.Equal(t, int32(2), tenant.SchemaVersion)
+	if got := tenant.Name; got != "acme" {
+		t.Errorf("got Name %v, want %v", got, "acme")
+	}
+	if got := tenant.SchemaVersion; got != int32(2) {
+		t.Errorf("got SchemaVersion %v, want %v", got, int32(2))
+	}
 }
 
 func TestTenantFromProto_Nil(t *testing.T) {
-	assert.Nil(t, tenantFromProto(nil))
+	if got := tenantFromProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 }
 
 func TestVersionFromProto(t *testing.T) {
@@ -171,31 +241,45 @@ func TestVersionFromProto(t *testing.T) {
 		Id: "v1", TenantId: "t1", Version: 3, Description: "test",
 		CreatedBy: "admin", CreatedAt: timestamppb.Now(),
 	})
-	assert.Equal(t, int32(3), v.Version)
-	assert.Equal(t, "admin", v.CreatedBy)
+	if got := v.Version; got != int32(3) {
+		t.Errorf("got Version %v, want %v", got, int32(3))
+	}
+	if got := v.CreatedBy; got != "admin" {
+		t.Errorf("got CreatedBy %v, want %v", got, "admin")
+	}
 }
 
 func TestVersionFromProto_Nil(t *testing.T) {
-	assert.Nil(t, versionFromProto(nil))
+	if got := versionFromProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 }
 
 func TestAuditEntryFromProto(t *testing.T) {
 	fp := "app.fee"
 	old := "0.01"
-	new := "0.02"
+	newVal := "0.02"
 	ver := int32(3)
 	e := auditEntryFromProto(&pb.AuditEntry{
 		Id: "e1", TenantId: "t1", Actor: "admin", Action: "set_field",
-		FieldPath: &fp, OldValue: &old, NewValue: &new,
+		FieldPath: &fp, OldValue: &old, NewValue: &newVal,
 		ConfigVersion: &ver, CreatedAt: timestamppb.Now(),
 	})
-	assert.Equal(t, "app.fee", e.FieldPath)
-	assert.Equal(t, "0.01", e.OldValue)
-	assert.Equal(t, int32(3), *e.ConfigVersion)
+	if got := e.FieldPath; got != "app.fee" {
+		t.Errorf("got FieldPath %v, want %v", got, "app.fee")
+	}
+	if got := e.OldValue; got != "0.01" {
+		t.Errorf("got OldValue %v, want %v", got, "0.01")
+	}
+	if got := *e.ConfigVersion; got != int32(3) {
+		t.Errorf("got ConfigVersion %v, want %v", got, int32(3))
+	}
 }
 
 func TestAuditEntryFromProto_Nil(t *testing.T) {
-	assert.Nil(t, auditEntryFromProto(nil))
+	if got := auditEntryFromProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 }
 
 func TestUsageStatsFromProto(t *testing.T) {
@@ -204,22 +288,38 @@ func TestUsageStatsFromProto(t *testing.T) {
 		TenantId: "t1", FieldPath: "app.fee", ReadCount: 42,
 		LastReadBy: &lastBy, LastReadAt: timestamppb.Now(),
 	})
-	assert.Equal(t, int64(42), s.ReadCount)
-	assert.Equal(t, "reader", s.LastReadBy)
-	assert.NotNil(t, s.LastReadAt)
+	if got := s.ReadCount; got != int64(42) {
+		t.Errorf("got ReadCount %v, want %v", got, int64(42))
+	}
+	if got := s.LastReadBy; got != "reader" {
+		t.Errorf("got LastReadBy %v, want %v", got, "reader")
+	}
+	if s.LastReadAt == nil {
+		t.Error("expected non-nil LastReadAt")
+	}
 }
 
 func TestUsageStatsFromProto_Nil(t *testing.T) {
-	assert.Nil(t, usageStatsFromProto(nil))
+	if got := usageStatsFromProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 }
 
 func TestPtrString(t *testing.T) {
-	assert.Nil(t, ptrString(""))
-	assert.Equal(t, "hello", *ptrString("hello"))
+	if got := ptrString(""); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+	if got := *ptrString("hello"); got != "hello" {
+		t.Errorf("got %v, want %v", got, "hello")
+	}
 }
 
 func TestTimeToProto(t *testing.T) {
-	assert.Nil(t, timeToProto(nil))
+	if got := timeToProto(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
 	now := time.Now()
-	assert.NotNil(t, timeToProto(&now))
+	if got := timeToProto(&now); got == nil {
+		t.Error("expected non-nil result")
+	}
 }
