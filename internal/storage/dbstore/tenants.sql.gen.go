@@ -139,6 +139,24 @@ func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, er
 	return i, err
 }
 
+const getTenantByName = `-- name: GetTenantByName :one
+SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants WHERE name = $1
+`
+
+func (q *Queries) GetTenantByName(ctx context.Context, name string) (Tenant, error) {
+	row := q.db.QueryRow(ctx, getTenantByName, name)
+	var i Tenant
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SchemaID,
+		&i.SchemaVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listTenants = `-- name: ListTenants :many
 SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
 ORDER BY created_at DESC

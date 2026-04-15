@@ -24,6 +24,22 @@ func validUUID(s string) bool {
 	return uuidRe.MatchString(s)
 }
 
+// resolveSchema looks up a schema by UUID or name slug.
+func (s *Service) resolveSchema(ctx context.Context, idOrName string) (domain.Schema, error) {
+	if validUUID(idOrName) {
+		return s.store.GetSchemaByID(ctx, idOrName)
+	}
+	return s.store.GetSchemaByName(ctx, idOrName)
+}
+
+// resolveTenant looks up a tenant by UUID or name slug.
+func (s *Service) resolveTenant(ctx context.Context, idOrName string) (domain.Tenant, error) {
+	if validUUID(idOrName) {
+		return s.store.GetTenantByID(ctx, idOrName)
+	}
+	return s.store.GetTenantByName(ctx, idOrName)
+}
+
 func containsStr(slice []string, s string) bool {
 	for _, v := range slice {
 		if v == s {
@@ -95,11 +111,11 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 }
 
 func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.GetSchemaResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, req.Id)
+	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
@@ -110,11 +126,11 @@ func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.
 	var version domain.SchemaVersion
 	if req.Version != nil {
 		version, err = s.store.GetSchemaVersion(ctx, GetSchemaVersionParams{
-			SchemaID: req.Id,
+			SchemaID: schema.ID,
 			Version:  *req.Version,
 		})
 	} else {
-		version, err = s.store.GetLatestSchemaVersion(ctx, req.Id)
+		version, err = s.store.GetLatestSchemaVersion(ctx, schema.ID)
 	}
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -170,11 +186,11 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 }
 
 func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest) (*pb.UpdateSchemaResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, req.Id)
+	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
@@ -183,7 +199,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 	}
 
 	// Get latest version to derive from.
-	latestVersion, err := s.store.GetLatestSchemaVersion(ctx, req.Id)
+	latestVersion, err := s.store.GetLatestSchemaVersion(ctx, schema.ID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get latest version")
 	}
@@ -215,7 +231,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 
 	checksum := computeChecksum(mergedFields)
 	newVersion, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
-		SchemaID:      req.Id,
+		SchemaID:      schema.ID,
 		Version:       latestVersion.Version + 1,
 		ParentVersion: &latestVersion.Version,
 		Description:   ptrString(req.GetVersionDescription()),
@@ -237,11 +253,18 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 }
 
 func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest) (*pb.DeleteSchemaResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
+	}
+	schema, err := s.resolveSchema(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "schema not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to resolve schema")
 	}
 
-	if err := s.store.DeleteSchema(ctx, req.Id); err != nil {
+	if err := s.store.DeleteSchema(ctx, schema.ID); err != nil {
 		s.logger.ErrorContext(ctx, "delete schema", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete schema")
 	}
@@ -250,11 +273,11 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 }
 
 func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaRequest) (*pb.PublishSchemaResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
 
-	schema, err := s.store.GetSchemaByID(ctx, req.Id)
+	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "schema not found")
@@ -263,7 +286,7 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 	}
 
 	version, err := s.store.PublishSchemaVersion(ctx, PublishSchemaVersionParams{
-		SchemaID: req.Id,
+		SchemaID: schema.ID,
 		Version:  req.Version,
 	})
 	if err != nil {
@@ -330,19 +353,20 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 }
 
 func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.GetTenantResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
-	}
-	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
-		return nil, err
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
 
-	tenant, err := s.store.GetTenantByID(ctx, req.Id)
+	// Resolve slug to UUID first — access checks require the canonical UUID.
+	tenant, err := s.resolveTenant(ctx, req.Id)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "tenant not found")
 		}
 		return nil, status.Error(codes.Internal, "failed to get tenant")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
+		return nil, err
 	}
 
 	return &pb.GetTenantResponse{
@@ -394,10 +418,20 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
-	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
+	// Resolve slug to UUID first — access checks require the canonical UUID,
+	// and all downstream store operations use UUIDs as primary keys.
+	resolved, err := s.resolveTenant(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "tenant not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to resolve tenant")
+	}
+	tenantID := resolved.ID
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -409,7 +443,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 		}
 		var err error
 		tenant, err = s.store.UpdateTenantName(ctx, UpdateTenantNameParams{
-			ID:   req.Id,
+			ID:   tenantID,
 			Name: *req.Name,
 		})
 		if err != nil {
@@ -423,7 +457,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	if req.SchemaVersion != nil {
 		var err error
 		tenant, err = s.store.UpdateTenantSchemaVersion(ctx, UpdateTenantSchemaVersionParams{
-			ID:            req.Id,
+			ID:            tenantID,
 			SchemaVersion: *req.SchemaVersion,
 		})
 		if err != nil {
@@ -434,14 +468,14 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 		}
 		// Invalidate cached validators — tenant now uses different field definitions.
 		if s.validatorCache != nil {
-			s.validatorCache.Invalidate(req.Id)
+			s.validatorCache.Invalidate(tenantID)
 		}
 	}
 
 	// If neither field was updated, just fetch current state.
 	if req.Name == nil && req.SchemaVersion == nil {
 		var err error
-		tenant, err = s.store.GetTenantByID(ctx, req.Id)
+		tenant, err = s.store.GetTenantByID(ctx, tenantID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				return nil, status.Error(codes.NotFound, "tenant not found")
@@ -456,14 +490,22 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
-	if !validUUID(req.Id) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	if req.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
-	if err := auth.CheckTenantAccess(ctx, req.Id); err != nil {
+	// Resolve slug to UUID first — access checks require the canonical UUID.
+	tenant, err := s.resolveTenant(ctx, req.Id)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "tenant not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to resolve tenant")
+	}
+	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.DeleteTenant(ctx, req.Id); err != nil {
+	if err := s.store.DeleteTenant(ctx, tenant.ID); err != nil {
 		s.logger.ErrorContext(ctx, "delete tenant", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete tenant")
 	}
