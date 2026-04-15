@@ -1,0 +1,27 @@
+title: "[Idea] "
+labels:
+  - discovery
+body:
+  - type: checkboxes
+    attributes:
+      label: Before posting
+      options:
+        - label: I searched existing discussions and issues for this idea
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this solve, or what use case does it enable?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How do you envision this working? Include examples if possible.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, existing tools, or workarounds you've thought about.
