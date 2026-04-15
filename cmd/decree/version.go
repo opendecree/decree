@@ -16,7 +16,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the CLI version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("ccs %s (commit %s)\n", cliVersion, cliCommit)
+		fmt.Printf("decree %s (commit %s)\n", cliVersion, cliCommit)
 	},
 }
 

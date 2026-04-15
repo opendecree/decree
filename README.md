@@ -156,7 +156,13 @@ decree docgen <schema-id>                          # generate markdown docs
 decree validate --schema s.yaml --config c.yaml   # offline validation
 ```
 
-Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`
+Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`, `--wait`, `--wait-timeout`
+
+Use `--wait` in Docker/Kubernetes init containers to wait for the server to be ready:
+
+```bash
+decree seed config.yaml --server decree:9090 --wait --wait-timeout 60s
+```
 
 ## Quick Start
 
