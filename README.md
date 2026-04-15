@@ -13,9 +13,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/server_coverage-85%25-brightgreen" alt="Server Coverage">
+  <img src="https://img.shields.io/badge/server_coverage-83%25-brightgreen" alt="Server Coverage">
   <img src="https://img.shields.io/badge/Go_SDK_coverage-94%25-brightgreen" alt="Go SDK Coverage">
-  <img src="https://img.shields.io/badge/Python_SDK_coverage-98%25-brightgreen" alt="Python SDK Coverage">
 </p>
 
 <p align="center">Schema-driven business configuration management for multi-tenant services.</p>
