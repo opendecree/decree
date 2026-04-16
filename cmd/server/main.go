@@ -160,7 +160,7 @@ func run() int {
 		authInterceptor = jwtInterceptor
 		logger.InfoContext(ctx, "JWT auth enabled", "jwks_url", cfg.JWTJWKSURL)
 	} else {
-		authInterceptor = auth.NewMetadataInterceptor()
+		authInterceptor = auth.NewMetadataInterceptor(tenantResolver(schemaStoreVal))
 		logger.InfoContext(ctx, "metadata auth enabled — pass x-subject, x-role, x-tenant-id headers")
 	}
 
@@ -267,6 +267,21 @@ type serverConfig struct {
 	JWTIssuer      string
 	JWTJWKSURL     string
 	LogLevel       string
+}
+
+// tenantResolver creates an auth.TenantResolver from a schema store.
+// Resolves tenant name slugs to UUIDs so x-tenant-id headers accept both.
+func tenantResolver(store schema.Store) auth.TenantResolver {
+	return func(ctx context.Context, idOrName string) (string, error) {
+		if domain.IsUUID(idOrName) {
+			return idOrName, nil
+		}
+		tenant, err := store.GetTenantByName(ctx, idOrName)
+		if err != nil {
+			return "", err
+		}
+		return tenant.ID, nil
+	}
 }
 
 func loadConfig() serverConfig {
