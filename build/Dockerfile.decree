@@ -4,11 +4,15 @@ FROM golang:1.24-bookworm AS builder
 WORKDIR /app
 
 # Cache dependencies — this layer only rebuilds when go.mod/go.sum change.
-COPY cmd/decree/go.mod cmd/decree/go.sum ./cmd/decree/
-COPY api/go.mod api/go.sum ./api/
-COPY sdk/adminclient/go.mod sdk/adminclient/go.sum ./sdk/adminclient/
-COPY sdk/configclient/go.mod sdk/configclient/go.sum ./sdk/configclient/
-COPY sdk/tools/go.mod sdk/tools/go.sum ./sdk/tools/
+# Some SDK modules have no external deps and thus no go.sum; go.su[m] glob
+# copies go.sum only when it exists without failing.
+COPY cmd/decree/go.mod cmd/decree/go.su[m] ./cmd/decree/
+COPY api/go.mod api/go.su[m] ./api/
+COPY sdk/adminclient/go.mod sdk/adminclient/go.su[m] ./sdk/adminclient/
+COPY sdk/configclient/go.mod sdk/configclient/go.su[m] ./sdk/configclient/
+COPY sdk/configwatcher/go.mod sdk/configwatcher/go.su[m] ./sdk/configwatcher/
+COPY sdk/grpctransport/go.mod sdk/grpctransport/go.su[m] ./sdk/grpctransport/
+COPY sdk/tools/go.mod sdk/tools/go.su[m] ./sdk/tools/
 RUN cd cmd/decree && go mod download
 
 # Build — this layer rebuilds on any source change, but deps are cached.
