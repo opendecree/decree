@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetTenantByID :one
 SELECT * FROM tenants WHERE id = $1;
 
+-- name: GetTenantByName :one
+SELECT * FROM tenants WHERE name = $1;
+
 -- name: ListTenants :many
 SELECT * FROM tenants
 ORDER BY created_at DESC

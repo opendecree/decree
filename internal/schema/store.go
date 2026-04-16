@@ -138,6 +138,7 @@ type Store interface {
 	// Tenants.
 	CreateTenant(ctx context.Context, arg CreateTenantParams) (domain.Tenant, error)
 	GetTenantByID(ctx context.Context, id string) (domain.Tenant, error)
+	GetTenantByName(ctx context.Context, name string) (domain.Tenant, error)
 	ListTenants(ctx context.Context, arg ListTenantsParams) ([]domain.Tenant, error)
 	ListTenantsBySchema(ctx context.Context, arg ListTenantsBySchemaParams) ([]domain.Tenant, error)
 	UpdateTenantName(ctx context.Context, arg UpdateTenantNameParams) (domain.Tenant, error)

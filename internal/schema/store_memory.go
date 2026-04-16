@@ -293,6 +293,18 @@ func (m *MemoryStore) GetTenantByID(_ context.Context, id string) (domain.Tenant
 	return t, nil
 }
 
+func (m *MemoryStore) GetTenantByName(_ context.Context, name string) (domain.Tenant, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, t := range m.tenants {
+		if t.Name == name {
+			return t, nil
+		}
+	}
+	return domain.Tenant{}, domain.ErrNotFound
+}
+
 func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]domain.Tenant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

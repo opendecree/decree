@@ -82,6 +82,11 @@ func (m *mockStore) GetTenantByID(ctx context.Context, id string) (domain.Tenant
 	return args.Get(0).(domain.Tenant), args.Error(1)
 }
 
+func (m *mockStore) GetTenantByName(ctx context.Context, name string) (domain.Tenant, error) {
+	args := m.Called(ctx, name)
+	return args.Get(0).(domain.Tenant), args.Error(1)
+}
+
 func (m *mockStore) ListTenants(ctx context.Context, arg ListTenantsParams) ([]domain.Tenant, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]domain.Tenant), args.Error(1)

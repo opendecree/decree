@@ -99,8 +99,9 @@ type Store interface {
 	GetConfigValueAtVersion(ctx context.Context, arg GetConfigValueAtVersionParams) (GetConfigValueAtVersionRow, error)
 	GetFullConfigAtVersion(ctx context.Context, arg GetFullConfigAtVersionParams) ([]GetFullConfigAtVersionRow, error)
 
-	// Tenant lookup (needed for validation).
+	// Tenant lookup (needed for validation and slug resolution).
 	GetTenantByID(ctx context.Context, id string) (domain.Tenant, error)
+	GetTenantByName(ctx context.Context, name string) (domain.Tenant, error)
 
 	// Schema field lookup (needed for validation).
 	GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error)
