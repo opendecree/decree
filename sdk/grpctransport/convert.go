@@ -439,23 +439,25 @@ func fieldTypeToString(ft pb.FieldType) string {
 }
 
 // stringToFieldType converts a string type name to the proto FieldType enum.
+// Accepts both short names ("integer", "string") and proto enum names
+// ("FIELD_TYPE_INT", "FIELD_TYPE_STRING").
 func stringToFieldType(s string) pb.FieldType {
 	switch s {
-	case "integer":
+	case "integer", "INT", "FIELD_TYPE_INT":
 		return pb.FieldType_FIELD_TYPE_INT
-	case "string":
+	case "string", "STRING", "FIELD_TYPE_STRING":
 		return pb.FieldType_FIELD_TYPE_STRING
-	case "time":
+	case "time", "TIME", "FIELD_TYPE_TIME":
 		return pb.FieldType_FIELD_TYPE_TIME
-	case "duration":
+	case "duration", "DURATION", "FIELD_TYPE_DURATION":
 		return pb.FieldType_FIELD_TYPE_DURATION
-	case "url":
+	case "url", "URL", "FIELD_TYPE_URL":
 		return pb.FieldType_FIELD_TYPE_URL
-	case "json":
+	case "json", "JSON", "FIELD_TYPE_JSON":
 		return pb.FieldType_FIELD_TYPE_JSON
-	case "number":
+	case "number", "NUMBER", "FIELD_TYPE_NUMBER":
 		return pb.FieldType_FIELD_TYPE_NUMBER
-	case "bool":
+	case "bool", "BOOL", "FIELD_TYPE_BOOL":
 		return pb.FieldType_FIELD_TYPE_BOOL
 	default:
 		return pb.FieldType_FIELD_TYPE_UNSPECIFIED
