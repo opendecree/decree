@@ -19,7 +19,7 @@ func ctxWithMetadata(kvs map[string]string) context.Context {
 // --- UnaryInterceptor ---
 
 func TestMetadata_ValidSuperadmin(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{"x-subject": "admin@example.com"})
@@ -30,7 +30,7 @@ func TestMetadata_ValidSuperadmin(t *testing.T) {
 }
 
 func TestMetadata_DefaultsToSuperadmin(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{"x-subject": "user@example.com"})
@@ -50,7 +50,7 @@ func TestMetadata_DefaultsToSuperadmin(t *testing.T) {
 }
 
 func TestMetadata_AdminWithTenant(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{
@@ -74,7 +74,7 @@ func TestMetadata_AdminWithTenant(t *testing.T) {
 }
 
 func TestMetadata_UserWithTenant(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{
@@ -96,7 +96,7 @@ func TestMetadata_UserWithTenant(t *testing.T) {
 }
 
 func TestMetadata_MissingSubject(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{"x-role": "admin"})
@@ -108,7 +108,7 @@ func TestMetadata_MissingSubject(t *testing.T) {
 }
 
 func TestMetadata_NoMetadata(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := context.Background()
@@ -119,7 +119,7 @@ func TestMetadata_NoMetadata(t *testing.T) {
 }
 
 func TestMetadata_UnknownRole(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{
@@ -134,7 +134,7 @@ func TestMetadata_UnknownRole(t *testing.T) {
 }
 
 func TestMetadata_AdminMissingTenant(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{
@@ -149,7 +149,7 @@ func TestMetadata_AdminMissingTenant(t *testing.T) {
 }
 
 func TestMetadata_UserMissingTenant(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{
@@ -163,7 +163,7 @@ func TestMetadata_UserMissingTenant(t *testing.T) {
 }
 
 func TestMetadata_HealthCheckBypass(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
 	// No headers at all — health checks skip auth.
@@ -175,7 +175,7 @@ func TestMetadata_HealthCheckBypass(t *testing.T) {
 }
 
 func TestMetadata_StreamInterceptor(t *testing.T) {
-	interceptor := NewMetadataInterceptor()
+	interceptor := NewMetadataInterceptor(nil)
 	stream := interceptor.StreamInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{

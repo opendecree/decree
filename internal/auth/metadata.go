@@ -17,13 +17,21 @@ const (
 	headerTenantID = "x-tenant-id"
 )
 
+// TenantResolver resolves a tenant identifier (UUID or name slug) to a UUID.
+// Used by MetadataInterceptor to normalize x-tenant-id header values.
+type TenantResolver func(ctx context.Context, idOrName string) (string, error)
+
 // MetadataInterceptor extracts identity from gRPC metadata headers
 // instead of JWT tokens. Used when JWT auth is disabled.
-type MetadataInterceptor struct{}
+type MetadataInterceptor struct {
+	resolveTenant TenantResolver
+}
 
 // NewMetadataInterceptor creates a new metadata-based auth interceptor.
-func NewMetadataInterceptor() *MetadataInterceptor {
-	return &MetadataInterceptor{}
+// If resolver is non-nil, tenant IDs in x-tenant-id headers are resolved
+// from name slugs to UUIDs before storing in the auth context.
+func NewMetadataInterceptor(resolver TenantResolver) *MetadataInterceptor {
+	return &MetadataInterceptor{resolveTenant: resolver}
 }
 
 // UnaryInterceptor returns a gRPC unary server interceptor.
@@ -70,14 +78,23 @@ func (m *MetadataInterceptor) extractClaims(ctx context.Context) (context.Contex
 	}
 
 	// Parse tenant IDs — comma-separated in x-tenant-id header.
+	// If a resolver is configured, slugs are resolved to UUIDs.
 	var tenantIDs []string
 	rawTenantID := firstMetadataValue(md, headerTenantID)
 	if rawTenantID != "" {
 		for _, id := range strings.Split(rawTenantID, ",") {
 			id = strings.TrimSpace(id)
-			if id != "" {
-				tenantIDs = append(tenantIDs, id)
+			if id == "" {
+				continue
 			}
+			if m.resolveTenant != nil {
+				resolved, err := m.resolveTenant(ctx, id)
+				if err != nil {
+					return nil, status.Errorf(codes.InvalidArgument, "failed to resolve tenant %q: %v", id, err)
+				}
+				id = resolved
+			}
+			tenantIDs = append(tenantIDs, id)
 		}
 	}
 	if role != RoleSuperAdmin && len(tenantIDs) == 0 {
