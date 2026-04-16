@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/validation"
@@ -31,20 +33,33 @@ const (
 
 func newTestService() (*Service, *mockStore, *mockCache, *mockPublisher) {
 	store := &mockStore{}
-	cache := &mockCache{}
+	c := &mockCache{}
 	pub := &mockPublisher{}
 	sub := &mockSubscriber{}
-	svc := NewService(store, cache, pub, sub, testLogger, nil, nil, nil)
-	return svc, store, cache, pub
+	svc := NewService(ServiceConfig{
+		Store:      store,
+		Cache:      c,
+		Publisher:  pub,
+		Subscriber: sub,
+		Logger:     testLogger,
+	})
+	return svc, store, c, pub
 }
 
 func newTestServiceWithValidation() (*Service, *mockStore) {
 	store := &mockStore{}
-	cache := &mockCache{}
+	c := &mockCache{}
 	pub := &mockPublisher{}
 	sub := &mockSubscriber{}
 	vf := validation.NewValidatorFactory(store)
-	svc := NewService(store, cache, pub, sub, testLogger, nil, nil, vf)
+	svc := NewService(ServiceConfig{
+		Store:      store,
+		Cache:      c,
+		Publisher:  pub,
+		Subscriber: sub,
+		Logger:     testLogger,
+		Validators: vf,
+	})
 	return svc, store
 }
 
@@ -525,4 +540,170 @@ values:
 	require.NoError(t, err)
 	// Only app.missing should be set
 	store.AssertNumberOfCalls(t, "SetConfigValue", 1)
+}
+
+// --- Usage Recording ---
+
+func TestGetField_RecordsUsage(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	auditStore := audit.NewMemoryStore()
+	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
+		FlushInterval: time.Hour,
+		Logger:        testLogger,
+	})
+	svc := NewService(ServiceConfig{
+		Store:    store,
+		Cache:    c,
+		Logger:   testLogger,
+		Recorder: recorder,
+	})
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{FieldPath: "app.fee", Value: strPtr("0.5")}, nil)
+
+	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "app.fee"})
+	require.NoError(t, err)
+
+	require.NoError(t, recorder.Flush(context.Background()))
+
+	stats, err := auditStore.GetFieldUsage(context.Background(), audit.GetFieldUsageParams{
+		TenantID:  tenantID1,
+		FieldPath: "app.fee",
+	})
+	require.NoError(t, err)
+	require.Len(t, stats, 1)
+	assert.Equal(t, int64(1), stats[0].ReadCount)
+}
+
+func TestGetConfig_RecordsUsage(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	auditStore := audit.NewMemoryStore()
+	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
+		FlushInterval: time.Hour,
+		Logger:        testLogger,
+	})
+	svc := NewService(ServiceConfig{
+		Store:    store,
+		Cache:    c,
+		Logger:   testLogger,
+		Recorder: recorder,
+	})
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	c.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
+		Return([]GetFullConfigAtVersionRow{
+			{FieldPath: "a.x", Value: strPtr("1")},
+			{FieldPath: "a.y", Value: strPtr("2")},
+		}, nil)
+	c.On("Set", ctx, tenantID1, int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
+		Return(nil)
+
+	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.NoError(t, err)
+
+	require.NoError(t, recorder.Flush(context.Background()))
+
+	for _, path := range []string{"a.x", "a.y"} {
+		stats, err := auditStore.GetFieldUsage(context.Background(), audit.GetFieldUsageParams{
+			TenantID:  tenantID1,
+			FieldPath: path,
+		})
+		require.NoError(t, err)
+		require.Len(t, stats, 1, "path %s", path)
+		assert.Equal(t, int64(1), stats[0].ReadCount)
+	}
+}
+
+func TestGetFields_RecordsUsage(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	auditStore := audit.NewMemoryStore()
+	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
+		FlushInterval: time.Hour,
+		Logger:        testLogger,
+	})
+	svc := NewService(ServiceConfig{
+		Store:    store,
+		Cache:    c,
+		Logger:   testLogger,
+		Recorder: recorder,
+	})
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// Each requested path returns a different row.
+	store.On("GetConfigValueAtVersion", ctx, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.x", Version: 1}).
+		Return(GetConfigValueAtVersionRow{FieldPath: "b.x", Value: strPtr("v1")}, nil)
+	store.On("GetConfigValueAtVersion", ctx, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.y", Version: 1}).
+		Return(GetConfigValueAtVersionRow{FieldPath: "b.y", Value: strPtr("v2")}, nil)
+
+	_, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
+		TenantId:   tenantID1,
+		FieldPaths: []string{"b.x", "b.y"},
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, recorder.Flush(context.Background()))
+
+	stats, err := auditStore.GetTenantUsage(context.Background(), audit.GetTenantUsageParams{
+		TenantID: tenantID1,
+	})
+	require.NoError(t, err)
+	assert.Len(t, stats, 2)
+}
+
+func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	auditStore := audit.NewMemoryStore()
+	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
+		FlushInterval: time.Hour,
+		Logger:        testLogger,
+	})
+	svc := NewService(ServiceConfig{
+		Store:    store,
+		Cache:    c,
+		Logger:   testLogger,
+		Recorder: recorder,
+	})
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 5}, nil)
+	c.On("Get", ctx, tenantID1, int32(5)).
+		Return(map[string]string{"a.x": "1", "a.y": "2"}, nil)
+
+	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.NoError(t, err)
+
+	require.NoError(t, recorder.Flush(context.Background()))
+
+	stats, err := auditStore.GetTenantUsage(context.Background(), audit.GetTenantUsageParams{
+		TenantID: tenantID1,
+	})
+	require.NoError(t, err)
+	assert.Len(t, stats, 2)
+}
+
+func TestGetField_NilRecorder_NoPanic(t *testing.T) {
+	// Default test service has nil recorder — verify reads don't panic.
+	svc, store, _, _ := newTestService()
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{FieldPath: "x", Value: strPtr("1")}, nil)
+
+	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "x"})
+	require.NoError(t, err)
 }

@@ -55,7 +55,16 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	schemaSvc := schema.NewService(memSchema, slog.Default(), telemetry.NewSchemaMetrics(telemetry.Config{}), validatorFactory.Cache())
 	pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 
-	configSvc := config.NewService(memConfig, cache.NewMemoryCache(0), memPubSub, memPubSub, slog.Default(), telemetry.NewCacheMetrics(telemetry.Config{}), telemetry.NewConfigMetrics(telemetry.Config{}), validatorFactory)
+	configSvc := config.NewService(config.ServiceConfig{
+		Store:        memConfig,
+		Cache:        cache.NewMemoryCache(0),
+		Publisher:    memPubSub,
+		Subscriber:   memPubSub,
+		Logger:       slog.Default(),
+		CacheMetrics: telemetry.NewCacheMetrics(telemetry.Config{}),
+		Metrics:      telemetry.NewConfigMetrics(telemetry.Config{}),
+		Validators:   validatorFactory,
+	})
 	pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
 
 	auditSvc := audit.NewService(audit.NewMemoryStore(), slog.Default(), nil)
