@@ -64,6 +64,54 @@ func TestGetFields_InvalidTenantID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+// --- Slug resolution tests ---
+
+func TestGetConfig_ByTenantName(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	// Resolve "acme" slug → tenant UUID
+	store.On("GetTenantByName", mock.Anything, "acme").Return(domain.Tenant{
+		ID: tenantID1, Name: "acme",
+	}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{
+		TenantID: tenantID1, Version: 1,
+	}, nil)
+	// Return a cached result so we skip the DB path
+	cached := map[string]string{"key": "val"}
+	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
+
+	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: "acme"})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID1, resp.Config.TenantId)
+	store.AssertCalled(t, "GetTenantByName", mock.Anything, "acme")
+}
+
+func TestGetConfig_ByTenantUUID(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	// UUID goes directly to version lookup — no name resolution
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{
+		TenantID: tenantID1, Version: 1,
+	}, nil)
+	cached := map[string]string{"key": "val"}
+	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
+
+	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.NoError(t, err)
+	assert.Equal(t, tenantID1, resp.Config.TenantId)
+	store.AssertNotCalled(t, "GetTenantByName", mock.Anything, mock.Anything)
+}
+
+func TestGetConfig_TenantNameNotFound(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	store.On("GetTenantByName", mock.Anything, "nonexistent").Return(domain.Tenant{}, domain.ErrNotFound)
+
+	_, err := svc.GetConfig(context.Background(), &pb.GetConfigRequest{TenantId: "nonexistent"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
 // --- SetFields ---
 
 func TestSetFields_Success(t *testing.T) {

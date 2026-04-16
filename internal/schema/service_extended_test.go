@@ -71,8 +71,10 @@ func TestDeleteSchema_InvalidID(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	// "bad" is not a UUID, so resolveSchema tries name lookup.
+	store.On("GetSchemaByName", mock.Anything, "bad").Return(domain.Schema{}, domain.ErrNotFound)
 	_, err := svc.DeleteSchema(context.Background(), &pb.DeleteSchemaRequest{Id: "bad"})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 // --- GetTenant ---
@@ -141,8 +143,9 @@ func TestDeleteTenant_InvalidID(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	store.On("GetTenantByName", mock.Anything, "bad").Return(domain.Tenant{}, domain.ErrNotFound)
 	_, err := svc.DeleteTenant(context.Background(), &pb.DeleteTenantRequest{Id: "bad"})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 // --- LockField ---
@@ -204,6 +207,7 @@ func TestUpdateTenant_UpdateName_Success(t *testing.T) {
 	updated := testTenant()
 	updated.Name = newName
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("UpdateTenantName", mock.Anything, UpdateTenantNameParams{
 		ID:   testTenantID,
 		Name: newName,
@@ -226,6 +230,7 @@ func TestUpdateTenant_UpdateSchemaVersion_Success(t *testing.T) {
 	updated := testTenant()
 	updated.SchemaVersion = newVersion
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("UpdateTenantSchemaVersion", mock.Anything, UpdateTenantSchemaVersionParams{
 		ID:            testTenantID,
 		SchemaVersion: newVersion,
@@ -251,6 +256,7 @@ func TestUpdateTenant_UpdateBothNameAndVersion(t *testing.T) {
 	afterVersion := afterName
 	afterVersion.SchemaVersion = newVersion
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("UpdateTenantName", mock.Anything, UpdateTenantNameParams{
 		ID:   testTenantID,
 		Name: newName,
@@ -289,14 +295,17 @@ func TestUpdateTenant_InvalidID(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	// "bad" is not a UUID, so resolveTenant tries name lookup.
+	store.On("GetTenantByName", mock.Anything, "bad").Return(domain.Tenant{}, domain.ErrNotFound)
 	_, err := svc.UpdateTenant(context.Background(), &pb.UpdateTenantRequest{Id: "bad"})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestUpdateTenant_InvalidSlugName(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	badName := "NOT A SLUG!"
 	_, err := svc.UpdateTenant(context.Background(), &pb.UpdateTenantRequest{
 		Id:   testTenantID,
@@ -309,6 +318,7 @@ func TestUpdateTenant_NameNotFound(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	newName := "new-name"
 	store.On("UpdateTenantName", mock.Anything, mock.Anything).Return(domain.Tenant{}, domain.ErrNotFound)
 
@@ -323,6 +333,7 @@ func TestUpdateTenant_SchemaVersionNotFound(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	v := int32(99)
 	store.On("UpdateTenantSchemaVersion", mock.Anything, mock.Anything).Return(domain.Tenant{}, domain.ErrNotFound)
 
@@ -355,6 +366,7 @@ func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 	updated := testTenant()
 	updated.SchemaVersion = newVersion
 
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("UpdateTenantSchemaVersion", mock.Anything, mock.Anything).Return(updated, nil)
 
 	resp, err := svc.UpdateTenant(context.Background(), &pb.UpdateTenantRequest{
@@ -364,6 +376,32 @@ func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, newVersion, resp.Tenant.SchemaVersion)
 	store.AssertExpectations(t)
+}
+
+// --- Slug resolution tests ---
+
+func TestGetTenant_ByName(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+
+	store.On("GetTenantByName", mock.Anything, "acme").Return(testTenant(), nil)
+
+	resp, err := svc.GetTenant(context.Background(), &pb.GetTenantRequest{Id: "acme"})
+	require.NoError(t, err)
+	assert.Equal(t, testTenantID, resp.Tenant.Id)
+}
+
+func TestGetSchema_ByName(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+
+	store.On("GetSchemaByName", mock.Anything, "test-schema").Return(testSchema(), nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(1), nil)
+	store.On("GetSchemaFields", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
+
+	resp, err := svc.GetSchema(context.Background(), &pb.GetSchemaRequest{Id: "test-schema"})
+	require.NoError(t, err)
+	assert.Equal(t, "test-schema", resp.Schema.Name)
 }
 
 // --- ExportSchema ---
@@ -508,8 +546,9 @@ func TestExportSchema_InvalidID(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, testLogger, nil, nil)
 
+	store.On("GetSchemaByName", mock.Anything, "bad").Return(domain.Schema{}, domain.ErrNotFound)
 	_, err := svc.ExportSchema(context.Background(), &pb.ExportSchemaRequest{Id: "bad"})
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 // --- ImportSchema ---

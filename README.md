@@ -137,22 +137,22 @@ go install github.com/opendecree/decree/cmd/decree@latest
 decree schema list
 decree schema import --publish schema.yaml      # import + auto-publish
 
-decree tenant create --name acme --schema <id> --schema-version 1
-decree config set <tenant-id> payments.fee 0.5%
-decree config get-all <tenant-id>
-decree config versions <tenant-id>
-decree config rollback <tenant-id> 2
+decree tenant create --name acme --schema payroll-service --schema-version 1
+decree config set acme payments.fee 0.5%          # use tenant name or UUID
+decree config get-all acme
+decree config versions acme
+decree config rollback acme 2
 
-decree watch <tenant-id>                          # live stream
-decree lock set <tenant-id> payments.currency     # lock field
-decree audit query --tenant <tenant-id> --since 24h
+decree watch acme                                  # live stream
+decree lock set acme payments.currency             # lock field
+decree audit query --tenant acme --since 24h
 
 # Power tools
 decree seed fixtures/billing.yaml                 # bootstrap from a fixture
-decree dump <tenant-id> > backup.yaml             # full tenant backup
-decree diff <tenant-id> 1 2                       # diff two config versions
+decree dump acme > backup.yaml                    # full tenant backup
+decree diff acme 1 2                              # diff two config versions
 decree diff --old v1.yaml --new v2.yaml           # diff two files
-decree docgen <schema-id>                          # generate markdown docs
+decree docgen payroll-service                      # use schema name or UUID
 decree validate --schema s.yaml --config c.yaml   # offline validation
 ```
 
@@ -322,6 +322,8 @@ The API is defined in Protocol Buffers under [`proto/`](proto/), published to BS
 - **AuditService** — query change history and usage statistics
 
 Values use a `TypedValue` oneof — integer, number, string, bool, timestamp, duration, url, json — with null support.
+
+All endpoints that accept a tenant or schema ID also accept the **name slug** — the server resolves automatically. Use UUIDs or human-readable names interchangeably:
 
 Generate client stubs in any language from BSR, or use the official SDKs:
 

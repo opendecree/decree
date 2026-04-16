@@ -223,6 +223,18 @@ func (s *MemoryStore) GetTenantByID(_ context.Context, id string) (domain.Tenant
 	return t, nil
 }
 
+func (s *MemoryStore) GetTenantByName(_ context.Context, name string) (domain.Tenant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, t := range s.tenants {
+		if t.Name == name {
+			return t, nil
+		}
+	}
+	return domain.Tenant{}, domain.ErrNotFound
+}
+
 // SetTenant is a test helper to seed tenant data.
 func (s *MemoryStore) SetTenant(t domain.Tenant) {
 	s.mu.Lock()

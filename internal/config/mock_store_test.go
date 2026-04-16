@@ -61,6 +61,11 @@ func (m *mockStore) GetTenantByID(ctx context.Context, id string) (domain.Tenant
 	return args.Get(0).(domain.Tenant), args.Error(1)
 }
 
+func (m *mockStore) GetTenantByName(ctx context.Context, name string) (domain.Tenant, error) {
+	args := m.Called(ctx, name)
+	return args.Get(0).(domain.Tenant), args.Error(1)
+}
+
 func (m *mockStore) GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error) {
 	args := m.Called(ctx, schemaVersionID)
 	return args.Get(0).([]domain.SchemaField), args.Error(1)
