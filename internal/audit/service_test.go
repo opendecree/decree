@@ -106,11 +106,19 @@ func TestQueryWriteLog_DefaultPageSize(t *testing.T) {
 	ctx := context.Background()
 
 	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
-		return p.Limit == 50
+		return p.Limit == 51 // 50 (default page size) + 1 (to detect next page)
 	})).Return([]domain.AuditWriteLog{}, nil)
 
 	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{})
 	require.NoError(t, err)
+}
+
+func TestQueryWriteLog_InvalidPageToken(t *testing.T) {
+	svc, _ := newTestService()
+	ctx := context.Background()
+
+	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageToken: "garbage"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- GetFieldUsage ---

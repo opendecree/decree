@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -51,14 +52,16 @@ func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string,
 }
 
 func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogRequest) (*pb.QueryWriteLogResponse, error) {
-	pageSize := req.PageSize
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 50
+	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
+
+	offset, err := pagination.DecodePageToken(req.PageToken)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
 	params := QueryWriteLogParams{
-		Limit:  pageSize,
-		Offset: 0,
+		Limit:  pageSize + 1,
+		Offset: offset,
 	}
 	if req.TenantId != nil {
 		resolved, err := s.resolveTenantID(ctx, *req.TenantId)
@@ -88,12 +91,20 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		return nil, status.Error(codes.Internal, "failed to query audit log")
 	}
 
+	nextToken := pagination.NextPageToken(pageSize, int32(len(entries)), offset)
+	if int32(len(entries)) > pageSize {
+		entries = entries[:pageSize]
+	}
+
 	pbEntries := make([]*pb.AuditEntry, 0, len(entries))
 	for _, e := range entries {
 		pbEntries = append(pbEntries, auditEntryToProto(e))
 	}
 
-	return &pb.QueryWriteLogResponse{Entries: pbEntries}, nil
+	return &pb.QueryWriteLogResponse{
+		Entries:       pbEntries,
+		NextPageToken: nextToken,
+	}, nil
 }
 
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
