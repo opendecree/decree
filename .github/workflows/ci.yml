@@ -176,6 +176,38 @@ jobs:
       - name: Coverage ratchet
         run: ./scripts/check-coverage.sh
 
+  sdk-compat:
+    name: SDK compat (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        go: ["1.22", "1.23"]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Build SDK core modules
+        run: |
+          cd sdk/configclient && go build ./...
+          cd ../adminclient && go build ./...
+          cd ../configwatcher && go build ./...
+
+      - name: Test SDK core modules
+        run: |
+          cd sdk/configclient && go test ./... -count=1 &
+          cd sdk/adminclient && go test ./... -count=1 &
+          cd sdk/configwatcher && go test ./... -count=1 &
+          wait
+
   docs:
     name: Docs check
     runs-on: ubuntu-latest
@@ -314,11 +346,11 @@ jobs:
   check:
     name: CI check
     if: always()
-    needs: [lint, test, docs, e2e, examples]
+    needs: [lint, test, sdk-compat, docs, e2e, examples]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: lint, test, e2e, examples
+          allowed-skips: lint, test, sdk-compat, e2e, examples
