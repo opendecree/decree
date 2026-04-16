@@ -51,11 +51,12 @@ No existing open-source tool combines a schema-first approach to typed configura
 
 ## SDKs
 
-| Language | Package | Install |
-|----------|---------|---------|
-| **Go** | 4 modules | `go get github.com/opendecree/decree/sdk/configclient@latest` |
-| **Python** | [`opendecree`](https://pypi.org/project/opendecree/) | `pip install opendecree` |
-| **TypeScript** | [`@opendecree/sdk`](https://www.npmjs.com/package/@opendecree/sdk) | `npm install @opendecree/sdk` |
+| SDK | Language | Protocol | Status | Version | Install |
+|-----|----------|----------|--------|---------|---------|
+| [decree](sdk/) | ![Go](https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![Go release](https://img.shields.io/github/v/release/opendecree/decree?include_prereleases&label=)](https://github.com/opendecree/decree/releases) | `go get github.com/opendecree/decree/sdk/grpctransport@latest` |
+| [decree-python](https://github.com/opendecree/decree-python) | ![Python](https://img.shields.io/badge/-Python-3776AB?logo=python&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![PyPI](https://img.shields.io/pypi/v/opendecree?label=)](https://pypi.org/project/opendecree/) | `pip install opendecree` |
+| [decree-typescript](https://github.com/opendecree/decree-typescript) | ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![npm](https://img.shields.io/npm/v/@opendecree/sdk?label=)](https://www.npmjs.com/package/@opendecree/sdk) | `npm install @opendecree/sdk` |
+| [REST API](#rest-api) | Any | ![REST](https://img.shields.io/badge/-REST%2FJSON-0a7ea4?logo=openapiinitiative&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | — | `curl` |
 
 ### Go
 
