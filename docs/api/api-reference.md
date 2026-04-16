@@ -102,11 +102,12 @@
   
     - [SchemaService](#centralconfig-v1-SchemaService)
   
-- [centralconfig/v1/version_service.proto](#centralconfig_v1_version_service-proto)
-    - [GetServerVersionRequest](#centralconfig-v1-GetServerVersionRequest)
-    - [GetServerVersionResponse](#centralconfig-v1-GetServerVersionResponse)
+- [centralconfig/v1/server_service.proto](#centralconfig_v1_server_service-proto)
+    - [GetServerInfoRequest](#centralconfig-v1-GetServerInfoRequest)
+    - [GetServerInfoResponse](#centralconfig-v1-GetServerInfoResponse)
+    - [GetServerInfoResponse.FeaturesEntry](#centralconfig-v1-GetServerInfoResponse-FeaturesEntry)
   
-    - [VersionService](#centralconfig-v1-VersionService)
+    - [ServerService](#centralconfig-v1-ServerService)
   
 - [Scalar Value Types](#scalar-value-types)
 
@@ -1656,26 +1657,26 @@ Schema lifecycle.
 
 
 
-<a name="centralconfig_v1_version_service-proto"></a>
+<a name="centralconfig_v1_server_service-proto"></a>
 <p align="right"><a href="#top">Top</a></p>
 
-## centralconfig/v1/version_service.proto
+## centralconfig/v1/server_service.proto
 
 
 
-<a name="centralconfig-v1-GetServerVersionRequest"></a>
+<a name="centralconfig-v1-GetServerInfoRequest"></a>
 
-### GetServerVersionRequest
-
-
+### GetServerInfoRequest
 
 
 
 
 
-<a name="centralconfig-v1-GetServerVersionResponse"></a>
 
-### GetServerVersionResponse
+
+<a name="centralconfig-v1-GetServerInfoResponse"></a>
+
+### GetServerInfoResponse
 
 
 
@@ -1683,6 +1684,23 @@ Schema lifecycle.
 | ----- | ---- | ----- | ----------- |
 | version | [string](#string) |  | Semantic version string (e.g. &#34;1.2.3&#34; or &#34;dev&#34;). |
 | commit | [string](#string) |  | Git commit hash. |
+| features | [GetServerInfoResponse.FeaturesEntry](#centralconfig-v1-GetServerInfoResponse-FeaturesEntry) | repeated | Enabled server features. Keys are feature names, values indicate enabled state. Known features: schema, config, audit, usage_tracking, jwt_auth, http_gateway. |
+
+
+
+
+
+
+<a name="centralconfig-v1-GetServerInfoResponse-FeaturesEntry"></a>
+
+### GetServerInfoResponse.FeaturesEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [bool](#bool) |  |  |
 
 
 
@@ -1695,14 +1713,15 @@ Schema lifecycle.
  
 
 
-<a name="centralconfig-v1-VersionService"></a>
+<a name="centralconfig-v1-ServerService"></a>
 
-### VersionService
-VersionService provides server version information.
+### ServerService
+ServerService provides server metadata and capability discovery.
+Always registered, no authentication required.
 
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
-| GetServerVersion | [GetServerVersionRequest](#centralconfig-v1-GetServerVersionRequest) | [GetServerVersionResponse](#centralconfig-v1-GetServerVersionResponse) | GetServerVersion returns the server&#39;s build version and commit hash. |
+| GetServerInfo | [GetServerInfoRequest](#centralconfig-v1-GetServerInfoRequest) | [GetServerInfoResponse](#centralconfig-v1-GetServerInfoResponse) | GetServerInfo returns the server&#39;s version, commit hash, and enabled features. |
 
  
 

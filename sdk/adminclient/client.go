@@ -6,13 +6,14 @@
 package adminclient
 
 // Client wraps transport implementations for SchemaService, ConfigService,
-// and AuditService with an ergonomic API for administrative operations.
+// AuditService, and ServerService with an ergonomic API for administrative operations.
 //
 // All methods are safe for concurrent use.
 type Client struct {
 	schema SchemaTransport
 	config ConfigTransport
 	audit  AuditTransport
+	server ServerTransport
 }
 
 // New creates a new admin client using the given transport implementations.
@@ -25,7 +26,7 @@ type Client struct {
 //
 // Example (with explicit transports):
 //
-//	client := adminclient.New(schemaTransport, configTransport, auditTransport)
-func New(schema SchemaTransport, config ConfigTransport, audit AuditTransport) *Client {
-	return &Client{schema: schema, config: config, audit: audit}
+//	client := adminclient.New(schemaTransport, configTransport, auditTransport, serverTransport)
+func New(schema SchemaTransport, config ConfigTransport, audit AuditTransport, server ServerTransport) *Client {
+	return &Client{schema: schema, config: config, audit: audit, server: server}
 }

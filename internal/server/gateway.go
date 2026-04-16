@@ -57,7 +57,7 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 
 	// Register all services.
 	handlers := []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
-		pb.RegisterVersionServiceHandler,
+		pb.RegisterServerServiceHandler,
 		pb.RegisterSchemaServiceHandler,
 		pb.RegisterConfigServiceHandler,
 		pb.RegisterAuditServiceHandler,

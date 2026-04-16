@@ -117,6 +117,13 @@ type UsageStats struct {
 	LastReadAt *time.Time
 }
 
+// ServerInfo contains the server's version and enabled features.
+type ServerInfo struct {
+	Version  string
+	Commit   string
+	Features map[string]bool
+}
+
 // Version represents a config version snapshot.
 type Version struct {
 	ID          string

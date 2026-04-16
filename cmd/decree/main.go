@@ -78,6 +78,7 @@ func init() {
 	rootCmd.AddCommand(watchCmd)
 	rootCmd.AddCommand(lockCmd)
 	rootCmd.AddCommand(auditCmd)
+	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(docgenCmd)
 	rootCmd.AddCommand(validateCmd)

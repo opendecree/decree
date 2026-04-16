@@ -20,7 +20,7 @@
       "name": "SchemaService"
     },
     {
-      "name": "VersionService"
+      "name": "ServerService"
     }
   ],
   "consumes": [
@@ -403,6 +403,29 @@
         ],
         "tags": [
           "SchemaService"
+        ]
+      }
+    },
+    "/v1/server/info": {
+      "get": {
+        "summary": "GetServerInfo returns the server's version, commit hash, and enabled features.",
+        "operationId": "ServerService_GetServerInfo",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetServerInfoResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ServerService"
         ]
       }
     },
@@ -1327,29 +1350,6 @@
           "ConfigService"
         ]
       }
-    },
-    "/v1/version": {
-      "get": {
-        "summary": "GetServerVersion returns the server's build version and commit hash.",
-        "operationId": "VersionService_GetServerVersion",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetServerVersionResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "VersionService"
-        ]
-      }
     }
   },
   "definitions": {
@@ -1947,7 +1947,7 @@
         }
       }
     },
-    "v1GetServerVersionResponse": {
+    "v1GetServerInfoResponse": {
       "type": "object",
       "properties": {
         "version": {
@@ -1957,6 +1957,13 @@
         "commit": {
           "type": "string",
           "description": "Git commit hash."
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Enabled server features. Keys are feature names, values indicate enabled state.\nKnown features: schema, config, audit, usage_tracking, jwt_auth, http_gateway."
         }
       }
     },
