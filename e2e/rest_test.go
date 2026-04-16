@@ -67,12 +67,13 @@ func httpDelete(t *testing.T, path string) int {
 	return resp.StatusCode
 }
 
-// TestREST_Version verifies the version endpoint works over REST.
-func TestREST_Version(t *testing.T) {
-	status, body := httpGet(t, "/v1/version")
+// TestREST_ServerInfo verifies the server info endpoint works over REST.
+func TestREST_ServerInfo(t *testing.T) {
+	status, body := httpGet(t, "/v1/server/info")
 	assert.Equal(t, 200, status)
 	assert.Contains(t, body, "version")
 	assert.Contains(t, body, "commit")
+	assert.Contains(t, body, "features")
 }
 
 // TestREST_SchemaLifecycle tests schema CRUD over REST.
@@ -142,7 +143,7 @@ func TestREST_SchemaLifecycle(t *testing.T) {
 // TestREST_AuthHeaders verifies auth headers are forwarded from HTTP to gRPC.
 func TestREST_AuthHeaders(t *testing.T) {
 	// Request with x-subject should succeed.
-	req, err := http.NewRequest("GET", httpAddr()+"/v1/version", nil)
+	req, err := http.NewRequest("GET", httpAddr()+"/v1/server/info", nil)
 	require.NoError(t, err)
 	req.Header.Set("x-subject", "e2e-test")
 	resp, err := http.DefaultClient.Do(req)

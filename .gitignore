@@ -50,3 +50,7 @@ site/
 /ccs
 /decree
 /server
+cmd/decree/decree
+
+# Coverage thresholds — only the root file is tracked
+sdk/**/coverage-thresholds.json

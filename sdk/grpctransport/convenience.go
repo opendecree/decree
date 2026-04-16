@@ -37,6 +37,7 @@ func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) *adminclient.
 		&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: cfg.auth},
 		&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: cfg.auth},
 		&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: cfg.auth},
+		&ServerTransport{rpc: pb.NewServerServiceClient(conn)},
 	)
 }
 

@@ -204,6 +204,17 @@ func run() int {
 		logger.InfoContext(ctx, "usage tracking disabled")
 	}
 
+	// Server info service — always registered, no auth.
+	serverInfoSvc := server.NewServerService(server.Features{
+		Schema:        srv.IsServiceEnabled("schema"),
+		Config:        srv.IsServiceEnabled("config"),
+		Audit:         srv.IsServiceEnabled("audit"),
+		UsageTracking: cfg.UsageTrackingEnabled,
+		JWTAuth:       cfg.JWTJWKSURL != "",
+		HTTPGateway:   cfg.HTTPPort != "",
+	})
+	pb.RegisterServerServiceServer(srv.GRPCServer(), serverInfoSvc)
+
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
 		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory.Cache())

@@ -96,8 +96,7 @@ func (i *Interceptor) Close() {
 // UnaryInterceptor returns a gRPC unary server interceptor.
 func (i *Interceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		// Skip auth for health checks.
-		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+		if skipAuth(info.FullMethod) {
 			return handler(ctx, req)
 		}
 
