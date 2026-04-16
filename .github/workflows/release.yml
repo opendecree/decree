@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,16 +15,12 @@ env:
 jobs:
   test:
     name: Validate
-    # Skip CI on workflow_dispatch — reusable workflow refs can't resolve from
-    # a tag ref, and we run the full pre-release checklist before tagging anyway.
-    if: github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
 
   release-notes:
     name: Release notes
     runs-on: ubuntu-latest
     needs: test
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     steps:
       - uses: actions/checkout@v6
         with:
