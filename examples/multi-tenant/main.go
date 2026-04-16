@@ -17,9 +17,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/sdk/adminclient"
 	"github.com/opendecree/decree/sdk/configclient"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func main() {
@@ -39,15 +38,11 @@ func run() error {
 	}
 	defer conn.Close()
 
-	admin := adminclient.New(
-		pb.NewSchemaServiceClient(conn),
-		pb.NewConfigServiceClient(conn),
-		nil,
-		adminclient.WithSubject("multi-tenant-example"),
+	admin := grpctransport.NewAdminClient(conn,
+		grpctransport.WithSubject("multi-tenant-example"),
 	)
-	cfg := configclient.New(
-		pb.NewConfigServiceClient(conn),
-		configclient.WithSubject("multi-tenant-example"),
+	cfg := grpctransport.NewConfigClient(conn,
+		grpctransport.WithSubject("multi-tenant-example"),
 	)
 
 	tenantA := mustTenantID() // "acme-corp" from seed

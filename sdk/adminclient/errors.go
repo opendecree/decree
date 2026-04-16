@@ -1,11 +1,6 @@
 package adminclient
 
-import (
-	"errors"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-)
+import "errors"
 
 var (
 	// ErrNotFound is returned when a requested resource does not exist.
@@ -23,23 +18,3 @@ var (
 	// client that was not provided to [New].
 	ErrServiceNotConfigured = errors.New("service client not configured")
 )
-
-func mapError(err error) error {
-	if err == nil {
-		return nil
-	}
-	st, ok := status.FromError(err)
-	if !ok {
-		return err
-	}
-	switch st.Code() {
-	case codes.NotFound:
-		return ErrNotFound
-	case codes.AlreadyExists:
-		return ErrAlreadyExists
-	case codes.FailedPrecondition:
-		return ErrFailedPrecondition
-	default:
-		return err
-	}
-}

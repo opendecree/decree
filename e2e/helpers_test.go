@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/adminclient"
 	"github.com/opendecree/decree/sdk/configclient"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func serviceAddr() string {
@@ -38,19 +38,11 @@ func dial(t *testing.T) *grpc.ClientConn {
 }
 
 func newAdminClient(conn *grpc.ClientConn) *adminclient.Client {
-	return adminclient.New(
-		pb.NewSchemaServiceClient(conn),
-		pb.NewConfigServiceClient(conn),
-		pb.NewAuditServiceClient(conn),
-		adminclient.WithSubject("e2e-test"),
-	)
+	return grpctransport.NewAdminClient(conn, grpctransport.WithSubject("e2e-test"))
 }
 
 func newConfigClient(conn *grpc.ClientConn) *configclient.Client {
-	return configclient.New(
-		pb.NewConfigServiceClient(conn),
-		configclient.WithSubject("e2e-test"),
-	)
+	return grpctransport.NewConfigClient(conn, grpctransport.WithSubject("e2e-test"))
 }
 
 func ptr[T any](v T) *T { return &v }

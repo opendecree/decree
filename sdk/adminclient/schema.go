@@ -2,8 +2,6 @@ package adminclient
 
 import (
 	"context"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // CreateSchema creates a new schema with an initial draft version (v1).
@@ -13,15 +11,11 @@ func (c *Client) CreateSchema(ctx context.Context, name string, fields []Field, 
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.CreateSchema(c.withAuth(ctx), &pb.CreateSchemaRequest{
+	return c.schema.CreateSchema(ctx, &CreateSchemaRequest{
 		Name:        name,
-		Description: ptrString(description),
-		Fields:      fieldsToProto(fields),
+		Fields:      fields,
+		Description: description,
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
 }
 
 // GetSchema retrieves a schema by ID at its latest version.
@@ -29,11 +23,7 @@ func (c *Client) GetSchema(ctx context.Context, id string) (*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.GetSchema(c.withAuth(ctx), &pb.GetSchemaRequest{Id: id})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
+	return c.schema.GetSchema(ctx, id, nil)
 }
 
 // GetSchemaVersion retrieves a schema at a specific version.
@@ -41,14 +31,7 @@ func (c *Client) GetSchemaVersion(ctx context.Context, id string, version int32)
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.GetSchema(c.withAuth(ctx), &pb.GetSchemaRequest{
-		Id:      id,
-		Version: &version,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
+	return c.schema.GetSchema(ctx, id, &version)
 }
 
 // ListSchemas returns all schemas, auto-paginating through all results.
@@ -59,16 +42,11 @@ func (c *Client) ListSchemas(ctx context.Context) ([]*Schema, error) {
 	var all []*Schema
 	pageToken := ""
 	for {
-		resp, err := c.schema.ListSchemas(c.withAuth(ctx), &pb.ListSchemasRequest{
-			PageSize:  100,
-			PageToken: pageToken,
-		})
+		resp, err := c.schema.ListSchemas(ctx, 100, pageToken)
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
-		for _, s := range resp.Schemas {
-			all = append(all, schemaFromProto(s))
-		}
+		all = append(all, resp.Schemas...)
 		if resp.NextPageToken == "" {
 			break
 		}
@@ -83,16 +61,12 @@ func (c *Client) UpdateSchema(ctx context.Context, id string, addOrModify []Fiel
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.UpdateSchema(c.withAuth(ctx), &pb.UpdateSchemaRequest{
-		Id:                 id,
-		VersionDescription: ptrString(versionDescription),
-		Fields:             fieldsToProto(addOrModify),
+	return c.schema.UpdateSchema(ctx, &UpdateSchemaRequest{
+		ID:                 id,
+		AddOrModify:        addOrModify,
 		RemoveFields:       removeFields,
+		VersionDescription: versionDescription,
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
 }
 
 // PublishSchema marks a schema version as published and immutable.
@@ -102,14 +76,7 @@ func (c *Client) PublishSchema(ctx context.Context, id string, version int32) (*
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.PublishSchema(c.withAuth(ctx), &pb.PublishSchemaRequest{
-		Id:      id,
-		Version: version,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
+	return c.schema.PublishSchema(ctx, id, version)
 }
 
 // DeleteSchema permanently deletes a schema and all its versions.
@@ -118,8 +85,7 @@ func (c *Client) DeleteSchema(ctx context.Context, id string) error {
 	if c.schema == nil {
 		return ErrServiceNotConfigured
 	}
-	_, err := c.schema.DeleteSchema(c.withAuth(ctx), &pb.DeleteSchemaRequest{Id: id})
-	return mapError(err)
+	return c.schema.DeleteSchema(ctx, id)
 }
 
 // ExportSchema serializes a schema version to YAML.
@@ -128,20 +94,9 @@ func (c *Client) ExportSchema(ctx context.Context, id string, version *int32) ([
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.ExportSchema(c.withAuth(ctx), &pb.ExportSchemaRequest{
-		Id:      id,
-		Version: version,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return resp.YamlContent, nil
+	return c.schema.ExportSchema(ctx, id, version)
 }
 
-// ImportSchema creates a schema (or new version) from YAML content.
-// Full-replace semantics: the YAML defines the complete field set.
-// Returns [ErrAlreadyExists] if the imported fields are identical to the latest version.
-// Imported versions are always created as drafts (unpublished).
 // ImportSchema creates a schema (or new version) from YAML content.
 // Full-replace semantics: the YAML defines the complete field set.
 // Returns [ErrAlreadyExists] if the imported fields are identical to the latest version.
@@ -150,15 +105,6 @@ func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte, autoPubli
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	req := &pb.ImportSchemaRequest{
-		YamlContent: yamlContent,
-	}
-	if len(autoPublish) > 0 && autoPublish[0] {
-		req.AutoPublish = true
-	}
-	resp, err := c.schema.ImportSchema(c.withAuth(ctx), req)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return schemaFromProto(resp.Schema), nil
+	ap := len(autoPublish) > 0 && autoPublish[0]
+	return c.schema.ImportSchema(ctx, yamlContent, ap)
 }

@@ -24,7 +24,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/opendecree/decree/sdk/configwatcher"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func main() {
@@ -48,8 +48,8 @@ func run() error {
 	tenantID := mustTenantID()
 
 	// Register fields that drive server behavior.
-	w := configwatcher.New(conn, tenantID,
-		configwatcher.WithSubject("live-config-example"),
+	w := grpctransport.NewWatcher(conn, tenantID,
+		grpctransport.WithSubject("live-config-example"),
 	)
 	rateLimit := w.Int("server.rate_limit", 100)
 	timeout := w.Duration("server.timeout", 30*time.Second)

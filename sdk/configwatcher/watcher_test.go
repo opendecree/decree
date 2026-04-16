@@ -2,19 +2,69 @@ package configwatcher
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"sync"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/configclient"
 )
 
-func sv(s string) *pb.TypedValue {
-	return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: s}}
+// --- Mock transport for watcher integration tests ---
+
+type mockTransport struct {
+	getConfigFn func(ctx context.Context, req *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error)
+	subscribeFn func(ctx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error)
+}
+
+func (m *mockTransport) GetField(context.Context, *configclient.GetFieldRequest) (*configclient.GetFieldResponse, error) {
+	panic("not implemented")
+}
+
+func (m *mockTransport) GetConfig(ctx context.Context, req *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+	return m.getConfigFn(ctx, req)
+}
+
+func (m *mockTransport) GetFields(context.Context, *configclient.GetFieldsRequest) (*configclient.GetFieldsResponse, error) {
+	panic("not implemented")
+}
+
+func (m *mockTransport) SetField(context.Context, *configclient.SetFieldRequest) (*configclient.SetFieldResponse, error) {
+	panic("not implemented")
+}
+
+func (m *mockTransport) SetFields(context.Context, *configclient.SetFieldsRequest) (*configclient.SetFieldsResponse, error) {
+	panic("not implemented")
+}
+
+func (m *mockTransport) Subscribe(ctx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error) {
+	return m.subscribeFn(ctx, req)
+}
+
+// mockSubscription simulates a subscription stream.
+type mockSubscription struct {
+	ch  chan *configclient.ConfigChange
+	ctx context.Context
+}
+
+func newMockSubscription(ctx context.Context) *mockSubscription {
+	return &mockSubscription{ch: make(chan *configclient.ConfigChange, 16), ctx: ctx}
+}
+
+func (s *mockSubscription) Recv() (*configclient.ConfigChange, error) {
+	select {
+	case <-s.ctx.Done():
+		return nil, io.EOF
+	case msg, ok := <-s.ch:
+		if !ok {
+			return nil, io.EOF
+		}
+		return msg, nil
+	}
+}
+
+func (s *mockSubscription) send(change *configclient.ConfigChange) {
+	s.ch <- change
 }
 
 // --- Value unit tests ---
@@ -112,117 +162,35 @@ func TestValue_Duration(t *testing.T) {
 	}
 }
 
-// --- Hand-written mock gRPC client for watcher integration tests ---
-
-type mockRPC struct {
-	mu              sync.Mutex
-	getConfigResp   *pb.GetConfigResponse
-	getConfigErr    error
-	subscribeStream grpc.ServerStreamingClient[pb.SubscribeResponse]
-	subscribeErr    error
-}
-
-func (m *mockRPC) GetConfig(_ context.Context, _ *pb.GetConfigRequest, _ ...grpc.CallOption) (*pb.GetConfigResponse, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.getConfigResp, m.getConfigErr
-}
-
-func (m *mockRPC) GetField(_ context.Context, _ *pb.GetFieldRequest, _ ...grpc.CallOption) (*pb.GetFieldResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) GetFields(_ context.Context, _ *pb.GetFieldsRequest, _ ...grpc.CallOption) (*pb.GetFieldsResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) SetField(_ context.Context, _ *pb.SetFieldRequest, _ ...grpc.CallOption) (*pb.SetFieldResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) SetFields(_ context.Context, _ *pb.SetFieldsRequest, _ ...grpc.CallOption) (*pb.SetFieldsResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) ListVersions(_ context.Context, _ *pb.ListVersionsRequest, _ ...grpc.CallOption) (*pb.ListVersionsResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) GetVersion(_ context.Context, _ *pb.GetVersionRequest, _ ...grpc.CallOption) (*pb.GetVersionResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) RollbackToVersion(_ context.Context, _ *pb.RollbackToVersionRequest, _ ...grpc.CallOption) (*pb.RollbackToVersionResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) Subscribe(_ context.Context, _ *pb.SubscribeRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[pb.SubscribeResponse], error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.subscribeStream, m.subscribeErr
-}
-
-func (m *mockRPC) ExportConfig(_ context.Context, _ *pb.ExportConfigRequest, _ ...grpc.CallOption) (*pb.ExportConfigResponse, error) {
-	return nil, nil
-}
-
-func (m *mockRPC) ImportConfig(_ context.Context, _ *pb.ImportConfigRequest, _ ...grpc.CallOption) (*pb.ImportConfigResponse, error) {
-	return nil, nil
-}
-
-// mockStream simulates a gRPC server stream.
-type mockStream struct {
-	ch  chan *pb.SubscribeResponse
-	ctx context.Context
-	grpc.ClientStream
-}
-
-func newMockStream(ctx context.Context) *mockStream {
-	return &mockStream{ch: make(chan *pb.SubscribeResponse, 16), ctx: ctx}
-}
-
-func (s *mockStream) Recv() (*pb.SubscribeResponse, error) {
-	select {
-	case <-s.ctx.Done():
-		return nil, io.EOF
-	case msg, ok := <-s.ch:
-		if !ok {
-			return nil, io.EOF
-		}
-		return msg, nil
-	}
-}
-
-func (s *mockStream) send(change *pb.ConfigChange) {
-	s.ch <- &pb.SubscribeResponse{Change: change}
-}
-
 // --- Watcher integration tests ---
 
 func TestWatcher_SnapshotAndStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	stream := newMockStream(ctx)
+	sub := newMockSubscription(ctx)
 
-	rpc := &mockRPC{
-		getConfigResp: &pb.GetConfigResponse{
-			Config: &pb.Config{TenantId: "t1", Version: 1, Values: []*pb.ConfigValue{
-				{FieldPath: "payments.fee", Value: sv("0.025")},
-				{FieldPath: "payments.enabled", Value: sv("true")},
-			}},
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "payments.fee", Value: configclient.FloatVal(0.025)},
+					{FieldPath: "payments.enabled", Value: configclient.BoolVal(true)},
+				},
+			}, nil
 		},
-		subscribeStream: stream,
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
 	}
 
-	// Build watcher manually with injected mock.
 	w := &Watcher{
-		rpc:      rpc,
-		tenantID: "t1",
-		opts:     options{role: "superadmin", minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
-		fields:   make(map[string]*fieldEntry),
-		done:     make(chan struct{}),
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
 	}
-	// Wire configclient with same mock RPC.
-	w.configClient = newConfigClientFromRPC(rpc)
 
 	fee := w.Float("payments.fee", 0.01)
 	enabled := w.Bool("payments.enabled", false)
@@ -241,18 +209,16 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 	}
 
 	// Simulate a stream change.
-	stream.send(&pb.ConfigChange{
-		TenantId:  "t1",
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
 		FieldPath: "payments.fee",
-		OldValue:  sv("0.025"),
-		NewValue:  sv("0.05"),
+		OldValue:  configclient.FloatVal(0.025),
+		NewValue:  configclient.FloatVal(0.05),
 	})
 
 	// Wait for change to propagate.
 	select {
 	case ch := <-fee.Changes():
-		// First change is from snapshot load, second from stream.
-		// The snapshot load fires a change too.
 		_ = ch
 	case <-time.After(100 * time.Millisecond):
 	}
@@ -267,8 +233,134 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 	_ = w.Close()
 }
 
-// newConfigClientFromRPC creates a configclient.Client from a mock RPC
-// without needing a real grpc.ClientConn.
-func newConfigClientFromRPC(rpc pb.ConfigServiceClient) *configclient.Client {
-	return configclient.New(rpc)
+func TestWatcher_SnapshotError(t *testing.T) {
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return nil, fmt.Errorf("connection refused")
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			panic("should not be called")
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
+	}
+
+	_ = w.String("app.name", "default")
+
+	err := w.Start(context.Background())
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestWatcher_NullField(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sub := newMockSubscription(ctx)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values:   []configclient.ConfigValue{}, // no values — all fields are "missing"
+			}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
+	}
+
+	name := w.String("app.name", "fallback")
+
+	err := w.Start(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Field is missing from snapshot, should return default.
+	if got := name.Get(); got != "fallback" {
+		t.Errorf("got %v, want %v", got, "fallback")
+	}
+	_, ok := name.GetWithNull()
+	if ok {
+		t.Error("expected false for missing field")
+	}
+
+	// Now simulate the field being set via stream.
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "app.name",
+		NewValue:  configclient.StringVal("hello"),
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	if got := name.Get(); got != "hello" {
+		t.Errorf("got %v, want %v", got, "hello")
+	}
+
+	// Then simulate the field being set to null via stream.
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "app.name",
+		OldValue:  configclient.StringVal("hello"),
+		NewValue:  nil,
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	if got := name.Get(); got != "fallback" {
+		t.Errorf("got %v, want %v after null update", got, "fallback")
+	}
+
+	cancel()
+	_ = w.Close()
+}
+
+func TestWatcher_TimeField(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "deploy.scheduled_at", Value: configclient.TimeVal(ts)},
+				},
+			}, nil
+		},
+		subscribeFn: func(ctx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: ctx}, nil
+		},
+	}
+
+	w := New(tr, "t1")
+	scheduled := w.Time("deploy.scheduled_at", time.Time{})
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := scheduled.Get(); !got.Equal(ts) {
+		t.Errorf("got %v, want %v", got, ts)
+	}
+
+	cancel()
+	_ = w.Close()
 }

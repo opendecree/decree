@@ -1,5 +1,5 @@
 // Package configclient provides an ergonomic Go client for reading and writing
-// configuration values via the OpenDecree gRPC API.
+// configuration values via the OpenDecree API.
 //
 // This is an application-runtime SDK — for admin operations (schema management,
 // import/export, rollback) see the adminclient package.
@@ -8,9 +8,6 @@ package configclient
 import (
 	"errors"
 	"fmt"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -36,27 +33,23 @@ var (
 	ErrInvalidArgument = errors.New("invalid argument")
 )
 
-// mapError converts gRPC status errors to sentinel errors.
-func mapError(err error) error {
-	if err == nil {
-		return nil
-	}
-	st, ok := status.FromError(err)
-	if !ok {
-		return err
-	}
-	switch st.Code() {
-	case codes.NotFound:
-		return ErrNotFound
-	case codes.PermissionDenied:
-		return ErrLocked
-	case codes.Aborted:
-		return ErrChecksumMismatch
-	case codes.AlreadyExists:
-		return ErrAlreadyExists
-	case codes.InvalidArgument:
-		return fmt.Errorf("%w: %s", ErrInvalidArgument, st.Message())
-	default:
-		return err
-	}
+// InvalidArgumentError wraps ErrInvalidArgument with a server message.
+func InvalidArgumentError(message string) error {
+	return fmt.Errorf("%w: %s", ErrInvalidArgument, message)
+}
+
+// RetryableError wraps an error to indicate the operation may succeed on retry.
+// Transport implementations should wrap transient errors (e.g., network issues,
+// server overload) in RetryableError.
+type RetryableError struct {
+	Err error
+}
+
+func (e *RetryableError) Error() string { return e.Err.Error() }
+func (e *RetryableError) Unwrap() error { return e.Err }
+
+// IsRetryable reports whether err is marked as retryable by the transport.
+func IsRetryable(err error) bool {
+	var re *RetryableError
+	return errors.As(err, &re)
 }

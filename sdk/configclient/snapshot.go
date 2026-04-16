@@ -2,8 +2,6 @@ package configclient
 
 import (
 	"context"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // Snapshot provides read access to configuration values pinned to a specific version.
@@ -19,18 +17,13 @@ type Snapshot struct {
 // All subsequent reads on the returned Snapshot use this version, ensuring consistency
 // across multiple Get calls within the same flow.
 func (c *Client) Snapshot(ctx context.Context, tenantID string) (*Snapshot, error) {
-	// Fetch latest config to resolve the current version.
-	resp, err := c.rpc.GetConfig(c.withAuth(ctx), &pb.GetConfigRequest{
-		TenantId: tenantID,
+	resp, err := c.transport.GetConfig(ctx, &GetConfigRequest{
+		TenantID: tenantID,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
-	version := int32(0)
-	if resp.Config != nil {
-		version = resp.Config.Version
-	}
-	return &Snapshot{client: c, tenantID: tenantID, version: version}, nil
+	return &Snapshot{client: c, tenantID: tenantID, version: resp.Version}, nil
 }
 
 // AtVersion creates a read-only view pinned to the specified config version.
@@ -47,43 +40,44 @@ func (s *Snapshot) Version() int32 {
 // Get returns the value of a single field at the pinned version.
 // Returns [ErrNotFound] if the field has no value at this version.
 func (s *Snapshot) Get(ctx context.Context, fieldPath string) (string, error) {
-	resp, err := s.client.rpc.GetField(s.client.withAuth(ctx), &pb.GetFieldRequest{
-		TenantId:  s.tenantID,
+	resp, err := s.client.transport.GetField(ctx, &GetFieldRequest{
+		TenantID:  s.tenantID,
 		FieldPath: fieldPath,
 		Version:   &s.version,
 	})
 	if err != nil {
-		return "", mapError(err)
+		return "", err
 	}
-	return typedValueToString(resp.Value.Value), nil
+	return resp.Value.String(), nil
 }
 
 // GetAll returns all configuration values at the pinned version.
 func (s *Snapshot) GetAll(ctx context.Context) (map[string]string, error) {
-	resp, err := s.client.rpc.GetConfig(s.client.withAuth(ctx), &pb.GetConfigRequest{
-		TenantId: s.tenantID,
-		Version:  &s.version,
+	v := s.version
+	resp, err := s.client.transport.GetConfig(ctx, &GetConfigRequest{
+		TenantID: s.tenantID,
+		Version:  &v,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
-	return configToMap(resp.Config), nil
+	return configToMap(resp), nil
 }
 
 // GetFields returns the values for the specified field paths at the pinned version.
 // Fields that have no value at this version are omitted from the result.
 func (s *Snapshot) GetFields(ctx context.Context, fieldPaths []string) (map[string]string, error) {
-	resp, err := s.client.rpc.GetFields(s.client.withAuth(ctx), &pb.GetFieldsRequest{
-		TenantId:   s.tenantID,
+	resp, err := s.client.transport.GetFields(ctx, &GetFieldsRequest{
+		TenantID:   s.tenantID,
 		FieldPaths: fieldPaths,
 		Version:    &s.version,
 	})
 	if err != nil {
-		return nil, mapError(err)
+		return nil, err
 	}
 	result := make(map[string]string, len(resp.Values))
 	for _, v := range resp.Values {
-		result[v.FieldPath] = typedValueToString(v.Value)
+		result[v.FieldPath] = v.Value.String()
 	}
 	return result, nil
 }

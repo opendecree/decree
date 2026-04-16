@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/opendecree/decree/sdk/configwatcher"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func TestExample(t *testing.T) {
@@ -40,8 +40,8 @@ func TestExample(t *testing.T) {
 		tenantID = strings.TrimSpace(string(data))
 	}
 
-	w := configwatcher.New(conn, tenantID,
-		configwatcher.WithSubject("live-config-test"),
+	w := grpctransport.NewWatcher(conn, tenantID,
+		grpctransport.WithSubject("live-config-test"),
 	)
 	rateLimit := w.Int("server.rate_limit", 100)
 	timeout := w.Duration("server.timeout", 30*time.Second)
