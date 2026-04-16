@@ -14,6 +14,8 @@ OpenDecree is configured entirely through environment variables. No config files
 | `REDIS_URL` | Redis connection string. Used for config caching and real-time change propagation (pub/sub). Format: `redis://host:6379` | -- | Yes (postgres mode) |
 | `ENABLE_SERVICES` | Comma-separated list of services to enable. Valid values: `schema`, `config`, `audit`. | `schema,config,audit` | No |
 | `LOG_LEVEL` | Log verbosity. One of: `debug`, `info`, `warn`, `error`. Logs are JSON-formatted to stdout. | `info` | No |
+| `USAGE_TRACKING_ENABLED` | Enable automatic recording of config field reads (`GetField`, `GetConfig`, `GetFields`). Set to `false` to disable. | `true` | No |
+| `USAGE_FLUSH_INTERVAL` | How often accumulated read counts are flushed to storage. Format: Go duration (e.g., `30s`, `1m`). | `30s` | No |
 
 ### In-Memory Mode
 

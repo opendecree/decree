@@ -77,7 +77,7 @@ flowchart LR
 |---------|---------|
 | **SchemaService** | Define and version configuration schemas, manage tenants |
 | **ConfigService** | Read, write, and subscribe to typed config values |
-| **AuditService** | Query change history and usage statistics |
+| **AuditService** | Query change history and field read usage statistics (reads are tracked automatically) |
 
 The storage layer persists schemas, config values, and audit entries. A cache and pub/sub layer provides config caching and real-time change propagation. Both are behind Go interfaces — the default implementation uses PostgreSQL and Redis, but backends are pluggable. Authentication supports JWT (JWKS validation) or metadata headers, with multi-tenant access control. Services can be selectively enabled via `ENABLE_SERVICES` for deployment flexibility.
 

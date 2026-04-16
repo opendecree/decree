@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/exaring/otelpgx"
 	"github.com/redis/go-redis/extra/redisotel/v9"
@@ -190,6 +191,19 @@ func run() int {
 	// Validator factory (shared between schema + config services).
 	validatorFactory := validation.NewValidatorFactory(validatorStore)
 
+	// Usage recorder — async batched read tracking for audit stats.
+	var recorder *audit.UsageRecorder
+	if cfg.UsageTrackingEnabled {
+		recorder = audit.NewUsageRecorder(auditStoreVal, audit.RecorderConfig{
+			FlushInterval: cfg.UsageFlushInterval,
+			Logger:        logger,
+		})
+		go recorder.Start(ctx)
+		logger.InfoContext(ctx, "usage tracking enabled", "flush_interval", cfg.UsageFlushInterval)
+	} else {
+		logger.InfoContext(ctx, "usage tracking disabled")
+	}
+
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
 		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory.Cache())
@@ -198,7 +212,17 @@ func run() int {
 		logger.InfoContext(ctx, "schema service enabled")
 	}
 	if srv.IsServiceEnabled("config") {
-		configSvc := config.NewService(configStore, configCache, publisher, subscriber, logger, cacheMetrics, configMetrics, validatorFactory)
+		configSvc := config.NewService(config.ServiceConfig{
+			Store:        configStore,
+			Cache:        configCache,
+			Publisher:    publisher,
+			Subscriber:   subscriber,
+			Logger:       logger,
+			CacheMetrics: cacheMetrics,
+			Metrics:      configMetrics,
+			Validators:   validatorFactory,
+			Recorder:     recorder,
+		})
 		pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
 		srv.SetServiceHealthy("centralconfig.v1.ConfigService")
 		logger.InfoContext(ctx, "config service enabled")
@@ -250,6 +274,7 @@ func run() int {
 	}
 
 	cancel()
+	recorder.Stop() // nil-safe; waits for final flush
 	if gw != nil {
 		gw.Shutdown(ctx)
 	}
@@ -259,16 +284,18 @@ func run() int {
 }
 
 type serverConfig struct {
-	GRPCPort       string
-	HTTPPort       string
-	StorageBackend string
-	DBWriteURL     string
-	DBReadURL      string
-	RedisURL       string
-	EnableServices []string
-	JWTIssuer      string
-	JWTJWKSURL     string
-	LogLevel       string
+	GRPCPort             string
+	HTTPPort             string
+	StorageBackend       string
+	DBWriteURL           string
+	DBReadURL            string
+	RedisURL             string
+	EnableServices       []string
+	JWTIssuer            string
+	JWTJWKSURL           string
+	LogLevel             string
+	UsageTrackingEnabled bool
+	UsageFlushInterval   time.Duration
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -291,17 +318,26 @@ func loadConfig() serverConfig {
 	dbWriteURL := getEnv("DB_WRITE_URL", "")
 	dbReadURL := getEnv("DB_READ_URL", dbWriteURL)
 
+	flushInterval := 30 * time.Second
+	if v := getEnv("USAGE_FLUSH_INTERVAL", ""); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			flushInterval = d
+		}
+	}
+
 	return serverConfig{
-		GRPCPort:       getEnv("GRPC_PORT", "9090"),
-		HTTPPort:       getEnv("HTTP_PORT", ""),
-		StorageBackend: getEnv("STORAGE_BACKEND", "postgres"),
-		DBWriteURL:     dbWriteURL,
-		DBReadURL:      dbReadURL,
-		RedisURL:       getEnv("REDIS_URL", ""),
-		EnableServices: parseServices(enableServices),
-		JWTIssuer:      getEnv("JWT_ISSUER", ""),
-		JWTJWKSURL:     getEnv("JWT_JWKS_URL", ""),
-		LogLevel:       getEnv("LOG_LEVEL", "info"),
+		GRPCPort:             getEnv("GRPC_PORT", "9090"),
+		HTTPPort:             getEnv("HTTP_PORT", ""),
+		StorageBackend:       getEnv("STORAGE_BACKEND", "postgres"),
+		DBWriteURL:           dbWriteURL,
+		DBReadURL:            dbReadURL,
+		RedisURL:             getEnv("REDIS_URL", ""),
+		EnableServices:       parseServices(enableServices),
+		JWTIssuer:            getEnv("JWT_ISSUER", ""),
+		JWTJWKSURL:           getEnv("JWT_JWKS_URL", ""),
+		LogLevel:             getEnv("LOG_LEVEL", "info"),
+		UsageTrackingEnabled: getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
+		UsageFlushInterval:   flushInterval,
 	}
 }
 

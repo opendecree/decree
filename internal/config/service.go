@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/pagination"
@@ -23,6 +24,19 @@ import (
 )
 
 const defaultCacheTTL = 5 * time.Minute
+
+// ServiceConfig holds dependencies for the ConfigService.
+type ServiceConfig struct {
+	Store        Store
+	Cache        cache.ConfigCache
+	Publisher    pubsub.Publisher
+	Subscriber   pubsub.Subscriber
+	Logger       *slog.Logger
+	CacheMetrics *telemetry.CacheMetrics
+	Metrics      *telemetry.ConfigMetrics
+	Validators   *validation.ValidatorFactory
+	Recorder     *audit.UsageRecorder
+}
 
 // Service implements the ConfigService gRPC server.
 type Service struct {
@@ -35,19 +49,21 @@ type Service struct {
 	cacheMetrics *telemetry.CacheMetrics
 	metrics      *telemetry.ConfigMetrics
 	validators   *validation.ValidatorFactory
+	recorder     *audit.UsageRecorder
 }
 
 // NewService creates a new ConfigService.
-func NewService(store Store, cache cache.ConfigCache, pub pubsub.Publisher, sub pubsub.Subscriber, logger *slog.Logger, cacheMetrics *telemetry.CacheMetrics, configMetrics *telemetry.ConfigMetrics, validators *validation.ValidatorFactory) *Service {
+func NewService(cfg ServiceConfig) *Service {
 	return &Service{
-		store:        store,
-		cache:        cache,
-		publisher:    pub,
-		subscriber:   sub,
-		logger:       logger,
-		cacheMetrics: cacheMetrics,
-		metrics:      configMetrics,
-		validators:   validators,
+		store:        cfg.Store,
+		cache:        cfg.Cache,
+		publisher:    cfg.Publisher,
+		subscriber:   cfg.Subscriber,
+		logger:       cfg.Logger,
+		cacheMetrics: cfg.CacheMetrics,
+		metrics:      cfg.Metrics,
+		validators:   cfg.Validators,
+		recorder:     cfg.Recorder,
 	}
 }
 
@@ -98,6 +114,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		if cached, err := s.cache.Get(ctx, tenantID, version); err == nil && cached != nil {
 			s.cacheMetrics.Hit(ctx)
 			values := make([]*pb.ConfigValue, 0, len(cached))
+			paths := make([]string, 0, len(cached))
 			for path, val := range cached {
 				v := val
 				values = append(values, &pb.ConfigValue{
@@ -105,7 +122,9 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 					Value:     stringToTypedValue(&v, lookupFieldType(types, path)),
 					Checksum:  computeChecksum(val),
 				})
+				paths = append(paths, path)
 			}
+			s.recorder.RecordReads(tenantID, paths, s.actorPtr(ctx))
 			return &pb.GetConfigResponse{
 				Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
 			}, nil
@@ -143,6 +162,13 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 			s.logger.WarnContext(ctx, "failed to populate cache", "error", err)
 		}
 	}
+
+	// Record usage for all returned fields.
+	paths := make([]string, 0, len(values))
+	for _, v := range values {
+		paths = append(paths, v.FieldPath)
+	}
+	s.recorder.RecordReads(tenantID, paths, s.actorPtr(ctx))
 
 	return &pb.GetConfigResponse{
 		Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
@@ -191,6 +217,8 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		cv.Description = row.Description
 	}
 
+	s.recorder.RecordRead(tenantID, req.FieldPath, s.actorPtr(ctx))
+
 	return &pb.GetFieldResponse{Value: cv}, nil
 }
 
@@ -238,6 +266,13 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		}
 		values = append(values, cv)
 	}
+
+	// Record usage for all returned fields.
+	fieldPaths := make([]string, 0, len(values))
+	for _, v := range values {
+		fieldPaths = append(fieldPaths, v.FieldPath)
+	}
+	s.recorder.RecordReads(tenantID, fieldPaths, s.actorPtr(ctx))
 
 	return &pb.GetFieldsResponse{Values: values}, nil
 }
@@ -994,6 +1029,14 @@ func (s *Service) getActor(ctx context.Context) string {
 		return "unknown"
 	}
 	return claims.Subject
+}
+
+func (s *Service) actorPtr(ctx context.Context) *string {
+	actor := s.getActor(ctx)
+	if actor == "unknown" {
+		return nil
+	}
+	return &actor
 }
 
 func (s *Service) getCurrentValue(ctx context.Context, tenantID string, fieldPath string, version int32) string {
