@@ -2,14 +2,7 @@ package configclient
 
 import (
 	"context"
-	"fmt"
-	"strconv"
 	"time"
-
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // --- String getters (always work, convert any type to string) ---
@@ -19,11 +12,14 @@ import (
 // Returns [ErrNotFound] if the field has no value set.
 func (c *Client) Get(ctx context.Context, tenantID, fieldPath string) (string, error) {
 	return retry(ctx, c, func(ctx context.Context) (string, error) {
-		tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
+		resp, err := c.transport.GetField(ctx, &GetFieldRequest{
+			TenantID:  tenantID,
+			FieldPath: fieldPath,
+		})
 		if err != nil {
 			return "", err
 		}
-		return typedValueToString(tv), nil
+		return resp.Value.String(), nil
 	})
 }
 
@@ -31,13 +27,13 @@ func (c *Client) Get(ctx context.Context, tenantID, fieldPath string) (string, e
 // Returns an empty map if no values are set.
 func (c *Client) GetAll(ctx context.Context, tenantID string) (map[string]string, error) {
 	return retry(ctx, c, func(ctx context.Context) (map[string]string, error) {
-		resp, err := c.rpc.GetConfig(c.withAuth(ctx), &pb.GetConfigRequest{
-			TenantId: tenantID,
+		resp, err := c.transport.GetConfig(ctx, &GetConfigRequest{
+			TenantID: tenantID,
 		})
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
-		return configToMap(resp.Config), nil
+		return configToMap(resp), nil
 	})
 }
 
@@ -45,16 +41,16 @@ func (c *Client) GetAll(ctx context.Context, tenantID string) (map[string]string
 // Fields that have no value set are omitted from the result.
 func (c *Client) GetFields(ctx context.Context, tenantID string, fieldPaths []string) (map[string]string, error) {
 	return retry(ctx, c, func(ctx context.Context) (map[string]string, error) {
-		resp, err := c.rpc.GetFields(c.withAuth(ctx), &pb.GetFieldsRequest{
-			TenantId:   tenantID,
+		resp, err := c.transport.GetFields(ctx, &GetFieldsRequest{
+			TenantID:   tenantID,
 			FieldPaths: fieldPaths,
 		})
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
 		result := make(map[string]string, len(resp.Values))
 		for _, v := range resp.Values {
-			result[v.FieldPath] = typedValueToString(v.Value)
+			result[v.FieldPath] = v.Value.String()
 		}
 		return result, nil
 	})
@@ -73,13 +69,9 @@ func (c *Client) GetString(ctx context.Context, tenantID, fieldPath string) (str
 	if tv == nil {
 		return "", nil
 	}
-	switch v := tv.Kind.(type) {
-	case *pb.TypedValue_StringValue:
-		return v.StringValue, nil
-	case *pb.TypedValue_UrlValue:
-		return v.UrlValue, nil
-	case *pb.TypedValue_JsonValue:
-		return v.JsonValue, nil
+	switch tv.Kind() {
+	case KindString, KindURL, KindJSON:
+		return tv.str, nil
 	default:
 		return "", ErrTypeMismatch
 	}
@@ -96,8 +88,8 @@ func (c *Client) GetInt(ctx context.Context, tenantID, fieldPath string) (int64,
 	if tv == nil {
 		return 0, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_IntegerValue); ok {
-		return v.IntegerValue, nil
+	if tv.Kind() == KindInteger {
+		return tv.i, nil
 	}
 	return 0, ErrTypeMismatch
 }
@@ -113,8 +105,8 @@ func (c *Client) GetFloat(ctx context.Context, tenantID, fieldPath string) (floa
 	if tv == nil {
 		return 0, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_NumberValue); ok {
-		return v.NumberValue, nil
+	if tv.Kind() == KindNumber {
+		return tv.num, nil
 	}
 	return 0, ErrTypeMismatch
 }
@@ -130,8 +122,8 @@ func (c *Client) GetBool(ctx context.Context, tenantID, fieldPath string) (bool,
 	if tv == nil {
 		return false, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_BoolValue); ok {
-		return v.BoolValue, nil
+	if tv.Kind() == KindBool {
+		return tv.b, nil
 	}
 	return false, ErrTypeMismatch
 }
@@ -147,8 +139,8 @@ func (c *Client) GetTime(ctx context.Context, tenantID, fieldPath string) (time.
 	if tv == nil {
 		return time.Time{}, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_TimeValue); ok && v.TimeValue != nil {
-		return v.TimeValue.AsTime(), nil
+	if tv.Kind() == KindTime {
+		return tv.t, nil
 	}
 	return time.Time{}, ErrTypeMismatch
 }
@@ -164,8 +156,8 @@ func (c *Client) GetDuration(ctx context.Context, tenantID, fieldPath string) (t
 	if tv == nil {
 		return 0, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_DurationValue); ok && v.DurationValue != nil {
-		return v.DurationValue.AsDuration(), nil
+	if tv.Kind() == KindDuration {
+		return tv.d, nil
 	}
 	return 0, ErrTypeMismatch
 }
@@ -182,7 +174,7 @@ func (c *Client) GetStringNullable(ctx context.Context, tenantID, fieldPath stri
 	if tv == nil {
 		return nil, nil
 	}
-	s := typedValueToString(tv)
+	s := tv.String()
 	return &s, nil
 }
 
@@ -197,8 +189,9 @@ func (c *Client) GetIntNullable(ctx context.Context, tenantID, fieldPath string)
 	if tv == nil {
 		return nil, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_IntegerValue); ok {
-		return &v.IntegerValue, nil
+	if tv.Kind() == KindInteger {
+		v := tv.i
+		return &v, nil
 	}
 	return nil, ErrTypeMismatch
 }
@@ -214,113 +207,35 @@ func (c *Client) GetBoolNullable(ctx context.Context, tenantID, fieldPath string
 	if tv == nil {
 		return nil, nil
 	}
-	if v, ok := tv.Kind.(*pb.TypedValue_BoolValue); ok {
-		return &v.BoolValue, nil
+	if tv.Kind() == KindBool {
+		v := tv.b
+		return &v, nil
 	}
 	return nil, ErrTypeMismatch
 }
 
-// --- Type-specific setters ---
-
-// SetInt writes an integer configuration value.
-func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64) error {
-	return c.setTyped(ctx, tenantID, fieldPath, &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: value}})
-}
-
-// SetFloat writes a floating-point configuration value.
-func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64) error {
-	return c.setTyped(ctx, tenantID, fieldPath, &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: value}})
-}
-
-// SetBool writes a boolean configuration value.
-func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool) error {
-	return c.setTyped(ctx, tenantID, fieldPath, &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: value}})
-}
-
-// SetTime writes a timestamp configuration value.
-func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time) error {
-	return c.setTyped(ctx, tenantID, fieldPath, &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(value)}})
-}
-
-// SetDuration writes a duration configuration value.
-func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration) error {
-	return c.setTyped(ctx, tenantID, fieldPath, &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(value)}})
-}
-
 // --- Internal helpers ---
 
-func (c *Client) getTypedValue(ctx context.Context, tenantID, fieldPath string) (*pb.TypedValue, error) {
-	resp, err := c.rpc.GetField(c.withAuth(ctx), &pb.GetFieldRequest{
-		TenantId:  tenantID,
-		FieldPath: fieldPath,
+func (c *Client) getTypedValue(ctx context.Context, tenantID, fieldPath string) (*TypedValue, error) {
+	return retry(ctx, c, func(ctx context.Context) (*TypedValue, error) {
+		resp, err := c.transport.GetField(ctx, &GetFieldRequest{
+			TenantID:  tenantID,
+			FieldPath: fieldPath,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return resp.Value, nil
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return resp.Value.Value, nil
 }
 
-func (c *Client) setTyped(ctx context.Context, tenantID, fieldPath string, value *pb.TypedValue) error {
-	_, err := c.rpc.SetField(c.withAuth(ctx), &pb.SetFieldRequest{
-		TenantId:  tenantID,
-		FieldPath: fieldPath,
-		Value:     value,
-	})
-	return mapError(err)
-}
-
-func configToMap(cfg *pb.Config) map[string]string {
-	if cfg == nil {
+func configToMap(resp *GetConfigResponse) map[string]string {
+	if resp == nil || len(resp.Values) == 0 {
 		return nil
 	}
-	m := make(map[string]string, len(cfg.Values))
-	for _, v := range cfg.Values {
-		m[v.FieldPath] = typedValueToString(v.Value)
+	m := make(map[string]string, len(resp.Values))
+	for _, v := range resp.Values {
+		m[v.FieldPath] = v.Value.String()
 	}
 	return m
-}
-
-// typedValueToString extracts a string representation from a TypedValue.
-func typedValueToString(tv *pb.TypedValue) string {
-	if tv == nil {
-		return ""
-	}
-	switch v := tv.Kind.(type) {
-	case *pb.TypedValue_StringValue:
-		return v.StringValue
-	case *pb.TypedValue_IntegerValue:
-		return fmt.Sprintf("%d", v.IntegerValue)
-	case *pb.TypedValue_NumberValue:
-		return strconv.FormatFloat(v.NumberValue, 'f', -1, 64)
-	case *pb.TypedValue_BoolValue:
-		return strconv.FormatBool(v.BoolValue)
-	case *pb.TypedValue_UrlValue:
-		return v.UrlValue
-	case *pb.TypedValue_JsonValue:
-		return v.JsonValue
-	case *pb.TypedValue_TimeValue:
-		if v.TimeValue != nil {
-			return v.TimeValue.AsTime().Format(time.RFC3339Nano)
-		}
-		return ""
-	case *pb.TypedValue_DurationValue:
-		if v.DurationValue != nil {
-			return v.DurationValue.AsDuration().String()
-		}
-		return ""
-	default:
-		return ""
-	}
-}
-
-// StringValue creates a TypedValue wrapping a string.
-func StringValue(s string) *pb.TypedValue {
-	return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: s}}
-}
-
-func derefString(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }

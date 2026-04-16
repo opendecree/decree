@@ -2,16 +2,14 @@
 // configuration values with automatic subscription and reconnect.
 //
 // Values are always fresh — the watcher loads an initial snapshot, then
-// subscribes to the gRPC stream for live updates. Typed accessors return
+// subscribes to a stream for live updates. Typed accessors return
 // native Go types (string, int64, float64, bool, time.Duration) with
 // null/missing support.
 //
 // Example:
 //
-//	conn, _ := grpc.Dial("localhost:9090", grpc.WithInsecure())
-//	w, _ := configwatcher.New(conn, "tenant-uuid",
-//	    configwatcher.WithSubject("myapp"),
-//	)
+//	transport := grpctransport.NewConfigTransport(conn, grpctransport.WithSubject("myapp"))
+//	w := configwatcher.New(transport, "tenant-uuid")
 //
 //	fee := w.Float("payments.fee_rate", 0.01)
 //	enabled := w.Bool("payments.enabled", false)
@@ -33,20 +31,15 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/configclient"
 )
 
-// Watcher monitors a tenant's configuration via a gRPC subscription stream.
+// Watcher monitors a tenant's configuration via a subscription stream.
 // Register typed field accessors before calling [Watcher.Start].
 type Watcher struct {
-	configClient *configclient.Client
-	rpc          pb.ConfigServiceClient
-	tenantID     string
-	opts         options
+	transport configclient.Transport
+	tenantID  string
+	opts      options
 
 	mu     sync.RWMutex
 	fields map[string]*fieldEntry // field path → entry
@@ -61,22 +54,18 @@ type fieldEntry struct {
 }
 
 type options struct {
-	subject     string
-	role        string
-	tenantID    string
-	bearerToken string
-	minBackoff  time.Duration
-	maxBackoff  time.Duration
-	logger      *slog.Logger
+	minBackoff time.Duration
+	maxBackoff time.Duration
+	logger     *slog.Logger
 }
 
 // New creates a new watcher for the given tenant's configuration.
 // Register typed field accessors (String, Int, Bool, etc.) before calling Start.
 //
-// The conn parameter is the gRPC client connection to the OpenDecree.
-func New(conn grpc.ClientConnInterface, tenantID string, opts ...Option) *Watcher {
+// The transport is used for both snapshot loading and subscription streaming.
+// Use grpctransport.NewConfigTransport to create a gRPC-backed transport.
+func New(transport configclient.Transport, tenantID string, opts ...Option) *Watcher {
 	o := options{
-		role:       "superadmin",
 		minBackoff: 500 * time.Millisecond,
 		maxBackoff: 30 * time.Second,
 		logger:     slog.Default(),
@@ -85,56 +74,17 @@ func New(conn grpc.ClientConnInterface, tenantID string, opts ...Option) *Watche
 		opt(&o)
 	}
 
-	// Build configclient options from our options.
-	var ccOpts []configclient.Option
-	if o.subject != "" {
-		ccOpts = append(ccOpts, configclient.WithSubject(o.subject))
-	}
-	if o.role != "" {
-		ccOpts = append(ccOpts, configclient.WithRole(o.role))
-	}
-	if o.tenantID != "" {
-		ccOpts = append(ccOpts, configclient.WithTenantID(o.tenantID))
-	}
-	if o.bearerToken != "" {
-		ccOpts = append(ccOpts, configclient.WithBearerToken(o.bearerToken))
-	}
-
-	rpc := pb.NewConfigServiceClient(conn)
-
 	return &Watcher{
-		configClient: configclient.New(rpc, ccOpts...),
-		rpc:          rpc,
-		tenantID:     tenantID,
-		opts:         o,
-		fields:       make(map[string]*fieldEntry),
-		done:         make(chan struct{}),
+		transport: transport,
+		tenantID:  tenantID,
+		opts:      o,
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
 	}
 }
 
 // Option configures the watcher.
 type Option func(*options)
-
-// WithSubject sets the x-subject metadata header for authentication.
-func WithSubject(subject string) Option {
-	return func(o *options) { o.subject = subject }
-}
-
-// WithRole sets the x-role metadata header. Defaults to "superadmin".
-func WithRole(role string) Option {
-	return func(o *options) { o.role = role }
-}
-
-// WithTenantID sets the x-tenant-id metadata header for authentication.
-// This is separate from the watched tenant (passed to [New]).
-func WithTenantID(tenantID string) Option {
-	return func(o *options) { o.tenantID = tenantID }
-}
-
-// WithBearerToken sets a JWT bearer token for authentication.
-func WithBearerToken(token string) Option {
-	return func(o *options) { o.bearerToken = token }
-}
 
 // WithReconnectBackoff configures the exponential backoff for stream reconnection.
 // Defaults to 500ms min, 30s max.
@@ -191,6 +141,14 @@ func (w *Watcher) Duration(fieldPath string, defaultVal time.Duration) *Value[ti
 	return registerField(w, fieldPath, defaultVal, parseDuration)
 }
 
+// Time registers a timestamp field and returns a live [Value] handle.
+// Values are stored as RFC3339Nano strings and parsed to time.Time.
+// The defaultVal is returned when the field is null, missing, or unparseable.
+// Must be called before [Watcher.Start].
+func (w *Watcher) Time(fieldPath string, defaultVal time.Time) *Value[time.Time] {
+	return registerField(w, fieldPath, defaultVal, parseTime)
+}
+
 // Raw registers a string field with no type conversion and returns a live [Value] handle.
 // This is equivalent to [Watcher.String] — provided for clarity of intent.
 // Must be called before [Watcher.Start].
@@ -218,7 +176,6 @@ func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func
 //
 // Fields must be registered (via String, Int, Bool, etc.) before calling Start.
 func (w *Watcher) Start(ctx context.Context) error {
-	// Load initial snapshot.
 	if err := w.loadSnapshot(ctx); err != nil {
 		return err
 	}
@@ -256,9 +213,17 @@ func (w *Watcher) Close() error {
 // --- Internal ---
 
 func (w *Watcher) loadSnapshot(ctx context.Context) error {
-	values, err := w.configClient.GetAll(ctx, w.tenantID)
+	resp, err := w.transport.GetConfig(ctx, &configclient.GetConfigRequest{
+		TenantID: w.tenantID,
+	})
 	if err != nil {
 		return err
+	}
+
+	// Build a map of field path → string value.
+	values := make(map[string]string, len(resp.Values))
+	for _, v := range resp.Values {
+		values[v.FieldPath] = v.Value.String()
 	}
 
 	w.mu.RLock()
@@ -307,9 +272,8 @@ func (w *Watcher) subscriptionLoop(ctx context.Context) {
 }
 
 func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string) error {
-	authCtx := w.withAuth(ctx)
-	stream, err := w.rpc.Subscribe(authCtx, &pb.SubscribeRequest{
-		TenantId:   w.tenantID,
+	sub, err := w.transport.Subscribe(ctx, &configclient.SubscribeRequest{
+		TenantID:   w.tenantID,
 		FieldPaths: fieldPaths,
 	})
 	if err != nil {
@@ -317,12 +281,10 @@ func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string) error {
 	}
 
 	for {
-		resp, err := stream.Recv()
+		change, err := sub.Recv()
 		if err != nil {
 			return err
 		}
-
-		change := resp.Change
 		if change == nil {
 			continue
 		}
@@ -330,7 +292,7 @@ func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string) error {
 		w.mu.RLock()
 		if entry, ok := w.fields[change.FieldPath]; ok {
 			if change.NewValue != nil {
-				entry.rawUpdate(typedValueToString(change.NewValue), true)
+				entry.rawUpdate(change.NewValue.String(), true)
 			} else {
 				entry.rawUpdate("", false)
 			}
@@ -347,24 +309,4 @@ func (w *Watcher) registeredPaths() []string {
 		paths = append(paths, p)
 	}
 	return paths
-}
-
-func (w *Watcher) withAuth(ctx context.Context) context.Context {
-	if w.opts.bearerToken != "" {
-		return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+w.opts.bearerToken)
-	}
-	pairs := make([]string, 0, 6)
-	if w.opts.subject != "" {
-		pairs = append(pairs, "x-subject", w.opts.subject)
-	}
-	if w.opts.role != "" {
-		pairs = append(pairs, "x-role", w.opts.role)
-	}
-	if w.opts.tenantID != "" {
-		pairs = append(pairs, "x-tenant-id", w.opts.tenantID)
-	}
-	if len(pairs) == 0 {
-		return ctx
-	}
-	return metadata.AppendToOutgoingContext(ctx, pairs...)
 }

@@ -17,8 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/grpctransport"
 	"github.com/opendecree/decree/sdk/tools/seed"
 )
 
@@ -40,11 +39,8 @@ func run() error {
 	}
 	defer conn.Close()
 
-	admin := adminclient.New(
-		pb.NewSchemaServiceClient(conn),
-		pb.NewConfigServiceClient(conn),
-		nil,
-		adminclient.WithSubject("bootstrap-example"),
+	admin := grpctransport.NewAdminClient(conn,
+		grpctransport.WithSubject("bootstrap-example"),
 	)
 
 	// Parse the seed file.

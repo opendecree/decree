@@ -2,8 +2,6 @@ package adminclient
 
 import (
 	"context"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // LockField prevents a configuration field from being modified by non-superadmin users.
@@ -13,12 +11,7 @@ func (c *Client) LockField(ctx context.Context, tenantID, fieldPath string, lock
 	if c.schema == nil {
 		return ErrServiceNotConfigured
 	}
-	_, err := c.schema.LockField(c.withAuth(ctx), &pb.LockFieldRequest{
-		TenantId:     tenantID,
-		FieldPath:    fieldPath,
-		LockedValues: lockedValues,
-	})
-	return mapError(err)
+	return c.schema.LockField(ctx, tenantID, fieldPath, lockedValues)
 }
 
 // UnlockField removes a field lock, allowing modifications again.
@@ -26,11 +19,7 @@ func (c *Client) UnlockField(ctx context.Context, tenantID, fieldPath string) er
 	if c.schema == nil {
 		return ErrServiceNotConfigured
 	}
-	_, err := c.schema.UnlockField(c.withAuth(ctx), &pb.UnlockFieldRequest{
-		TenantId:  tenantID,
-		FieldPath: fieldPath,
-	})
-	return mapError(err)
+	return c.schema.UnlockField(ctx, tenantID, fieldPath)
 }
 
 // ListFieldLocks returns all active field locks for a tenant.
@@ -38,19 +27,5 @@ func (c *Client) ListFieldLocks(ctx context.Context, tenantID string) ([]FieldLo
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.ListFieldLocks(c.withAuth(ctx), &pb.ListFieldLocksRequest{
-		TenantId: tenantID,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	result := make([]FieldLock, len(resp.Locks))
-	for i, l := range resp.Locks {
-		result[i] = FieldLock{
-			TenantID:     l.TenantId,
-			FieldPath:    l.FieldPath,
-			LockedValues: l.LockedValues,
-		}
-	}
-	return result, nil
+	return c.schema.ListFieldLocks(ctx, tenantID)
 }

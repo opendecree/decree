@@ -19,8 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"github.com/opendecree/decree/sdk/configclient"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func main() {
@@ -40,9 +39,8 @@ func run() error {
 	}
 	defer conn.Close()
 
-	client := configclient.New(
-		pb.NewConfigServiceClient(conn),
-		configclient.WithSubject("cas-example"),
+	client := grpctransport.NewConfigClient(conn,
+		grpctransport.WithSubject("cas-example"),
 	)
 
 	tenantID := mustTenantID()

@@ -72,7 +72,7 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 	oldVal := v.current
 	wasNull := !v.isSet
 
-	if !isSet || rawValue == "" {
+	if !isSet {
 		v.current = v.defaultVal
 		v.isSet = false
 	} else {

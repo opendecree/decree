@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/opendecree/decree/sdk/configwatcher"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 // TestExample verifies the watcher starts and reads initial values.
@@ -39,8 +39,8 @@ func TestExample(t *testing.T) {
 		tenantID = strings.TrimSpace(string(data))
 	}
 
-	w := configwatcher.New(conn, tenantID,
-		configwatcher.WithSubject("feature-flags-test"),
+	w := grpctransport.NewWatcher(conn, tenantID,
+		grpctransport.WithSubject("feature-flags-test"),
 	)
 	darkMode := w.Bool("features.dark_mode", false)
 	betaAccess := w.Bool("features.beta_access", false)

@@ -8,7 +8,7 @@ Schema-driven business configuration management service. Multi-tenant, gRPC API,
 
 | Concern | Tool | Version |
 |---------|------|---------|
-| Language | Go | 1.24 |
+| Language | Go | 1.24 (server/CLI), 1.22 (SDK) |
 | API | gRPC (Protocol Buffers) | — |
 | Proto tooling | buf (local plugins) | v1.66.1 |
 | DB | PostgreSQL | 17 |
@@ -58,7 +58,7 @@ go.work              # Go workspace (service + api + sdk)
 cmd/server/          # Entry point
 proto/               # Protobuf definitions (API source of truth)
 api/                 # Generated proto code (own module, lightweight deps)
-sdk/                 # Client SDK (own module, depends on api/)
+sdk/                 # Client SDK modules (see Go version note below)
 db/queries/          # SQL queries (DB source of truth)
 db/migrations/       # goose migrations
 internal/
@@ -96,3 +96,9 @@ Single Go binary, three gRPC services (SchemaService, ConfigService, AuditServic
 - buf plugins run locally, not remote
 - sqlc generated files use `.gen.go` suffix
 - Apache 2.0 license
+
+### Go version policy
+
+- **Server, CLI, tools, api** — Go 1.24+ (our build environment)
+- **SDK core modules** (configclient, adminclient, configwatcher) — Go 1.22 (lowest stable common ground for consumers who install the SDK)
+- **SDK grpctransport** — Go 1.24 (requires gRPC, which pins Go version)

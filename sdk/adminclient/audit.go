@@ -3,34 +3,32 @@ package adminclient
 import (
 	"context"
 	"time"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // AuditFilter configures which audit entries to retrieve.
-type AuditFilter func(*pb.QueryWriteLogRequest)
+type AuditFilter func(*QueryWriteLogRequest)
 
 // WithAuditTenant filters audit entries by tenant ID.
 func WithAuditTenant(tenantID string) AuditFilter {
-	return func(r *pb.QueryWriteLogRequest) { r.TenantId = &tenantID }
+	return func(r *QueryWriteLogRequest) { r.TenantID = &tenantID }
 }
 
 // WithAuditActor filters audit entries by actor (JWT subject).
 func WithAuditActor(actor string) AuditFilter {
-	return func(r *pb.QueryWriteLogRequest) { r.Actor = &actor }
+	return func(r *QueryWriteLogRequest) { r.Actor = &actor }
 }
 
 // WithAuditField filters audit entries by field path.
 func WithAuditField(fieldPath string) AuditFilter {
-	return func(r *pb.QueryWriteLogRequest) { r.FieldPath = &fieldPath }
+	return func(r *QueryWriteLogRequest) { r.FieldPath = &fieldPath }
 }
 
 // WithAuditTimeRange filters audit entries by creation time range.
 // Either start or end may be nil for an open-ended range.
 func WithAuditTimeRange(start, end *time.Time) AuditFilter {
-	return func(r *pb.QueryWriteLogRequest) {
-		r.StartTime = timeToProto(start)
-		r.EndTime = timeToProto(end)
+	return func(r *QueryWriteLogRequest) {
+		r.StartTime = start
+		r.EndTime = end
 	}
 }
 
@@ -44,20 +42,18 @@ func (c *Client) QueryWriteLog(ctx context.Context, filters ...AuditFilter) ([]*
 	var all []*AuditEntry
 	pageToken := ""
 	for {
-		req := &pb.QueryWriteLogRequest{
+		req := &QueryWriteLogRequest{
 			PageSize:  100,
 			PageToken: pageToken,
 		}
 		for _, f := range filters {
 			f(req)
 		}
-		resp, err := c.audit.QueryWriteLog(c.withAuth(ctx), req)
+		resp, err := c.audit.QueryWriteLog(ctx, req)
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
-		for _, e := range resp.Entries {
-			all = append(all, auditEntryFromProto(e))
-		}
+		all = append(all, resp.Entries...)
 		if resp.NextPageToken == "" {
 			break
 		}
@@ -72,16 +68,7 @@ func (c *Client) GetFieldUsage(ctx context.Context, tenantID, fieldPath string, 
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.audit.GetFieldUsage(c.withAuth(ctx), &pb.GetFieldUsageRequest{
-		TenantId:  tenantID,
-		FieldPath: fieldPath,
-		StartTime: timeToProto(start),
-		EndTime:   timeToProto(end),
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return usageStatsFromProto(resp.Stats), nil
+	return c.audit.GetFieldUsage(ctx, tenantID, fieldPath, start, end)
 }
 
 // GetTenantUsage returns aggregated read statistics for all fields of a tenant.
@@ -90,19 +77,7 @@ func (c *Client) GetTenantUsage(ctx context.Context, tenantID string, start, end
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.audit.GetTenantUsage(c.withAuth(ctx), &pb.GetTenantUsageRequest{
-		TenantId:  tenantID,
-		StartTime: timeToProto(start),
-		EndTime:   timeToProto(end),
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	result := make([]*UsageStats, len(resp.FieldStats))
-	for i, s := range resp.FieldStats {
-		result[i] = usageStatsFromProto(s)
-	}
-	return result, nil
+	return c.audit.GetTenantUsage(ctx, tenantID, start, end)
 }
 
 // GetUnusedFields returns field paths that have not been read since the given time.
@@ -111,12 +86,5 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.audit.GetUnusedFields(c.withAuth(ctx), &pb.GetUnusedFieldsRequest{
-		TenantId: tenantID,
-		Since:    timeToProto(&since),
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return resp.FieldPaths, nil
+	return c.audit.GetUnusedFields(ctx, tenantID, since)
 }
