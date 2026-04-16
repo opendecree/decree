@@ -169,6 +169,16 @@ func TestUnaryInterceptor_HealthCheckBypass(t *testing.T) {
 	assert.Equal(t, "ok", resp)
 }
 
+func TestUnaryInterceptor_ServerServiceBypass(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := context.Background()
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/centralconfig.v1.ServerService/GetServerInfo"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
 func TestUnaryInterceptor_MissingMetadata(t *testing.T) {
 	interceptor := newTestInterceptor(t, "")
 	unary := interceptor.UnaryInterceptor()
