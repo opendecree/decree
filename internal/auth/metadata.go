@@ -11,6 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// skipAuth returns true for gRPC methods that should bypass authentication.
+func skipAuth(fullMethod string) bool {
+	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/") ||
+		strings.HasPrefix(fullMethod, "/centralconfig.v1.ServerService/")
+}
+
 const (
 	headerSubject  = "x-subject"
 	headerRole     = "x-role"
@@ -37,7 +43,7 @@ func NewMetadataInterceptor(resolver TenantResolver) *MetadataInterceptor {
 // UnaryInterceptor returns a gRPC unary server interceptor.
 func (m *MetadataInterceptor) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if strings.HasPrefix(info.FullMethod, "/grpc.health.v1.Health/") {
+		if skipAuth(info.FullMethod) {
 			return handler(ctx, req)
 		}
 		newCtx, err := m.extractClaims(ctx)

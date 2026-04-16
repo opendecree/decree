@@ -169,14 +169,27 @@ func TestGateway_DocsEndpoints(t *testing.T) {
 	})
 }
 
-func TestVersionService_GetServerVersion(t *testing.T) {
-	svc := &VersionService{}
-	resp, err := svc.GetServerVersion(context.Background(), nil)
+func TestServerService_GetServerInfo(t *testing.T) {
+	svc := NewServerService(Features{
+		Schema:        true,
+		Config:        true,
+		Audit:         false,
+		UsageTracking: true,
+		JWTAuth:       false,
+		HTTPGateway:   true,
+	})
+	resp, err := svc.GetServerInfo(context.Background(), nil)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
-	// version.Version and version.Commit are set at build time; empty in tests is fine.
 	assert.IsType(t, "", resp.Version)
 	assert.IsType(t, "", resp.Commit)
+	assert.True(t, resp.Features["schema"])
+	assert.True(t, resp.Features["config"])
+	assert.False(t, resp.Features["audit"])
+	assert.True(t, resp.Features["usage_tracking"])
+	assert.False(t, resp.Features["jwt_auth"])
+	assert.True(t, resp.Features["http_gateway"])
+	assert.Len(t, resp.Features, 6)
 }
 
 // Verify that metadata.MD satisfies the grpc metadata interface.

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package centralconfig.v1;
+
+import "google/api/annotations.proto";
+
+// ServerService provides server metadata and capability discovery.
+// Always registered, no authentication required.
+service ServerService {
+  // GetServerInfo returns the server's version, commit hash, and enabled features.
+  rpc GetServerInfo(GetServerInfoRequest) returns (GetServerInfoResponse) {
+    option (google.api.http) = {
+      get: "/v1/server/info"
+    };
+  }
+}
+
+message GetServerInfoRequest {}
+
+message GetServerInfoResponse {
+  // Semantic version string (e.g. "1.2.3" or "dev").
+  string version = 1;
+
+  // Git commit hash.
+  string commit = 2;
+
+  // Enabled server features. Keys are feature names, values indicate enabled state.
+  // Known features: schema, config, audit, usage_tracking, jwt_auth, http_gateway.
+  map<string, bool> features = 3;
+}

@@ -36,6 +36,11 @@ type ConfigTransport interface {
 	ImportConfig(ctx context.Context, req *ImportConfigRequest) (*Version, error)
 }
 
+// ServerTransport abstracts server info operations.
+type ServerTransport interface {
+	GetServerInfo(ctx context.Context) (*ServerInfo, error)
+}
+
 // AuditTransport abstracts audit log operations.
 type AuditTransport interface {
 	QueryWriteLog(ctx context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error)

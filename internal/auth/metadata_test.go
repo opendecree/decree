@@ -174,6 +174,18 @@ func TestMetadata_HealthCheckBypass(t *testing.T) {
 	assert.Equal(t, "ok", resp)
 }
 
+func TestMetadata_ServerServiceBypass(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	// No headers — ServerService skips auth.
+	ctx := context.Background()
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/centralconfig.v1.ServerService/GetServerInfo"}, noopHandler)
+
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
 func TestMetadata_StreamInterceptor(t *testing.T) {
 	interceptor := NewMetadataInterceptor(nil)
 	stream := interceptor.StreamInterceptor()

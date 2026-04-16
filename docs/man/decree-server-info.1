@@ -2,22 +2,23 @@
 .TH "DECREE" "1" "Apr 2026" "OpenDecree" "OpenDecree CLI"
 
 .SH NAME
-decree - OpenDecree CLI
+decree-server-info - Show server version and enabled features
 
 
 .SH SYNOPSIS
-\fBdecree [flags]\fP
+\fBdecree server info [flags]\fP
 
 
 .SH DESCRIPTION
-Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.
+Show server version and enabled features
 
 
 .SH OPTIONS
 \fB-h\fP, \fB--help\fP[=false]
-	help for decree
+	help for info
 
-.PP
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
 \fB--insecure\fP[=true]
 	skip TLS verification
 
@@ -55,4 +56,4 @@ Command-line tool for managing schemas, tenants, and configuration values in Ope
 
 
 .SH SEE ALSO
-\fBdecree-audit(1)\fP, \fBdecree-completion(1)\fP, \fBdecree-config(1)\fP, \fBdecree-diff(1)\fP, \fBdecree-docgen(1)\fP, \fBdecree-dump(1)\fP, \fBdecree-lock(1)\fP, \fBdecree-schema(1)\fP, \fBdecree-seed(1)\fP, \fBdecree-server(1)\fP, \fBdecree-tenant(1)\fP, \fBdecree-validate(1)\fP, \fBdecree-version(1)\fP, \fBdecree-watch(1)\fP
+\fBdecree-server(1)\fP
