@@ -15,6 +15,7 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/cache"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
@@ -460,18 +461,25 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 		return nil, err
 	}
 
-	pageSize := req.PageSize
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 50
+	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
+
+	offset, err := pagination.DecodePageToken(req.PageToken)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
 	versions, err := s.store.ListConfigVersions(ctx, ListConfigVersionsParams{
 		TenantID: tenantID,
-		Limit:    pageSize,
-		Offset:   0,
+		Limit:    pageSize + 1,
+		Offset:   offset,
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list versions")
+	}
+
+	nextToken := pagination.NextPageToken(pageSize, int32(len(versions)), offset)
+	if int32(len(versions)) > pageSize {
+		versions = versions[:pageSize]
 	}
 
 	pbVersions := make([]*pb.ConfigVersion, 0, len(versions))
@@ -479,7 +487,10 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 		pbVersions = append(pbVersions, configVersionToProto(v))
 	}
 
-	return &pb.ListVersionsResponse{Versions: pbVersions}, nil
+	return &pb.ListVersionsResponse{
+		Versions:      pbVersions,
+		NextPageToken: nextToken,
+	}, nil
 }
 
 func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*pb.GetVersionResponse, error) {
