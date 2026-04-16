@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/opendecree/decree/releases"><img src="https://img.shields.io/github/v/release/opendecree/decree" alt="Release"></a>
-  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.24-00ADD8?logo=go" alt="Go"></a>
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go" alt="Go"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
 </p>
@@ -59,23 +59,26 @@ No existing open-source tool combines a schema-first approach to typed configura
 
 ### Go
 
+The core SDK modules require **Go 1.22+** and have zero external dependencies. The `grpctransport` module (default transport) requires Go 1.24+.
+
 ```go
 // configclient — application runtime reads and writes
-client := configclient.New(rpc, configclient.WithSubject("myapp"))
+client := grpctransport.NewConfigClient(conn, grpctransport.WithSubject("myapp"))
 val, _ := client.GetInt(ctx, tenantID, "payments.retries")
 
 // configwatcher — live typed values with auto-reconnect
-w := configwatcher.New(conn, tenantID)
+w := grpctransport.NewWatcher(conn, tenantID, grpctransport.WithSubject("myapp"))
 fee := w.Float("payments.fee", 0.01)
 w.Start(ctx)
 fmt.Println(fee.Get()) // always fresh
 ```
 
 ```bash
-go get github.com/opendecree/decree/sdk/configclient@latest
-go get github.com/opendecree/decree/sdk/adminclient@latest
-go get github.com/opendecree/decree/sdk/configwatcher@latest
-go get github.com/opendecree/decree/sdk/tools@latest         # diff, docgen, validate, seed, dump
+go get github.com/opendecree/decree/sdk/grpctransport@latest  # gRPC transport (pulls in configclient, etc.)
+go get github.com/opendecree/decree/sdk/configclient@latest   # core client (no gRPC dependency)
+go get github.com/opendecree/decree/sdk/adminclient@latest    # admin operations
+go get github.com/opendecree/decree/sdk/configwatcher@latest  # live config watcher
+go get github.com/opendecree/decree/sdk/tools@latest          # diff, docgen, validate, seed, dump
 ```
 
 ### Python
