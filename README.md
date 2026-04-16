@@ -60,7 +60,7 @@ No existing open-source tool combines a schema-first approach to typed configura
 
 ### Go
 
-The core SDK modules require **Go 1.22+** and have zero external dependencies. The `grpctransport` module (default transport) requires Go 1.24+.
+The core SDK modules require **Go 1.22+** and have zero external dependencies. The `grpctransport` module (default transport) requires Go 1.24+ because `google.golang.org/grpc` pins that version — if you need a Go 1.22-compatible transport, 👍 or comment on [#90](https://github.com/opendecree/decree/issues/90) to signal demand.
 
 ```go
 // configclient — application runtime reads and writes
