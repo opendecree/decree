@@ -328,3 +328,39 @@ func TestWatcher_NullField(t *testing.T) {
 	cancel()
 	_ = w.Close()
 }
+
+func TestWatcher_TimeField(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ts := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "deploy.scheduled_at", Value: configclient.TimeVal(ts)},
+				},
+			}, nil
+		},
+		subscribeFn: func(ctx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: ctx}, nil
+		},
+	}
+
+	w := New(tr, "t1")
+	scheduled := w.Time("deploy.scheduled_at", time.Time{})
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := scheduled.Get(); !got.Equal(ts) {
+		t.Errorf("got %v, want %v", got, ts)
+	}
+
+	cancel()
+	_ = w.Close()
+}

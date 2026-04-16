@@ -83,4 +83,22 @@ func TestParseFunctions(t *testing.T) {
 			t.Fatal("expected error, got nil")
 		}
 	})
+
+	t.Run("parseTime valid", func(t *testing.T) {
+		ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
+		v, err := parseTime(ts.Format(time.RFC3339Nano))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !v.Equal(ts) {
+			t.Errorf("got %v, want %v", v, ts)
+		}
+	})
+
+	t.Run("parseTime invalid", func(t *testing.T) {
+		_, err := parseTime("not-a-time")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
 }

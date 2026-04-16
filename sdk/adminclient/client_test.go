@@ -96,11 +96,11 @@ func (m *mockSchemaTransport) ListFieldLocks(ctx context.Context, tenantID strin
 // --- Mock ConfigTransport ---
 
 type mockConfigTransport struct {
-	listVersionsFn    func(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*ListVersionsResponse, error)
-	getVersionFn      func(ctx context.Context, tenantID string, version int32) (*Version, error)
-	rollbackFn        func(ctx context.Context, tenantID string, version int32, description string) (*Version, error)
-	exportConfigFn    func(ctx context.Context, tenantID string, version *int32) ([]byte, error)
-	importConfigFn    func(ctx context.Context, req *ImportConfigRequest) (*Version, error)
+	listVersionsFn func(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*ListVersionsResponse, error)
+	getVersionFn   func(ctx context.Context, tenantID string, version int32) (*Version, error)
+	rollbackFn     func(ctx context.Context, tenantID string, version int32, description string) (*Version, error)
+	exportConfigFn func(ctx context.Context, tenantID string, version *int32) ([]byte, error)
+	importConfigFn func(ctx context.Context, req *ImportConfigRequest) (*Version, error)
 }
 
 func (m *mockConfigTransport) ListVersions(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*ListVersionsResponse, error) {

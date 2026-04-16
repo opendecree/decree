@@ -11,13 +11,13 @@ type ValueKind int8
 
 const (
 	KindString   ValueKind = iota + 1 // string
-	KindInteger                        // int64
-	KindNumber                         // float64
-	KindBool                           // bool
-	KindTime                           // time.Time
-	KindDuration                       // time.Duration
-	KindURL                            // URL (stored as string)
-	KindJSON                           // JSON (stored as string)
+	KindInteger                       // int64
+	KindNumber                        // float64
+	KindBool                          // bool
+	KindTime                          // time.Time
+	KindDuration                      // time.Duration
+	KindURL                           // URL (stored as string)
+	KindJSON                          // JSON (stored as string)
 )
 
 // TypedValue holds a configuration value with its type information.

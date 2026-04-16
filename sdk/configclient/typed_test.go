@@ -236,3 +236,100 @@ func TestTypedValue_StringTime(t *testing.T) {
 		t.Errorf("expected %q to contain %q", got, "2026-03-30")
 	}
 }
+
+// --- TypedValue accessors ---
+
+func TestTypedValue_Accessors(t *testing.T) {
+	if got := StringVal("hello").StringValue(); got != "hello" {
+		t.Errorf("StringValue: got %v, want hello", got)
+	}
+	ts := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if got := TimeVal(ts).TimeValue(); !got.Equal(ts) {
+		t.Errorf("TimeValue: got %v, want %v", got, ts)
+	}
+	if got := URLVal("https://x.com").URLValue(); got != "https://x.com" {
+		t.Errorf("URLValue: got %v, want https://x.com", got)
+	}
+	if got := JSONVal(`{}`).JSONValue(); got != "{}" {
+		t.Errorf("JSONValue: got %v, want {}", got)
+	}
+}
+
+func TestTypedValue_AccessorPanics(t *testing.T) {
+	assertPanics := func(t *testing.T, name string, fn func()) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("%s: expected panic, got none", name)
+			}
+		}()
+		fn()
+	}
+	t.Run("StringValue on int", func(t *testing.T) {
+		assertPanics(t, "StringValue", func() { IntVal(1).StringValue() })
+	})
+	t.Run("TimeValue on string", func(t *testing.T) {
+		assertPanics(t, "TimeValue", func() { StringVal("x").TimeValue() })
+	})
+	t.Run("URLValue on bool", func(t *testing.T) {
+		assertPanics(t, "URLValue", func() { BoolVal(true).URLValue() })
+	})
+	t.Run("JSONValue on int", func(t *testing.T) {
+		assertPanics(t, "JSONValue", func() { IntVal(1).JSONValue() })
+	})
+}
+
+// --- Snapshot.GetFields ---
+
+func TestSnapshot_GetFields(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	snap := client.AtVersion("t1", 3)
+
+	v := int32(3)
+	tr.on("GetFields", func(args ...any) bool {
+		r := args[0].(*GetFieldsRequest)
+		return r.Version != nil && *r.Version == v
+	}, &GetFieldsResponse{
+		Values: []ConfigValue{
+			{FieldPath: "a", Value: StringVal("1")},
+			{FieldPath: "b", Value: StringVal("2")},
+		},
+	}, nil)
+
+	vals, err := snap.GetFields(ctx, []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := vals["a"]; got != "1" {
+		t.Errorf("got %v, want 1", got)
+	}
+	if got := vals["b"]; got != "2" {
+		t.Errorf("got %v, want 2", got)
+	}
+}
+
+// --- Error types ---
+
+func TestInvalidArgumentError(t *testing.T) {
+	err := InvalidArgumentError("bad value")
+	if !errors.Is(err, ErrInvalidArgument) {
+		t.Errorf("expected ErrInvalidArgument, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "bad value") {
+		t.Errorf("expected message to contain 'bad value', got %q", err.Error())
+	}
+}
+
+func TestRetryableError(t *testing.T) {
+	inner := errors.New("unavailable")
+	re := &RetryableError{Err: inner}
+	if re.Error() != "unavailable" {
+		t.Errorf("Error(): got %v, want unavailable", re.Error())
+	}
+	if re.Unwrap() != inner {
+		t.Errorf("Unwrap(): got %v, want %v", re.Unwrap(), inner)
+	}
+}
