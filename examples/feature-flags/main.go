@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/opendecree/decree/sdk/configwatcher"
+	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
 func main() {
@@ -45,8 +45,8 @@ func run() error {
 	tenantID := mustTenantID()
 
 	// Create a watcher and register boolean feature flags with defaults.
-	w := configwatcher.New(conn, tenantID,
-		configwatcher.WithSubject("feature-flags-example"),
+	w := grpctransport.NewWatcher(conn, tenantID,
+		grpctransport.WithSubject("feature-flags-example"),
 	)
 	darkMode := w.Bool("features.dark_mode", false)
 	betaAccess := w.Bool("features.beta_access", false)
