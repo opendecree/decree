@@ -23,9 +23,9 @@ func testSchema() domain.Schema {
 	return domain.Schema{ID: testSchemaID, Name: "test-schema", CreatedAt: now, UpdatedAt: now}
 }
 
-func testVersion(v int32) domain.SchemaVersion {
+func testVersion() domain.SchemaVersion {
 	return domain.SchemaVersion{
-		ID: testVersionID, SchemaID: testSchemaID, Version: v,
+		ID: testVersionID, SchemaID: testSchemaID, Version: 1,
 		Checksum: "abc", CreatedAt: now,
 	}
 }
@@ -46,12 +46,60 @@ func TestListSchemas_Success(t *testing.T) {
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{
 		testSchema(),
 	}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(1), nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
 	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageSize: 10})
 	require.NoError(t, err)
 	assert.Len(t, resp.Schemas, 1)
+}
+
+func TestListSchemas_Pagination(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+
+	s1 := testSchema()
+	s2 := testSchema()
+	s2.ID = "22222222-2222-2222-2222-222222222222"
+	s2.Name = "schema-2"
+
+	v1 := testVersion()
+	v2 := testVersion()
+	v2.ID = "33333333-3333-3333-3333-333333333333"
+
+	// Page 1: returns 2 results (pageSize+1) → has next page
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Offset == 0 && p.Limit == 2
+	})).Return([]domain.Schema{s1, s2}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, s1.ID).Return(v1, nil)
+	store.On("GetSchemaFields", mock.Anything, v1.ID).Return([]domain.SchemaField{}, nil)
+
+	resp, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageSize: 1})
+	require.NoError(t, err)
+	assert.Len(t, resp.Schemas, 1)
+	assert.NotEmpty(t, resp.NextPageToken, "expected next_page_token for full page")
+
+	// Page 2: returns 1 result (< pageSize+1) → no next page
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Offset == 1 && p.Limit == 2
+	})).Return([]domain.Schema{s2}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, s2.ID).Return(v2, nil)
+	store.On("GetSchemaFields", mock.Anything, v2.ID).Return([]domain.SchemaField{}, nil)
+
+	resp, err = svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{
+		PageSize:  1,
+		PageToken: resp.NextPageToken,
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Schemas, 1)
+	assert.Empty(t, resp.NextPageToken, "expected no next_page_token for last page")
+}
+
+func TestListSchemas_InvalidPageToken(t *testing.T) {
+	svc := NewService(&mockStore{}, testLogger, nil, nil)
+
+	_, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageToken: "garbage"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- DeleteSchema ---
@@ -396,7 +444,7 @@ func TestGetSchema_ByName(t *testing.T) {
 	svc := NewService(store, testLogger, nil, nil)
 
 	store.On("GetSchemaByName", mock.Anything, "test-schema").Return(testSchema(), nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(1), nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
 	store.On("GetSchemaFields", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.GetSchema(context.Background(), &pb.GetSchemaRequest{Id: "test-schema"})
@@ -417,7 +465,7 @@ func TestListTenants_SuperadminSeesAll(t *testing.T) {
 	})
 
 	store.On("ListTenants", ctx, ListTenantsParams{
-		Limit: 50, AllowedTenantIDs: nil,
+		Limit: 51, AllowedTenantIDs: nil,
 	}).Return([]domain.Tenant{testTenant()}, nil)
 
 	resp, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{})
@@ -438,7 +486,7 @@ func TestListTenants_NonSuperadminFiltered(t *testing.T) {
 
 	// Store should receive AllowedTenantIDs — filtering happens at store level.
 	store.On("ListTenants", ctx, ListTenantsParams{
-		Limit: 50, AllowedTenantIDs: allowedIDs,
+		Limit: 51, AllowedTenantIDs: allowedIDs,
 	}).Return([]domain.Tenant{testTenant()}, nil)
 
 	resp, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{})
@@ -460,7 +508,7 @@ func TestListTenants_BySchemaFiltered(t *testing.T) {
 
 	schemaID := testSchemaID
 	store.On("ListTenantsBySchema", ctx, ListTenantsBySchemaParams{
-		SchemaID: schemaID, Limit: 50, AllowedTenantIDs: allowedIDs,
+		SchemaID: schemaID, Limit: 51, AllowedTenantIDs: allowedIDs,
 	}).Return([]domain.Tenant{testTenant()}, nil)
 
 	resp, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{SchemaId: &schemaID})
@@ -475,13 +523,21 @@ func TestListTenants_NoAuthContext_SeesAll(t *testing.T) {
 	ctx := context.Background() // No auth claims — permissive.
 
 	store.On("ListTenants", ctx, ListTenantsParams{
-		Limit: 50, AllowedTenantIDs: nil,
+		Limit: 51, AllowedTenantIDs: nil,
 	}).Return([]domain.Tenant{testTenant()}, nil)
 
 	resp, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{})
 	require.NoError(t, err)
 	assert.Len(t, resp.Tenants, 1)
 	store.AssertExpectations(t)
+}
+
+func TestListTenants_InvalidPageToken(t *testing.T) {
+	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
+
+	_, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{PageToken: "garbage"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- ExportSchema ---

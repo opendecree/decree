@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
@@ -170,20 +171,24 @@ func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.
 }
 
 func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (*pb.ListSchemasResponse, error) {
-	pageSize := req.PageSize
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 50
+	pageSize := pagination.ClampPageSize(req.PageSize, 50, 100)
+
+	offset, err := pagination.DecodePageToken(req.PageToken)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
-	var offset int32
-	// TODO: implement cursor-based pagination using req.PageToken.
-
 	schemas, err := s.store.ListSchemas(ctx, ListSchemasParams{
-		Limit:  pageSize,
+		Limit:  pageSize + 1,
 		Offset: offset,
 	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list schemas")
+	}
+
+	nextToken := pagination.NextPageToken(pageSize, int32(len(schemas)), offset)
+	if int32(len(schemas)) > pageSize {
+		schemas = schemas[:pageSize]
 	}
 
 	// Fetch latest version for each schema.
@@ -201,7 +206,8 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 	}
 
 	return &pb.ListSchemasResponse{
-		Schemas: pbSchemas,
+		Schemas:       pbSchemas,
+		NextPageToken: nextToken,
 	}, nil
 }
 
@@ -381,16 +387,17 @@ func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.
 }
 
 func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (*pb.ListTenantsResponse, error) {
-	pageSize := req.PageSize
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 50
+	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
+
+	offset, err := pagination.DecodePageToken(req.PageToken)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
 	// Push tenant access filtering into the store so pagination is correct.
 	allowedIDs := auth.AllowedTenantIDs(ctx)
 
 	var tenants []domain.Tenant
-	var err error
 
 	if req.SchemaId != nil && *req.SchemaId != "" {
 		if !validUUID(*req.SchemaId) {
@@ -398,19 +405,24 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 		}
 		tenants, err = s.store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{
 			SchemaID:         *req.SchemaId,
-			Limit:            pageSize,
-			Offset:           0,
+			Limit:            pageSize + 1,
+			Offset:           offset,
 			AllowedTenantIDs: allowedIDs,
 		})
 	} else {
 		tenants, err = s.store.ListTenants(ctx, ListTenantsParams{
-			Limit:            pageSize,
-			Offset:           0,
+			Limit:            pageSize + 1,
+			Offset:           offset,
 			AllowedTenantIDs: allowedIDs,
 		})
 	}
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list tenants")
+	}
+
+	nextToken := pagination.NextPageToken(pageSize, int32(len(tenants)), offset)
+	if int32(len(tenants)) > pageSize {
+		tenants = tenants[:pageSize]
 	}
 
 	pbTenants := make([]*pb.Tenant, 0, len(tenants))
@@ -419,7 +431,8 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 	}
 
 	return &pb.ListTenantsResponse{
-		Tenants: pbTenants,
+		Tenants:       pbTenants,
+		NextPageToken: nextToken,
 	}, nil
 }
 
