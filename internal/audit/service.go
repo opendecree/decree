@@ -12,19 +12,42 @@ import (
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
+// TenantResolver resolves a tenant UUID or name slug to a UUID.
+type TenantResolver func(ctx context.Context, idOrName string) (string, error)
+
 // Service implements the AuditService gRPC server.
 type Service struct {
 	pb.UnimplementedAuditServiceServer
-	store  Store
-	logger *slog.Logger
+	store         Store
+	logger        *slog.Logger
+	resolveTenant TenantResolver
 }
 
 // NewService creates a new AuditService.
-func NewService(store Store, logger *slog.Logger) *Service {
+func NewService(store Store, logger *slog.Logger, resolver TenantResolver) *Service {
 	return &Service{
-		store:  store,
-		logger: logger,
+		store:         store,
+		logger:        logger,
+		resolveTenant: resolver,
 	}
+}
+
+// resolveTenantID resolves a tenant UUID or slug. If no resolver is set, requires UUID.
+func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string, error) {
+	if idOrName == "" {
+		return "", status.Error(codes.InvalidArgument, "tenant id or name required")
+	}
+	if isValidUUID(idOrName) {
+		return idOrName, nil
+	}
+	if s.resolveTenant != nil {
+		resolved, err := s.resolveTenant(ctx, idOrName)
+		if err != nil {
+			return "", status.Errorf(codes.NotFound, "tenant %q not found", idOrName)
+		}
+		return resolved, nil
+	}
+	return "", status.Error(codes.InvalidArgument, "invalid tenant id")
 }
 
 func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogRequest) (*pb.QueryWriteLogResponse, error) {
@@ -38,10 +61,11 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		Offset: 0,
 	}
 	if req.TenantId != nil {
-		if !isValidUUID(*req.TenantId) {
-			return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+		resolved, err := s.resolveTenantID(ctx, *req.TenantId)
+		if err != nil {
+			return nil, err
 		}
-		params.TenantID = *req.TenantId
+		params.TenantID = resolved
 	}
 	if req.Actor != nil {
 		params.Actor = *req.Actor
@@ -73,12 +97,13 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 }
 
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
-	if !isValidUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	params := GetFieldUsageParams{
-		TenantID:  req.TenantId,
+		TenantID:  tenantID,
 		FieldPath: req.FieldPath,
 	}
 	if req.StartTime != nil {
@@ -112,7 +137,7 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 
 	return &pb.GetFieldUsageResponse{
 		Stats: &pb.UsageStats{
-			TenantId:   req.TenantId,
+			TenantId:   tenantID,
 			FieldPath:  req.FieldPath,
 			ReadCount:  totalReads,
 			LastReadBy: lastReadBy,
@@ -122,12 +147,13 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 }
 
 func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequest) (*pb.GetTenantUsageResponse, error) {
-	if !isValidUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	params := GetTenantUsageParams{
-		TenantID: req.TenantId,
+		TenantID: tenantID,
 	}
 	if req.StartTime != nil {
 		t := req.StartTime.AsTime()
@@ -147,7 +173,7 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 	fieldStats := make([]*pb.UsageStats, 0, len(rows))
 	for _, row := range rows {
 		stat := &pb.UsageStats{
-			TenantId:  req.TenantId,
+			TenantId:  tenantID,
 			FieldPath: row.FieldPath,
 			ReadCount: row.ReadCount,
 		}
@@ -161,12 +187,13 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 }
 
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
-	if !isValidUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	paths, err := s.store.GetUnusedFields(ctx, GetUnusedFieldsParams{
-		TenantID: req.TenantId,
+		TenantID: tenantID,
 		Since:    req.Since.AsTime(),
 	})
 	if err != nil {

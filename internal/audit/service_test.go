@@ -46,7 +46,7 @@ func (m *mockStore) UpsertUsageStats(ctx context.Context, arg UpsertUsageStatsPa
 
 func newTestService() (*Service, *mockStore) {
 	store := &mockStore{}
-	svc := NewService(store, slog.Default())
+	svc := NewService(store, slog.Default(), nil)
 	return svc, store
 }
 

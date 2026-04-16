@@ -204,7 +204,9 @@ func run() int {
 		logger.InfoContext(ctx, "config service enabled")
 	}
 	if srv.IsServiceEnabled("audit") {
-		auditSvc := audit.NewService(auditStoreVal, logger)
+		auditSvc := audit.NewService(auditStoreVal, logger, func(ctx context.Context, idOrName string) (string, error) {
+			return tenantResolver(schemaStoreVal)(ctx, idOrName)
+		})
 		pb.RegisterAuditServiceServer(srv.GRPCServer(), auditSvc)
 		srv.SetServiceHealthy("centralconfig.v1.AuditService")
 		logger.InfoContext(ctx, "audit service enabled")
