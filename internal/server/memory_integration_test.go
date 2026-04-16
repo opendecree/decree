@@ -58,7 +58,7 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	configSvc := config.NewService(memConfig, cache.NewMemoryCache(0), memPubSub, memPubSub, slog.Default(), telemetry.NewCacheMetrics(telemetry.Config{}), telemetry.NewConfigMetrics(telemetry.Config{}), validatorFactory)
 	pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
 
-	auditSvc := audit.NewService(audit.NewMemoryStore(), slog.Default())
+	auditSvc := audit.NewService(audit.NewMemoryStore(), slog.Default(), nil)
 	pb.RegisterAuditServiceServer(srv.GRPCServer(), auditSvc)
 
 	// Start server.
