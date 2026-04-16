@@ -2,8 +2,6 @@ package adminclient
 
 import (
 	"context"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // CreateTenant creates a new tenant assigned to a published schema version.
@@ -13,15 +11,11 @@ func (c *Client) CreateTenant(ctx context.Context, name, schemaID string, schema
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.CreateTenant(c.withAuth(ctx), &pb.CreateTenantRequest{
+	return c.schema.CreateTenant(ctx, &CreateTenantRequest{
 		Name:          name,
-		SchemaId:      schemaID,
+		SchemaID:      schemaID,
 		SchemaVersion: schemaVersion,
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return tenantFromProto(resp.Tenant), nil
 }
 
 // GetTenant retrieves a tenant by ID.
@@ -29,11 +23,7 @@ func (c *Client) GetTenant(ctx context.Context, id string) (*Tenant, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.GetTenant(c.withAuth(ctx), &pb.GetTenantRequest{Id: id})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return tenantFromProto(resp.Tenant), nil
+	return c.schema.GetTenant(ctx, id)
 }
 
 // ListTenants returns all tenants, optionally filtered by schema ID.
@@ -42,23 +32,18 @@ func (c *Client) ListTenants(ctx context.Context, schemaID string) ([]*Tenant, e
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
+	var schemaFilter *string
+	if schemaID != "" {
+		schemaFilter = &schemaID
+	}
 	var all []*Tenant
 	pageToken := ""
 	for {
-		req := &pb.ListTenantsRequest{
-			PageSize:  100,
-			PageToken: pageToken,
-		}
-		if schemaID != "" {
-			req.SchemaId = &schemaID
-		}
-		resp, err := c.schema.ListTenants(c.withAuth(ctx), req)
+		resp, err := c.schema.ListTenants(ctx, schemaFilter, 100, pageToken)
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
-		for _, t := range resp.Tenants {
-			all = append(all, tenantFromProto(t))
-		}
+		all = append(all, resp.Tenants...)
 		if resp.NextPageToken == "" {
 			break
 		}
@@ -73,14 +58,10 @@ func (c *Client) UpdateTenantName(ctx context.Context, id, newName string) (*Ten
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.UpdateTenant(c.withAuth(ctx), &pb.UpdateTenantRequest{
-		Id:   id,
+	return c.schema.UpdateTenant(ctx, &UpdateTenantRequest{
+		ID:   id,
 		Name: &newName,
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return tenantFromProto(resp.Tenant), nil
 }
 
 // UpdateTenantSchema upgrades a tenant to a new schema version.
@@ -89,14 +70,10 @@ func (c *Client) UpdateTenantSchema(ctx context.Context, id string, schemaVersio
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.schema.UpdateTenant(c.withAuth(ctx), &pb.UpdateTenantRequest{
-		Id:            id,
+	return c.schema.UpdateTenant(ctx, &UpdateTenantRequest{
+		ID:            id,
 		SchemaVersion: &schemaVersion,
 	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return tenantFromProto(resp.Tenant), nil
 }
 
 // DeleteTenant permanently deletes a tenant and all its configuration data.
@@ -104,6 +81,5 @@ func (c *Client) DeleteTenant(ctx context.Context, id string) error {
 	if c.schema == nil {
 		return ErrServiceNotConfigured
 	}
-	_, err := c.schema.DeleteTenant(c.withAuth(ctx), &pb.DeleteTenantRequest{Id: id})
-	return mapError(err)
+	return c.schema.DeleteTenant(ctx, id)
 }

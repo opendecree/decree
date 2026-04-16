@@ -3,11 +3,9 @@ package configclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestRetry_NoRetryByDefault(t *testing.T) {
@@ -16,7 +14,7 @@ func TestRetry_NoRetryByDefault(t *testing.T) {
 
 	result, err := retry(context.Background(), c, func(_ context.Context) (string, error) {
 		calls++
-		return "", status.Error(codes.Unavailable, "down")
+		return "", &RetryableError{Err: fmt.Errorf("unavailable")}
 	})
 
 	if err == nil {
@@ -30,7 +28,7 @@ func TestRetry_NoRetryByDefault(t *testing.T) {
 	}
 }
 
-func TestRetry_RetriesOnUnavailable(t *testing.T) {
+func TestRetry_RetriesOnRetryableError(t *testing.T) {
 	calls := 0
 	c := &Client{opts: options{
 		retryEnabled: true,
@@ -45,7 +43,7 @@ func TestRetry_RetriesOnUnavailable(t *testing.T) {
 	result, err := retry(context.Background(), c, func(_ context.Context) (string, error) {
 		calls++
 		if calls < 3 {
-			return "", status.Error(codes.Unavailable, "down")
+			return "", &RetryableError{Err: fmt.Errorf("unavailable")}
 		}
 		return "ok", nil
 	})
@@ -73,7 +71,7 @@ func TestRetry_DoesNotRetryNonRetryable(t *testing.T) {
 
 	_, err := retry(context.Background(), c, func(_ context.Context) (string, error) {
 		calls++
-		return "", status.Error(codes.NotFound, "not found")
+		return "", ErrNotFound
 	})
 
 	if err == nil {
@@ -98,7 +96,7 @@ func TestRetry_ExhaustsAttempts(t *testing.T) {
 
 	_, err := retry(context.Background(), c, func(_ context.Context) (string, error) {
 		calls++
-		return "", status.Error(codes.Unavailable, "always down")
+		return "", &RetryableError{Err: fmt.Errorf("always down")}
 	})
 
 	if err == nil {
@@ -111,7 +109,7 @@ func TestRetry_ExhaustsAttempts(t *testing.T) {
 
 func TestRetry_RespectsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
+	cancel()
 
 	calls := 0
 	c := &Client{opts: options{
@@ -125,10 +123,9 @@ func TestRetry_RespectsContextCancellation(t *testing.T) {
 
 	_, err := retry(ctx, c, func(_ context.Context) (string, error) {
 		calls++
-		return "", status.Error(codes.Unavailable, "down")
+		return "", &RetryableError{Err: fmt.Errorf("down")}
 	})
 
-	// First call executes, then context is already cancelled before backoff.
 	if calls != 1 {
 		t.Errorf("got %d calls, want 1", calls)
 	}
@@ -171,7 +168,6 @@ func TestRetryConfig_PreservesCustomValues(t *testing.T) {
 }
 
 func TestBackoffDuration(t *testing.T) {
-	// Without jitter, exponential: 100ms, 200ms, 400ms...
 	b0 := backoffDuration(0, 100*time.Millisecond, 5*time.Second, false)
 	if b0 != 100*time.Millisecond {
 		t.Errorf("got %v, want %v", b0, 100*time.Millisecond)
@@ -187,7 +183,6 @@ func TestBackoffDuration(t *testing.T) {
 		t.Errorf("got %v, want %v", b2, 400*time.Millisecond)
 	}
 
-	// Capped at max.
 	b10 := backoffDuration(10, 100*time.Millisecond, 5*time.Second, false)
 	if b10 != 5*time.Second {
 		t.Errorf("got %v, want %v", b10, 5*time.Second)
@@ -196,7 +191,6 @@ func TestBackoffDuration(t *testing.T) {
 
 func TestBackoffDuration_WithJitter(t *testing.T) {
 	b := backoffDuration(2, 100*time.Millisecond, 5*time.Second, true)
-	// With jitter, result is [0, 400ms).
 	if b >= 400*time.Millisecond {
 		t.Errorf("got %v, want < %v", b, 400*time.Millisecond)
 	}
@@ -206,23 +200,17 @@ func TestBackoffDuration_WithJitter(t *testing.T) {
 }
 
 func TestIsRetryable(t *testing.T) {
-	if !IsRetryable(status.Error(codes.Unavailable, "")) {
-		t.Error("expected Unavailable to be retryable")
+	if !IsRetryable(&RetryableError{Err: fmt.Errorf("unavailable")}) {
+		t.Error("expected RetryableError to be retryable")
 	}
-	if !IsRetryable(status.Error(codes.DeadlineExceeded, "")) {
-		t.Error("expected DeadlineExceeded to be retryable")
+	if IsRetryable(ErrNotFound) {
+		t.Error("expected ErrNotFound to not be retryable")
 	}
-	if !IsRetryable(status.Error(codes.ResourceExhausted, "")) {
-		t.Error("expected ResourceExhausted to be retryable")
+	if IsRetryable(ErrInvalidArgument) {
+		t.Error("expected ErrInvalidArgument to not be retryable")
 	}
-	if IsRetryable(status.Error(codes.NotFound, "")) {
-		t.Error("expected NotFound to not be retryable")
-	}
-	if IsRetryable(status.Error(codes.InvalidArgument, "")) {
-		t.Error("expected InvalidArgument to not be retryable")
-	}
-	if IsRetryable(status.Error(codes.PermissionDenied, "")) {
-		t.Error("expected PermissionDenied to not be retryable")
+	if IsRetryable(ErrLocked) {
+		t.Error("expected ErrLocked to not be retryable")
 	}
 	if IsRetryable(nil) {
 		t.Error("expected nil error to not be retryable")
@@ -238,6 +226,6 @@ func TestWithRetry_Option(t *testing.T) {
 		t.Errorf("got %v, want %v", c.opts.retry.MaxAttempts, 5)
 	}
 	if c.opts.retry.InitialBackoff != 100*time.Millisecond {
-		t.Errorf("got %v, want %v", c.opts.retry.InitialBackoff, 100*time.Millisecond) // default
+		t.Errorf("got %v, want %v", c.opts.retry.InitialBackoff, 100*time.Millisecond)
 	}
 }

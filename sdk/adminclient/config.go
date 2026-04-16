@@ -2,8 +2,6 @@ package adminclient
 
 import (
 	"context"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // ListConfigVersions returns all config versions for a tenant, newest first.
@@ -15,17 +13,11 @@ func (c *Client) ListConfigVersions(ctx context.Context, tenantID string) ([]*Ve
 	var all []*Version
 	pageToken := ""
 	for {
-		resp, err := c.config.ListVersions(c.withAuth(ctx), &pb.ListVersionsRequest{
-			TenantId:  tenantID,
-			PageSize:  100,
-			PageToken: pageToken,
-		})
+		resp, err := c.config.ListVersions(ctx, tenantID, 100, pageToken)
 		if err != nil {
-			return nil, mapError(err)
+			return nil, err
 		}
-		for _, v := range resp.Versions {
-			all = append(all, versionFromProto(v))
-		}
+		all = append(all, resp.Versions...)
 		if resp.NextPageToken == "" {
 			break
 		}
@@ -39,14 +31,7 @@ func (c *Client) GetConfigVersion(ctx context.Context, tenantID string, version 
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.config.GetVersion(c.withAuth(ctx), &pb.GetVersionRequest{
-		TenantId: tenantID,
-		Version:  version,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return versionFromProto(resp.ConfigVersion), nil
+	return c.config.GetVersion(ctx, tenantID, version)
 }
 
 // RollbackConfig creates a new config version with the values from a previous version.
@@ -55,15 +40,7 @@ func (c *Client) RollbackConfig(ctx context.Context, tenantID string, targetVers
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.config.RollbackToVersion(c.withAuth(ctx), &pb.RollbackToVersionRequest{
-		TenantId:    tenantID,
-		Version:     targetVersion,
-		Description: ptrString(description),
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return versionFromProto(resp.ConfigVersion), nil
+	return c.config.RollbackToVersion(ctx, tenantID, targetVersion, description)
 }
 
 // ExportConfig serializes a tenant's configuration to YAML.
@@ -72,14 +49,7 @@ func (c *Client) ExportConfig(ctx context.Context, tenantID string, version *int
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	resp, err := c.config.ExportConfig(c.withAuth(ctx), &pb.ExportConfigRequest{
-		TenantId: tenantID,
-		Version:  version,
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return resp.YamlContent, nil
+	return c.config.ExportConfig(ctx, tenantID, version)
 }
 
 // ImportMode controls how imported values interact with existing config.
@@ -101,17 +71,14 @@ func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent 
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	req := &pb.ImportConfigRequest{
-		TenantId:    tenantID,
-		YamlContent: yamlContent,
-		Description: ptrString(description),
-	}
+	m := ImportModeMerge
 	if len(mode) > 0 {
-		req.Mode = pb.ImportMode(mode[0])
+		m = mode[0]
 	}
-	resp, err := c.config.ImportConfig(c.withAuth(ctx), req)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return versionFromProto(resp.ConfigVersion), nil
+	return c.config.ImportConfig(ctx, &ImportConfigRequest{
+		TenantID:    tenantID,
+		YamlContent: yamlContent,
+		Description: description,
+		Mode:        m,
+	})
 }

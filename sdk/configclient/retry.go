@@ -5,9 +5,6 @@ import (
 	"math"
 	"math/rand/v2"
 	"time"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // RetryConfig configures automatic retry with exponential backoff.
@@ -22,11 +19,10 @@ type RetryConfig struct {
 	// Default: 5s.
 	MaxBackoff time.Duration
 	// Jitter adds randomness to backoff to avoid thundering herd.
-	// Default: true.
+	// Default: false.
 	Jitter bool
 	// RetryableCheck determines if an error is retryable.
-	// If nil, defaults to retrying Unavailable, DeadlineExceeded,
-	// and ResourceExhausted codes.
+	// If nil, defaults to checking for [RetryableError].
 	RetryableCheck func(err error) bool
 }
 
@@ -46,13 +42,8 @@ func (c RetryConfig) withDefaults() RetryConfig {
 	return c
 }
 
-// WithRetry enables automatic retry with exponential backoff for transient
-// gRPC errors. Only safe-to-retry errors are retried by default
-// (Unavailable, DeadlineExceeded, ResourceExhausted).
-//
-// Example:
-//
-//	client := configclient.New(rpc, configclient.WithRetry(configclient.RetryConfig{}))
+// WithRetry enables automatic retry with exponential backoff for transient errors.
+// By default, only errors wrapped in [RetryableError] by the transport are retried.
 func WithRetry(cfg RetryConfig) Option {
 	return func(o *options) {
 		o.retry = cfg.withDefaults()
@@ -98,6 +89,14 @@ func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (
 	return zero, lastErr
 }
 
+// retryDo executes fn with retries if retry is enabled, for void operations.
+func retryDo(ctx context.Context, c *Client, fn func(ctx context.Context) error) error {
+	_, err := retry(ctx, c, func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, fn(ctx)
+	})
+	return err
+}
+
 // backoffDuration computes exponential backoff with optional jitter.
 func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
 	backoff := time.Duration(float64(initial) * math.Pow(2, float64(attempt)))
@@ -106,18 +105,4 @@ func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.
 		backoff = time.Duration(rand.Int64N(int64(backoff)))
 	}
 	return backoff
-}
-
-// IsRetryable returns true for gRPC status codes that indicate a transient error.
-func IsRetryable(err error) bool {
-	st, ok := status.FromError(err)
-	if !ok {
-		return false
-	}
-	switch st.Code() {
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
-		return true
-	default:
-		return false
-	}
 }
