@@ -47,8 +47,8 @@ jobs:
             VERSION=main
             COMMIT=${{ github.sha }}
           tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:main
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}:buildcache,mode=max
 
   docs:
     name: Deploy docs
