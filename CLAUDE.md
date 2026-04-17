@@ -99,6 +99,7 @@ Single Go binary, three gRPC services (SchemaService, ConfigService, AuditServic
 
 ### Go version policy
 
-- **Server, CLI, tools, api** — Go 1.25+ (our build environment)
+- **Server (root module)** — Go 1.25+ (our build environment)
+- **CLI (`cmd/decree`)** — Go 1.25+ (standalone binary, no SDK consumers)
 - **SDK core modules** (configclient, adminclient, configwatcher) — Go 1.22 (lowest stable common ground for consumers who install the SDK)
-- **SDK grpctransport** — Go 1.24 (requires gRPC, which pins Go version)
+- **`api`, `sdk/tools`, `sdk/grpctransport`** — Go 1.24 (downstream of the gRPC pin on grpctransport; api is consumed by grpctransport and sdk/tools depends on api)
