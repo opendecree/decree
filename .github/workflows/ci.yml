@@ -1,12 +1,26 @@
 # CI pipeline for OpenDecree server, SDKs, and CLI.
 #
 # Jobs: changes ──┬── tools → lint, docs, e2e, examples ──→ check (alls-green gate)
-#                 └── test ─────────────────────────────────┘
-# The changes job runs dorny/paths-filter; all downstream jobs (tools, lint, test,
-# docs, e2e, examples) skip on docs-only PRs — zero-cost CI for top-level Markdown.
+#                 └── test, sdk-compat, govulncheck, deps-review ─┘
+#
+# The changes job runs dorny/paths-filter; all downstream jobs (tools, lint,
+# test, sdk-compat, docs, e2e, examples, govulncheck) skip on docs-only PRs —
+# zero-cost CI for top-level Markdown edits.
+#
 # The tools job builds/caches the Docker image used by lint, docs, e2e, examples,
 # with a registry-backed buildx cache (:buildcache tag) so unchanged layers are
 # pulled from ghcr and only modified layers rebuild.
+#
+# Security posture (issue #8):
+#   - Workflow-level permissions default to `contents: read` — jobs opt into more.
+#   - Only `tools` has `packages: write` (pushes the tools image); consumers get
+#     `packages: read` to pull.
+#   - All actions/checkout steps use `persist-credentials: false` so the
+#     GITHUB_TOKEN isn't left in .git/config for later steps.
+#   - `deps-review` blocks PRs that add dependencies with known high-severity
+#     vulnerabilities.
+#   - `govulncheck` scans Go code for known vulnerabilities in imported packages.
+#
 # The check job aggregates all results for branch protection (skipped jobs allowed).
 #
 # Cache budget: all Docker layer caches live on ghcr.io as `:buildcache` tags on
@@ -31,12 +45,12 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   TOOLS_IMAGE: ghcr.io/${{ github.repository_owner }}/decree-tools
 
 jobs:
+  # Detects which paths changed so downstream jobs can skip on docs-only PRs.
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
@@ -46,10 +60,13 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: dorny/paths-filter@v4
+
+      - name: Run path filter
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -64,14 +81,21 @@ jobs:
               - 'docker-compose*.yml'
               - '.github/workflows/**'
 
+  # Builds/pushes the shared decree-tools Docker image used by downstream jobs.
+  # Skips the build if an image tagged with the Dockerfile hash already exists
+  # on ghcr; registry-backed buildx cache reuses unchanged layers on miss.
   tools:
     name: Tools image
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: write
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
@@ -116,14 +140,20 @@ jobs:
     outputs:
       image: ${{ env.TOOLS_IMAGE }}:${{ steps.hash.outputs.tag }}
 
+  # Runs golangci-lint against Go code and buf lint/breaking against protos.
+  # buf breaking needs main fetched so it can diff the current branch.
   lint:
     name: Lint
     runs-on: ubuntu-latest
     needs: [tools, changes]
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -132,7 +162,8 @@ jobs:
         if: github.ref != 'refs/heads/main'
         run: git fetch origin main:main
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
@@ -140,7 +171,7 @@ jobs:
       - name: Go lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.8.0
+          version: v2.11.4
 
       - name: Log in to ghcr.io
         uses: docker/login-action@v4
@@ -158,6 +189,8 @@ jobs:
       - name: Proto lint + breaking
         run: make lint-proto
 
+  # Builds the server + CLI, runs unit, SDK, and CLI tests in parallel, then
+  # enforces the coverage ratchet defined in coverage-thresholds.json.
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -165,11 +198,13 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
@@ -194,6 +229,8 @@ jobs:
       - name: Coverage ratchet
         run: ./scripts/check-coverage.sh
 
+  # Proves the SDK core modules still build and test against older Go versions
+  # we advertise support for (1.22 is the lowest SDK-supported minor).
   sdk-compat:
     name: SDK compat (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
@@ -204,11 +241,13 @@ jobs:
       matrix:
         go: ["1.22", "1.23"]
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: "**/go.sum"
@@ -226,18 +265,25 @@ jobs:
           cd sdk/configwatcher && go test ./... -count=1 &
           wait
 
+  # Regenerates docs + OpenAPI spec and fails if the generated output differs
+  # from what's committed. Catches forgotten `make generate docs` runs.
   docs:
     name: Docs check
     runs-on: ubuntu-latest
     needs: [tools, changes]
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
@@ -265,18 +311,25 @@ jobs:
             exit 1
           fi
 
+  # Boots the service via docker compose and runs the e2e Go test suite
+  # against it. Pre-builds the server image locally using the ghcr layer cache.
   e2e:
     name: E2E
     runs-on: ubuntu-latest
     needs: [tools, changes]
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
@@ -315,18 +368,25 @@ jobs:
         env:
           TOOLS_IMAGE: ${{ needs.tools.outputs.image }}
 
+  # Runs the hands-on example programs against the freshly-built server image,
+  # catching SDK regressions that only surface in real integration scenarios.
   examples:
     name: Examples
     runs-on: ubuntu-latest
     needs: [tools, changes]
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: read
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
@@ -362,14 +422,67 @@ jobs:
         env:
           TOOLS_IMAGE: ${{ needs.tools.outputs.image }}
 
+  # Blocks PRs that introduce dependencies with known high-severity
+  # vulnerabilities (GitHub Advisory Database). Fails closed on severity >= high.
+  deps-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Review dependencies
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # Scans imported Go packages (and reachable call sites) for known CVEs
+  # using the Go vulnerability database. Complements deps-review by also
+  # catching vulnerabilities in transitive deps already on main.
+  govulncheck:
+    name: Go vuln scan
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "**/go.sum"
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+          work-dir: .
+
+  # Aggregates all job results for branch protection. A single required check
+  # that passes iff every listed job passed or was legitimately skipped.
   check:
     name: CI check
     if: always()
-    needs: [lint, test, sdk-compat, docs, e2e, examples]
+    needs: [lint, test, sdk-compat, docs, e2e, examples, govulncheck, deps-review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: re-actors/alls-green@release/v1
+      - name: All green gate
+        uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: lint, test, sdk-compat, docs, e2e, examples
+          allowed-skips: lint, test, sdk-compat, docs, e2e, examples, govulncheck, deps-review
