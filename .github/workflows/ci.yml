@@ -8,6 +8,13 @@
 # with a registry-backed buildx cache (:buildcache tag) so unchanged layers are
 # pulled from ghcr and only modified layers rebuild.
 # The check job aggregates all results for branch protection (skipped jobs allowed).
+#
+# Cache budget: all Docker layer caches live on ghcr.io as `:buildcache` tags on
+# their respective image repos (no 10GB GHA cache limit). Writers:
+#   - main.yml  → ghcr.io/<owner>/decree:buildcache, decree-cli:buildcache
+#   - release.yml → same refs (shared with main.yml, mode=max)
+#   - tools job → ghcr.io/<owner>/decree-tools:buildcache
+# ci.yml e2e/examples are read-only consumers.
 
 name: CI
 
@@ -297,8 +304,8 @@ jobs:
           file: build/Dockerfile
           load: true
           tags: decree-service
-          cache-from: type=gha,scope=e2e-server
-          cache-to: type=gha,mode=max,scope=e2e-server
+          # Read-only: main.yml is the canonical writer for this cache.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
 
       - name: Run E2E tests
         run: |
@@ -347,8 +354,8 @@ jobs:
           file: build/Dockerfile
           load: true
           tags: decree-service
-          cache-from: type=gha,scope=e2e-server
-          cache-to: type=gha,mode=max,scope=e2e-server
+          # Read-only: main.yml is the canonical writer for this cache.
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
 
       - name: Run examples
         run: make examples
