@@ -1,6 +1,6 @@
 # OpenDecree Makefile
 #
-# Prerequisites: Go 1.24+, Docker, Make. All code generators run in Docker.
+# Prerequisites: Go 1.25+, Docker, Make. All code generators run in Docker.
 # Run `make help` to see available targets.
 #
 # Workflow: modify specs → make generate → make pre-commit → commit
