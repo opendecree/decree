@@ -140,6 +140,13 @@ func TestMemoryStore_TenantLookup(t *testing.T) {
 	got, err := s.GetTenantByID(ctx, "t1")
 	require.NoError(t, err)
 	assert.Equal(t, "acme", got.Name)
+
+	got, err = s.GetTenantByName(ctx, "acme")
+	require.NoError(t, err)
+	assert.Equal(t, "t1", got.ID)
+
+	_, err = s.GetTenantByName(ctx, "missing")
+	assert.ErrorIs(t, err, domain.ErrNotFound)
 }
 
 func TestMemoryStore_SchemaLookup(t *testing.T) {
