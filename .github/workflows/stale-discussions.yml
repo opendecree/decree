@@ -1,0 +1,149 @@
+name: Stale Discussions
+
+# Weekly sweep of unanswered Q&A discussions.
+# Phase 1: reminder-only. Posts a comment + applies `needs-response` label when
+# a Q&A discussion has been inactive >REMINDER_DAYS and has no marked answer.
+# Skips pinned discussions and anything labeled `keep`. Idempotent via an
+# HTML-comment marker so a re-run doesn't re-remind.
+#
+# Manual runs: use the workflow_dispatch trigger. The `dry-run` input defaults
+# to `true` — a manual run will log planned actions without posting.
+#
+# See opendecree/decree#58 for the research + scope decision.
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Mondays 09:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Log planned actions without posting or labeling'
+        type: boolean
+        default: true
+
+permissions:
+  discussions: write
+  contents: read
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      REMINDER_DAYS: '45'
+      CATEGORY_SLUG: 'q-a'
+      KEEP_LABEL: 'keep'
+      NEEDS_RESPONSE_LABEL: 'needs-response'
+      MARKER: '<!-- stale-discussion-reminder -->'
+      DRY_RUN: ${{ github.event.inputs.dry-run || 'false' }}
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const REMINDER_DAYS = parseInt(process.env.REMINDER_DAYS, 10);
+            const CATEGORY_SLUG = process.env.CATEGORY_SLUG;
+            const KEEP_LABEL = process.env.KEEP_LABEL;
+            const NEEDS_RESPONSE_LABEL = process.env.NEEDS_RESPONSE_LABEL;
+            const MARKER = process.env.MARKER;
+            const DRY_RUN = process.env.DRY_RUN === 'true';
+            const { owner, repo } = context.repo;
+            const threshold = REMINDER_DAYS * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+
+            const setup = await github.graphql(`
+              query($owner:String!, $repo:String!, $slug:String!, $labelName:String!) {
+                repository(owner:$owner, name:$repo) {
+                  discussionCategory(slug:$slug) { id name }
+                  label(name:$labelName) { id name }
+                }
+              }
+            `, { owner, repo, slug: CATEGORY_SLUG, labelName: NEEDS_RESPONSE_LABEL });
+
+            if (!setup.repository.discussionCategory) {
+              core.setFailed(`Discussion category '${CATEGORY_SLUG}' not found in ${owner}/${repo}`);
+              return;
+            }
+            if (!setup.repository.label) {
+              core.setFailed(`Label '${NEEDS_RESPONSE_LABEL}' not found in ${owner}/${repo} — create it first`);
+              return;
+            }
+            const categoryId = setup.repository.discussionCategory.id;
+            const labelId = setup.repository.label.id;
+
+            core.info(`Category: ${setup.repository.discussionCategory.name}`);
+            core.info(`Threshold: ${REMINDER_DAYS} days | DRY_RUN=${DRY_RUN}`);
+
+            let cursor = null;
+            let scanned = 0;
+            let reminded = 0;
+
+            while (true) {
+              const page = await github.graphql(`
+                query($owner:String!, $repo:String!, $cat:ID!, $after:String) {
+                  repository(owner:$owner, name:$repo) {
+                    discussions(first: 50, categoryId: $cat, states: OPEN,
+                                orderBy: {field: UPDATED_AT, direction: ASC},
+                                after: $after) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        id number title url updatedAt isAnswered
+                        labels(first: 20) { nodes { name } }
+                        comments(last: 10) { nodes { body } }
+                      }
+                    }
+                  }
+                }
+              `, { owner, repo, cat: categoryId, after: cursor });
+
+              const { pageInfo, nodes } = page.repository.discussions;
+
+              for (const d of nodes) {
+                scanned++;
+                if (d.isAnswered) continue;
+                if (d.labels.nodes.some(l => l.name === KEEP_LABEL)) continue;
+
+                const age = now - new Date(d.updatedAt).getTime();
+                if (age < threshold) {
+                  // List is sorted ASC by updatedAt — everything after this is newer
+                  core.info(`Stopping: #${d.number} is only ${Math.floor(age / 86400000)}d stale`);
+                  return core.info(`Done. Scanned ${scanned} | Reminded ${reminded}${DRY_RUN ? ' (dry-run)' : ''}`);
+                }
+
+                if (d.comments.nodes.some(c => c.body.includes(MARKER))) continue;
+
+                const ageDays = Math.floor(age / 86400000);
+                core.info(`→ #${d.number} (${ageDays}d stale): ${d.title}`);
+
+                if (!DRY_RUN) {
+                  const body = [
+                    MARKER,
+                    '',
+                    `👋 This Q&A discussion has been inactive for ${ageDays} days and has no marked answer.`,
+                    '',
+                    "**If you're the asker**: any updates, more context, or an answer you can mark?",
+                    '',
+                    `**Maintainers**: will revisit. Add the \`${KEEP_LABEL}\` label to opt out of future reminders.`,
+                  ].join('\n');
+
+                  await github.graphql(`
+                    mutation($id:ID!, $body:String!) {
+                      addDiscussionComment(input: {discussionId:$id, body:$body}) { clientMutationId }
+                    }
+                  `, { id: d.id, body });
+
+                  await github.graphql(`
+                    mutation($labelable:ID!, $labels:[ID!]!) {
+                      addLabelsToLabelable(input: {labelableId:$labelable, labelIds:$labels}) { clientMutationId }
+                    }
+                  `, { labelable: d.id, labels: [labelId] });
+                }
+                reminded++;
+              }
+
+              if (!pageInfo.hasNextPage) break;
+              cursor = pageInfo.endCursor;
+            }
+
+            core.info(`Done. Scanned ${scanned} | Reminded ${reminded}${DRY_RUN ? ' (dry-run)' : ''}`);
+            core.setOutput('scanned', scanned);
+            core.setOutput('reminded', reminded);
