@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help
+.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif
 
 all: generate lint test build
 
@@ -158,6 +158,17 @@ docs-cli:
 ## docs-man: Generate man pages
 docs-man:
 	cd cmd/decree && go build -ldflags '$(CLI_LDFLAGS)' -o ../../$(BUILD_DIR)/decree . && cd ../.. && $(BUILD_DIR)/decree gen-man docs/man
+
+# --- Demo recording ---
+
+## demo-gif: Render assets/demo.tape to assets/demo.gif (needs docker + running service at :9090)
+demo-gif:
+	docker exec decree-postgres-1 psql -U centralconfig -d centralconfig -c "TRUNCATE tenants, schemas, schema_versions, config_values CASCADE;" >/dev/null
+	docker run --rm --network host \
+	  -v $(CURDIR):/vhs \
+	  -v $(CURDIR)/bin/decree:/usr/local/bin/decree:ro \
+	  ghcr.io/charmbracelet/vhs /vhs/assets/demo.tape
+	docker run --rm -v $(CURDIR)/assets:/w alpine chown -R $(shell id -u):$(shell id -g) /w
 
 # --- Maintenance ---
 
