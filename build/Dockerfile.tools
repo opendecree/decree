@@ -1,15 +1,27 @@
 FROM golang:1.25-bookworm
 
-# Install all tools in a single layer with cached module and build dirs.
+# Tools are grouped by purpose so bumping one pin rebuilds only its layer.
+# Cache mounts persist Go module downloads and build artifacts within a build;
+# the CI buildx registry cache (:buildcache tag) persists layers across runs.
+
+# Proto toolchain
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go install github.com/bufbuild/buf/cmd/buf@v1.66.1 && \
     go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11 && \
     go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1 && \
     go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.27.3 && \
-    go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.27.3 && \
+    go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@v2.27.3
+
+# DB toolchain
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
     go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 && \
-    go install github.com/pressly/goose/v3/cmd/goose@v3.27.0 && \
+    go install github.com/pressly/goose/v3/cmd/goose@v3.27.0
+
+# Docs toolchain
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
     go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
 
 WORKDIR /workspace
