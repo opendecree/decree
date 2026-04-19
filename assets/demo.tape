@@ -10,7 +10,7 @@ Require decree
 
 Set FontSize 14
 Set Width 1200
-Set Height 720
+Set Height 360
 Set Padding 20
 Set Theme "GitHub Dark"
 Set TypingSpeed 40ms
