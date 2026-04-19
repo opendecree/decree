@@ -6,6 +6,10 @@ title: decree config set-many
 
 Set multiple config values atomically
 
+### Synopsis
+
+Set multiple config values atomically. Values are parsed according to each field's schema type (see `decree config set --help`).
+
 ```
 decree config set-many <tenant-id> <key=value>... [flags]
 ```

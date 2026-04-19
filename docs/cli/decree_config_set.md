@@ -6,6 +6,20 @@ title: decree config set
 
 Set a single config value
 
+### Synopsis
+
+Set a single config value.
+
+Values are parsed according to the schema's field type:
+  string    -> as-is
+  integer   -> decimal integer (e.g. 42)
+  number    -> float (e.g. 3.14)
+  bool      -> true / false
+  time      -> RFC3339 (e.g. 2006-01-02T15:04:05Z)
+  duration  -> Go duration (e.g. 15s, 2h, 500ms)
+  url       -> as-is
+  json      -> must be valid JSON
+
 ```
 decree config set <tenant-id> <field-path> <value> [flags]
 ```

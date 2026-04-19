@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 var configCmd = &cobra.Command{
@@ -63,7 +65,18 @@ var configGetAllCmd = &cobra.Command{
 var configSetCmd = &cobra.Command{
 	Use:   "set <tenant-id> <field-path> <value>",
 	Short: "Set a single config value",
-	Args:  cobra.ExactArgs(3),
+	Long: `Set a single config value.
+
+Values are parsed according to the schema's field type:
+  string    -> as-is
+  integer   -> decimal integer (e.g. 42)
+  number    -> float (e.g. 3.14)
+  bool      -> true / false
+  time      -> RFC3339 (e.g. 2006-01-02T15:04:05Z)
+  duration  -> Go duration (e.g. 15s, 2h, 500ms)
+  url       -> as-is
+  json      -> must be valid JSON`,
+	Args: cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		conn, err := dialServer()
 		if err != nil {
@@ -71,7 +84,7 @@ var configSetCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newConfigClient(conn).Set(cmd.Context(), args[0], args[1], args[2]); err != nil {
+		if err := runConfigSet(cmd.Context(), newAdminClient(conn), newConfigClient(conn), args[0], args[1], args[2]); err != nil {
 			return err
 		}
 		fmt.Println("Set.")
@@ -79,19 +92,38 @@ var configSetCmd = &cobra.Command{
 	},
 }
 
+// runConfigSet is the testable core of `decree config set`: fetch the tenant's
+// schema, coerce raw to the declared field type, and dispatch a typed write.
+func runConfigSet(ctx context.Context, admin *adminclient.Client, cfg *configclient.Client, tenantID, fieldPath, raw string) error {
+	types, err := tenantFieldTypes(ctx, admin, tenantID)
+	if err != nil {
+		return err
+	}
+	ft, err := lookupFieldType(types, fieldPath)
+	if err != nil {
+		return err
+	}
+	tv, err := parseTypedValue(ft, raw)
+	if err != nil {
+		return fmt.Errorf("field %s: %w", fieldPath, err)
+	}
+	return cfg.SetTyped(ctx, tenantID, fieldPath, tv)
+}
+
 var configSetManyCmd = &cobra.Command{
 	Use:   "set-many <tenant-id> <key=value>...",
 	Short: "Set multiple config values atomically",
+	Long:  "Set multiple config values atomically. Values are parsed according to each field's schema type (see `decree config set --help`).",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		tenantID := args[0]
-		values := make(map[string]string, len(args)-1)
+		rawValues := make(map[string]string, len(args)-1)
 		for _, kv := range args[1:] {
 			parts := strings.SplitN(kv, "=", 2)
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid key=value pair: %s", kv)
 			}
-			values[parts[0]] = parts[1]
+			rawValues[parts[0]] = parts[1]
 		}
 		desc, _ := cmd.Flags().GetString("description")
 
@@ -101,12 +133,39 @@ var configSetManyCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newConfigClient(conn).SetMany(cmd.Context(), tenantID, values, desc); err != nil {
+		n, err := runConfigSetMany(cmd.Context(), newAdminClient(conn), newConfigClient(conn), tenantID, rawValues, desc)
+		if err != nil {
 			return err
 		}
-		fmt.Printf("Set %d values.\n", len(values))
+		fmt.Printf("Set %d values.\n", n)
 		return nil
 	},
+}
+
+// runConfigSetMany is the testable core of `decree config set-many`: fetch the
+// tenant's schema, coerce each raw value to its field type, and dispatch a
+// typed atomic batch write. Returns the number of fields written.
+func runConfigSetMany(ctx context.Context, admin *adminclient.Client, cfg *configclient.Client, tenantID string, rawValues map[string]string, description string) (int, error) {
+	types, err := tenantFieldTypes(ctx, admin, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	typed := make(map[string]*configclient.TypedValue, len(rawValues))
+	for path, raw := range rawValues {
+		ft, err := lookupFieldType(types, path)
+		if err != nil {
+			return 0, err
+		}
+		tv, err := parseTypedValue(ft, raw)
+		if err != nil {
+			return 0, fmt.Errorf("field %s: %w", path, err)
+		}
+		typed[path] = tv
+	}
+	if err := cfg.SetManyTyped(ctx, tenantID, typed, description); err != nil {
+		return 0, err
+	}
+	return len(typed), nil
 }
 
 var configVersionsCmd = &cobra.Command{
