@@ -28,27 +28,22 @@ Type "decree tenant list"
 Enter
 Sleep 2s
 
-# 3. Grab the tenant ID for subsequent commands.
-Type "TENANT=$(decree tenant list | awk '/acme-corp/ { print $1 }')"
-Enter
-Sleep 500ms
-
-# 4. Read a config value.
-Type "decree config get $TENANT app.name"
+# 3. Read a config value.
+Type "decree config get acme-corp app.name"
 Enter
 Sleep 2s
 
-# 5. Start a live watcher in the background — events print inline.
-Type "decree watch $TENANT &"
+# 4. Start a live watcher in the background — events print inline.
+Type "decree watch acme-corp &"
 Enter
 Sleep 2s
 
-# 6. Update the value — the watcher prints the change event.
-Type 'decree config set $TENANT app.name "Acme v2"'
+# 5. Update the value — the watcher prints the change event.
+Type 'decree config set acme-corp app.name "Acme v2"'
 Enter
 Sleep 3s
 
-# 7. Read it back — now shows the new value.
-Type "decree config get $TENANT app.name"
+# 6. Read it back — now shows the new value.
+Type "decree config get acme-corp app.name"
 Enter
 Sleep 2s
