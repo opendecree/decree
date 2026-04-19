@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/opendecree/decree/releases"><img src="https://img.shields.io/github/v/release/opendecree/decree" alt="Release"></a>
+  <a href="https://github.com/opendecree/decree/releases"><img src="https://img.shields.io/github/v/release/opendecree/decree?include_prereleases" alt="Release"></a>
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go" alt="Go"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
