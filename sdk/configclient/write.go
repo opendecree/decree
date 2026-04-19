@@ -68,6 +68,27 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 	})
 }
 
+// SetManyTyped writes multiple typed configuration values atomically in a single
+// version. The description is optional — pass an empty string to omit it.
+// Returns [ErrLocked] if any of the fields are locked.
+func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string) error {
+	return retryDo(ctx, c, func(ctx context.Context) error {
+		updates := make([]FieldUpdate, 0, len(values))
+		for path, v := range values {
+			updates = append(updates, FieldUpdate{
+				FieldPath: path,
+				Value:     v,
+			})
+		}
+		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
+			TenantID:    tenantID,
+			Updates:     updates,
+			Description: description,
+		})
+		return err
+	})
+}
+
 // LockedValue holds a field's current value and checksum for optimistic concurrency.
 // Use [Client.GetForUpdate] to obtain one, then call [LockedValue.Set] to write
 // a new value only if the field hasn't been modified since the read.

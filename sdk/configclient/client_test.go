@@ -207,6 +207,36 @@ func TestSetMany_Success(t *testing.T) {
 	}
 }
 
+func TestSetManyTyped_Success(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		if r.TenantID != "t1" || r.Description != "typed bulk" || len(r.Updates) != 2 {
+			return false
+		}
+		byPath := map[string]*TypedValue{}
+		for _, u := range r.Updates {
+			byPath[u.FieldPath] = u.Value
+		}
+		return byPath["count"] != nil && byPath["count"].Kind() == KindInteger && byPath["count"].IntValue() == 42 &&
+			byPath["enabled"] != nil && byPath["enabled"].Kind() == KindBool && byPath["enabled"].BoolValue()
+	}, &SetFieldsResponse{}, nil)
+
+	err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{
+		"count":   IntVal(42),
+		"enabled": BoolVal(true),
+	}, "typed bulk")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n := tr.called("SetFields"); n != 1 {
+		t.Errorf("expected SetFields to be called once, got %d", n)
+	}
+}
+
 // --- Snapshot ---
 
 func TestSnapshot_PinnedVersion(t *testing.T) {
