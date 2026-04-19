@@ -2,7 +2,7 @@
 # check-coverage.sh — Enforce per-module coverage thresholds (ratchet).
 #
 # Usage:
-#   ./scripts/check-coverage.sh          # Check coverage against thresholds
+#   ./scripts/check-coverage.sh           # Check coverage against thresholds
 #   ./scripts/check-coverage.sh --update  # Update thresholds to current values (ratchet up only)
 set -euo pipefail
 
@@ -28,24 +28,53 @@ declare -A MODULE_DIRS=(
   ["cmd/decree"]="cmd/decree"
 )
 
-get_coverage() {
-  local dir=$1
-  local pattern=$2
-  local cov
+declare -A COVERAGES
+declare -A FAIL_REASONS
+declare -A FAIL_LOGS
 
-  if [ "$dir" = "." ]; then
-    go test "$pattern" -coverprofile=coverage.tmp -count=1 > /dev/null 2>&1 || true
-    cov=$(go tool cover -func=coverage.tmp 2>/dev/null | awk '/^total:/ {gsub(/%/,""); print $NF}')
-    rm -f coverage.tmp
+# run_coverage MODULE DIR PATTERN
+# Populates COVERAGES[MODULE] with a percentage, or "FAIL" if tests failed or
+# no coverage was produced. On FAIL, records FAIL_REASONS[MODULE] and captures
+# the tail of the combined test output in FAIL_LOGS[MODULE].
+run_coverage() {
+  local module=$1
+  local dir=$2
+  local pattern=$3
+  local log_file cov_file
+  log_file=$(mktemp)
+  cov_file=$(mktemp)
+
+  # `go tool cover -func` resolves package paths relative to the current module,
+  # so it must run in the same directory as `go test`.
+  local test_exit=0
+  local cov=""
+  (
+    if [ "$dir" != "." ]; then cd "$dir"; fi
+    go test "$pattern" -coverprofile="$cov_file" -count=1 >"$log_file" 2>&1 || exit $?
+    [ -s "$cov_file" ] || exit 64  # distinguishable from go test exits
+    go tool cover -func="$cov_file" 2>/dev/null \
+      | awk '/^total:/ {gsub(/%/,""); print $NF}' > "$log_file.cov"
+  ) || test_exit=$?
+
+  if [ "$test_exit" -eq 64 ]; then
+    COVERAGES[$module]="FAIL"
+    FAIL_REASONS[$module]="no coverage produced (coverprofile empty)"
+    FAIL_LOGS[$module]=$(tail -n 40 "$log_file")
+  elif [ "$test_exit" -ne 0 ]; then
+    COVERAGES[$module]="FAIL"
+    FAIL_REASONS[$module]="tests failed (exit $test_exit)"
+    FAIL_LOGS[$module]=$(tail -n 40 "$log_file")
   else
-    pushd "$dir" > /dev/null
-    go test "$pattern" -coverprofile=coverage.tmp -count=1 > /dev/null 2>&1 || true
-    cov=$(go tool cover -func=coverage.tmp 2>/dev/null | awk '/^total:/ {gsub(/%/,""); print $NF}')
-    rm -f coverage.tmp
-    popd > /dev/null
+    cov=$(cat "$log_file.cov" 2>/dev/null || true)
+    if [ -z "$cov" ]; then
+      COVERAGES[$module]="FAIL"
+      FAIL_REASONS[$module]="coverage total not parseable"
+      FAIL_LOGS[$module]=$(tail -n 40 "$log_file")
+    else
+      COVERAGES[$module]=$cov
+    fi
   fi
-
-  echo "${cov:-0}"
+  rm -f "$log_file" "$log_file.cov" "$cov_file"
 }
 
 get_threshold() {
@@ -59,22 +88,51 @@ get_threshold() {
   echo "${val:-0}"
 }
 
+print_fail_logs() {
+  local stream=$1
+  for module in $(echo "${!MODULES[@]}" | tr ' ' '\n' | sort); do
+    if [ "${COVERAGES[$module]:-}" = "FAIL" ] && [ -n "${FAIL_LOGS[$module]:-}" ]; then
+      if [ "$stream" = "stderr" ]; then
+        echo "--- $module test output (last 40 lines) ---" >&2
+        echo "${FAIL_LOGS[$module]}" >&2
+        echo "" >&2
+      else
+        echo "--- $module test output (last 40 lines) ---"
+        echo "${FAIL_LOGS[$module]}"
+        echo ""
+      fi
+    fi
+  done
+}
+
 # Collect all coverage values.
-declare -A COVERAGES
 for module in "${!MODULES[@]}"; do
-  COVERAGES[$module]=$(get_coverage "${MODULE_DIRS[$module]}" "${MODULES[$module]}")
+  run_coverage "$module" "${MODULE_DIRS[$module]}" "${MODULES[$module]}"
 done
 
 if [ "${1:-}" = "--update" ]; then
-  # Ratchet: update thresholds, only if coverage improved.
+  # A failing module cannot be ratcheted — its coverage is unknown. Exit non-zero
+  # rather than silently writing 0 or preserving a stale threshold.
+  any_fail=0
+  for module in $(echo "${!MODULES[@]}" | tr ' ' '\n' | sort); do
+    if [ "${COVERAGES[$module]}" = "FAIL" ]; then
+      echo "ERROR: $module: ${FAIL_REASONS[$module]}" >&2
+      any_fail=1
+    fi
+  done
+  if [ "$any_fail" -eq 1 ]; then
+    echo "" >&2
+    print_fail_logs stderr
+    echo "Cannot update thresholds while modules are failing." >&2
+    exit 1
+  fi
+
   echo "{"
   first=true
   for module in $(echo "${!MODULES[@]}" | tr ' ' '\n' | sort); do
     current=${COVERAGES[$module]}
     old=$(get_threshold "$module")
-    # Use the higher of current and old (ratchet up only).
     new=$(python3 -c "print(max(float('$current'), float('$old')))")
-    # Floor to one decimal.
     new=$(python3 -c "import math; print(math.floor(float('$new') * 10) / 10)")
     if [ "$first" = true ]; then first=false; else echo ","; fi
     printf '  "%s": %s' "$module" "$new"
@@ -89,19 +147,23 @@ failed=0
 for module in $(echo "${!MODULES[@]}" | tr ' ' '\n' | sort); do
   current=${COVERAGES[$module]}
   threshold=$(get_threshold "$module")
-  status="✓"
+  if [ "$current" = "FAIL" ]; then
+    printf "%-25s %7s   ✗ TESTS FAILED (%s)\n" "$module" "--" "${FAIL_REASONS[$module]}"
+    failed=1
+    continue
+  fi
   if python3 -c "exit(0 if float('$current') >= float('$threshold') else 1)" 2>/dev/null; then
-    status="✓"
+    printf "%-25s %6s%% (threshold: %s%%) ✓\n" "$module" "$current" "$threshold"
   else
-    status="✗ BELOW THRESHOLD"
+    printf "%-25s %6s%% (threshold: %s%%) ✗ BELOW THRESHOLD\n" "$module" "$current" "$threshold"
     failed=1
   fi
-  printf "%-25s %6s%% (threshold: %s%%) %s\n" "$module" "$current" "$threshold" "$status"
 done
 
 if [ "$failed" -eq 1 ]; then
   echo ""
-  echo "Coverage regression detected. Fix the failing modules or update thresholds with:"
+  print_fail_logs stdout
+  echo "Fix the failing modules or update thresholds with:"
   echo "  ./scripts/check-coverage.sh --update > coverage-thresholds.json"
   exit 1
 fi
