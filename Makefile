@@ -123,6 +123,10 @@ e2e:
 	cd e2e && go test -tags=e2e -v -race -count=1 ./... || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
+## e2e-coverage: Run e2e against a -cover instrumented server and report coverage on files excluded from unit-test total
+e2e-coverage:
+	./scripts/e2e-coverage.sh
+
 ## examples: Run SDK examples (docker compose lifecycle)
 examples:
 	docker compose up -d --wait service
