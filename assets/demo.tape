@@ -21,29 +21,24 @@ Env DECREE_SUBJECT "demo"
 # 1. One command bootstraps a schema, tenant, and initial config from YAML.
 Type "decree seed examples/seed.yaml --auto-publish"
 Enter
-Sleep 3s
+Sleep 2200ms
 
 # 2. Look at the seeded tenant.
 Type "decree tenant list"
 Enter
-Sleep 3s
+Sleep 2200ms
 
 # 3. Read a config value.
 Type "decree config get acme-corp app.name"
 Enter
-Sleep 3s
+Sleep 2s
 
-# 4. Start a live watcher in the background — events print inline.
-Type "decree watch acme-corp &"
-Enter
-Sleep 3s
-
-# 5. Update the value — the watcher prints the change event.
+# 4. Update the value — the watcher prints the change event.
 Type 'decree config set acme-corp app.name "Acme v2"'
 Enter
-Sleep 4s
+Sleep 2200ms
 
-# 6. Read it back — now shows the new value.
+# 5. Read it back — now shows the new value.
 Type "decree config get acme-corp app.name"
 Enter
-Sleep 4s
+Sleep 2200ms
