@@ -126,6 +126,37 @@ func TestMemoryCache_EvictsExpiredBeforeOldest(t *testing.T) {
 	assert.Equal(t, "2", got["a"], "t2 should survive — expired t1 evicted first")
 }
 
+func TestMemoryCache_Sweep_RemovesExpiredEntries(t *testing.T) {
+	c := NewMemoryCache(0)
+	defer c.Stop()
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Millisecond))
+	require.NoError(t, c.Set(ctx, "t2", 1, map[string]string{"a": "2"}, time.Millisecond))
+	require.NoError(t, c.Set(ctx, "t3", 1, map[string]string{"a": "3"}, time.Hour))
+	assert.Equal(t, 3, c.Len())
+
+	time.Sleep(5 * time.Millisecond)
+	c.sweep()
+
+	assert.Equal(t, 1, c.Len(), "only t3 should remain after sweep")
+
+	got, _ := c.Get(ctx, "t3", 1)
+	assert.Equal(t, "3", got["a"])
+}
+
+func TestMemoryCache_Sweep_NoExpired_NoOp(t *testing.T) {
+	c := NewMemoryCache(0)
+	defer c.Stop()
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Hour))
+	require.NoError(t, c.Set(ctx, "t2", 1, map[string]string{"a": "2"}, time.Hour))
+
+	c.sweep()
+	assert.Equal(t, 2, c.Len())
+}
+
 func TestMemoryCache_UpdateExistingDoesNotGrow(t *testing.T) {
 	c := NewMemoryCache(2)
 	defer c.Stop()

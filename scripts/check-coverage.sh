@@ -8,6 +8,12 @@ set -euo pipefail
 
 THRESHOLDS_FILE="coverage-thresholds.json"
 
+# Files excluded from coverage: generated code (sqlc, protobuf) and thin
+# wrappers over external dependencies (Redis, PostgreSQL) that are covered
+# by e2e tests rather than unit tests. Keeping these in the weighted total
+# drowns out real signal from the hand-written, unit-testable code.
+COVERAGE_EXCLUDES='(\.gen\.go|/cache/redis\.go|/pubsub/redis\.go|/config/store_pg\.go|/schema/store_pg\.go):'
+
 # Module → test pattern pairs.
 declare -A MODULES=(
   ["internal"]="./internal/..."
@@ -52,6 +58,15 @@ run_coverage() {
     if [ "$dir" != "." ]; then cd "$dir"; fi
     go test "$pattern" -coverprofile="$cov_file" -count=1 >"$log_file" 2>&1 || exit $?
     [ -s "$cov_file" ] || exit 64  # distinguishable from go test exits
+    # Strip excluded files (generated code + external-dep wrappers) from the
+    # profile before computing the total. grep -v returning 1 means nothing
+    # matched; that's fine (nothing to exclude), so don't let set -e abort.
+    grep -vE "$COVERAGE_EXCLUDES" "$cov_file" > "$cov_file.filtered" || true
+    if [ -s "$cov_file.filtered" ]; then
+      mv "$cov_file.filtered" "$cov_file"
+    else
+      rm -f "$cov_file.filtered"
+    fi
     go tool cover -func="$cov_file" 2>/dev/null \
       | awk '/^total:/ {gsub(/%/,""); print $NF}' > "$log_file.cov"
   ) || test_exit=$?

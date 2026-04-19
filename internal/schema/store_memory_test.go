@@ -208,6 +208,15 @@ func TestMemoryStore_TenantCRUD(t *testing.T) {
 	_, err = store.GetTenantByID(ctx, "bad")
 	assert.True(t, errors.Is(err, domain.ErrNotFound))
 
+	// Get by name.
+	gotByName, err := store.GetTenantByName(ctx, "acme")
+	require.NoError(t, err)
+	assert.Equal(t, tenant.ID, gotByName.ID)
+
+	// Get by name not found.
+	_, err = store.GetTenantByName(ctx, "nope")
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+
 	// List.
 	tenant2, err := store.CreateTenant(ctx, CreateTenantParams{
 		Name: "globex", SchemaID: s.ID, SchemaVersion: 1,
