@@ -1,5 +1,13 @@
 # Runs on `v*` tag pushes — generates release notes, publishes binaries via
 # goreleaser, pushes protos to the BSR, and pushes multi-arch release images.
+#
+# NOTE: Do not call ci.yml as a reusable workflow from this file. Reusable
+# workflow resolution (`uses: ./.github/workflows/ci.yml`) fails from a
+# tag-push context with `startup_failure`, because the ref points at a tag
+# rather than a branch the workflow file can be resolved against. If CI
+# needs to run on release, either duplicate the jobs here or trigger ci.yml
+# via a separate workflow_run. Fixed in commit f996187 (removed reusable
+# call). See opendecree/decree#88.
 
 name: Release
 
