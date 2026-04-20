@@ -142,7 +142,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
   {
     "name": "OpenDecree Schema",
     "description": "OpenDecree configuration schema",
-    "fileMatch": ["decree.schema.yaml", "*.decree.schema.yaml"],
+    "fileMatch": ["decree.schema.yaml", "decree.schema.yml", "*.decree.schema.yaml", "*.decree.schema.yml"],
     "url": "https://schemas.opendecree.io/schema/v0.1.0/decree.json"
   }
   ```
@@ -166,28 +166,29 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ### Phase A — Format changes (breaking, in-tree)
 
-- Rename `syntax:` → `spec_version:` across parser, fixtures, examples, docs, e2e, CLI error messages
-- Add optional top-level `$schema:` and `$id:` fields to parser (validated if present)
-- Enforce field-path regex `^[a-zA-Z_][a-zA-Z0-9_.-]*$` in Go parser
-- Reject unknown keys at parse time + reserve `x-*` extension prefix
-- Rename fixture files to `*.decree.schema.yaml` / `*.decree.config.yaml`
+- #118 — Rename `syntax:` → `spec_version:` across parser, fixtures, examples, docs, e2e, CLI error messages _(merged)_
+- #119 — Add optional top-level `$schema:` and `$id:` fields to parser (validated if present)
+- #120 — Enforce field-path regex `^[a-zA-Z_][a-zA-Z0-9_.-]*$` in Go parser
+- #121 — Reject unknown keys at parse time + reserve `x-*` extension prefix
+- #122 — Rename fixture files to `*.decree.schema.yaml` / `*.decree.config.yaml`
 
 ### Phase B — Meta-schema
 
-- Author split-file YAML meta-schema under `schemas/v0.1.0/` + bundling script
-- CI: `check-jsonschema` validates every checked-in schema YAML + known-invalid fixtures
+- #123 — Author split-file YAML meta-schema under `schemas/v0.1.0/` + bundling script
+- #124 — CI: `check-jsonschema` validates every checked-in schema YAML + known-invalid fixtures
 
 ### Phase C — Publishing
 
-- Host meta-schema at `https://schemas.opendecree.io/schema/v0.1.0/decree.json`
-- Submit schemastore.org PR
+- #125 — Host meta-schema at `https://schemas.opendecree.io/schema/v0.1.0/decree.json`
+- #126 — Submit schemastore.org PR
 
 ### Phase D — Docs
 
-- Write `docs/concepts/schema-format.md`
-- Write `docs/concepts/meta-schema.md`
-- Update `docs/getting-started.md` with modeline + new filenames
-- Link meta-schema from README
+- #127 — Write `docs/concepts/schema-format.md`, `docs/concepts/meta-schema.md`; update `docs/getting-started.md` with modeline + new filenames; update `docs/concepts/schemas-and-fields.md` to cross-link the new concept docs; link meta-schema from `README.md`
+
+### Cross-cutting
+
+- #129 — Pluggable schema parser: extract v1 parser behind an interface so future spec versions register as a single package + init(). Unblocks v2 without branches across the codebase.
 
 ## Open questions
 
