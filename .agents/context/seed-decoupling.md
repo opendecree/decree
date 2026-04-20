@@ -113,6 +113,19 @@ Currently forces all three sections. New rules:
 - If `config:` present → `tenant:` also required
 - At least one of `schema:`, `tenant:`, `config:` must be non-empty
 
+## Idempotency
+
+Seeding the same content twice must be a no-op — no new schema version, no new config version, no error.
+
+Current state:
+- **Schema:** `ImportSchema` returns `ErrAlreadyExists` when fields are identical; `seed.Run()` handles this and reuses the existing version. ✓
+- **Config:** server already returns `codes.AlreadyExists` with `"no changes to apply"` when merge-mode filtering finds nothing to change (internal/config/service.go:842). But the adminclient doesn't translate this to `ErrAlreadyExists`, and `seed.Run()` doesn't handle it. A no-op config re-seed surfaces as a hard error today. ✗
+
+Fix alongside the decoupling work (affects all modes, not just the new ones):
+- `sdk/adminclient/config.go` — `ImportConfig` must map grpc `codes.AlreadyExists` → `adminclient.ErrAlreadyExists`
+- `sdk/tools/seed/seed.go` — `Run()` must treat `ErrAlreadyExists` from `ImportConfig` as a successful skip (set `ConfigImported=false`, preserve the existing `ConfigVersion` from the latest version lookup)
+- **Locks:** `LockField` is inherently idempotent (re-locking to the same values is fine). Confirm in test.
+
 ## Compatibility
 
 - **spec_version:** no bump. Additive at parser/orchestrator layer.
