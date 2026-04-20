@@ -121,6 +121,47 @@ decree config import "$TENANT_ID" "config/${ENV}.decree.config.yaml" \
   --description "deploy $(git rev-parse --short HEAD)"
 ```
 
+### Split-lifecycle deploys (seed form)
+
+When the schema ships with the **application** and each **tenant** provisions its own config at deploy time, use two seed files with different lifecycles:
+
+**`schema.seed.yaml`** — ships with the application binary, seeded once per release:
+
+```yaml
+spec_version: "v1"
+schema:
+  name: payments
+  fields:
+    payments.enabled: { type: bool }
+    payments.fee_rate: { type: number, constraints: { minimum: 0, maximum: 1 } }
+```
+
+```bash
+# App release pipeline
+decree seed schema.seed.yaml
+```
+
+**`org1.config.seed.yaml`** — ships with each tenant's deploy pipeline:
+
+```yaml
+spec_version: "v1"
+tenant:
+  name: org1
+  schema: payments
+  # schema_version omitted → latest published
+config:
+  values:
+    payments.enabled: { value: true }
+    payments.fee_rate: { value: 0.025 }
+```
+
+```bash
+# Tenant deploy pipeline
+decree seed org1.config.seed.yaml
+```
+
+The config file references the schema by name and defaults to the latest published version — no need to re-declare the schema in each tenant's pipeline. Pin explicitly with `tenant.schema_version: 3` if you need a specific version.
+
 ## Import modes
 
 The `--mode` flag controls how YAML values interact with existing config:
