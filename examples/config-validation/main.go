@@ -23,7 +23,7 @@ func main() {
 func run() error {
 	// Validate a correct config.
 	fmt.Println("=== Valid config ===")
-	result, err := validate.ValidateFiles("schema.yaml", "config-valid.yaml")
+	result, err := validate.ValidateFiles("decree.schema.yaml", "valid.decree.config.yaml")
 	if err != nil {
 		return fmt.Errorf("validate: %w", err)
 	}
@@ -34,7 +34,7 @@ func run() error {
 	// Validate a config with errors.
 	fmt.Println()
 	fmt.Println("=== Invalid config ===")
-	result, err = validate.ValidateFiles("schema.yaml", "config-invalid.yaml", validate.Strict())
+	result, err = validate.ValidateFiles("decree.schema.yaml", "invalid.decree.config.yaml", validate.Strict())
 	if err != nil {
 		return fmt.Errorf("validate: %w", err)
 	}

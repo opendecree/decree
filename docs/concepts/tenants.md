@@ -44,8 +44,8 @@ Each environment gets its own config values, version history, and audit trail. Y
 
 ```bash
 # Export staging config and import into prod
-decree config export staging-tenant-id > config.yaml
-decree config import prod-tenant-id config.yaml
+decree config export staging-tenant-id > decree.config.yaml
+decree config import prod-tenant-id decree.config.yaml
 ```
 
 ## Schema Version Pinning

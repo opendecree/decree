@@ -43,7 +43,7 @@ go run . && echo "Config is valid" || echo "Config has errors"
 Or use the validate package directly in your own tools:
 
 ```go
-result, _ := validate.ValidateFiles("schema.yaml", "config.yaml", validate.Strict())
+result, _ := validate.ValidateFiles("decree.schema.yaml", "decree.config.yaml", validate.Strict())
 if !result.IsValid() {
     os.Exit(1)
 }
