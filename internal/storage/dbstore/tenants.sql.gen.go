@@ -78,23 +78,6 @@ func (q *Queries) DeleteTenant(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
-const getFieldLock = `-- name: GetFieldLock :one
-SELECT tenant_id, field_path, locked_values FROM tenant_field_locks
-WHERE tenant_id = $1 AND field_path = $2
-`
-
-type GetFieldLockParams struct {
-	TenantID  pgtype.UUID `json:"tenant_id"`
-	FieldPath string      `json:"field_path"`
-}
-
-func (q *Queries) GetFieldLock(ctx context.Context, arg GetFieldLockParams) (TenantFieldLock, error) {
-	row := q.db.QueryRow(ctx, getFieldLock, arg.TenantID, arg.FieldPath)
-	var i TenantFieldLock
-	err := row.Scan(&i.TenantID, &i.FieldPath, &i.LockedValues)
-	return i, err
-}
-
 const getFieldLocks = `-- name: GetFieldLocks :many
 SELECT tenant_id, field_path, locked_values FROM tenant_field_locks
 WHERE tenant_id = $1
