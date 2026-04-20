@@ -1,3 +1,11 @@
+// Package configclient provides an ergonomic Go client for reading and
+// writing OpenDecree configuration values at application runtime.
+//
+// The client wraps a pluggable [Transport] (see the sibling grpctransport
+// module for the gRPC implementation) with typed accessors and optimistic
+// concurrency helpers. For administrative operations such as schema and
+// tenant management, see the adminclient package. For a live, auto-refreshing
+// view over configuration, see configwatcher.
 package configclient
 
 // Client wraps a [Transport] with an ergonomic API for reading and writing

@@ -8,6 +8,7 @@
   <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/opendecree/decree/releases"><img src="https://img.shields.io/github/v/release/opendecree/decree?include_prereleases" alt="Release"></a>
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go" alt="Go"></a>
+  <a href="https://pkg.go.dev/github.com/opendecree/decree"><img src="https://pkg.go.dev/badge/github.com/opendecree/decree.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
 </p>
@@ -85,6 +86,13 @@ go get github.com/opendecree/decree/sdk/adminclient@latest    # admin operations
 go get github.com/opendecree/decree/sdk/configwatcher@latest  # live config watcher
 go get github.com/opendecree/decree/sdk/tools@latest          # diff, docgen, validate, seed, dump
 ```
+
+Go API docs on pkg.go.dev:
+[grpctransport](https://pkg.go.dev/github.com/opendecree/decree/sdk/grpctransport) ·
+[configclient](https://pkg.go.dev/github.com/opendecree/decree/sdk/configclient) ·
+[adminclient](https://pkg.go.dev/github.com/opendecree/decree/sdk/adminclient) ·
+[configwatcher](https://pkg.go.dev/github.com/opendecree/decree/sdk/configwatcher) ·
+[tools](https://pkg.go.dev/github.com/opendecree/decree/sdk/tools)
 
 ### Python
 
