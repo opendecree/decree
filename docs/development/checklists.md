@@ -64,6 +64,7 @@ Standard development workflow checklists.
    git tag -a sdk/configclient/v{X.Y.Z} -m "sdk/configclient v{X.Y.Z}"
    git tag -a sdk/adminclient/v{X.Y.Z} -m "sdk/adminclient v{X.Y.Z}"
    git tag -a sdk/configwatcher/v{X.Y.Z} -m "sdk/configwatcher v{X.Y.Z}"
+   git tag -a sdk/grpctransport/v{X.Y.Z} -m "sdk/grpctransport v{X.Y.Z}"
    git tag -a sdk/tools/v{X.Y.Z} -m "sdk/tools v{X.Y.Z}"
    git tag -a cmd/decree/v{X.Y.Z} -m "cmd/decree v{X.Y.Z}"
    ```

@@ -77,7 +77,7 @@ jobs:
         run: |
           go install golang.org/x/exp/cmd/apidiff@latest
           NOTES=""
-          for mod in sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools; do
+          for mod in sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools; do
             MOD_TAG="${mod}/$(echo $GITHUB_REF_NAME)"
             PREV_TAG="${mod}/${{ steps.prev.outputs.tag }}"
             # Check if both tags exist
@@ -128,8 +128,8 @@ jobs:
           # CLI
           go install github.com/opendecree/decree/cmd/decree@${TAG}
 
-          # SDK
-          go get github.com/opendecree/decree/sdk/configclient@${TAG}
+          # SDK (grpctransport pulls in configclient + configwatcher)
+          go get github.com/opendecree/decree/sdk/grpctransport@${TAG}
           go get github.com/opendecree/decree/sdk/adminclient@${TAG}
 
           # Docker
