@@ -16,17 +16,17 @@ You have a single service (or a small number of services) where:
 ```
 your-service/
 ├── config/
-│   ├── schema.yaml            # Schema definition (field types, constraints)
-│   ├── values.dev.yaml        # Baseline values for dev
-│   ├── values.staging.yaml    # Baseline values for staging
-│   └── values.prod.yaml       # Baseline values for prod
+│   ├── decree.schema.yaml           # Schema definition (field types, constraints)
+│   ├── dev.decree.config.yaml       # Baseline values for dev
+│   ├── staging.decree.config.yaml   # Baseline values for staging
+│   └── prod.decree.config.yaml      # Baseline values for prod
 ├── main.go
 └── ...
 ```
 
 ## Schema YAML
 
-Define your config structure in `config/schema.yaml`:
+Define your config structure in `config/decree.schema.yaml`:
 
 ```yaml
 spec_version: "v1"
@@ -69,7 +69,7 @@ See [Schemas & Fields](../concepts/schemas-and-fields.md) for the full YAML refe
 
 Create a values file per environment. Only include values you want to set — fields not listed keep their schema defaults or existing runtime values.
 
-`config/values.prod.yaml`:
+`config/prod.decree.config.yaml`:
 ```yaml
 spec_version: "v1"
 values:
@@ -85,7 +85,7 @@ values:
     value: 30s
 ```
 
-`config/values.dev.yaml`:
+`config/dev.decree.config.yaml`:
 ```yaml
 spec_version: "v1"
 values:
@@ -113,11 +113,11 @@ TENANT_ID="${TENANT_ID:?TENANT_ID is required}"
 ENV="${ENV:-prod}"
 
 # Sync schema — imports and auto-publishes if changed, skips if unchanged
-decree schema import --publish config/schema.yaml
+decree schema import --publish config/decree.schema.yaml
 
 # Apply baseline values (merge mode — default)
 # Updates changed values from YAML, preserves runtime overrides for other fields
-decree config import "$TENANT_ID" "config/values.${ENV}.yaml" \
+decree config import "$TENANT_ID" "config/${ENV}.decree.config.yaml" \
   --description "deploy $(git rev-parse --short HEAD)"
 ```
 
