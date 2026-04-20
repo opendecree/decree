@@ -1,0 +1,31 @@
+spec_version: v1
+schema:
+  name: example-app
+  description: Example application configuration schema
+  fields:
+    app.name:
+      type: string
+      description: Application display name
+    app.debug:
+      type: bool
+      description: Enable debug logging
+    features.dark_mode:
+      type: bool
+      description: Enable dark mode UI
+    server.rate_limit:
+      type: integer
+      description: Maximum requests per second
+      constraints:
+        minimum: 1
+        maximum: 10000
+    payments.fee_rate:
+      type: number
+      description: Transaction fee percentage (0-1)
+      constraints:
+        minimum: 0
+        maximum: 1
+    payments.currency:
+      type: string
+      description: Default currency code
+      constraints:
+        enum: [USD, EUR, GBP]

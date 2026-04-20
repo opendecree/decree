@@ -417,3 +417,121 @@ func TestServiceNotConfigured(t *testing.T) {
 		t.Errorf("GetServerInfo: got error %v, want %v", err, ErrServiceNotConfigured)
 	}
 }
+
+func TestGetLatestPublishedSchemaVersion_LatestIsPublished(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{
+			Schemas: []*Schema{
+				{ID: "s_other", Name: "other", Version: 1, Published: true},
+				{ID: "s_payments", Name: "payments", Version: 3, Published: true},
+			},
+		}, nil
+	}
+
+	id, version, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "s_payments" || version != 3 {
+		t.Errorf("got %s@%d, want s_payments@3", id, version)
+	}
+}
+
+func TestGetLatestPublishedSchemaVersion_WalksBackFromDraft(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{
+			Schemas: []*Schema{{ID: "s1", Name: "payments", Version: 5, Published: false}},
+		}, nil
+	}
+	// v5 draft, v4 draft, v3 published.
+	ms.getSchemaFn = func(_ context.Context, id string, version *int32) (*Schema, error) {
+		if id != "s1" {
+			t.Errorf("unexpected id %q", id)
+		}
+		switch *version {
+		case 4:
+			return &Schema{ID: "s1", Version: 4, Published: false}, nil
+		case 3:
+			return &Schema{ID: "s1", Version: 3, Published: true}, nil
+		}
+		return nil, ErrNotFound
+	}
+
+	id, version, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "s1" || version != 3 {
+		t.Errorf("got %s@%d, want s1@3", id, version)
+	}
+}
+
+func TestGetLatestPublishedSchemaVersion_NoPublishedVersion(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{
+			Schemas: []*Schema{{ID: "s1", Name: "payments", Version: 2, Published: false}},
+		}, nil
+	}
+	ms.getSchemaFn = func(_ context.Context, _ string, _ *int32) (*Schema, error) {
+		return &Schema{Published: false}, nil
+	}
+
+	_, _, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestGetLatestPublishedSchemaVersion_SchemaNameNotFound(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{Schemas: []*Schema{{ID: "s_other", Name: "other", Published: true}}}, nil
+	}
+
+	_, _, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestGetLatestPublishedSchemaVersion_ListError(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return nil, errors.New("rpc failed")
+	}
+
+	_, _, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if err == nil || !strings.Contains(err.Error(), "rpc failed") {
+		t.Errorf("expected rpc failed error, got %v", err)
+	}
+}
+
+func TestGetLatestPublishedSchemaVersion_GetSchemaVersionError(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{Schemas: []*Schema{{ID: "s1", Name: "payments", Version: 3, Published: false}}}, nil
+	}
+	ms.getSchemaFn = func(_ context.Context, _ string, _ *int32) (*Schema, error) {
+		return nil, errors.New("transport error")
+	}
+
+	_, _, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if err == nil || !strings.Contains(err.Error(), "transport error") {
+		t.Errorf("expected transport error, got %v", err)
+	}
+}

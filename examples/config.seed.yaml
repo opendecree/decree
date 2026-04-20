@@ -1,0 +1,21 @@
+spec_version: v1
+tenant:
+  name: acme-corp
+  schema: example-app
+  # schema_version omitted → latest published version of example-app is used.
+  # Pin explicitly with `schema_version: 3` to bind to a specific version.
+config:
+  description: Initial config for acme-corp
+  values:
+    app.name:
+      value: "Acme Corp App"
+    app.debug:
+      value: false
+    features.dark_mode:
+      value: true
+    server.rate_limit:
+      value: 100
+    payments.fee_rate:
+      value: 0.025
+    payments.currency:
+      value: "USD"

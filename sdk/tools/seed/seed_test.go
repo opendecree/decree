@@ -3,6 +3,7 @@ package seed
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/opendecree/decree/sdk/adminclient"
@@ -11,12 +12,14 @@ import (
 // --- Mock client ---
 
 type mockClient struct {
-	importSchemaFn func(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error)
-	listSchemasFn  func(ctx context.Context) ([]*adminclient.Schema, error)
-	listTenantsFn  func(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error)
-	createTenantFn func(ctx context.Context, name, schemaID string, schemaVersion int32) (*adminclient.Tenant, error)
-	importConfigFn func(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error)
-	lockFieldFn    func(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error
+	importSchemaFn                    func(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error)
+	listSchemasFn                     func(ctx context.Context) ([]*adminclient.Schema, error)
+	getLatestPublishedSchemaVersionFn func(ctx context.Context, name string) (string, int32, error)
+	listTenantsFn                     func(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error)
+	createTenantFn                    func(ctx context.Context, name, schemaID string, schemaVersion int32) (*adminclient.Tenant, error)
+	importConfigFn                    func(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error)
+	listConfigVersionsFn              func(ctx context.Context, tenantID string) ([]*adminclient.Version, error)
+	lockFieldFn                       func(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error
 }
 
 func (m *mockClient) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error) {
@@ -25,6 +28,10 @@ func (m *mockClient) ImportSchema(ctx context.Context, yamlContent []byte, autoP
 
 func (m *mockClient) ListSchemas(ctx context.Context) ([]*adminclient.Schema, error) {
 	return m.listSchemasFn(ctx)
+}
+
+func (m *mockClient) GetLatestPublishedSchemaVersion(ctx context.Context, name string) (string, int32, error) {
+	return m.getLatestPublishedSchemaVersionFn(ctx, name)
 }
 
 func (m *mockClient) ListTenants(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error) {
@@ -37,6 +44,10 @@ func (m *mockClient) CreateTenant(ctx context.Context, name, schemaID string, sc
 
 func (m *mockClient) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error) {
 	return m.importConfigFn(ctx, tenantID, yamlContent, description, mode...)
+}
+
+func (m *mockClient) ListConfigVersions(ctx context.Context, tenantID string) ([]*adminclient.Version, error) {
+	return m.listConfigVersionsFn(ctx, tenantID)
 }
 
 func (m *mockClient) LockField(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error {
@@ -154,14 +165,19 @@ schema:
   fields: {}
 tenant:
   name: t`},
-		{"no tenant name", `spec_version: "v1"
-schema:
-  name: test
-  fields:
-    a:
-      type: string
+		{"empty file", `spec_version: "v1"`},
+		{"config without tenant", `spec_version: "v1"
+config:
+  values:
+    x:
+      value: 1`},
+		{"config-only missing schema ref", `spec_version: "v1"
 tenant:
-  name: ""`},
+  name: t
+config:
+  values:
+    x:
+      value: 1`},
 	}
 
 	for _, tt := range tests {
@@ -539,5 +555,621 @@ func TestRun_LockFieldError(t *testing.T) {
 	_, err := Run(context.Background(), mock, file)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// --- ParseFile: decoupled modes ---
+
+func TestParseFile_SchemaOnly(t *testing.T) {
+	data := `spec_version: "v1"
+schema:
+  name: payments
+  fields:
+    rate:
+      type: number
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Schema.Name != "payments" || f.Tenant.Name != "" || len(f.Config.Values) != 0 {
+		t.Errorf("schema-only parsed incorrectly: %+v", f)
+	}
+}
+
+func TestParseFile_ConfigOnly_SchemaVersionOmitted(t *testing.T) {
+	data := `spec_version: "v1"
+tenant:
+  name: org1
+  schema: payments
+config:
+  values:
+    rate:
+      value: 42
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Tenant.Schema != "payments" {
+		t.Errorf("tenant.schema = %q", f.Tenant.Schema)
+	}
+	if f.Tenant.SchemaVersion != nil {
+		t.Errorf("expected schema_version nil (latest), got %d", *f.Tenant.SchemaVersion)
+	}
+}
+
+func TestParseFile_ConfigOnly_SchemaVersionExplicit(t *testing.T) {
+	data := `spec_version: "v1"
+tenant:
+  name: org1
+  schema: payments
+  schema_version: 3
+config:
+  values:
+    rate:
+      value: 42
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Tenant.SchemaVersion == nil || *f.Tenant.SchemaVersion != 3 {
+		t.Errorf("schema_version = %v, want 3", f.Tenant.SchemaVersion)
+	}
+}
+
+// --- Run: schema-only mode ---
+
+func TestRun_SchemaOnly(t *testing.T) {
+	file := &File{
+		SpecVersion: "v1",
+		Schema: SchemaDef{
+			Name:   "payments",
+			Fields: map[string]FieldDef{"rate": {Type: "number"}},
+		},
+	}
+	var importConfigCalled, createTenantCalled bool
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return &adminclient.Schema{ID: "s1", Version: 1}, nil
+		},
+		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
+			createTenantCalled = true
+			return nil, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			importConfigCalled = true
+			return nil, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.SchemaCreated || result.SchemaID != "s1" {
+		t.Errorf("expected schema created, got %+v", result)
+	}
+	if result.TenantID != "" || createTenantCalled {
+		t.Error("tenant should not be touched in schema-only mode")
+	}
+	if result.ConfigImported || importConfigCalled {
+		t.Error("config should not be touched in schema-only mode")
+	}
+}
+
+// --- Run: config-only mode ---
+
+func configOnlyFile(schemaVersion *int32) *File {
+	return &File{
+		SpecVersion: "v1",
+		Tenant: TenantDef{
+			Name:          "org1",
+			Schema:        "payments",
+			SchemaVersion: schemaVersion,
+		},
+		Config: ConfigDef{
+			Values: map[string]ConfigValueDef{"rate": {Value: 42}},
+		},
+	}
+}
+
+func TestRun_ConfigOnly_LatestPublished(t *testing.T) {
+	file := configOnlyFile(nil)
+	var resolvedName string
+	var importSchemaCalled bool
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			importSchemaCalled = true
+			return nil, nil
+		},
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, name string) (string, int32, error) {
+			resolvedName = name
+			return "s1", 5, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "org1"}}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return &adminclient.Version{Version: 2}, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if importSchemaCalled {
+		t.Error("ImportSchema should not be called in config-only mode")
+	}
+	if resolvedName != "payments" {
+		t.Errorf("resolved schema name = %q", resolvedName)
+	}
+	if result.SchemaID != "s1" || result.SchemaVersion != 5 {
+		t.Errorf("expected s1@5, got %s@%d", result.SchemaID, result.SchemaVersion)
+	}
+	if result.TenantID != "t1" || result.TenantCreated {
+		t.Errorf("expected reused tenant t1, got %+v", result)
+	}
+	if !result.ConfigImported || result.ConfigVersion != 2 {
+		t.Errorf("expected config v2, got %+v", result)
+	}
+}
+
+func TestRun_ConfigOnly_ExplicitVersion(t *testing.T) {
+	v := int32(3)
+	file := configOnlyFile(&v)
+	var getLatestCalled bool
+	mock := &mockClient{
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{{ID: "s1", Name: "payments", Version: 5}}, nil
+		},
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			getLatestCalled = true
+			return "", 0, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return nil, nil
+		},
+		createTenantFn: func(_ context.Context, _, _ string, schemaVersion int32) (*adminclient.Tenant, error) {
+			if schemaVersion != 3 {
+				t.Errorf("CreateTenant called with schema_version=%d, want 3", schemaVersion)
+			}
+			return &adminclient.Tenant{ID: "t1"}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return &adminclient.Version{Version: 1}, nil
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getLatestCalled {
+		t.Error("GetLatestPublishedSchemaVersion should not be called when schema_version is explicit")
+	}
+}
+
+func TestRun_ConfigOnly_NoPublishedVersion(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "", 0, adminclient.ErrNotFound
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil {
+		t.Fatal("expected error when no published schema version")
+	}
+}
+
+func TestRun_ConfigOnly_SchemaMismatch(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s_payments", 1, nil
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{
+				{ID: "s_payments", Name: "payments"},
+				{ID: "s_billing", Name: "billing"},
+			}, nil
+		},
+		listTenantsFn: func(_ context.Context, schemaID string) ([]*adminclient.Tenant, error) {
+			if schemaID == "s_billing" {
+				return []*adminclient.Tenant{{ID: "t_existing", Name: "org1"}}, nil
+			}
+			return nil, nil
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil {
+		t.Fatal("expected schema-mismatch error")
+	}
+}
+
+// --- Run: idempotency ---
+
+func TestRun_SchemaReseed_NoNewVersion(t *testing.T) {
+	file := testFile()
+	file.Config.Values = nil
+	file.Locks = nil
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return nil, adminclient.ErrAlreadyExists
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{{ID: "s1", Name: "test-schema", Version: 4}}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SchemaCreated {
+		t.Error("schema was re-created — expected no new version")
+	}
+	if result.SchemaVersion != 4 {
+		t.Errorf("expected existing version 4, got %d", result.SchemaVersion)
+	}
+}
+
+func TestRun_ConfigReseed_NoNewVersion(t *testing.T) {
+	file := testFile()
+	file.Locks = nil
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return &adminclient.Schema{ID: "s1", Version: 1}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return nil, adminclient.ErrAlreadyExists
+		},
+		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
+			return []*adminclient.Version{{Version: 7}, {Version: 6}}, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatalf("re-seed with identical config should not error, got: %v", err)
+	}
+	if result.ConfigImported {
+		t.Error("config was imported — expected no new version")
+	}
+	if result.ConfigVersion != 7 {
+		t.Errorf("expected existing version 7, got %d", result.ConfigVersion)
+	}
+}
+
+func TestRun_FullNoOpReseed(t *testing.T) {
+	file := testFile()
+	file.Locks = nil
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return nil, adminclient.ErrAlreadyExists
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{{ID: "s1", Name: "test-schema", Version: 2}}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return nil, adminclient.ErrAlreadyExists
+		},
+		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
+			return []*adminclient.Version{{Version: 3}}, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SchemaCreated || result.TenantCreated || result.ConfigImported {
+		t.Errorf("expected fully no-op re-seed, got %+v", result)
+	}
+}
+
+// --- ParseFile / Run: remaining modes ---
+
+func TestParseFile_SchemaAndTenant(t *testing.T) {
+	data := `spec_version: "v1"
+schema:
+  name: payments
+  fields:
+    rate:
+      type: number
+tenant:
+  name: org1
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Schema.Name != "payments" || f.Tenant.Name != "org1" || len(f.Config.Values) != 0 {
+		t.Errorf("schema+tenant parsed incorrectly: %+v", f)
+	}
+}
+
+func TestParseFile_TenantOnly(t *testing.T) {
+	data := `spec_version: "v1"
+tenant:
+  name: org1
+  schema: payments
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Tenant.Name != "org1" || f.Tenant.Schema != "payments" {
+		t.Errorf("tenant-only parsed incorrectly: %+v", f)
+	}
+}
+
+func TestParseFile_LocksWithoutTenant(t *testing.T) {
+	data := `spec_version: "v1"
+locks:
+  - field_path: a
+`
+	if _, err := ParseFile([]byte(data)); err == nil {
+		t.Fatal("expected error for locks without tenant")
+	}
+}
+
+func TestRun_SchemaAndTenant(t *testing.T) {
+	file := &File{
+		SpecVersion: "v1",
+		Schema: SchemaDef{
+			Name:   "payments",
+			Fields: map[string]FieldDef{"rate": {Type: "number"}},
+		},
+		Tenant: TenantDef{Name: "org1"},
+	}
+	var importConfigCalled bool
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return &adminclient.Schema{ID: "s1", Version: 1}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return nil, nil
+		},
+		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
+			return &adminclient.Tenant{ID: "t1"}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			importConfigCalled = true
+			return nil, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.SchemaCreated || !result.TenantCreated {
+		t.Errorf("expected schema + tenant created, got %+v", result)
+	}
+	if importConfigCalled || result.ConfigImported {
+		t.Error("ImportConfig should not be called when no config section")
+	}
+}
+
+func TestRun_TenantOnly(t *testing.T) {
+	file := &File{
+		SpecVersion: "v1",
+		Tenant:      TenantDef{Name: "org1", Schema: "payments"},
+	}
+	var importSchemaCalled, importConfigCalled bool
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			importSchemaCalled = true
+			return nil, nil
+		},
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s1", 2, nil
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{{ID: "s1", Name: "payments"}}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return nil, nil
+		},
+		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
+			return &adminclient.Tenant{ID: "t1"}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			importConfigCalled = true
+			return nil, nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if importSchemaCalled {
+		t.Error("ImportSchema should not be called in tenant-only mode")
+	}
+	if !result.TenantCreated {
+		t.Error("expected tenant created")
+	}
+	if importConfigCalled {
+		t.Error("ImportConfig should not be called in tenant-only mode")
+	}
+}
+
+// --- Mismatch error-message content + config-only + locks ---
+
+func TestRun_ConfigOnly_SchemaMismatch_ErrorMessage(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s_payments", 1, nil
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{
+				{ID: "s_payments", Name: "payments"},
+				{ID: "s_billing", Name: "billing"},
+			}, nil
+		},
+		listTenantsFn: func(_ context.Context, schemaID string) ([]*adminclient.Tenant, error) {
+			if schemaID == "s_billing" {
+				return []*adminclient.Tenant{{ID: "t_existing", Name: "org1"}}, nil
+			}
+			return nil, nil
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	for _, want := range []string{"org1", "billing", "payments"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error message %q missing %q", msg, want)
+		}
+	}
+}
+
+func TestRun_ConfigOnly_WithLocks(t *testing.T) {
+	file := configOnlyFile(nil)
+	file.Locks = []LockDef{
+		{FieldPath: "rate", LockedValues: []string{"42"}},
+	}
+	var lockedTenantID, lockedPath string
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s1", 1, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "org1"}}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return &adminclient.Version{Version: 1}, nil
+		},
+		lockFieldFn: func(_ context.Context, tenantID, fieldPath string, _ ...string) error {
+			lockedTenantID, lockedPath = tenantID, fieldPath
+			return nil
+		},
+	}
+	result, err := Run(context.Background(), mock, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lockedTenantID != "t1" || lockedPath != "rate" {
+		t.Errorf("LockField called with (%q, %q); want (t1, rate)", lockedTenantID, lockedPath)
+	}
+	if result.LocksApplied != 1 {
+		t.Errorf("LocksApplied = %d, want 1", result.LocksApplied)
+	}
+}
+
+// --- Round-trip: TenantDef.SchemaVersion pointer ---
+
+func TestMarshal_TenantSchemaVersionOmitEmpty(t *testing.T) {
+	f := &File{
+		SpecVersion: "v1",
+		Tenant:      TenantDef{Name: "org1", Schema: "payments"},
+		Config:      ConfigDef{Values: map[string]ConfigValueDef{"rate": {Value: 1}}},
+	}
+	data, err := Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "schema_version") {
+		t.Errorf("nil SchemaVersion should not appear in YAML; got:\n%s", data)
+	}
+	f2, err := ParseFile(data)
+	if err != nil {
+		t.Fatalf("re-parse failed: %v", err)
+	}
+	if f2.Tenant.SchemaVersion != nil {
+		t.Errorf("expected SchemaVersion nil after round-trip, got %d", *f2.Tenant.SchemaVersion)
+	}
+}
+
+func TestMarshal_TenantSchemaVersionRoundTrip(t *testing.T) {
+	v := int32(3)
+	f := &File{
+		SpecVersion: "v1",
+		Tenant:      TenantDef{Name: "org1", Schema: "payments", SchemaVersion: &v},
+		Config:      ConfigDef{Values: map[string]ConfigValueDef{"rate": {Value: 1}}},
+	}
+	data, err := Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f2, err := ParseFile(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f2.Tenant.SchemaVersion == nil || *f2.Tenant.SchemaVersion != 3 {
+		t.Errorf("SchemaVersion round-trip lost value: got %v", f2.Tenant.SchemaVersion)
+	}
+}
+
+func TestRun_ConfigOnly_ExplicitVersion_SchemaNotFound(t *testing.T) {
+	v := int32(3)
+	file := configOnlyFile(&v)
+	mock := &mockClient{
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{{ID: "s1", Name: "other"}}, nil
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil {
+		t.Fatal("expected error when schema name not found")
+	}
+}
+
+func TestRun_ConfigOnly_ExplicitVersion_ListSchemasError(t *testing.T) {
+	v := int32(3)
+	file := configOnlyFile(&v)
+	mock := &mockClient{
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return nil, fmt.Errorf("rpc down")
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil || !strings.Contains(err.Error(), "rpc down") {
+		t.Fatalf("expected rpc down error, got %v", err)
+	}
+}
+
+func TestRun_ConfigOnly_LatestPublished_GenericError(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "", 0, fmt.Errorf("transport error")
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil || !strings.Contains(err.Error(), "transport error") {
+		t.Fatalf("expected transport error, got %v", err)
+	}
+}
+
+func TestRun_ConfigReseed_ListConfigVersionsError(t *testing.T) {
+	file := testFile()
+	file.Locks = nil
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+			return &adminclient.Schema{ID: "s1", Version: 1}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
+		},
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+			return nil, adminclient.ErrAlreadyExists
+		},
+		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
+			return nil, fmt.Errorf("db down")
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil || !strings.Contains(err.Error(), "db down") {
+		t.Fatalf("expected db down error, got %v", err)
 	}
 }
