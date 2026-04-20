@@ -4,11 +4,21 @@ title: decree seed
 
 ## decree seed
 
-Bootstrap a schema, tenant, and config from a single YAML file
+Seed a schema, tenant, and/or config from a YAML file
 
 ### Synopsis
 
-Seed creates a schema, tenant, and initial configuration from a single YAML file. The operation is idempotent: existing schemas with identical fields are skipped, existing tenants are reused, and config values are merged.
+Seed applies a YAML file against the server. The file may contain any combination of schema, tenant, config, and locks sections; the operation dispatches based on which are present:
+
+  schema only                  → imports the schema
+  tenant only                  → creates (or reuses) the tenant
+  schema + tenant              → imports schema + creates tenant
+  tenant + config (+ locks)    → reuses schema, creates tenant, imports config
+  schema + tenant + config     → full combined envelope (legacy form)
+
+In config-only mode, tenant.schema names an already-imported schema. If tenant.schema_version is omitted, the latest published version is used.
+
+The operation is idempotent: importing a schema with identical fields, or a config whose values match the latest version, is a no-op and does not create a new version.
 
 ```
 decree seed <file> [flags]
