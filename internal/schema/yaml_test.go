@@ -56,6 +56,8 @@ func TestYAMLRoundtrip(t *testing.T) {
 	// Proto → YAML
 	doc := schemaToYAML(original)
 	assert.Equal(t, yamlSpecVersionV1, doc.SpecVersion)
+	assert.Equal(t, metaSchemaURL, doc.Schema)
+	assert.Equal(t, "urn:decree:schema:payments:v3", doc.ID)
 	assert.Equal(t, "payments", doc.Name)
 	assert.Equal(t, "Payment config", doc.Description)
 	assert.Equal(t, int32(3), doc.Version)
@@ -231,6 +233,56 @@ func TestYAMLValidation_InvalidSlug(t *testing.T) {
 			assert.ErrorContains(t, err, "slug")
 		})
 	}
+}
+
+func TestYAMLValidation_SchemaAndID(t *testing.T) {
+	validBody := "\nname: test\nfields:\n  x:\n    type: string\n"
+
+	t.Run("both absent (optional)", func(t *testing.T) {
+		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"" + validBody))
+		require.NoError(t, err)
+	})
+
+	t.Run("both accepted when well-formed", func(t *testing.T) {
+		doc, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$schema: https://schemas.opendecree.io/schema/v0.1.0/decree.json\n$id: urn:decree:schema:test:v1" + validBody))
+		require.NoError(t, err)
+		assert.Equal(t, "https://schemas.opendecree.io/schema/v0.1.0/decree.json", doc.Schema)
+		assert.Equal(t, "urn:decree:schema:test:v1", doc.ID)
+	})
+
+	t.Run("$schema must be HTTPS", func(t *testing.T) {
+		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$schema: http://example.com/decree.json" + validBody))
+		assert.ErrorContains(t, err, "$schema")
+		assert.ErrorContains(t, err, "HTTPS")
+	})
+
+	t.Run("$schema must have host", func(t *testing.T) {
+		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$schema: not-a-url" + validBody))
+		assert.ErrorContains(t, err, "$schema")
+	})
+
+	t.Run("$id must be decree schema URN", func(t *testing.T) {
+		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$id: not-a-urn" + validBody))
+		assert.ErrorContains(t, err, "$id")
+	})
+
+	t.Run("$id rejects wrong namespace", func(t *testing.T) {
+		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$id: urn:other:schema:test:v1" + validBody))
+		assert.ErrorContains(t, err, "$id")
+	})
+}
+
+func TestSchemaToYAML_EmitsSchemaAndID(t *testing.T) {
+	doc := schemaToYAML(&pb.Schema{
+		Name:    "billing",
+		Version: 7,
+		Fields:  []*pb.SchemaField{{Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING}},
+	})
+	assert.Equal(t, metaSchemaURL, doc.Schema)
+	assert.Equal(t, "urn:decree:schema:billing:v7", doc.ID)
+
+	// Synthesized $id must satisfy the same pattern the parser enforces.
+	assert.Regexp(t, schemaURNPattern, doc.ID)
 }
 
 func TestConstraintsNilWhenEmpty(t *testing.T) {
