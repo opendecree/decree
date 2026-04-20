@@ -143,7 +143,7 @@ cd quickstart && go run .   # run any example
 go install github.com/opendecree/decree/cmd/decree@latest
 
 decree schema list
-decree schema import --publish schema.yaml      # import + auto-publish
+decree schema import --publish decree.schema.yaml  # import + auto-publish
 
 decree tenant create --name acme --schema payroll-service --schema-version 1
 decree config set acme payments.fee 0.5%          # use tenant name or UUID
@@ -161,7 +161,7 @@ decree dump acme > backup.yaml                    # full tenant backup
 decree diff acme 1 2                              # diff two config versions
 decree diff --old v1.yaml --new v2.yaml           # diff two files
 decree docgen payroll-service                      # use schema name or UUID
-decree validate --schema s.yaml --config c.yaml   # offline validation
+decree validate --schema decree.schema.yaml --config decree.config.yaml
 ```
 
 Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`, `--wait`, `--wait-timeout`
@@ -169,7 +169,7 @@ Global flags: `--server`, `--subject`, `--role`, `--output table|json|yaml`, `--
 Use `--wait` in Docker/Kubernetes init containers to wait for the server to be ready:
 
 ```bash
-decree seed config.yaml --server decree:9090 --wait --wait-timeout 60s
+decree seed examples/seed.yaml --server decree:9090 --wait --wait-timeout 60s
 ```
 
 ## Quick Start
@@ -230,7 +230,7 @@ OpenAPI spec: [`docs/api/openapi.swagger.json`](docs/api/openapi.swagger.json)
 export DECREE_SUBJECT=admin@example.com
 
 # Create and publish a schema
-decree schema import --publish examples/schema.yaml
+decree schema import --publish examples/config-validation/decree.schema.yaml
 
 # Create a tenant and set config
 decree tenant create --name acme --schema <schema-id> --schema-version 1
