@@ -42,6 +42,11 @@ func (c *RedisCache) Get(ctx context.Context, tenantID string, version int32) (m
 }
 
 func (c *RedisCache) Set(ctx context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
+	// Redis HSET rejects zero field/value pairs; skip the call. There is nothing
+	// to cache, and a subsequent Get will correctly report a miss.
+	if len(values) == 0 {
+		return nil
+	}
 	key := c.key(tenantID, version)
 	pipe := c.client.Pipeline()
 	pipe.HSet(ctx, key, values)
