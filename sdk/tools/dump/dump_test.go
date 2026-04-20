@@ -427,7 +427,7 @@ func TestConvertConstraints(t *testing.T) {
 func TestMarshal(t *testing.T) {
 	f := &seed.File{
 		SpecVersion: "v1",
-		Schema:      seed.SchemaDef{
+		Schema: seed.SchemaDef{
 			Name:   "test",
 			Fields: map[string]seed.FieldDef{"x": {Type: "string"}},
 		},
