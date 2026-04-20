@@ -173,6 +173,9 @@ jobs:
         with:
           version: v2.11.4
 
+      - name: Go format check
+        run: golangci-lint fmt --diff
+
       - name: Log in to ghcr.io
         uses: docker/login-action@v4
         with:
