@@ -29,7 +29,7 @@ your-service/
 Define your config structure in `config/schema.yaml`:
 
 ```yaml
-syntax: "v1"
+spec_version: "v1"
 name: payments
 description: Payment processing configuration
 
@@ -71,7 +71,7 @@ Create a values file per environment. Only include values you want to set — fi
 
 `config/values.prod.yaml`:
 ```yaml
-syntax: "v1"
+spec_version: "v1"
 values:
   payments.enabled:
     value: true
@@ -87,7 +87,7 @@ values:
 
 `config/values.dev.yaml`:
 ```yaml
-syntax: "v1"
+spec_version: "v1"
 values:
   payments.enabled:
     value: true

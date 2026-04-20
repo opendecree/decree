@@ -120,7 +120,7 @@ func TestConstraintValidation(t *testing.T) {
 	// --- Import validation ---
 
 	t.Run("import valid YAML accepted", func(t *testing.T) {
-		validYAML := []byte(`syntax: "v1"
+		validYAML := []byte(`spec_version: "v1"
 values:
   app.retries:
     value: 5
@@ -134,7 +134,7 @@ values:
 	})
 
 	t.Run("import rejects constraint violation", func(t *testing.T) {
-		badYAML := []byte(`syntax: "v1"
+		badYAML := []byte(`spec_version: "v1"
 values:
   app.retries:
     value: 99
@@ -145,7 +145,7 @@ values:
 	})
 
 	t.Run("import rejects unknown field", func(t *testing.T) {
-		badYAML := []byte(`syntax: "v1"
+		badYAML := []byte(`spec_version: "v1"
 values:
   app.nonexistent:
     value: "hello"

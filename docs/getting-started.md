@@ -36,7 +36,7 @@ export DECREE_SUBJECT=admin@example.com
 A schema defines the structure of your configuration — what fields exist, their types, and constraints. Create a file called `payments.yaml`:
 
 ```yaml
-syntax: "v1"
+spec_version: "v1"
 name: payments
 description: Payment processing configuration
 

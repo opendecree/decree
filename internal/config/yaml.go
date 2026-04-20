@@ -11,11 +11,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const yamlSyntaxV1 = "v1"
+const yamlSpecVersionV1 = "v1"
 
 // ConfigYAML is the top-level YAML document for config import/export.
 type ConfigYAML struct {
-	Syntax      string                     `yaml:"syntax"`
+	SpecVersion string                     `yaml:"spec_version"`
 	Version     int32                      `yaml:"version,omitempty"`
 	Description string                     `yaml:"description,omitempty"`
 	Values      map[string]ConfigValueYAML `yaml:"values"`
@@ -37,11 +37,11 @@ type configValueImport struct {
 // --- Validation ---
 
 func validateConfigYAML(doc *ConfigYAML) error {
-	if doc.Syntax == "" {
-		return fmt.Errorf("syntax is required")
+	if doc.SpecVersion == "" {
+		return fmt.Errorf("spec_version is required")
 	}
-	if doc.Syntax != yamlSyntaxV1 {
-		return fmt.Errorf("unsupported syntax version: %s", doc.Syntax)
+	if doc.SpecVersion != yamlSpecVersionV1 {
+		return fmt.Errorf("unsupported spec_version: %s", doc.SpecVersion)
 	}
 	if len(doc.Values) == 0 {
 		return fmt.Errorf("at least one value is required")
@@ -60,7 +60,7 @@ func validateConfigYAML(doc *ConfigYAML) error {
 // for typed value representation.
 func configToYAML(version int32, description string, rows []configRow, fieldTypes map[string]domain.FieldType) *ConfigYAML {
 	doc := &ConfigYAML{
-		Syntax:      yamlSyntaxV1,
+		SpecVersion: yamlSpecVersionV1,
 		Version:     version,
 		Description: description,
 		Values:      make(map[string]ConfigValueYAML, len(rows)),

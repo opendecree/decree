@@ -30,7 +30,7 @@ func TestConfigYAML_Roundtrip(t *testing.T) {
 
 	// Export: rows -> YAML doc -> bytes
 	doc := configToYAML(5, "test export", rows, fieldTypes)
-	assert.Equal(t, yamlSyntaxV1, doc.Syntax)
+	assert.Equal(t, yamlSpecVersionV1, doc.SpecVersion)
 	assert.Equal(t, int32(5), doc.Version)
 	assert.Len(t, doc.Values, 6)
 
@@ -134,28 +134,28 @@ func TestConfigYAML_StringifyValue_Errors(t *testing.T) {
 }
 
 func TestConfigYAML_Validation(t *testing.T) {
-	t.Run("missing syntax", func(t *testing.T) {
+	t.Run("missing spec_version", func(t *testing.T) {
 		_, err := unmarshalConfigYAML([]byte(`
 values:
   x:
     value: "hello"
 `))
-		assert.ErrorContains(t, err, "syntax is required")
+		assert.ErrorContains(t, err, "spec_version is required")
 	})
 
-	t.Run("unsupported syntax", func(t *testing.T) {
+	t.Run("unsupported spec_version", func(t *testing.T) {
 		_, err := unmarshalConfigYAML([]byte(`
-syntax: "v99"
+spec_version: "v99"
 values:
   x:
     value: "hello"
 `))
-		assert.ErrorContains(t, err, "unsupported syntax version")
+		assert.ErrorContains(t, err, "unsupported spec_version")
 	})
 
 	t.Run("empty values", func(t *testing.T) {
 		_, err := unmarshalConfigYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 values: {}
 `))
 		assert.ErrorContains(t, err, "at least one value is required")
@@ -163,7 +163,7 @@ values: {}
 
 	t.Run("valid minimal", func(t *testing.T) {
 		doc, err := unmarshalConfigYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 values:
   x:
     value: "hello"

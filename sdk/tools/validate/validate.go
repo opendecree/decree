@@ -22,7 +22,7 @@ import (
 
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
-	Syntax      string              `yaml:"syntax"`
+	SpecVersion string              `yaml:"spec_version"`
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description,omitempty"`
 	Info        any                 `yaml:"info,omitempty"`
@@ -64,8 +64,8 @@ type ConstraintsDef struct {
 
 // ConfigFile is the parsed representation of a config YAML file.
 type ConfigFile struct {
-	Syntax string                    `yaml:"syntax"`
-	Values map[string]ConfigValueDef `yaml:"values"`
+	SpecVersion string                    `yaml:"spec_version"`
+	Values      map[string]ConfigValueDef `yaml:"values"`
 }
 
 // ConfigValueDef represents a single config value in the YAML format.
@@ -140,8 +140,8 @@ func ParseSchema(data []byte) (*SchemaFile, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
-	if doc.Syntax != "v1" {
-		return nil, fmt.Errorf("unsupported syntax version: %q (expected \"v1\")", doc.Syntax)
+	if doc.SpecVersion != "v1" {
+		return nil, fmt.Errorf("unsupported spec_version: %q (expected \"v1\")", doc.SpecVersion)
 	}
 	if doc.Name == "" {
 		return nil, fmt.Errorf("schema name is required")
@@ -163,8 +163,8 @@ func ParseConfig(data []byte) (*ConfigFile, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
-	if doc.Syntax != "v1" {
-		return nil, fmt.Errorf("unsupported syntax version: %q (expected \"v1\")", doc.Syntax)
+	if doc.SpecVersion != "v1" {
+		return nil, fmt.Errorf("unsupported spec_version: %q (expected \"v1\")", doc.SpecVersion)
 	}
 	if len(doc.Values) == 0 {
 		return nil, fmt.Errorf("at least one value is required")

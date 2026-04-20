@@ -8,11 +8,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const yamlSyntaxV1 = "v1"
+const yamlSpecVersionV1 = "v1"
 
 // SchemaYAML is the top-level YAML document for schema import/export.
 type SchemaYAML struct {
-	Syntax             string                     `yaml:"syntax"`
+	SpecVersion        string                     `yaml:"spec_version"`
 	Name               string                     `yaml:"name"`
 	Description        string                     `yaml:"description,omitempty"`
 	Version            int32                      `yaml:"version,omitempty"`
@@ -84,11 +84,11 @@ type ConstraintsYAML struct {
 // --- Validation ---
 
 func validateSchemaYAML(doc *SchemaYAML) error {
-	if doc.Syntax == "" {
-		return fmt.Errorf("syntax is required")
+	if doc.SpecVersion == "" {
+		return fmt.Errorf("spec_version is required")
 	}
-	if doc.Syntax != yamlSyntaxV1 {
-		return fmt.Errorf("unsupported syntax version: %s", doc.Syntax)
+	if doc.SpecVersion != yamlSpecVersionV1 {
+		return fmt.Errorf("unsupported spec_version: %s", doc.SpecVersion)
 	}
 	if doc.Name == "" {
 		return fmt.Errorf("name is required")
@@ -162,7 +162,7 @@ func protoTypeToYAML(t pb.FieldType) string {
 
 func schemaToYAML(s *pb.Schema) *SchemaYAML {
 	doc := &SchemaYAML{
-		Syntax:             yamlSyntaxV1,
+		SpecVersion:        yamlSpecVersionV1,
 		Name:               s.Name,
 		Description:        s.Description,
 		Version:            s.Version,

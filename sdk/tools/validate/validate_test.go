@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-const schemaYAML = `syntax: "v1"
+const schemaYAML = `spec_version: "v1"
 name: test-schema
 fields:
   rate:
@@ -38,7 +38,7 @@ fields:
 `
 
 func TestValidate_Valid(t *testing.T) {
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   rate:
     value: 50.5
@@ -75,31 +75,31 @@ func TestValidate_TypeMismatch(t *testing.T) {
 		field  string
 		msg    string
 	}{
-		{"integer gets string", `syntax: "v1"
+		{"integer gets string", `spec_version: "v1"
 values:
   count:
     value: "not-a-number"`, "count", "expected integer"},
-		{"number gets bool", `syntax: "v1"
+		{"number gets bool", `spec_version: "v1"
 values:
   rate:
     value: true`, "rate", "expected number"},
-		{"bool gets string", `syntax: "v1"
+		{"bool gets string", `spec_version: "v1"
 values:
   enabled:
     value: "yes"`, "enabled", "expected bool"},
-		{"string gets int", `syntax: "v1"
+		{"string gets int", `spec_version: "v1"
 values:
   name:
     value: 42`, "name", "expected string"},
-		{"url gets int", `syntax: "v1"
+		{"url gets int", `spec_version: "v1"
 values:
   endpoint:
     value: 42`, "endpoint", "expected url"},
-		{"time gets int", `syntax: "v1"
+		{"time gets int", `spec_version: "v1"
 values:
   start_time:
     value: 123`, "start_time", "expected time"},
-		{"duration gets int", `syntax: "v1"
+		{"duration gets int", `spec_version: "v1"
 values:
   timeout:
     value: 123`, "timeout", "expected duration"},
@@ -122,11 +122,11 @@ func TestValidate_NumericConstraints(t *testing.T) {
 		config string
 		msg    string
 	}{
-		{"below minimum", `syntax: "v1"
+		{"below minimum", `spec_version: "v1"
 values:
   rate:
     value: -1`, "less than minimum"},
-		{"above maximum", `syntax: "v1"
+		{"above maximum", `spec_version: "v1"
 values:
   rate:
     value: 101`, "exceeds maximum"},
@@ -144,7 +144,7 @@ values:
 }
 
 func TestValidate_ExclusiveMinMax(t *testing.T) {
-	schema := `syntax: "v1"
+	schema := `spec_version: "v1"
 name: test
 fields:
   val:
@@ -158,15 +158,15 @@ fields:
 		value string
 		valid bool
 	}{
-		{"at exclusive min", `syntax: "v1"
+		{"at exclusive min", `spec_version: "v1"
 values:
   val:
     value: 0`, false},
-		{"at exclusive max", `syntax: "v1"
+		{"at exclusive max", `spec_version: "v1"
 values:
   val:
     value: 10`, false},
-		{"within range", `syntax: "v1"
+		{"within range", `spec_version: "v1"
 values:
   val:
     value: 5`, true},
@@ -194,15 +194,15 @@ func TestValidate_StringConstraints(t *testing.T) {
 		config string
 		msg    string
 	}{
-		{"too short", `syntax: "v1"
+		{"too short", `spec_version: "v1"
 values:
   name:
     value: ""`, "less than minLength"},
-		{"too long", `syntax: "v1"
+		{"too long", `spec_version: "v1"
 values:
   name:
     value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, "exceeds maxLength"},
-		{"bad pattern", `syntax: "v1"
+		{"bad pattern", `spec_version: "v1"
 values:
   name:
     value: "hello123"`, "does not match pattern"},
@@ -220,7 +220,7 @@ values:
 }
 
 func TestValidate_Enum(t *testing.T) {
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   tags:
     value: "invalid"
@@ -233,7 +233,7 @@ values:
 }
 
 func TestValidate_EnumWithNumericTypes(t *testing.T) {
-	schema := `syntax: "v1"
+	schema := `spec_version: "v1"
 name: test
 fields:
   level:
@@ -254,19 +254,19 @@ fields:
 		config string
 		valid  bool
 	}{
-		{"int enum match", `syntax: "v1"
+		{"int enum match", `spec_version: "v1"
 values:
   level:
     value: 1`, true},
-		{"int enum miss", `syntax: "v1"
+		{"int enum miss", `spec_version: "v1"
 values:
   level:
     value: 4`, false},
-		{"float enum match", `syntax: "v1"
+		{"float enum match", `spec_version: "v1"
 values:
   ratio:
     value: 1.5`, true},
-		{"bool enum match", `syntax: "v1"
+		{"bool enum match", `spec_version: "v1"
 values:
   flag:
     value: true`, true},
@@ -290,7 +290,7 @@ values:
 
 func TestValidate_Nullable(t *testing.T) {
 	t.Run("nullable field allows null", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   tags:
     value: null
@@ -305,7 +305,7 @@ values:
 	})
 
 	t.Run("non-nullable rejects null", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   count:
     value: null
@@ -319,7 +319,7 @@ values:
 }
 
 func TestValidate_Strict(t *testing.T) {
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   unknown_field:
     value: "hello"
@@ -345,7 +345,7 @@ values:
 
 func TestValidate_URL(t *testing.T) {
 	t.Run("invalid url", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   endpoint:
     value: "not-a-url"
@@ -358,7 +358,7 @@ values:
 	})
 
 	t.Run("relative url rejected", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   endpoint:
     value: "/relative/path"
@@ -373,7 +373,7 @@ values:
 
 func TestValidate_JSON(t *testing.T) {
 	t.Run("structured YAML is valid JSON", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   payload:
     value:
@@ -391,7 +391,7 @@ values:
 	})
 
 	t.Run("JSON array is valid", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   payload:
     value: [1, 2, 3]
@@ -406,7 +406,7 @@ values:
 	})
 
 	t.Run("invalid JSON string", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   payload:
     value: "{bad json"
@@ -419,7 +419,7 @@ values:
 	})
 
 	t.Run("non-string non-structured rejects", func(t *testing.T) {
-		config := `syntax: "v1"
+		config := `spec_version: "v1"
 values:
   payload:
     value: 42
@@ -433,7 +433,7 @@ values:
 }
 
 func TestValidate_IntegerRejectsFloat(t *testing.T) {
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   count:
     value: 3.14
@@ -446,7 +446,7 @@ values:
 }
 
 func TestValidate_IntegerAcceptsWholeFloat(t *testing.T) {
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   count:
     value: 3.0
@@ -461,7 +461,7 @@ values:
 }
 
 func TestValidate_InvalidPattern(t *testing.T) {
-	schema := `syntax: "v1"
+	schema := `spec_version: "v1"
 name: test
 fields:
   x:
@@ -469,7 +469,7 @@ fields:
     constraints:
       pattern: "[invalid"
 `
-	config := `syntax: "v1"
+	config := `spec_version: "v1"
 values:
   x:
     value: "test"
@@ -483,14 +483,14 @@ values:
 
 func TestValidateParsed(t *testing.T) {
 	schema := &SchemaFile{
-		Syntax: "v1",
-		Name:   "test",
+		SpecVersion: "v1",
+		Name:        "test",
 		Fields: map[string]FieldDef{
 			"x": {Type: "integer"},
 		},
 	}
 	config := &ConfigFile{
-		Syntax: "v1",
+		SpecVersion: "v1",
 		Values: map[string]ConfigValueDef{
 			"x": {Value: 42},
 		},
@@ -503,7 +503,7 @@ func TestValidateParsed(t *testing.T) {
 }
 
 func TestValidate_SchemaParseError(t *testing.T) {
-	_, err := Validate([]byte("{{bad"), []byte(`syntax: "v1"
+	_, err := Validate([]byte("{{bad"), []byte(`spec_version: "v1"
 values:
   x:
     value: 1`))
@@ -525,19 +525,19 @@ func TestParseSchema_Errors(t *testing.T) {
 		data string
 	}{
 		{"invalid yaml", "{{bad"},
-		{"wrong syntax", `syntax: "v2"
+		{"wrong spec_version", `spec_version: "v2"
 name: test
 fields:
   a:
     type: string`},
-		{"no name", `syntax: "v1"
+		{"no name", `spec_version: "v1"
 fields:
   a:
     type: string`},
-		{"no fields", `syntax: "v1"
+		{"no fields", `spec_version: "v1"
 name: test
 fields: {}`},
-		{"bad type", `syntax: "v1"
+		{"bad type", `spec_version: "v1"
 name: test
 fields:
   a:
@@ -560,11 +560,11 @@ func TestParseConfig_Errors(t *testing.T) {
 		data string
 	}{
 		{"invalid yaml", "{{bad"},
-		{"wrong syntax", `syntax: "v2"
+		{"wrong spec_version", `spec_version: "v2"
 values:
   a:
     value: 1`},
-		{"no values", `syntax: "v1"
+		{"no values", `spec_version: "v1"
 values: {}`},
 	}
 

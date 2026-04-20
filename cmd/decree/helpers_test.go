@@ -93,7 +93,7 @@ func TestVersionOrEmpty(t *testing.T) {
 // --- parseConfigValues ---
 
 func TestParseConfigValues(t *testing.T) {
-	yaml := `syntax: v1
+	yaml := `spec_version: v1
 values:
   app.name:
     value: MyApp
@@ -125,7 +125,7 @@ func TestParseConfigValues_Invalid(t *testing.T) {
 }
 
 func TestParseConfigValues_Empty(t *testing.T) {
-	m := parseConfigValues([]byte("syntax: v1\n"))
+	m := parseConfigValues([]byte("spec_version: v1\n"))
 	if m == nil {
 		t.Fatal("expected non-nil")
 	}

@@ -610,7 +610,7 @@ func TestExportSchema_InvalidID(t *testing.T) {
 // --- ImportSchema ---
 
 func validYAML(name string) []byte {
-	return []byte("syntax: v1\nname: " + name + "\nfields:\n  app.name:\n    type: string\n")
+	return []byte("spec_version: v1\nname: " + name + "\nfields:\n  app.name:\n    type: string\n")
 }
 
 func TestImportSchema_NewSchema(t *testing.T) {

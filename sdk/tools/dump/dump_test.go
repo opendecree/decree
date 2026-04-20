@@ -74,7 +74,7 @@ func baseMock() *mockClient {
 			}, nil
 		},
 		exportConfigFn: func(_ context.Context, _ string, _ *int32) ([]byte, error) {
-			return []byte(`syntax: "v1"
+			return []byte(`spec_version: "v1"
 values:
   rate:
     value: 42
@@ -100,8 +100,8 @@ func TestRun_FullDump(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if file.Syntax != "v1" {
-		t.Errorf("syntax = %q", file.Syntax)
+	if file.SpecVersion != "v1" {
+		t.Errorf("spec_version = %q", file.SpecVersion)
 	}
 	if file.Schema.Name != "payments" {
 		t.Errorf("schema.name = %q", file.Schema.Name)
@@ -210,7 +210,7 @@ func TestRun_WithConfigVersion(t *testing.T) {
 	var gotVersion *int32
 	mock.exportConfigFn = func(_ context.Context, _ string, version *int32) ([]byte, error) {
 		gotVersion = version
-		return []byte(`syntax: "v1"
+		return []byte(`spec_version: "v1"
 values:
   rate:
     value: 1
@@ -426,8 +426,8 @@ func TestConvertConstraints(t *testing.T) {
 
 func TestMarshal(t *testing.T) {
 	f := &seed.File{
-		Syntax: "v1",
-		Schema: seed.SchemaDef{
+		SpecVersion: "v1",
+		Schema:      seed.SchemaDef{
 			Name:   "test",
 			Fields: map[string]seed.FieldDef{"x": {Type: "string"}},
 		},

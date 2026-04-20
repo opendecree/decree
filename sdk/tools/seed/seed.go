@@ -20,8 +20,8 @@ import (
 
 // File is the top-level YAML document for seed and dump operations.
 type File struct {
-	Syntax string    `yaml:"syntax"`
-	Schema SchemaDef `yaml:"schema"`
+	SpecVersion string    `yaml:"spec_version"`
+	Schema      SchemaDef `yaml:"schema"`
 	Tenant TenantDef `yaml:"tenant"`
 	Config ConfigDef `yaml:"config,omitempty"`
 	Locks  []LockDef `yaml:"locks,omitempty"`
@@ -139,8 +139,8 @@ func ParseFile(data []byte) (*File, error) {
 	if err := yaml.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("invalid YAML: %w", err)
 	}
-	if f.Syntax != "v1" {
-		return nil, fmt.Errorf("unsupported syntax version: %q (expected \"v1\")", f.Syntax)
+	if f.SpecVersion != "v1" {
+		return nil, fmt.Errorf("unsupported spec_version: %q (expected \"v1\")", f.SpecVersion)
 	}
 	if f.Schema.Name == "" {
 		return nil, fmt.Errorf("schema.name is required")
@@ -283,12 +283,12 @@ func Run(ctx context.Context, client Client, file *File, opts ...Option) (*Resul
 // marshalSchemaYAML extracts the schema section into the standard schema YAML format.
 func marshalSchemaYAML(f *File) ([]byte, error) {
 	doc := struct {
-		Syntax      string              `yaml:"syntax"`
+		SpecVersion string              `yaml:"spec_version"`
 		Name        string              `yaml:"name"`
 		Description string              `yaml:"description,omitempty"`
 		Fields      map[string]FieldDef `yaml:"fields"`
 	}{
-		Syntax:      "v1",
+		SpecVersion: "v1",
 		Name:        f.Schema.Name,
 		Description: f.Schema.Description,
 		Fields:      f.Schema.Fields,
@@ -299,11 +299,11 @@ func marshalSchemaYAML(f *File) ([]byte, error) {
 // marshalConfigYAML extracts the config section into the standard config YAML format.
 func marshalConfigYAML(f *File) ([]byte, error) {
 	doc := struct {
-		Syntax      string                    `yaml:"syntax"`
+		SpecVersion string                    `yaml:"spec_version"`
 		Description string                    `yaml:"description,omitempty"`
 		Values      map[string]ConfigValueDef `yaml:"values"`
 	}{
-		Syntax:      "v1",
+		SpecVersion: "v1",
 		Description: f.Config.Description,
 		Values:      f.Config.Values,
 	}

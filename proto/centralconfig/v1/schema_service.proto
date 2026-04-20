@@ -114,7 +114,7 @@ service SchemaService {
   }
 
   // Import/export.
-  // Schemas can be exported as YAML (syntax v1) for backup, review, or version control.
+  // Schemas can be exported as YAML (spec_version v1) for backup, review, or version control.
 
   // ExportSchema serializes a schema version to YAML.
   rpc ExportSchema(ExportSchemaRequest) returns (ExportSchemaResponse) {
@@ -339,14 +339,14 @@ message ExportSchemaRequest {
 }
 
 message ExportSchemaResponse {
-  // YAML-encoded schema (syntax v1). Includes schema name, description,
+  // YAML-encoded schema (spec_version v1). Includes schema name, description,
   // version, and all field definitions with OAS-style constraint naming.
   // Server-generated fields (id, checksum, published, created_at) are excluded.
   bytes yaml_content = 1;
 }
 
 message ImportSchemaRequest {
-  // YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.
+  // YAML-encoded schema (spec_version v1). Must include `spec_version`, `name`, and `fields`.
   //
   // Import uses full-replace semantics:
   // - If no schema with this name exists: creates a new schema with version 1.
