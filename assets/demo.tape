@@ -18,27 +18,38 @@ Set TypingSpeed 50ms
 # Default role + subject for metadata-header auth (no JWT required).
 Env DECREE_SUBJECT "demo"
 
-# 1. One command bootstraps a schema, tenant, and initial config from YAML.
-Type "decree seed examples/seed.yaml --auto-publish"
+# 1. Peek at the seed file — schema + tenant + initial config in one doc.
+Type "head -20 examples/demo.seed.yaml"
+Sleep 1000ms
+Enter
+Sleep 3200ms
+
+# 2. One command bootstraps the schema, tenant, and config from that YAML.
+Type "decree seed examples/demo.seed.yaml --auto-publish"
+Sleep 200ms
 Enter
 Sleep 2400ms
 
-# 2. Look at the seeded tenant.
+# 3. Look at the seeded tenant.
 Type "decree tenant list"
+Sleep 200ms
 Enter
 Sleep 2400ms
 
-# 3. Read a config value.
+# 4. Read a config value.
 Type "decree config get acme-corp app.name"
+Sleep 100ms
 Enter
 Sleep 2400ms
 
-# 4. Update the value.
+# 5. Update the value.
 Type 'decree config set acme-corp app.name "Acme v2"'
+Sleep 100ms
 Enter
 Sleep 2400ms
 
-# 5. Read it back — now shows the new value.
+# 6. Read it back — now shows the new value.
 Type "decree config get acme-corp app.name"
+Sleep 100ms
 Enter
 Sleep 2400ms

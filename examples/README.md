@@ -44,6 +44,15 @@ Or run all examples as tests:
 make test
 ```
 
+## Seed files in this directory
+
+| File | Role |
+|------|------|
+| `seed.yaml` | **Canonical full example.** Rich schema with all field types, metadata, and constraints. Used by `make setup` to bootstrap the SDK examples. |
+| `demo.seed.yaml` | **Minimal** — 3 fields in ~15 lines. Drives the `assets/demo.gif` terminal recording and doubles as a copy-paste quickstart snippet. |
+
+Both are standard `decree seed` inputs (schema + tenant + config in one doc) — either works as a starting point.
+
 ## Teardown
 
 ```bash
