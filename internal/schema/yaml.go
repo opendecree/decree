@@ -2,17 +2,30 @@ package schema
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
 	"sort"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"gopkg.in/yaml.v3"
 )
 
-const yamlSpecVersionV1 = "v1"
+const (
+	yamlSpecVersionV1 = "v1"
+	// metaSchemaURL is the canonical URL of the meta-schema that validates
+	// decree.schema.yaml documents at this spec version. Emitted on export.
+	metaSchemaURL = "https://schemas.opendecree.io/schema/v0.1.0/decree.json"
+)
+
+// schemaURNPattern matches decree schema URNs: urn:decree:schema:<segment>(:<segment>)*
+// where each segment is [a-zA-Z0-9][a-zA-Z0-9._-]*
+var schemaURNPattern = regexp.MustCompile(`^urn:decree:schema:[a-zA-Z0-9][a-zA-Z0-9._-]*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)*$`)
 
 // SchemaYAML is the top-level YAML document for schema import/export.
 type SchemaYAML struct {
 	SpecVersion        string                     `yaml:"spec_version"`
+	Schema             string                     `yaml:"$schema,omitempty"`
+	ID                 string                     `yaml:"$id,omitempty"`
 	Name               string                     `yaml:"name"`
 	Description        string                     `yaml:"description,omitempty"`
 	Version            int32                      `yaml:"version,omitempty"`
@@ -90,6 +103,15 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 	if doc.SpecVersion != yamlSpecVersionV1 {
 		return fmt.Errorf("unsupported spec_version: %s", doc.SpecVersion)
 	}
+	if doc.Schema != "" {
+		u, err := url.Parse(doc.Schema)
+		if err != nil || u.Scheme != "https" || u.Host == "" {
+			return fmt.Errorf("$schema must be an HTTPS URL, got %q", doc.Schema)
+		}
+	}
+	if doc.ID != "" && !schemaURNPattern.MatchString(doc.ID) {
+		return fmt.Errorf("$id must match urn:decree:schema:<segment>(:<segment>)*, got %q", doc.ID)
+	}
 	if doc.Name == "" {
 		return fmt.Errorf("name is required")
 	}
@@ -163,6 +185,8 @@ func protoTypeToYAML(t pb.FieldType) string {
 func schemaToYAML(s *pb.Schema) *SchemaYAML {
 	doc := &SchemaYAML{
 		SpecVersion:        yamlSpecVersionV1,
+		Schema:             metaSchemaURL,
+		ID:                 fmt.Sprintf("urn:decree:schema:%s:v%d", s.Name, s.Version),
 		Name:               s.Name,
 		Description:        s.Description,
 		Version:            s.Version,

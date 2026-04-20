@@ -23,6 +23,8 @@ import (
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
 	SpecVersion string              `yaml:"spec_version"`
+	Schema      string              `yaml:"$schema,omitempty"`
+	ID          string              `yaml:"$id,omitempty"`
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description,omitempty"`
 	Info        any                 `yaml:"info,omitempty"`
