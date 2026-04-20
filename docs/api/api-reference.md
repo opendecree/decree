@@ -1269,7 +1269,7 @@ bypasses the cache and reads directly from the database.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| yaml_content | [bytes](#bytes) |  | YAML-encoded schema (syntax v1). Includes schema name, description, version, and all field definitions with OAS-style constraint naming. Server-generated fields (id, checksum, published, created_at) are excluded. |
+| yaml_content | [bytes](#bytes) |  | YAML-encoded schema (spec_version v1). Includes schema name, description, version, and all field definitions with OAS-style constraint naming. Server-generated fields (id, checksum, published, created_at) are excluded. |
 
 
 
@@ -1345,7 +1345,7 @@ bypasses the cache and reads directly from the database.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| yaml_content | [bytes](#bytes) |  | YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.
+| yaml_content | [bytes](#bytes) |  | YAML-encoded schema (spec_version v1). Must include `spec_version`, `name`, and `fields`.
 
 Import uses full-replace semantics: - If no schema with this name exists: creates a new schema with version 1. - If a schema exists and fields differ from latest: creates the next version. - If a schema exists and fields are identical: returns AlreadyExists error.
 
