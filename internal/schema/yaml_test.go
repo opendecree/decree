@@ -55,7 +55,7 @@ func TestYAMLRoundtrip(t *testing.T) {
 
 	// Proto → YAML
 	doc := schemaToYAML(original)
-	assert.Equal(t, yamlSyntaxV1, doc.Syntax)
+	assert.Equal(t, yamlSpecVersionV1, doc.SpecVersion)
 	assert.Equal(t, "payments", doc.Name)
 	assert.Equal(t, "Payment config", doc.Description)
 	assert.Equal(t, int32(3), doc.Version)
@@ -149,30 +149,30 @@ func TestYAMLTypeMapping(t *testing.T) {
 }
 
 func TestYAMLValidation(t *testing.T) {
-	t.Run("missing syntax", func(t *testing.T) {
+	t.Run("missing spec_version", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte(`
 name: test
 fields:
   x:
     type: string
 `))
-		assert.ErrorContains(t, err, "syntax is required")
+		assert.ErrorContains(t, err, "spec_version is required")
 	})
 
-	t.Run("unsupported syntax", func(t *testing.T) {
+	t.Run("unsupported spec_version", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte(`
-syntax: "v99"
+spec_version: "v99"
 name: test
 fields:
   x:
     type: string
 `))
-		assert.ErrorContains(t, err, "unsupported syntax version")
+		assert.ErrorContains(t, err, "unsupported spec_version")
 	})
 
 	t.Run("missing name", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 fields:
   x:
     type: string
@@ -182,7 +182,7 @@ fields:
 
 	t.Run("no fields", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 name: test
 fields: {}
 `))
@@ -191,7 +191,7 @@ fields: {}
 
 	t.Run("unknown field type", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 name: test
 fields:
   x:
@@ -202,7 +202,7 @@ fields:
 
 	t.Run("valid minimal", func(t *testing.T) {
 		doc, err := unmarshalSchemaYAML([]byte(`
-syntax: "v1"
+spec_version: "v1"
 name: test
 fields:
   x:
@@ -227,7 +227,7 @@ func TestYAMLValidation_InvalidSlug(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := unmarshalSchemaYAML([]byte("syntax: \"v1\"\nname: " + tc.slug + "\nfields:\n  x:\n    type: string\n"))
+			_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\nname: " + tc.slug + "\nfields:\n  x:\n    type: string\n"))
 			assert.ErrorContains(t, err, "slug")
 		})
 	}

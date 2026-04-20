@@ -1483,7 +1483,7 @@ func (x *ExportSchemaRequest) GetVersion() int32 {
 
 type ExportSchemaResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// YAML-encoded schema (syntax v1). Includes schema name, description,
+	// YAML-encoded schema (spec_version v1). Includes schema name, description,
 	// version, and all field definitions with OAS-style constraint naming.
 	// Server-generated fields (id, checksum, published, created_at) are excluded.
 	YamlContent   []byte `protobuf:"bytes,1,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
@@ -1530,7 +1530,7 @@ func (x *ExportSchemaResponse) GetYamlContent() []byte {
 
 type ImportSchemaRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.
+	// YAML-encoded schema (spec_version v1). Must include `spec_version`, `name`, and `fields`.
 	//
 	// Import uses full-replace semantics:
 	// - If no schema with this name exists: creates a new schema with version 1.

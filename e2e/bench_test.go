@@ -197,7 +197,7 @@ func benchImport(b *testing.B, name string, fieldCount int) {
 
 	// Build YAML with all fields.
 	var yamlBuilder []byte
-	yamlBuilder = append(yamlBuilder, "syntax: \"v1\"\nvalues:\n"...)
+	yamlBuilder = append(yamlBuilder, "spec_version: \"v1\"\nvalues:\n"...)
 	for i := 0; i < fieldCount; i++ {
 		yamlBuilder = append(yamlBuilder, fmt.Sprintf("  f.field_%d:\n    value: \"val-%d\"\n", i, i)...)
 	}

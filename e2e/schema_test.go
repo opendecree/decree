@@ -96,7 +96,7 @@ func TestSchemaExportImport(t *testing.T) {
 
 	yamlStr := string(yamlContent)
 	t.Logf("Exported YAML:\n%s", yamlStr)
-	assert.Contains(t, yamlStr, "syntax:")
+	assert.Contains(t, yamlStr, "spec_version:")
 	assert.Contains(t, yamlStr, "name: export-e2e")
 	assert.Contains(t, yamlStr, "trade.fee")
 
@@ -122,7 +122,7 @@ func TestSchemaExportImport(t *testing.T) {
 	assert.Equal(t, int32(2), got.Version)
 
 	// 6. Import new schema by name.
-	newYAML := []byte(`syntax: "v1"
+	newYAML := []byte(`spec_version: "v1"
 name: brand-new-e2e
 description: Created via import
 fields:

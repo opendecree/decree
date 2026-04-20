@@ -79,8 +79,8 @@ func Run(ctx context.Context, client Client, tenantID string, opts ...Option) (*
 
 	// 4. Build seed file.
 	file := &seed.File{
-		Syntax: "v1",
-		Schema: buildSchemaDef(schema),
+		SpecVersion: "v1",
+		Schema:      buildSchemaDef(schema),
 		Tenant: seed.TenantDef{Name: tenant.Name},
 		Config: seed.ConfigDef{Values: configDoc.Values},
 	}

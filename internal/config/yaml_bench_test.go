@@ -8,8 +8,8 @@ import (
 
 func BenchmarkMarshalConfigYAML(b *testing.B) {
 	doc := &ConfigYAML{
-		Syntax:  yamlSyntaxV1,
-		Version: 3,
+		SpecVersion: yamlSpecVersionV1,
+		Version:     3,
 		Values: map[string]ConfigValueYAML{
 			"payments.fee":      {Value: 0.025},
 			"payments.currency": {Value: "USD"},
@@ -24,7 +24,7 @@ func BenchmarkMarshalConfigYAML(b *testing.B) {
 }
 
 func BenchmarkUnmarshalConfigYAML(b *testing.B) {
-	data := []byte(`syntax: "v1"
+	data := []byte(`spec_version: "v1"
 version: 3
 values:
   payments.fee:

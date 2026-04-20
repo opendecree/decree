@@ -305,7 +305,7 @@ func TestImportConfig_Success(t *testing.T) {
 	ctx := context.Background()
 
 	yamlContent := []byte(`
-syntax: "v1"
+spec_version: "v1"
 description: "imported config"
 values:
   payments.fee:
@@ -357,7 +357,7 @@ func TestImportConfig_ValidationRejectsUnknownField(t *testing.T) {
 	ctx := context.Background()
 
 	yamlContent := []byte(`
-syntax: "v1"
+spec_version: "v1"
 values:
   unknown.field:
     value: "hello"
@@ -390,7 +390,7 @@ func TestImportConfig_ValidationRejectsConstraintViolation(t *testing.T) {
 
 	// Import an integer value that exceeds max constraint.
 	yamlContent := []byte(`
-syntax: "v1"
+spec_version: "v1"
 values:
   app.retries:
     value: 99
@@ -431,7 +431,7 @@ func TestImportConfig_MergeMode_SkipsSameValues(t *testing.T) {
 	ctx := context.Background()
 
 	yamlContent := []byte(`
-syntax: "v1"
+spec_version: "v1"
 values:
   app.name:
     value: "same"
@@ -487,7 +487,7 @@ func TestImportConfig_DefaultsMode_SkipsExistingValues(t *testing.T) {
 	ctx := context.Background()
 
 	yamlContent := []byte(`
-syntax: "v1"
+spec_version: "v1"
 values:
   app.existing:
     value: "new-from-yaml"

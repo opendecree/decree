@@ -47,7 +47,7 @@ func (m *mockClient) LockField(ctx context.Context, tenantID, fieldPath string, 
 
 func testFile() *File {
 	return &File{
-		Syntax: "v1",
+		SpecVersion: "v1",
 		Schema: SchemaDef{
 			Name: "test-schema",
 			Fields: map[string]FieldDef{
@@ -69,7 +69,7 @@ func testFile() *File {
 
 // --- Parse tests ---
 
-const validSeedYAML = `syntax: "v1"
+const validSeedYAML = `spec_version: "v1"
 schema:
   name: payment-config
   description: "Payment settings"
@@ -101,8 +101,8 @@ func TestParseFile_Valid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if f.Syntax != "v1" {
-		t.Errorf("syntax = %q, want v1", f.Syntax)
+	if f.SpecVersion != "v1" {
+		t.Errorf("spec_version = %q, want v1", f.SpecVersion)
 	}
 	if f.Schema.Name != "payment-config" {
 		t.Errorf("schema.name = %q, want payment-config", f.Schema.Name)
@@ -133,7 +133,7 @@ func TestParseFile_Errors(t *testing.T) {
 		data string
 	}{
 		{"invalid yaml", "{{bad"},
-		{"wrong syntax", `syntax: "v2"
+		{"wrong spec_version", `spec_version: "v2"
 schema:
   name: test
   fields:
@@ -141,20 +141,20 @@ schema:
       type: string
 tenant:
   name: t`},
-		{"no schema name", `syntax: "v1"
+		{"no schema name", `spec_version: "v1"
 schema:
   fields:
     a:
       type: string
 tenant:
   name: t`},
-		{"no fields", `syntax: "v1"
+		{"no fields", `spec_version: "v1"
 schema:
   name: test
   fields: {}
 tenant:
   name: t`},
-		{"no tenant name", `syntax: "v1"
+		{"no tenant name", `spec_version: "v1"
 schema:
   name: test
   fields:
@@ -175,7 +175,7 @@ tenant:
 }
 
 func TestParseFile_MinimalValid(t *testing.T) {
-	data := `syntax: "v1"
+	data := `spec_version: "v1"
 schema:
   name: minimal
   fields:
@@ -230,7 +230,7 @@ func TestMarshal_RoundTrip(t *testing.T) {
 }
 
 func TestParseFile_FieldConstraints(t *testing.T) {
-	data := `syntax: "v1"
+	data := `spec_version: "v1"
 schema:
   name: constrained
   fields:

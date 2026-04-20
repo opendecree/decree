@@ -1757,7 +1757,7 @@
         "yamlContent": {
           "type": "string",
           "format": "byte",
-          "description": "YAML-encoded schema (syntax v1). Includes schema name, description,\nversion, and all field definitions with OAS-style constraint naming.\nServer-generated fields (id, checksum, published, created_at) are excluded."
+          "description": "YAML-encoded schema (spec_version v1). Includes schema name, description,\nversion, and all field definitions with OAS-style constraint naming.\nServer-generated fields (id, checksum, published, created_at) are excluded."
         }
       }
     },
@@ -2034,7 +2034,7 @@
         "yamlContent": {
           "type": "string",
           "format": "byte",
-          "description": "YAML-encoded schema (syntax v1). Must include `syntax`, `name`, and `fields`.\n\nImport uses full-replace semantics:\n- If no schema with this name exists: creates a new schema with version 1.\n- If a schema exists and fields differ from latest: creates the next version.\n- If a schema exists and fields are identical: returns AlreadyExists error.\n\nImported versions are created as drafts (unpublished) unless auto_publish is true.\nThe `version` field in the YAML is informational \u2014 the server assigns\nthe next version number automatically."
+          "description": "YAML-encoded schema (spec_version v1). Must include `spec_version`, `name`, and `fields`.\n\nImport uses full-replace semantics:\n- If no schema with this name exists: creates a new schema with version 1.\n- If a schema exists and fields differ from latest: creates the next version.\n- If a schema exists and fields are identical: returns AlreadyExists error.\n\nImported versions are created as drafts (unpublished) unless auto_publish is true.\nThe `version` field in the YAML is informational \u2014 the server assigns\nthe next version number automatically."
         },
         "autoPublish": {
           "type": "boolean",

@@ -102,15 +102,15 @@ func TestExportSchema_Success(t *testing.T) {
 	client := New(ms, nil, nil, nil)
 
 	ms.exportSchemaFn = func(_ context.Context, _ string, _ *int32) ([]byte, error) {
-		return []byte("syntax: v1"), nil
+		return []byte("spec_version: v1"), nil
 	}
 
 	data, err := client.ExportSchema(context.Background(), "s1", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(string(data), "syntax") {
-		t.Errorf("expected %q to contain %q", string(data), "syntax")
+	if !strings.Contains(string(data), "spec_version") {
+		t.Errorf("expected %q to contain %q", string(data), "spec_version")
 	}
 }
 
@@ -122,7 +122,7 @@ func TestExportSchema_SpecificVersion(t *testing.T) {
 		if id != "s1" || version == nil || *version != int32(2) {
 			t.Fatalf("unexpected args: id=%v version=%v", id, version)
 		}
-		return []byte("syntax: v1"), nil
+		return []byte("spec_version: v1"), nil
 	}
 
 	v := int32(2)
@@ -143,7 +143,7 @@ func TestImportSchema_Success(t *testing.T) {
 		return &Schema{ID: "s1", Name: "imported", Version: 1, CreatedAt: time.Now()}, nil
 	}
 
-	s, err := client.ImportSchema(context.Background(), []byte("syntax: v1\nname: imported"))
+	s, err := client.ImportSchema(context.Background(), []byte("spec_version: v1\nname: imported"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
