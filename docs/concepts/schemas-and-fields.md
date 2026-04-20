@@ -27,7 +27,7 @@ Schemas are defined in YAML for import/export. The format uses syntax version `v
 
 ```yaml
 # yaml-language-server: $schema=../../schemas/schema-yaml.json
-syntax: "v1"
+spec_version: "v1"
 name: payments
 description: Payment processing configuration
 version_description: Add timeout field

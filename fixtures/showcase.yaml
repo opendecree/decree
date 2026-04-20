@@ -24,7 +24,7 @@
 #
 # Load: decree seed fixtures/showcase.yaml
 
-syntax: v1
+spec_version: v1
 
 schema:
   name: showcase

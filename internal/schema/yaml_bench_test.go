@@ -8,8 +8,8 @@ import (
 
 func BenchmarkMarshalSchemaYAML(b *testing.B) {
 	doc := &SchemaYAML{
-		Syntax: yamlSyntaxV1,
-		Name:   "payments",
+		SpecVersion: yamlSpecVersionV1,
+		Name:        "payments",
 		Fields: map[string]SchemaFieldYAML{
 			"payments.fee":      {Type: "string", Description: "Fee percentage"},
 			"payments.currency": {Type: "string"},
@@ -24,7 +24,7 @@ func BenchmarkMarshalSchemaYAML(b *testing.B) {
 }
 
 func BenchmarkUnmarshalSchemaYAML(b *testing.B) {
-	data := []byte(`syntax: "v1"
+	data := []byte(`spec_version: "v1"
 name: payments
 fields:
   payments.fee:

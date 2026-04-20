@@ -315,15 +315,15 @@ func TestExportImportConfig(t *testing.T) {
 	ctx := context.Background()
 
 	mc.exportConfigFn = func(_ context.Context, _ string, _ *int32) ([]byte, error) {
-		return []byte("syntax: v1\nvalues:\n  a:\n    value: x\n"), nil
+		return []byte("spec_version: v1\nvalues:\n  a:\n    value: x\n"), nil
 	}
 
 	data, err := client.ExportConfig(ctx, "t1", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(string(data), "syntax") {
-		t.Errorf("expected %q to contain %q", string(data), "syntax")
+	if !strings.Contains(string(data), "spec_version") {
+		t.Errorf("expected %q to contain %q", string(data), "spec_version")
 	}
 
 	mc.importConfigFn = func(_ context.Context, req *ImportConfigRequest) (*Version, error) {

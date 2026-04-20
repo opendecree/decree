@@ -2,15 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/opendecree/decree/schemas/schema-yaml.json",
   "title": "OpenDecree Schema YAML",
-  "description": "Schema definition format for the OpenDecree (syntax v1).",
+  "description": "Schema definition format for the OpenDecree (spec_version v1).",
   "type": "object",
-  "required": ["syntax", "name", "fields"],
+  "required": ["spec_version", "name", "fields"],
   "additionalProperties": false,
   "properties": {
-    "syntax": {
+    "spec_version": {
       "type": "string",
       "const": "v1",
-      "description": "Schema syntax version. Must be \"v1\"."
+      "description": "Decree schema spec version. Must be \"v1\"."
     },
     "name": {
       "type": "string",
