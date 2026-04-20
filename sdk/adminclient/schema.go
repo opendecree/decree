@@ -108,3 +108,41 @@ func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte, autoPubli
 	ap := len(autoPublish) > 0 && autoPublish[0]
 	return c.schema.ImportSchema(ctx, yamlContent, ap)
 }
+
+// GetLatestPublishedSchemaVersion finds the most recent published version of a schema by name.
+// Returns the schema ID and version number. If the latest version is a draft, walks
+// backward until it finds a published version.
+// Returns [ErrNotFound] if no schema with the given name exists, or if no version is published.
+func (c *Client) GetLatestPublishedSchemaVersion(ctx context.Context, name string) (id string, version int32, err error) {
+	if c.schema == nil {
+		return "", 0, ErrServiceNotConfigured
+	}
+	schemas, err := c.ListSchemas(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+	var match *Schema
+	for _, s := range schemas {
+		if s.Name == name {
+			match = s
+			break
+		}
+	}
+	if match == nil {
+		return "", 0, ErrNotFound
+	}
+	if match.Published {
+		return match.ID, match.Version, nil
+	}
+	// Latest is a draft — walk back to find the newest published version.
+	for v := match.Version - 1; v >= 1; v-- {
+		s, err := c.GetSchemaVersion(ctx, match.ID, v)
+		if err != nil {
+			return "", 0, err
+		}
+		if s.Published {
+			return match.ID, v, nil
+		}
+	}
+	return "", 0, ErrNotFound
+}
