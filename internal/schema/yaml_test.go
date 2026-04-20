@@ -310,6 +310,170 @@ func TestYAMLValidation_FieldPath(t *testing.T) {
 	})
 }
 
+func TestYAMLValidation_RejectsUnknownKeys(t *testing.T) {
+	cases := []struct {
+		name    string
+		yaml    string
+		locHint string // substring expected in error
+	}{
+		{
+			name: "unknown top-level key",
+			yaml: `spec_version: "v1"
+typo_top: 1
+name: test
+fields:
+  x:
+    type: string
+`,
+			locHint: "top level",
+		},
+		{
+			name: "unknown key under info",
+			yaml: `spec_version: "v1"
+name: test
+info:
+  typo_info: hi
+fields:
+  x:
+    type: string
+`,
+			locHint: "info",
+		},
+		{
+			name: "unknown key under info.contact",
+			yaml: `spec_version: "v1"
+name: test
+info:
+  contact:
+    typo_contact: hi
+fields:
+  x:
+    type: string
+`,
+			locHint: "info.contact",
+		},
+		{
+			name: "unknown key under a field",
+			yaml: `spec_version: "v1"
+name: test
+fields:
+  x:
+    type: string
+    typ: string
+`,
+			locHint: "fields.x",
+		},
+		{
+			name: "unknown key under constraints",
+			yaml: `spec_version: "v1"
+name: test
+fields:
+  x:
+    type: string
+    constraints:
+      minimun: 1
+`,
+			locHint: "fields.x.constraints",
+		},
+		{
+			name: "unknown key under externalDocs",
+			yaml: `spec_version: "v1"
+name: test
+fields:
+  x:
+    type: string
+    externalDocs:
+      url: https://example.com
+      typo_docs: hi
+`,
+			locHint: "fields.x.externalDocs",
+		},
+		{
+			name: "unknown key under an example",
+			yaml: `spec_version: "v1"
+name: test
+fields:
+  x:
+    type: string
+    examples:
+      ok:
+        value: hi
+        typo_ex: 1
+`,
+			locHint: "fields.x.examples.ok",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := unmarshalSchemaYAML([]byte(tc.yaml))
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "unknown key")
+			assert.ErrorContains(t, err, tc.locHint)
+		})
+	}
+}
+
+func TestYAMLValidation_AcceptsXExtensions(t *testing.T) {
+	input := []byte(`spec_version: "v1"
+x-owner: platform
+name: test
+info:
+  title: Test
+  x-info-ext: info-val
+  contact:
+    name: a
+    x-contact-ext: c-val
+fields:
+  x:
+    type: string
+    x-field-ext: field-val
+    constraints:
+      minLength: 1
+      x-constraint-ext: cn-val
+    externalDocs:
+      url: https://example.com
+      x-docs-ext: d-val
+    examples:
+      ok:
+        value: hi
+        x-example-ext: e-val
+`)
+	doc, err := unmarshalSchemaYAML(input)
+	require.NoError(t, err)
+
+	assert.Equal(t, "platform", doc.Extensions["x-owner"])
+	assert.Equal(t, "info-val", doc.Info.Extensions["x-info-ext"])
+	assert.Equal(t, "c-val", doc.Info.Contact.Extensions["x-contact-ext"])
+	f := doc.Fields["x"]
+	assert.Equal(t, "field-val", f.Extensions["x-field-ext"])
+	assert.Equal(t, "cn-val", f.Constraints.Extensions["x-constraint-ext"])
+	assert.Equal(t, "d-val", f.ExternalDocs.Extensions["x-docs-ext"])
+	assert.Equal(t, "e-val", f.Examples["ok"].Extensions["x-example-ext"])
+}
+
+func TestYAML_XExtensionsRoundTrip(t *testing.T) {
+	input := []byte(`spec_version: "v1"
+x-owner: platform
+name: test
+fields:
+  a:
+    type: string
+    x-field-ext: field-val
+`)
+	doc, err := unmarshalSchemaYAML(input)
+	require.NoError(t, err)
+
+	out, err := marshalSchemaYAML(doc)
+	require.NoError(t, err)
+	outStr := string(out)
+	assert.Contains(t, outStr, "x-owner: platform")
+	assert.Contains(t, outStr, "x-field-ext: field-val")
+
+	// Re-parse — round-trip must succeed.
+	_, err = unmarshalSchemaYAML(out)
+	require.NoError(t, err)
+}
+
 func TestSchemaToYAML_EmitsSchemaAndID(t *testing.T) {
 	doc := schemaToYAML(&pb.Schema{
 		Name:    "billing",

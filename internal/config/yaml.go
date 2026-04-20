@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 
@@ -13,18 +14,24 @@ import (
 
 const yamlSpecVersionV1 = "v1"
 
+// extensionKeyPattern is the grammar for OAS-style vendor extension keys.
+// Unknown YAML keys that do not match this pattern are rejected at parse time.
+var extensionKeyPattern = regexp.MustCompile(`^x-.+$`)
+
 // ConfigYAML is the top-level YAML document for config import/export.
 type ConfigYAML struct {
 	SpecVersion string                     `yaml:"spec_version"`
 	Version     int32                      `yaml:"version,omitempty"`
 	Description string                     `yaml:"description,omitempty"`
 	Values      map[string]ConfigValueYAML `yaml:"values"`
+	Extensions  map[string]any             `yaml:",inline"`
 }
 
 // ConfigValueYAML represents a single config value in the YAML format.
 type ConfigValueYAML struct {
-	Value       interface{} `yaml:"value"`
-	Description string      `yaml:"description,omitempty"`
+	Value       interface{}    `yaml:"value"`
+	Description string         `yaml:"description,omitempty"`
+	Extensions  map[string]any `yaml:",inline"`
 }
 
 // configValueImport is the parsed result of a YAML config value, ready for DB storage.
@@ -43,12 +50,34 @@ func validateConfigYAML(doc *ConfigYAML) error {
 	if doc.SpecVersion != yamlSpecVersionV1 {
 		return fmt.Errorf("unsupported spec_version: %s", doc.SpecVersion)
 	}
+	if err := validateExtensions("", doc.Extensions); err != nil {
+		return err
+	}
 	if len(doc.Values) == 0 {
 		return fmt.Errorf("at least one value is required")
 	}
-	for path := range doc.Values {
+	for path, v := range doc.Values {
 		if path == "" {
 			return fmt.Errorf("field path cannot be empty")
+		}
+		if err := validateExtensions("values."+path, v.Extensions); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateExtensions rejects any keys in the inline-extension map that do not
+// match the x-* vendor-extension pattern. The path prefix is included in the
+// error so users can locate the offending key in large documents.
+func validateExtensions(pathPrefix string, ext map[string]any) error {
+	for key := range ext {
+		if !extensionKeyPattern.MatchString(key) {
+			loc := "top level"
+			if pathPrefix != "" {
+				loc = pathPrefix
+			}
+			return fmt.Errorf("unknown key %q at %s: only known fields or x-* vendor extensions are allowed", key, loc)
 		}
 	}
 	return nil
