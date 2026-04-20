@@ -21,6 +21,12 @@ const (
 // where each segment is [a-zA-Z0-9][a-zA-Z0-9._-]*
 var schemaURNPattern = regexp.MustCompile(`^urn:decree:schema:[a-zA-Z0-9][a-zA-Z0-9._-]*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)*$`)
 
+// fieldPathPattern is the grammar for map keys under `fields:`. Must start with
+// an ASCII letter or underscore; subsequent characters may be letters, digits,
+// underscore, dot, or hyphen. Enforced at parse time to catch pathological
+// keys (empty, leading digit, whitespace, special chars) early.
+var fieldPathPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.-]*$`)
+
 // SchemaYAML is the top-level YAML document for schema import/export.
 type SchemaYAML struct {
 	SpecVersion        string                     `yaml:"spec_version"`
@@ -122,8 +128,8 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 		return fmt.Errorf("at least one field is required")
 	}
 	for path, f := range doc.Fields {
-		if path == "" {
-			return fmt.Errorf("field path cannot be empty")
+		if !fieldPathPattern.MatchString(path) {
+			return fmt.Errorf("invalid field path %q: must match %s", path, fieldPathPattern)
 		}
 		if _, ok := yamlTypeToProto(f.Type); !ok {
 			return fmt.Errorf("field %s: unknown type %q", path, f.Type)

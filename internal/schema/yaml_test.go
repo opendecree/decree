@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -269,6 +270,43 @@ func TestYAMLValidation_SchemaAndID(t *testing.T) {
 	t.Run("$id rejects wrong namespace", func(t *testing.T) {
 		_, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$id: urn:other:schema:test:v1" + validBody))
 		assert.ErrorContains(t, err, "$id")
+	})
+}
+
+func TestYAMLValidation_FieldPath(t *testing.T) {
+	mkYAML := func(path string) []byte {
+		return []byte(fmt.Sprintf("spec_version: \"v1\"\nname: test\nfields:\n  %q:\n    type: string\n", path))
+	}
+
+	t.Run("valid paths accepted", func(t *testing.T) {
+		for _, path := range []string{"x", "app.name", "app_name", "app-name", "a.b.c", "_leading_underscore", "x1", "x.y-z_2"} {
+			_, err := unmarshalSchemaYAML(mkYAML(path))
+			assert.NoError(t, err, "expected %q to be accepted", path)
+		}
+	})
+
+	t.Run("invalid paths rejected", func(t *testing.T) {
+		cases := []struct {
+			name string
+			path string
+		}{
+			{"empty", ""},
+			{"leading digit", "1app"},
+			{"leading dot", ".app"},
+			{"leading hyphen", "-app"},
+			{"whitespace", "app name"},
+			{"tab", "app\tname"},
+			{"special chars", "app@name"},
+			{"colon", "app:name"},
+			{"slash", "app/name"},
+			{"dollar", "$app"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				_, err := unmarshalSchemaYAML(mkYAML(tc.path))
+				assert.ErrorContains(t, err, "invalid field path")
+			})
+		}
 	})
 }
 
