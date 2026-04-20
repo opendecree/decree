@@ -27,6 +27,11 @@ var schemaURNPattern = regexp.MustCompile(`^urn:decree:schema:[a-zA-Z0-9][a-zA-Z
 // keys (empty, leading digit, whitespace, special chars) early.
 var fieldPathPattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.-]*$`)
 
+// extensionKeyPattern is the grammar for OAS-style vendor extension keys.
+// Any YAML key not matching a known struct field must match this pattern,
+// otherwise the parser rejects the document as containing an unknown key.
+var extensionKeyPattern = regexp.MustCompile(`^x-.+$`)
+
 // SchemaYAML is the top-level YAML document for schema import/export.
 type SchemaYAML struct {
 	SpecVersion        string                     `yaml:"spec_version"`
@@ -38,21 +43,24 @@ type SchemaYAML struct {
 	VersionDescription string                     `yaml:"version_description,omitempty"`
 	Info               *SchemaInfoYAML            `yaml:"info,omitempty"`
 	Fields             map[string]SchemaFieldYAML `yaml:"fields"`
+	Extensions         map[string]any             `yaml:",inline"`
 }
 
 // SchemaInfoYAML contains optional schema-level metadata.
 type SchemaInfoYAML struct {
-	Title   string             `yaml:"title,omitempty"`
-	Author  string             `yaml:"author,omitempty"`
-	Contact *SchemaContactYAML `yaml:"contact,omitempty"`
-	Labels  map[string]string  `yaml:"labels,omitempty"`
+	Title      string             `yaml:"title,omitempty"`
+	Author     string             `yaml:"author,omitempty"`
+	Contact    *SchemaContactYAML `yaml:"contact,omitempty"`
+	Labels     map[string]string  `yaml:"labels,omitempty"`
+	Extensions map[string]any     `yaml:",inline"`
 }
 
 // SchemaContactYAML contains contact information for a schema owner.
 type SchemaContactYAML struct {
-	Name  string `yaml:"name,omitempty"`
-	Email string `yaml:"email,omitempty"`
-	URL   string `yaml:"url,omitempty"`
+	Name       string         `yaml:"name,omitempty"`
+	Email      string         `yaml:"email,omitempty"`
+	URL        string         `yaml:"url,omitempty"`
+	Extensions map[string]any `yaml:",inline"`
 }
 
 // SchemaFieldYAML represents a single field in the YAML format.
@@ -73,31 +81,35 @@ type SchemaFieldYAML struct {
 	ReadOnly     bool                   `yaml:"readOnly,omitempty"`
 	WriteOnce    bool                   `yaml:"writeOnce,omitempty"`
 	Sensitive    bool                   `yaml:"sensitive,omitempty"`
+	Extensions   map[string]any         `yaml:",inline"`
 }
 
 // ExampleYAML represents a named example value.
 type ExampleYAML struct {
-	Value   string `yaml:"value"`
-	Summary string `yaml:"summary,omitempty"`
+	Value      string         `yaml:"value"`
+	Summary    string         `yaml:"summary,omitempty"`
+	Extensions map[string]any `yaml:",inline"`
 }
 
 // ExternalDocsYAML links to external documentation.
 type ExternalDocsYAML struct {
-	Description string `yaml:"description,omitempty"`
-	URL         string `yaml:"url"`
+	Description string         `yaml:"description,omitempty"`
+	URL         string         `yaml:"url"`
+	Extensions  map[string]any `yaml:",inline"`
 }
 
 // ConstraintsYAML uses OAS-style naming for field constraints.
 type ConstraintsYAML struct {
-	Minimum          *float64 `yaml:"minimum,omitempty"`
-	Maximum          *float64 `yaml:"maximum,omitempty"`
-	ExclusiveMinimum *float64 `yaml:"exclusiveMinimum,omitempty"`
-	ExclusiveMaximum *float64 `yaml:"exclusiveMaximum,omitempty"`
-	MinLength        *int32   `yaml:"minLength,omitempty"`
-	MaxLength        *int32   `yaml:"maxLength,omitempty"`
-	Pattern          string   `yaml:"pattern,omitempty"`
-	Enum             []string `yaml:"enum,omitempty"`
-	JSONSchema       string   `yaml:"json_schema,omitempty"`
+	Minimum          *float64       `yaml:"minimum,omitempty"`
+	Maximum          *float64       `yaml:"maximum,omitempty"`
+	ExclusiveMinimum *float64       `yaml:"exclusiveMinimum,omitempty"`
+	ExclusiveMaximum *float64       `yaml:"exclusiveMaximum,omitempty"`
+	MinLength        *int32         `yaml:"minLength,omitempty"`
+	MaxLength        *int32         `yaml:"maxLength,omitempty"`
+	Pattern          string         `yaml:"pattern,omitempty"`
+	Enum             []string       `yaml:"enum,omitempty"`
+	JSONSchema       string         `yaml:"json_schema,omitempty"`
+	Extensions       map[string]any `yaml:",inline"`
 }
 
 // --- Validation ---
@@ -118,6 +130,19 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 	if doc.ID != "" && !schemaURNPattern.MatchString(doc.ID) {
 		return fmt.Errorf("$id must match urn:decree:schema:<segment>(:<segment>)*, got %q", doc.ID)
 	}
+	if err := validateExtensions("", doc.Extensions); err != nil {
+		return err
+	}
+	if doc.Info != nil {
+		if err := validateExtensions("info", doc.Info.Extensions); err != nil {
+			return err
+		}
+		if doc.Info.Contact != nil {
+			if err := validateExtensions("info.contact", doc.Info.Contact.Extensions); err != nil {
+				return err
+			}
+		}
+	}
 	if doc.Name == "" {
 		return fmt.Errorf("name is required")
 	}
@@ -133,6 +158,40 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 		}
 		if _, ok := yamlTypeToProto(f.Type); !ok {
 			return fmt.Errorf("field %s: unknown type %q", path, f.Type)
+		}
+		if err := validateExtensions("fields."+path, f.Extensions); err != nil {
+			return err
+		}
+		if f.Constraints != nil {
+			if err := validateExtensions("fields."+path+".constraints", f.Constraints.Extensions); err != nil {
+				return err
+			}
+		}
+		if f.ExternalDocs != nil {
+			if err := validateExtensions("fields."+path+".externalDocs", f.ExternalDocs.Extensions); err != nil {
+				return err
+			}
+		}
+		for exName, ex := range f.Examples {
+			if err := validateExtensions("fields."+path+".examples."+exName, ex.Extensions); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateExtensions rejects any keys in the inline-extension map that do not
+// match the x-* vendor-extension pattern. The path prefix is included in the
+// error so users can locate the offending key in large documents.
+func validateExtensions(pathPrefix string, ext map[string]any) error {
+	for key := range ext {
+		if !extensionKeyPattern.MatchString(key) {
+			loc := "top level"
+			if pathPrefix != "" {
+				loc = pathPrefix
+			}
+			return fmt.Errorf("unknown key %q at %s: only known fields or x-* vendor extensions are allowed", key, loc)
 		}
 	}
 	return nil

@@ -171,6 +171,44 @@ values:
 		require.NoError(t, err)
 		assert.Equal(t, "hello", doc.Values["x"].Value)
 	})
+
+	t.Run("unknown top-level key rejected", func(t *testing.T) {
+		_, err := unmarshalConfigYAML([]byte(`
+spec_version: "v1"
+typo_top: 1
+values:
+  x:
+    value: "hello"
+`))
+		assert.ErrorContains(t, err, "unknown key")
+		assert.ErrorContains(t, err, "top level")
+	})
+
+	t.Run("unknown key under a value rejected", func(t *testing.T) {
+		_, err := unmarshalConfigYAML([]byte(`
+spec_version: "v1"
+values:
+  x:
+    value: "hello"
+    typo_val: 1
+`))
+		assert.ErrorContains(t, err, "unknown key")
+		assert.ErrorContains(t, err, "values.x")
+	})
+
+	t.Run("x-* extensions accepted", func(t *testing.T) {
+		doc, err := unmarshalConfigYAML([]byte(`
+spec_version: "v1"
+x-owner: platform
+values:
+  x:
+    value: "hello"
+    x-reviewed-by: alice
+`))
+		require.NoError(t, err)
+		assert.Equal(t, "platform", doc.Extensions["x-owner"])
+		assert.Equal(t, "alice", doc.Values["x"].Extensions["x-reviewed-by"])
+	})
 }
 
 func TestConfigYAML_Description(t *testing.T) {
