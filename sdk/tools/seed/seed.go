@@ -22,9 +22,9 @@ import (
 type File struct {
 	SpecVersion string    `yaml:"spec_version"`
 	Schema      SchemaDef `yaml:"schema"`
-	Tenant TenantDef `yaml:"tenant"`
-	Config ConfigDef `yaml:"config,omitempty"`
-	Locks  []LockDef `yaml:"locks,omitempty"`
+	Tenant      TenantDef `yaml:"tenant"`
+	Config      ConfigDef `yaml:"config,omitempty"`
+	Locks       []LockDef `yaml:"locks,omitempty"`
 }
 
 // SchemaDef defines a schema within a seed file.

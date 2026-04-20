@@ -81,8 +81,8 @@ func Run(ctx context.Context, client Client, tenantID string, opts ...Option) (*
 	file := &seed.File{
 		SpecVersion: "v1",
 		Schema:      buildSchemaDef(schema),
-		Tenant: seed.TenantDef{Name: tenant.Name},
-		Config: seed.ConfigDef{Values: configDoc.Values},
+		Tenant:      seed.TenantDef{Name: tenant.Name},
+		Config:      seed.ConfigDef{Values: configDoc.Values},
 	}
 
 	// 5. Export locks.
