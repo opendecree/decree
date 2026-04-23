@@ -7,15 +7,10 @@
 <p align="center">
   <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/opendecree/decree/releases"><img src="https://img.shields.io/github/v/release/opendecree/decree?include_prereleases" alt="Release"></a>
-  <a href="https://go.dev/"><img src="https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go" alt="Go"></a>
   <a href="https://pkg.go.dev/github.com/opendecree/decree"><img src="https://pkg.go.dev/badge/github.com/opendecree/decree.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/server_coverage-83%25-brightgreen" alt="Server Coverage">
-  <img src="https://img.shields.io/badge/Go_SDK_coverage-94%25-brightgreen" alt="Go SDK Coverage">
+  <a href="https://www.repostatus.org/#wip"><img src="https://www.repostatus.org/badges/latest/wip.svg" alt="Project Status: WIP"></a>
 </p>
 
 <p align="center">Schema-driven business configuration management for multi-tenant services.</p>
