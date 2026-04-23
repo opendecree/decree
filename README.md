@@ -11,6 +11,7 @@
   <a href="https://pkg.go.dev/github.com/opendecree/decree"><img src="https://pkg.go.dev/badge/github.com/opendecree/decree.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
+  <a href="https://www.repostatus.org/#wip"><img src="https://www.repostatus.org/badges/latest/wip.svg" alt="Project Status: WIP"></a>
 </p>
 
 <p align="center">
