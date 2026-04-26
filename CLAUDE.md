@@ -8,7 +8,7 @@ Schema-driven business configuration management service. Multi-tenant, gRPC API,
 
 | Concern | Tool | Version |
 |---------|------|---------|
-| Language | Go | 1.25 (server/CLI), 1.22 (SDK) |
+| Language | Go | 1.25 (server), 1.24 (CLI + SDK transport), 1.22 (SDK core) |
 | API | gRPC (Protocol Buffers) | — |
 | Proto tooling | buf (local plugins) | v1.66.1 |
 | DB | PostgreSQL | 17 |
@@ -100,6 +100,6 @@ Single Go binary, three gRPC services (SchemaService, ConfigService, AuditServic
 ### Go version policy
 
 - **Server (root module)** — Go 1.25+ (our build environment)
-- **CLI (`cmd/decree`)** — Go 1.25+ (standalone binary, no SDK consumers)
+- **CLI (`cmd/decree`)** — Go 1.24 (matches the SDK transport floor; users installing via `go install` may be on the same version as their SDK consumers)
 - **SDK core modules** (configclient, adminclient, configwatcher) — Go 1.22 (lowest stable common ground for consumers who install the SDK)
 - **`api`, `sdk/tools`, `sdk/grpctransport`** — Go 1.24 (downstream of the gRPC pin on grpctransport; api is consumed by grpctransport and sdk/tools depends on api)
