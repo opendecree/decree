@@ -31,6 +31,10 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # grpc-gateway 2.29+ requires Go 1.25; we hold the SDK transport floor at 1.24.
+      - dependency-name: "github.com/grpc-ecosystem/grpc-gateway/v2"
+        versions: [">=2.29.0"]
 
   - package-ecosystem: github-actions
     directory: /
