@@ -1,0 +1,61 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - /
+      - /api
+      - /cmd/decree
+      - /e2e
+      - /sdk/configclient
+      - /sdk/adminclient
+      - /sdk/configwatcher
+      - /sdk/grpctransport
+      - /sdk/tools
+      - /examples/quickstart
+      - /examples/setup
+      - /examples/schema-lifecycle
+      - /examples/feature-flags
+      - /examples/config-validation
+      - /examples/multi-tenant
+      - /examples/live-config
+      - /examples/environment-bootstrap
+      - /examples/optimistic-concurrency
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /build
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
