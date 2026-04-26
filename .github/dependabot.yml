@@ -32,9 +32,15 @@ updates:
           - minor
           - patch
     ignore:
-      # grpc-gateway 2.29+ requires Go 1.25; we hold the SDK transport floor at 1.24.
+      # The Go ecosystem is moving its floor to Go 1.25 in lockstep. We hold the
+      # SDK transport floor at 1.24, so any dep version that requires Go 1.25 is
+      # ignored until we revisit the floor. Re-evaluate periodically.
       - dependency-name: "github.com/grpc-ecosystem/grpc-gateway/v2"
         versions: [">=2.29.0"]
+      - dependency-name: "go.opentelemetry.io/otel"
+        versions: [">=1.43.0"]
+      - dependency-name: "go.opentelemetry.io/otel/sdk/metric"
+        versions: [">=1.43.0"]
 
   - package-ecosystem: github-actions
     directory: /
