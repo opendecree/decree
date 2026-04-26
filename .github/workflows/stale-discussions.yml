@@ -37,7 +37,7 @@ jobs:
       MARKER: '<!-- stale-discussion-reminder -->'
       DRY_RUN: ${{ github.event.inputs.dry-run || 'false' }}
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v9
         with:
           script: |
             const REMINDER_DAYS = parseInt(process.env.REMINDER_DAYS, 10);
