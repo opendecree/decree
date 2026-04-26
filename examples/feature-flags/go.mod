@@ -13,8 +13,9 @@ require (
 	github.com/opendecree/decree/sdk/adminclient v0.1.2 // indirect
 	github.com/opendecree/decree/sdk/configclient v0.3.1 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.3.1 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
+	go.opentelemetry.io/otel/metric v1.43.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
+	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
