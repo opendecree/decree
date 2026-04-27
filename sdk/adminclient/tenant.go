@@ -76,6 +76,19 @@ func (c *Client) UpdateTenantSchema(ctx context.Context, id string, schemaVersio
 	})
 }
 
+// UpdateTenant updates a tenant's name and/or schema version in a single call.
+// Pass nil for fields that should be left unchanged. At least one field must be non-nil.
+func (c *Client) UpdateTenant(ctx context.Context, id string, name *string, schemaVersion *int32) (*Tenant, error) {
+	if c.schema == nil {
+		return nil, ErrServiceNotConfigured
+	}
+	return c.schema.UpdateTenant(ctx, &UpdateTenantRequest{
+		ID:            id,
+		Name:          name,
+		SchemaVersion: schemaVersion,
+	})
+}
+
 // DeleteTenant permanently deletes a tenant and all its configuration data.
 func (c *Client) DeleteTenant(ctx context.Context, id string) error {
 	if c.schema == nil {
