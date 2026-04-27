@@ -41,6 +41,9 @@ func schemaToProto(s domain.Schema, v domain.SchemaVersion, fields []domain.Sche
 	if entries := UnmarshalDependentRequired(v.DependentRequired); len(entries) > 0 {
 		result.DependentRequired = entries
 	}
+	if rules := UnmarshalValidations(v.Validations); len(rules) > 0 {
+		result.Validations = rules
+	}
 	return result
 }
 

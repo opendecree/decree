@@ -34,6 +34,10 @@ CREATE TABLE schema_versions (
     -- JSON array of {trigger_field, dependent_fields} entries encoding the
     -- schema's dependentRequired rules. Empty array when no rules exist.
     dependent_required JSONB NOT NULL DEFAULT '[]',
+    -- JSON array of {path, rule, message, severity?, reason?} entries
+    -- encoding the schema's CEL validation rules. Reserved in v0.1.0 —
+    -- parser persists; runtime engine ships in Phase 2 (see issue #76).
+    validations        JSONB NOT NULL DEFAULT '[]',
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(schema_id, version)
 );

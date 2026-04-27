@@ -92,6 +92,10 @@ func (s *PGStore) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 	if len(depReq) == 0 {
 		depReq = []byte("[]")
 	}
+	validations := arg.Validations
+	if len(validations) == 0 {
+		validations = []byte("[]")
+	}
 	row, err := s.write.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
 		SchemaID:          schemaID,
 		Version:           arg.Version,
@@ -99,6 +103,7 @@ func (s *PGStore) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 		Description:       arg.Description,
 		Checksum:          arg.Checksum,
 		DependentRequired: depReq,
+		Validations:       validations,
 	})
 	if err != nil {
 		return domain.SchemaVersion{}, err
@@ -409,6 +414,7 @@ func schemaVersionFromDB(r dbstore.SchemaVersion) domain.SchemaVersion {
 		Checksum:          r.Checksum,
 		Published:         r.Published,
 		DependentRequired: r.DependentRequired,
+		Validations:       r.Validations,
 		CreatedAt:         pgconv.TimestamptzToTime(r.CreatedAt),
 	}
 }

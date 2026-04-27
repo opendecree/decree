@@ -145,6 +145,10 @@ func (m *MemoryStore) CreateSchemaVersion(_ context.Context, arg CreateSchemaVer
 	if len(depReq) == 0 {
 		depReq = []byte("[]")
 	}
+	validations := arg.Validations
+	if len(validations) == 0 {
+		validations = []byte("[]")
+	}
 	sv := domain.SchemaVersion{
 		ID:                m.nextID(),
 		SchemaID:          arg.SchemaID,
@@ -154,6 +158,7 @@ func (m *MemoryStore) CreateSchemaVersion(_ context.Context, arg CreateSchemaVer
 		Checksum:          arg.Checksum,
 		Published:         false,
 		DependentRequired: depReq,
+		Validations:       validations,
 		CreatedAt:         time.Now(),
 	}
 	m.schemaVersions[sv.ID] = sv

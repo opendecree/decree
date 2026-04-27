@@ -18,8 +18,8 @@ LIMIT $1 OFFSET $2;
 DELETE FROM schemas WHERE id = $1;
 
 -- name: CreateSchemaVersion :one
-INSERT INTO schema_versions (schema_id, version, parent_version, description, checksum, dependent_required)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO schema_versions (schema_id, version, parent_version, description, checksum, dependent_required, validations)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetSchemaVersion :one

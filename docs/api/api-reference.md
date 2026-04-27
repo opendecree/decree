@@ -23,6 +23,7 @@
     - [Tenant](#centralconfig-v1-Tenant)
     - [TypedValue](#centralconfig-v1-TypedValue)
     - [UsageStats](#centralconfig-v1-UsageStats)
+    - [ValidationRule](#centralconfig-v1-ValidationRule)
   
     - [FieldType](#centralconfig-v1-FieldType)
   
@@ -344,6 +345,7 @@ Each schema is versioned — updates create new immutable versions.
 | created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | When this version was created. |
 | info | [SchemaInfo](#centralconfig-v1-SchemaInfo) |  | Optional schema metadata: ownership, contact, labels. |
 | dependent_required | [DependentRequiredEntry](#centralconfig-v1-DependentRequiredEntry) | repeated | Cross-field &#34;B required when A present&#34; rules. Each entry declares one trigger field whose presence (non-null value) makes a list of dependent field paths required (also non-null). Equivalent to JSON Schema 2020-12 dependentRequired, scoped to schema-level cross-field requirement. Lint-checked at ImportSchema time (every path must reference a real field; trigger may not appear in its own dependents). Enforced at every config write against the post-merge snapshot. |
+| validations | [ValidationRule](#centralconfig-v1-ValidationRule) | repeated | Cross-field rule expressions reserved for future Common Expression Language (CEL) evaluation. Stored on the schema and round-tripped through ImportSchema/GetSchema; the runtime engine ships separately (see issue #76). Reserving the key in v0.1.0 of the schema spec avoids a breaking meta-schema change later. |
 
 
 
@@ -510,6 +512,33 @@ UsageStats represents aggregated read usage statistics for a config field.
 | read_count | [int64](#int64) |  | Total number of reads across the queried time range. |
 | last_read_by | [string](#string) | optional | The last actor who read this field (if tracked). |
 | last_read_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) | optional | When this field was last read (if tracked). |
+
+
+
+
+
+
+<a name="centralconfig-v1-ValidationRule"></a>
+
+### ValidationRule
+ValidationRule encodes one cross-field rule expressed in Common
+Expression Language (CEL). Reserved in v0.1.0 of the schema spec — the
+parser accepts and persists rules, but the engine that compiles and
+evaluates them ships separately (see issue #76 / .agents/context/cel-validation.md).
+
+Rules are scoped to a path prefix: an empty path means a schema-wide
+rule; a non-empty path anchors the rule to a group for documentation
+and UI grouping (the binding namespace itself always exposes every
+field via `self`, regardless of path).
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| path | [string](#string) |  | Optional path prefix scoping the rule to a group of fields. Empty string means the rule applies at schema scope. |
+| rule | [string](#string) |  | The CEL expression source. Lint at ImportSchema in v0.1.0 only checks that the string is non-empty; CEL compilation happens in Phase 2 once the engine ships. |
+| message | [string](#string) |  | Human-readable failure message shown to clients when the rule rejects a write. Required. |
+| severity | [string](#string) |  | Optional severity hint. Reserved values: &#34;error&#34; (default — write rejected) and &#34;warning&#34; (write accepted, surfaced for UI). v0.1.0 only validates the value is empty or one of the reserved set; the warning path is not yet enforced. |
+| reason | [string](#string) |  | Optional machine-readable failure code for SDK consumers that want to branch on rule outcome without parsing the message text. |
 
 
 

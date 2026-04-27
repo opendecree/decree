@@ -2230,6 +2230,14 @@
             "$ref": "#/definitions/v1DependentRequiredEntry"
           },
           "description": "Cross-field \"B required when A present\" rules. Each entry declares one\ntrigger field whose presence (non-null value) makes a list of dependent\nfield paths required (also non-null). Equivalent to JSON Schema 2020-12\ndependentRequired, scoped to schema-level cross-field requirement.\nLint-checked at ImportSchema time (every path must reference a real\nfield; trigger may not appear in its own dependents). Enforced at every\nconfig write against the post-merge snapshot."
+        },
+        "validations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1ValidationRule"
+          },
+          "description": "Cross-field rule expressions reserved for future Common Expression\nLanguage (CEL) evaluation. Stored on the schema and round-tripped\nthrough ImportSchema/GetSchema; the runtime engine ships separately\n(see issue #76). Reserving the key in v0.1.0 of the schema spec\navoids a breaking meta-schema change later."
         }
       },
       "description": "Schema represents a configuration schema template.\nSchemas define the allowed fields and their types for tenant configurations.\nEach schema is versioned \u2014 updates create new immutable versions."
@@ -2505,6 +2513,32 @@
         }
       },
       "description": "UsageStats represents aggregated read usage statistics for a config field."
+    },
+    "v1ValidationRule": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Optional path prefix scoping the rule to a group of fields. Empty\nstring means the rule applies at schema scope."
+        },
+        "rule": {
+          "type": "string",
+          "description": "The CEL expression source. Lint at ImportSchema in v0.1.0 only checks\nthat the string is non-empty; CEL compilation happens in Phase 2 once\nthe engine ships."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable failure message shown to clients when the rule\nrejects a write. Required."
+        },
+        "severity": {
+          "type": "string",
+          "description": "Optional severity hint. Reserved values: \"error\" (default \u2014 write\nrejected) and \"warning\" (write accepted, surfaced for UI). v0.1.0\nonly validates the value is empty or one of the reserved set; the\nwarning path is not yet enforced."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional machine-readable failure code for SDK consumers that want\nto branch on rule outcome without parsing the message text."
+        }
+      },
+      "description": "ValidationRule encodes one cross-field rule expressed in Common\nExpression Language (CEL). Reserved in v0.1.0 of the schema spec \u2014 the\nparser accepts and persists rules, but the engine that compiles and\nevaluates them ships separately (see issue #76 / .agents/context/cel-validation.md).\n\nRules are scoped to a path prefix: an empty path means a schema-wide\nrule; a non-empty path anchors the rule to a group for documentation\nand UI grouping (the binding namespace itself always exposes every\nfield via `self`, regardless of path)."
     }
   },
   "securityDefinitions": {
