@@ -9,6 +9,7 @@
     - [ConfigChange](#centralconfig-v1-ConfigChange)
     - [ConfigValue](#centralconfig-v1-ConfigValue)
     - [ConfigVersion](#centralconfig-v1-ConfigVersion)
+    - [DependentRequiredEntry](#centralconfig-v1-DependentRequiredEntry)
     - [ExternalDocs](#centralconfig-v1-ExternalDocs)
     - [FieldConstraints](#centralconfig-v1-FieldConstraints)
     - [FieldExample](#centralconfig-v1-FieldExample)
@@ -225,6 +226,27 @@ full config at any version is the union of all deltas up to that version.
 
 
 
+<a name="centralconfig-v1-DependentRequiredEntry"></a>
+
+### DependentRequiredEntry
+DependentRequiredEntry encodes one cross-field requirement: when the
+trigger field has a non-null value, every dependent field path must also
+have a non-null value. This is the proto wire form of JSON Schema 2020-12
+dependentRequired, which uses a `map&lt;path, list&lt;path&gt;&gt;` shape — proto
+maps cannot hold repeated values directly, so we use a repeated list of
+entries.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| trigger_field | [string](#string) |  | Field path whose presence triggers the requirement. |
+| dependent_fields | [string](#string) | repeated | Field paths that must be present when the trigger has a non-null value. |
+
+
+
+
+
+
 <a name="centralconfig-v1-ExternalDocs"></a>
 
 ### ExternalDocs
@@ -321,6 +343,7 @@ Each schema is versioned — updates create new immutable versions.
 | fields | [SchemaField](#centralconfig-v1-SchemaField) | repeated | The fields defined in this schema version. |
 | created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | When this version was created. |
 | info | [SchemaInfo](#centralconfig-v1-SchemaInfo) |  | Optional schema metadata: ownership, contact, labels. |
+| dependent_required | [DependentRequiredEntry](#centralconfig-v1-DependentRequiredEntry) | repeated | Cross-field &#34;B required when A present&#34; rules. Each entry declares one trigger field whose presence (non-null value) makes a list of dependent field paths required (also non-null). Equivalent to JSON Schema 2020-12 dependentRequired, scoped to schema-level cross-field requirement. Lint-checked at ImportSchema time (every path must reference a real field; trigger may not appear in its own dependents). Enforced at every config write against the post-merge snapshot. |
 
 
 
