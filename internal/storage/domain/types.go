@@ -48,7 +48,12 @@ type SchemaVersion struct {
 	// required when A present" rules. Empty array when no rules exist.
 	// Wire shape: [{trigger_field, dependent_fields[]}].
 	DependentRequired []byte
-	CreatedAt         time.Time
+	// Validations holds the JSON-encoded list of CEL validation rules
+	// reserved in v0.1.0 of the schema spec. Empty array when no rules
+	// exist. Wire shape: [{path, rule, message, severity?, reason?}].
+	// Engine ships in Phase 2 (issue #76); v0.1.0 only round-trips.
+	Validations []byte
+	CreatedAt   time.Time
 }
 
 // SchemaField represents a field definition within a schema version.

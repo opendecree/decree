@@ -113,9 +113,9 @@ func (q *Queries) CreateSchemaField(ctx context.Context, arg CreateSchemaFieldPa
 }
 
 const createSchemaVersion = `-- name: CreateSchemaVersion :one
-INSERT INTO schema_versions (schema_id, version, parent_version, description, checksum, dependent_required)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, schema_id, version, parent_version, description, checksum, published, dependent_required, created_at
+INSERT INTO schema_versions (schema_id, version, parent_version, description, checksum, dependent_required, validations)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, schema_id, version, parent_version, description, checksum, published, dependent_required, validations, created_at
 `
 
 type CreateSchemaVersionParams struct {
@@ -125,6 +125,7 @@ type CreateSchemaVersionParams struct {
 	Description       *string     `json:"description"`
 	Checksum          string      `json:"checksum"`
 	DependentRequired []byte      `json:"dependent_required"`
+	Validations       []byte      `json:"validations"`
 }
 
 func (q *Queries) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersionParams) (SchemaVersion, error) {
@@ -135,6 +136,7 @@ func (q *Queries) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 		arg.Description,
 		arg.Checksum,
 		arg.DependentRequired,
+		arg.Validations,
 	)
 	var i SchemaVersion
 	err := row.Scan(
@@ -146,6 +148,7 @@ func (q *Queries) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 		&i.Checksum,
 		&i.Published,
 		&i.DependentRequired,
+		&i.Validations,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -176,7 +179,7 @@ func (q *Queries) DeleteSchemaField(ctx context.Context, arg DeleteSchemaFieldPa
 }
 
 const getLatestSchemaVersion = `-- name: GetLatestSchemaVersion :one
-SELECT id, schema_id, version, parent_version, description, checksum, published, dependent_required, created_at FROM schema_versions
+SELECT id, schema_id, version, parent_version, description, checksum, published, dependent_required, validations, created_at FROM schema_versions
 WHERE schema_id = $1
 ORDER BY version DESC
 LIMIT 1
@@ -194,6 +197,7 @@ func (q *Queries) GetLatestSchemaVersion(ctx context.Context, schemaID pgtype.UU
 		&i.Checksum,
 		&i.Published,
 		&i.DependentRequired,
+		&i.Validations,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -280,7 +284,7 @@ func (q *Queries) GetSchemaFields(ctx context.Context, schemaVersionID pgtype.UU
 }
 
 const getSchemaVersion = `-- name: GetSchemaVersion :one
-SELECT id, schema_id, version, parent_version, description, checksum, published, dependent_required, created_at FROM schema_versions
+SELECT id, schema_id, version, parent_version, description, checksum, published, dependent_required, validations, created_at FROM schema_versions
 WHERE schema_id = $1 AND version = $2
 `
 
@@ -301,6 +305,7 @@ func (q *Queries) GetSchemaVersion(ctx context.Context, arg GetSchemaVersionPara
 		&i.Checksum,
 		&i.Published,
 		&i.DependentRequired,
+		&i.Validations,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -346,7 +351,7 @@ func (q *Queries) ListSchemas(ctx context.Context, arg ListSchemasParams) ([]Sch
 const publishSchemaVersion = `-- name: PublishSchemaVersion :one
 UPDATE schema_versions SET published = true
 WHERE schema_id = $1 AND version = $2
-RETURNING id, schema_id, version, parent_version, description, checksum, published, dependent_required, created_at
+RETURNING id, schema_id, version, parent_version, description, checksum, published, dependent_required, validations, created_at
 `
 
 type PublishSchemaVersionParams struct {
@@ -366,6 +371,7 @@ func (q *Queries) PublishSchemaVersion(ctx context.Context, arg PublishSchemaVer
 		&i.Checksum,
 		&i.Published,
 		&i.DependentRequired,
+		&i.Validations,
 		&i.CreatedAt,
 	)
 	return i, err

@@ -128,6 +128,7 @@ type SchemaVersion struct {
 	Checksum          string             `json:"checksum"`
 	Published         bool               `json:"published"`
 	DependentRequired []byte             `json:"dependent_required"`
+	Validations       []byte             `json:"validations"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 

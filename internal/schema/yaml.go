@@ -47,7 +47,22 @@ type SchemaYAML struct {
 	// rules. Keys and values must reference paths defined in Fields. Matches
 	// the JSON Schema 2020-12 keyword of the same name.
 	DependentRequired map[string][]string `yaml:"dependentRequired,omitempty"`
-	Extensions        map[string]any      `yaml:",inline"`
+	// Validations declares cross-field rules expressed in CEL. Reserved in
+	// v0.1.0 — the parser persists rules and round-trips them, but the
+	// engine that compiles and evaluates them ships in Phase 2 (issue #76).
+	Validations []ValidationYAML `yaml:"validations,omitempty"`
+	Extensions  map[string]any   `yaml:",inline"`
+}
+
+// ValidationYAML mirrors a single ValidationRule entry on the wire.
+// Fields match the proto message but use YAML naming conventions.
+type ValidationYAML struct {
+	Path       string         `yaml:"path,omitempty"`
+	Rule       string         `yaml:"rule"`
+	Message    string         `yaml:"message"`
+	Severity   string         `yaml:"severity,omitempty"`
+	Reason     string         `yaml:"reason,omitempty"`
+	Extensions map[string]any `yaml:",inline"`
 }
 
 // SchemaInfoYAML contains optional schema-level metadata.
@@ -159,6 +174,9 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 	if err := validateDependentRequiredYAML(doc); err != nil {
 		return err
 	}
+	if err := validateValidationsYAML(doc); err != nil {
+		return err
+	}
 	for path, f := range doc.Fields {
 		if !fieldPathPattern.MatchString(path) {
 			return fmt.Errorf("invalid field path %q: must match %s", path, fieldPathPattern)
@@ -213,6 +231,40 @@ func validateDependentRequiredYAML(doc *SchemaYAML) error {
 				return fmt.Errorf("dependentRequired: dependent %q listed twice under trigger %q", dep, trigger)
 			}
 			seen[dep] = struct{}{}
+		}
+	}
+	return nil
+}
+
+// validateValidationsYAML structurally lint-checks the `validations:` list
+// at schema-validate time. v0.1.0 reserves the key in the format spec but
+// does not yet ship the CEL engine — so this routine only enforces what
+// the wire shape requires:
+//
+//   - rule and message are required, non-empty
+//   - severity is empty or one of "error" | "warning"
+//
+// CEL compilation, field-reference resolution, and contradiction
+// detection are deferred to Phase 2 (see .agents/context/cel-validation.md).
+func validateValidationsYAML(doc *SchemaYAML) error {
+	if len(doc.Validations) == 0 {
+		return nil
+	}
+	for i, v := range doc.Validations {
+		if v.Rule == "" {
+			return fmt.Errorf("validations[%d]: rule is required", i)
+		}
+		if v.Message == "" {
+			return fmt.Errorf("validations[%d]: message is required", i)
+		}
+		switch v.Severity {
+		case "", "error", "warning":
+			// ok
+		default:
+			return fmt.Errorf("validations[%d]: severity %q must be \"error\" or \"warning\"", i, v.Severity)
+		}
+		if err := validateExtensions(fmt.Sprintf("validations[%d]", i), v.Extensions); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -296,6 +348,7 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 		Info:               schemaInfoToYAML(s.Info),
 		Fields:             make(map[string]SchemaFieldYAML, len(s.Fields)),
 		DependentRequired:  protoDependentRequiredToYAML(s.DependentRequired),
+		Validations:        protoValidationsToYAML(s.Validations),
 	}
 
 	for _, f := range s.Fields {
@@ -401,6 +454,46 @@ func protoConstraintsToYAML(c *pb.FieldConstraints) *ConstraintsYAML {
 }
 
 // --- YAML → Proto ---
+
+// yamlToProtoValidations converts the YAML validations list into proto
+// ValidationRule entries. Order is preserved — schema authors typically
+// expect rules to appear in the same order they declared them.
+func yamlToProtoValidations(in []ValidationYAML) []*pb.ValidationRule {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*pb.ValidationRule, 0, len(in))
+	for _, v := range in {
+		out = append(out, &pb.ValidationRule{
+			Path:     v.Path,
+			Rule:     v.Rule,
+			Message:  v.Message,
+			Severity: v.Severity,
+			Reason:   v.Reason,
+		})
+	}
+	return out
+}
+
+// protoValidationsToYAML converts proto ValidationRule entries back to
+// YAML form for export. Returns nil for an empty input so the YAML key
+// is omitted.
+func protoValidationsToYAML(in []*pb.ValidationRule) []ValidationYAML {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ValidationYAML, 0, len(in))
+	for _, v := range in {
+		out = append(out, ValidationYAML{
+			Path:     v.Path,
+			Rule:     v.Rule,
+			Message:  v.Message,
+			Severity: v.Severity,
+			Reason:   v.Reason,
+		})
+	}
+	return out
+}
 
 // yamlToProtoDependentRequired converts the YAML map<trigger,[dependents]>
 // shape into the proto repeated-entry shape. Returns nil for an empty map so

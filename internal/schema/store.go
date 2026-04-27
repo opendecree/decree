@@ -23,6 +23,9 @@ type CreateSchemaVersionParams struct {
 	// Pass an empty []byte (or nil) when no rules exist; the store will
 	// persist `[]` so reads always return well-formed JSON.
 	DependentRequired []byte
+	// Validations is the JSON-encoded list of CEL validation rules
+	// reserved in v0.1.0. Same nil-safe semantics as DependentRequired.
+	Validations []byte
 }
 
 // GetSchemaVersionParams identifies a specific schema version.

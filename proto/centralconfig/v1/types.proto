@@ -235,6 +235,13 @@ message Schema {
   // field; trigger may not appear in its own dependents). Enforced at every
   // config write against the post-merge snapshot.
   repeated DependentRequiredEntry dependent_required = 12;
+
+  // Cross-field rule expressions reserved for future Common Expression
+  // Language (CEL) evaluation. Stored on the schema and round-tripped
+  // through ImportSchema/GetSchema; the runtime engine ships separately
+  // (see issue #76). Reserving the key in v0.1.0 of the schema spec
+  // avoids a breaking meta-schema change later.
+  repeated ValidationRule validations = 13;
 }
 
 // DependentRequiredEntry encodes one cross-field requirement: when the
@@ -249,6 +256,40 @@ message DependentRequiredEntry {
 
   // Field paths that must be present when the trigger has a non-null value.
   repeated string dependent_fields = 2;
+}
+
+// ValidationRule encodes one cross-field rule expressed in Common
+// Expression Language (CEL). Reserved in v0.1.0 of the schema spec — the
+// parser accepts and persists rules, but the engine that compiles and
+// evaluates them ships separately (see issue #76 / .agents/context/cel-validation.md).
+//
+// Rules are scoped to a path prefix: an empty path means a schema-wide
+// rule; a non-empty path anchors the rule to a group for documentation
+// and UI grouping (the binding namespace itself always exposes every
+// field via `self`, regardless of path).
+message ValidationRule {
+  // Optional path prefix scoping the rule to a group of fields. Empty
+  // string means the rule applies at schema scope.
+  string path = 1;
+
+  // The CEL expression source. Lint at ImportSchema in v0.1.0 only checks
+  // that the string is non-empty; CEL compilation happens in Phase 2 once
+  // the engine ships.
+  string rule = 2;
+
+  // Human-readable failure message shown to clients when the rule
+  // rejects a write. Required.
+  string message = 3;
+
+  // Optional severity hint. Reserved values: "error" (default — write
+  // rejected) and "warning" (write accepted, surfaced for UI). v0.1.0
+  // only validates the value is empty or one of the reserved set; the
+  // warning path is not yet enforced.
+  string severity = 4;
+
+  // Optional machine-readable failure code for SDK consumers that want
+  // to branch on rule outcome without parsing the message text.
+  string reason = 5;
 }
 
 // Tenant represents an organization or entity that has its own configuration
