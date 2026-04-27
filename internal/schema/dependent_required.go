@@ -90,40 +90,33 @@ func UnmarshalDependentRequired(raw []byte) []*pb.DependentRequiredEntry {
 	return out
 }
 
-// CheckDependentRequired evaluates all rules against a post-merge value
-// snapshot. For each rule, if the trigger field has a non-null value in the
-// snapshot, every dependent path must also have a non-null value. Missing
-// keys in the snapshot are treated as null. Returns the first violation
-// encountered, formatted with both trigger and dependent paths so the
-// caller's error message names the offending fields.
+// CheckDependentRequired evaluates all rules against a post-merge presence
+// set. For each rule, if the trigger path is present (i.e. has a non-null
+// value), every dependent path must also be present. Returns the first
+// violation encountered, formatted with both trigger and dependent paths so
+// the caller's error message names the offending fields.
 //
 // Designed to run inside the same transaction that stages the write — the
-// snapshot must include all in-flight changes already merged on top of the
-// pre-tx state. Race-safety relies on Postgres MVCC + the caller's
+// presence set must reflect all in-flight changes already merged on top of
+// the pre-tx state. Race-safety relies on Postgres MVCC + the caller's
 // CreateConfigVersion UNIQUE(tenant_id, version) constraint to serialize
 // concurrent writers.
-func CheckDependentRequired(rules []*pb.DependentRequiredEntry, snapshot map[string]*pb.TypedValue) error {
+//
+// `present` membership semantics: a path is in the set iff it has a
+// non-null value after merge. Missing keys are treated as null.
+func CheckDependentRequired(rules []*pb.DependentRequiredEntry, present map[string]struct{}) error {
 	if len(rules) == 0 {
 		return nil
 	}
 	for _, rule := range rules {
-		tv, present := snapshot[rule.TriggerField]
-		if !present || isNullTypedValue(tv) {
+		if _, ok := present[rule.TriggerField]; !ok {
 			continue
 		}
 		for _, dep := range rule.DependentFields {
-			depTV, depPresent := snapshot[dep]
-			if !depPresent || isNullTypedValue(depTV) {
+			if _, ok := present[dep]; !ok {
 				return fmt.Errorf("dependentRequired: %q has a value but required dependent %q is null", rule.TriggerField, dep)
 			}
 		}
 	}
 	return nil
-}
-
-// isNullTypedValue treats both a nil TypedValue and one with no kind set as
-// "null". The wire protocol uses an unset oneof to mean null (per
-// types.proto: "An unset oneof (no field present) represents a null value").
-func isNullTypedValue(tv *pb.TypedValue) bool {
-	return tv == nil || tv.Kind == nil
 }

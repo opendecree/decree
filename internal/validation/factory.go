@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/storage/domain"
@@ -20,8 +21,9 @@ type Store interface {
 
 // ValidatorFactory builds and caches field validators per tenant.
 type ValidatorFactory struct {
-	store Store
-	cache *ValidatorCache
+	store      Store
+	cache      *ValidatorCache
+	rulesCache sync.Map // tenantID → []byte (raw dependent_required JSON)
 }
 
 // NewValidatorFactory creates a new validator factory.
@@ -35,6 +37,41 @@ func NewValidatorFactory(store Store) *ValidatorFactory {
 // Cache returns the underlying cache for invalidation.
 func (f *ValidatorFactory) Cache() *ValidatorCache {
 	return f.cache
+}
+
+// InvalidateRules drops the cached dependentRequired bytes for a tenant.
+// Call this alongside Cache().Invalidate() whenever a tenant's schema
+// version changes.
+func (f *ValidatorFactory) InvalidateRules(tenantID string) {
+	f.rulesCache.Delete(tenantID)
+}
+
+// GetDependentRequired returns the raw JSON-encoded dependentRequired rules
+// for a tenant's bound schema version. Returns nil bytes for "no rules";
+// callers should treat that as a no-op. Cached per tenant; invalidate via
+// InvalidateRules when the tenant's schema binding changes.
+//
+// Returns []byte rather than the decoded proto type so the validation
+// package does not have to import internal/schema for the unmarshal helper
+// (avoiding a circular import). Decode at the call site.
+func (f *ValidatorFactory) GetDependentRequired(ctx context.Context, tenantID string) ([]byte, error) {
+	if v, ok := f.rulesCache.Load(tenantID); ok {
+		return v.([]byte), nil
+	}
+	tenant, err := f.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	sv, err := f.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
+		SchemaID: tenant.SchemaID,
+		Version:  tenant.SchemaVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	raw := sv.DependentRequired
+	f.rulesCache.Store(tenantID, raw)
+	return raw, nil
 }
 
 // GetValidators returns validators for a tenant's schema fields.

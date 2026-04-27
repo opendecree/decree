@@ -180,6 +180,27 @@ constraints:
     {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}
 ```
 
+## Cross-field dependencies
+
+Use the top-level `dependentRequired:` key to declare "if field A is set, field B must also be set". The keyword matches [JSON Schema 2020-12 `dependentRequired`](https://json-schema.org/understanding-json-schema/reference/conditionals#dependentrequired) — keys are trigger field paths, values are lists of dependent paths.
+
+```yaml
+fields:
+  payments.refunds_enabled: { type: bool }
+  payments.refund_window:   { type: duration, nullable: true }
+
+dependentRequired:
+  payments.refunds_enabled: [payments.refund_window]
+```
+
+Semantics:
+
+- **Triggers on non-null.** A rule fires only when the trigger field has a non-null value in the post-merge configuration. Setting the trigger to null clears the requirement.
+- **Lint at import.** `ImportSchema` rejects rules where the trigger or any dependent does not name a defined field, where a trigger lists itself as a dependent, or where a dependent appears twice under the same trigger.
+- **Runtime enforcement.** Every config write (`SetField`, `SetFields`, `ImportConfig`, `RollbackToVersion`) evaluates all rules against the post-merge state inside the same transaction. A rule violation rejects the write with `InvalidArgument`.
+
+For arithmetic or other cross-field invariants that `dependentRequired` cannot express (`min < max`, `start_at < end_at`), see the [CEL validation design](../../.agents/context/cel-validation.md) — that path uses the reserved `validations:` key.
+
 ## Field Options
 
 | Option | Type | Default | Description |

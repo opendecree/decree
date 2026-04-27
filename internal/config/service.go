@@ -18,10 +18,20 @@ import (
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/pubsub"
+	"github.com/opendecree/decree/internal/schema"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
 )
+
+// dependentRequiredError wraps a CheckDependentRequired error returned
+// from inside a transaction so the outer status mapping can distinguish a
+// validation violation (InvalidArgument) from a generic tx failure
+// (Internal).
+type dependentRequiredError struct{ err error }
+
+func (e *dependentRequiredError) Error() string { return e.err.Error() }
+func (e *dependentRequiredError) Unwrap() error { return e.err }
 
 const defaultCacheTTL = 5 * time.Minute
 
@@ -315,7 +325,12 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	}
 	oldValue := s.getCurrentValue(ctx, tenantID, req.FieldPath, latestVersion)
 
-	// Transaction: version + value + audit.
+	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Transaction: version + value + audit + dependentRequired check.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
@@ -340,6 +355,10 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 			return fmt.Errorf("set config value: %w", txErr)
 		}
 
+		if txErr = s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules); txErr != nil {
+			return txErr
+		}
+
 		newValueStr := typedValueToString(req.Value)
 		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 			TenantID:      tenantID,
@@ -351,8 +370,10 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 			ConfigVersion: &newVersion.Version,
 		})
 	}); err != nil {
-		s.logger.ErrorContext(ctx, "set field transaction failed", "error", err)
-		return nil, status.Error(codes.Internal, "failed to set field")
+		return nil, mapDependentRequiredErr(err, func() error {
+			s.logger.ErrorContext(ctx, "set field transaction failed", "error", err)
+			return status.Error(codes.Internal, "failed to set field")
+		})
 	}
 
 	// Post-transaction side effects.
@@ -419,7 +440,12 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		})
 	}
 
-	// Transaction: version + all values + all audit entries.
+	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Transaction: version + all values + all audit entries + dependentRequired check.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
@@ -459,10 +485,12 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 			}
 		}
 
-		return nil
+		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
 	}); err != nil {
-		s.logger.ErrorContext(ctx, "set fields transaction failed", "error", err)
-		return nil, status.Error(codes.Internal, "failed to set fields")
+		return nil, mapDependentRequiredErr(err, func() error {
+			s.logger.ErrorContext(ctx, "set fields transaction failed", "error", err)
+			return status.Error(codes.Internal, "failed to set fields")
+		})
 	}
 
 	// Post-transaction side effects.
@@ -596,7 +624,12 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		desc = *req.Description
 	}
 
-	// Transaction: new version + copied values + audit.
+	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Transaction: new version + copied values + audit + dependentRequired check.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
@@ -622,6 +655,10 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 			}
 		}
 
+		if txErr = s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules); txErr != nil {
+			return txErr
+		}
+
 		newValue := fmt.Sprintf("v%d", req.Version)
 		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 			TenantID:      tenantID,
@@ -633,8 +670,10 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 			ConfigVersion: &newVersion.Version,
 		})
 	}); err != nil {
-		s.logger.ErrorContext(ctx, "rollback transaction failed", "error", err)
-		return nil, status.Error(codes.Internal, "failed to rollback")
+		return nil, mapDependentRequiredErr(err, func() error {
+			s.logger.ErrorContext(ctx, "rollback transaction failed", "error", err)
+			return status.Error(codes.Internal, "failed to rollback")
+		})
 	}
 
 	// Post-transaction side effects.
@@ -865,7 +904,12 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		desc = doc.Description
 	}
 
-	// Transaction: version + all values + audit entries.
+	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Transaction: version + all values + audit entries + dependentRequired check.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
@@ -904,10 +948,12 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 			}
 		}
 
-		return nil
+		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
 	}); err != nil {
-		s.logger.ErrorContext(ctx, "import config transaction failed", "error", err)
-		return nil, status.Error(codes.Internal, "failed to import config")
+		return nil, mapDependentRequiredErr(err, func() error {
+			s.logger.ErrorContext(ctx, "import config transaction failed", "error", err)
+			return status.Error(codes.Internal, "failed to import config")
+		})
 	}
 
 	// Post-transaction side effects.
@@ -1118,6 +1164,66 @@ func (s *Service) validateField(ctx context.Context, tenantID, fieldPath string,
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	return nil
+}
+
+// fetchDependentRequiredRules returns the decoded dependentRequired rules
+// for a tenant's bound schema version. Returns (nil, nil) when there are no
+// rules — callers can skip the runtime check entirely. Caches via the
+// validator factory's per-tenant rules cache.
+func (s *Service) fetchDependentRequiredRules(ctx context.Context, tenantID string) ([]*pb.DependentRequiredEntry, error) {
+	if s.validators == nil {
+		return nil, nil
+	}
+	raw, err := s.validators.GetDependentRequired(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return schema.UnmarshalDependentRequired(raw), nil
+}
+
+// enforceDependentRequiredInTx evaluates the post-merge state of a config
+// write against the schema's dependentRequired rules. Reads the full config
+// snapshot at `version` from the same transaction that staged the writes
+// (so the read sees the staged values via Postgres MVCC), builds the
+// presence set, and runs schema.CheckDependentRequired.
+//
+// Returns a *dependentRequiredError on rule failure so the outer
+// RunInTx caller can map to codes.InvalidArgument; returns the underlying
+// store error verbatim on snapshot-read failure.
+//
+// No-op when `rules` is empty.
+func (s *Service) enforceDependentRequiredInTx(ctx context.Context, tx Store, tenantID string, version int32, rules []*pb.DependentRequiredEntry) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	rows, err := tx.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
+		TenantID: tenantID,
+		Version:  version,
+	})
+	if err != nil {
+		return fmt.Errorf("read snapshot for dependentRequired: %w", err)
+	}
+	present := make(map[string]struct{}, len(rows))
+	for _, row := range rows {
+		if row.Value != nil {
+			present[row.FieldPath] = struct{}{}
+		}
+	}
+	if err := schema.CheckDependentRequired(rules, present); err != nil {
+		return &dependentRequiredError{err: err}
+	}
+	return nil
+}
+
+// mapDependentRequiredErr converts a tx error into the right gRPC status:
+// InvalidArgument when the error wraps *dependentRequiredError, the
+// caller's fallback otherwise. Use after RunInTx returns.
+func mapDependentRequiredErr(err error, fallback func() error) error {
+	var dre *dependentRequiredError
+	if errors.As(err, &dre) {
+		return status.Errorf(codes.InvalidArgument, "%v", dre.err)
+	}
+	return fallback()
 }
 
 // fieldTypeMap returns a map of field path -> domain field type for a tenant's schema.

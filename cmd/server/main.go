@@ -217,7 +217,7 @@ func run() int {
 
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
-		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory.Cache())
+		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory)
 		pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 		srv.SetServiceHealthy("centralconfig.v1.SchemaService")
 		logger.InfoContext(ctx, "schema service enabled")

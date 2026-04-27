@@ -52,7 +52,7 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	}
 	validatorFactory := validation.NewValidatorFactory(validatorStore)
 
-	schemaSvc := schema.NewService(memSchema, slog.Default(), telemetry.NewSchemaMetrics(telemetry.Config{}), validatorFactory.Cache())
+	schemaSvc := schema.NewService(memSchema, slog.Default(), telemetry.NewSchemaMetrics(telemetry.Config{}), validatorFactory)
 	pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 
 	configSvc := config.NewService(config.ServiceConfig{

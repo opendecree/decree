@@ -73,19 +73,22 @@ func containsStr(slice []string, s string) bool {
 // Service implements the SchemaService gRPC server.
 type Service struct {
 	pb.UnimplementedSchemaServiceServer
-	store          Store
-	logger         *slog.Logger
-	metrics        *telemetry.SchemaMetrics
-	validatorCache *validation.ValidatorCache
+	store     Store
+	logger    *slog.Logger
+	metrics   *telemetry.SchemaMetrics
+	validator *validation.ValidatorFactory
 }
 
-// NewService creates a new SchemaService.
-func NewService(store Store, logger *slog.Logger, metrics *telemetry.SchemaMetrics, validatorCache *validation.ValidatorCache) *Service {
+// NewService creates a new SchemaService. The validator factory may be nil
+// for tests that do not exercise tenant updates; production callers should
+// pass the same factory the config service uses so cache invalidation is
+// observed by both.
+func NewService(store Store, logger *slog.Logger, metrics *telemetry.SchemaMetrics, validator *validation.ValidatorFactory) *Service {
 	return &Service{
-		store:          store,
-		logger:         logger,
-		metrics:        metrics,
-		validatorCache: validatorCache,
+		store:     store,
+		logger:    logger,
+		metrics:   metrics,
+		validator: validator,
 	}
 }
 
@@ -474,9 +477,12 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 			}
 			return nil, status.Error(codes.Internal, "failed to update tenant schema version")
 		}
-		// Invalidate cached validators — tenant now uses different field definitions.
-		if s.validatorCache != nil {
-			s.validatorCache.Invalidate(tenantID)
+		// Invalidate cached validators and dependentRequired rules — the tenant
+		// now binds a different schema version, so both per-field validators
+		// and the cross-field rule list must be refetched on next use.
+		if s.validator != nil {
+			s.validator.Cache().Invalidate(tenantID)
+			s.validator.InvalidateRules(tenantID)
 		}
 	}
 

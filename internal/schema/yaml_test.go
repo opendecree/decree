@@ -12,6 +12,68 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
+func TestUnmarshalSchemaYAML_DependentRequired_Valid(t *testing.T) {
+	doc, err := unmarshalSchemaYAML([]byte(`
+spec_version: v1
+name: payments
+fields:
+  payments.refunds_enabled:
+    type: bool
+  payments.refund_window:
+    type: duration
+    nullable: true
+dependentRequired:
+  payments.refunds_enabled: [payments.refund_window]
+`))
+	require.NoError(t, err)
+	require.NotNil(t, doc)
+	require.Len(t, doc.DependentRequired, 1)
+	assert.Equal(t, []string{"payments.refund_window"}, doc.DependentRequired["payments.refunds_enabled"])
+}
+
+func TestUnmarshalSchemaYAML_DependentRequired_RejectsUnknownTrigger(t *testing.T) {
+	_, err := unmarshalSchemaYAML([]byte(`
+spec_version: v1
+name: payments
+fields:
+  payments.a:
+    type: string
+dependentRequired:
+  payments.ghost: [payments.a]
+`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ghost")
+	assert.Contains(t, err.Error(), "not a defined field")
+}
+
+func TestUnmarshalSchemaYAML_DependentRequired_RejectsUnknownDependent(t *testing.T) {
+	_, err := unmarshalSchemaYAML([]byte(`
+spec_version: v1
+name: payments
+fields:
+  payments.a:
+    type: string
+dependentRequired:
+  payments.a: [payments.ghost]
+`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ghost")
+}
+
+func TestUnmarshalSchemaYAML_DependentRequired_RejectsSelfReference(t *testing.T) {
+	_, err := unmarshalSchemaYAML([]byte(`
+spec_version: v1
+name: payments
+fields:
+  payments.a:
+    type: string
+dependentRequired:
+  payments.a: [payments.a]
+`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot list itself")
+}
+
 func TestYAMLRoundtrip(t *testing.T) {
 	original := &pb.Schema{
 		Id:                 "test-id",
