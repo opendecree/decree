@@ -141,15 +141,20 @@ func (m *MemoryStore) CreateSchemaVersion(_ context.Context, arg CreateSchemaVer
 		return domain.SchemaVersion{}, domain.ErrNotFound
 	}
 
+	depReq := arg.DependentRequired
+	if len(depReq) == 0 {
+		depReq = []byte("[]")
+	}
 	sv := domain.SchemaVersion{
-		ID:            m.nextID(),
-		SchemaID:      arg.SchemaID,
-		Version:       arg.Version,
-		ParentVersion: arg.ParentVersion,
-		Description:   arg.Description,
-		Checksum:      arg.Checksum,
-		Published:     false,
-		CreatedAt:     time.Now(),
+		ID:                m.nextID(),
+		SchemaID:          arg.SchemaID,
+		Version:           arg.Version,
+		ParentVersion:     arg.ParentVersion,
+		Description:       arg.Description,
+		Checksum:          arg.Checksum,
+		Published:         false,
+		DependentRequired: depReq,
+		CreatedAt:         time.Now(),
 	}
 	m.schemaVersions[sv.ID] = sv
 	return sv, nil

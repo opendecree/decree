@@ -37,14 +37,18 @@ type Schema struct {
 
 // SchemaVersion represents a specific version of a schema.
 type SchemaVersion struct {
-	ID            string
-	SchemaID      string
-	Version       int32
-	ParentVersion *int32
-	Description   *string
-	Checksum      string
-	Published     bool
-	CreatedAt     time.Time
+	ID                string
+	SchemaID          string
+	Version           int32
+	ParentVersion     *int32
+	Description       *string
+	Checksum          string
+	Published         bool
+	// DependentRequired holds the JSON-encoded list of cross-field "B
+	// required when A present" rules. Empty array when no rules exist.
+	// Wire shape: [{trigger_field, dependent_fields[]}].
+	DependentRequired []byte
+	CreatedAt         time.Time
 }
 
 // SchemaField represents a field definition within a schema version.

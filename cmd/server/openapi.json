@@ -1741,6 +1741,23 @@
     "v1DeleteTenantResponse": {
       "type": "object"
     },
+    "v1DependentRequiredEntry": {
+      "type": "object",
+      "properties": {
+        "triggerField": {
+          "type": "string",
+          "description": "Field path whose presence triggers the requirement."
+        },
+        "dependentFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Field paths that must be present when the trigger has a non-null value."
+        }
+      },
+      "description": "DependentRequiredEntry encodes one cross-field requirement: when the\ntrigger field has a non-null value, every dependent field path must also\nhave a non-null value. This is the proto wire form of JSON Schema 2020-12\ndependentRequired, which uses a `map<path, list<path>>` shape \u2014 proto\nmaps cannot hold repeated values directly, so we use a repeated list of\nentries."
+    },
     "v1ExportConfigResponse": {
       "type": "object",
       "properties": {
@@ -2205,6 +2222,14 @@
         "info": {
           "$ref": "#/definitions/v1SchemaInfo",
           "description": "Optional schema metadata: ownership, contact, labels."
+        },
+        "dependentRequired": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1DependentRequiredEntry"
+          },
+          "description": "Cross-field \"B required when A present\" rules. Each entry declares one\ntrigger field whose presence (non-null value) makes a list of dependent\nfield paths required (also non-null). Equivalent to JSON Schema 2020-12\ndependentRequired, scoped to schema-level cross-field requirement.\nLint-checked at ImportSchema time (every path must reference a real\nfield; trigger may not appear in its own dependents). Enforced at every\nconfig write against the post-merge snapshot."
         }
       },
       "description": "Schema represents a configuration schema template.\nSchemas define the allowed fields and their types for tenant configurations.\nEach schema is versioned \u2014 updates create new immutable versions."

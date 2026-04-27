@@ -88,12 +88,17 @@ func (s *PGStore) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 	if err != nil {
 		return domain.SchemaVersion{}, err
 	}
+	depReq := arg.DependentRequired
+	if len(depReq) == 0 {
+		depReq = []byte("[]")
+	}
 	row, err := s.write.CreateSchemaVersion(ctx, dbstore.CreateSchemaVersionParams{
-		SchemaID:      schemaID,
-		Version:       arg.Version,
-		ParentVersion: arg.ParentVersion,
-		Description:   arg.Description,
-		Checksum:      arg.Checksum,
+		SchemaID:          schemaID,
+		Version:           arg.Version,
+		ParentVersion:     arg.ParentVersion,
+		Description:       arg.Description,
+		Checksum:          arg.Checksum,
+		DependentRequired: depReq,
 	})
 	if err != nil {
 		return domain.SchemaVersion{}, err
@@ -396,14 +401,15 @@ func schemaFromDB(r dbstore.Schema) domain.Schema {
 
 func schemaVersionFromDB(r dbstore.SchemaVersion) domain.SchemaVersion {
 	return domain.SchemaVersion{
-		ID:            pgconv.UUIDToString(r.ID),
-		SchemaID:      pgconv.UUIDToString(r.SchemaID),
-		Version:       r.Version,
-		ParentVersion: r.ParentVersion,
-		Description:   r.Description,
-		Checksum:      r.Checksum,
-		Published:     r.Published,
-		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
+		ID:                pgconv.UUIDToString(r.ID),
+		SchemaID:          pgconv.UUIDToString(r.SchemaID),
+		Version:           r.Version,
+		ParentVersion:     r.ParentVersion,
+		Description:       r.Description,
+		Checksum:          r.Checksum,
+		Published:         r.Published,
+		DependentRequired: r.DependentRequired,
+		CreatedAt:         pgconv.TimestamptzToTime(r.CreatedAt),
 	}
 }
 

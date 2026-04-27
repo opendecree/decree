@@ -120,14 +120,15 @@ type SchemaField struct {
 }
 
 type SchemaVersion struct {
-	ID            pgtype.UUID        `json:"id"`
-	SchemaID      pgtype.UUID        `json:"schema_id"`
-	Version       int32              `json:"version"`
-	ParentVersion *int32             `json:"parent_version"`
-	Description   *string            `json:"description"`
-	Checksum      string             `json:"checksum"`
-	Published     bool               `json:"published"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ID                pgtype.UUID        `json:"id"`
+	SchemaID          pgtype.UUID        `json:"schema_id"`
+	Version           int32              `json:"version"`
+	ParentVersion     *int32             `json:"parent_version"`
+	Description       *string            `json:"description"`
+	Checksum          string             `json:"checksum"`
+	Published         bool               `json:"published"`
+	DependentRequired []byte             `json:"dependent_required"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
 type Tenant struct {

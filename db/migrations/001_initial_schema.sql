@@ -24,14 +24,17 @@ CREATE TABLE schemas (
 );
 
 CREATE TABLE schema_versions (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    schema_id      UUID NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
-    version        INT NOT NULL,
-    parent_version INT,
-    description    TEXT,
-    checksum       TEXT NOT NULL,
-    published      BOOLEAN NOT NULL DEFAULT false,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    schema_id          UUID NOT NULL REFERENCES schemas(id) ON DELETE CASCADE,
+    version            INT NOT NULL,
+    parent_version     INT,
+    description        TEXT,
+    checksum           TEXT NOT NULL,
+    published          BOOLEAN NOT NULL DEFAULT false,
+    -- JSON array of {trigger_field, dependent_fields} entries encoding the
+    -- schema's dependentRequired rules. Empty array when no rules exist.
+    dependent_required JSONB NOT NULL DEFAULT '[]',
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(schema_id, version)
 );
 
