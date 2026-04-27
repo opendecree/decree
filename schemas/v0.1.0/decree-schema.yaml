@@ -1,0 +1,325 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+#
+# OpenDecree schema-format meta-schema (v0.1.0).
+#
+# Validates `decree.schema.yaml` files — the format authors use to declare
+# the fields, types, and constraints of a schema. Layer-1 structural
+# validation only: per the design brief, semantic rules that JSON Schema
+# cannot express (e.g. referential integrity between redirect_to /
+# dependentRequired / validations and the field set) stay in the Go
+# parser at internal/schema/validate_constraints.go.
+#
+# This document is authored in YAML for readability and converted to JSON
+# at publish time. Both forms are committed alongside each other; tooling
+# may consume either.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json"
+title: OpenDecree Schema Format (v0.1.0)
+description: >-
+  Schema definition format for OpenDecree. A decree.schema.yaml file
+  declares the fields, types, constraints, and cross-field rules of a
+  schema that tenants can then bind to and apply config values against.
+
+type: object
+required: [spec_version, name, fields]
+
+properties:
+  spec_version:
+    description: Decree schema-format spec version. Must be "v1".
+    type: string
+    const: v1
+  $schema:
+    description: Optional pointer to this meta-schema. HTTPS URL.
+    type: string
+    format: uri
+    pattern: "^https://"
+  $id:
+    description: >-
+      Optional URN identifying this schema document. Format
+      urn:decree:schema:<segment>(:<segment>)*.
+    type: string
+    pattern: "^urn:decree:schema:[a-zA-Z0-9][a-zA-Z0-9._-]*(?::[a-zA-Z0-9][a-zA-Z0-9._-]*)*$"
+  name:
+    description: Schema name. Slug — lowercase alphanumeric + hyphens.
+    type: string
+    pattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    minLength: 1
+    maxLength: 63
+  description:
+    description: Human-readable description of the schema.
+    type: string
+  version:
+    description: >-
+      Informational schema version number. The server assigns the next
+      version on import; this field is round-tripped through ImportSchema /
+      GetSchema for documentation purposes.
+    type: integer
+    minimum: 1
+  version_description:
+    description: Description of what changed in this schema version.
+    type: string
+  info:
+    $ref: "#/$defs/info"
+  fields:
+    description: >-
+      The fields defined in this schema version. Map keys are field paths
+      matching the field-path regex; at least one entry is required.
+    type: object
+    minProperties: 1
+    propertyNames:
+      $ref: "#/$defs/fieldPath"
+    additionalProperties:
+      $ref: "#/$defs/field"
+  dependentRequired:
+    description: >-
+      Cross-field "B required when A present" rules. Each key is a
+      trigger field path; each value is the list of dependent paths that
+      must be non-null when the trigger is non-null. Field-existence
+      checking is performed by the Go parser, not the meta-schema.
+    type: object
+    propertyNames:
+      $ref: "#/$defs/fieldPath"
+    additionalProperties:
+      type: array
+      items:
+        type: string
+        pattern: "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+      uniqueItems: true
+  validations:
+    description: >-
+      Cross-field rules expressed in CEL. Reserved in v0.1.0 — the parser
+      persists rules; the runtime engine ships in Phase 2 (issue #76).
+    type: array
+    items:
+      $ref: "#/$defs/validation"
+
+patternProperties:
+  "^x-": true
+
+unevaluatedProperties: false
+
+$defs:
+  fieldPath:
+    description: Field path. ASCII letter/underscore start; alphanumeric, underscore, dot, hyphen.
+    type: string
+    pattern: "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+
+  field:
+    type: object
+    required: [type]
+    properties:
+      type:
+        type: string
+        enum: [integer, number, string, bool, time, duration, url, json]
+      description: { type: string }
+      default: { type: string }
+      nullable: { type: boolean }
+      deprecated: { type: boolean }
+      redirect_to:
+        description: Target field path for deprecated-field reads. Existence checked Go-side.
+        type: string
+        pattern: "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+      title: { type: string }
+      example: { type: string }
+      examples:
+        type: object
+        additionalProperties:
+          $ref: "#/$defs/example"
+      externalDocs:
+        $ref: "#/$defs/externalDocs"
+      tags:
+        type: array
+        items: { type: string }
+      format:
+        description: >-
+          Free-form semantic format hint (e.g. "email", "semver",
+          "percentage"). Informational only — not enforced by validation.
+        type: string
+      readOnly: { type: boolean }
+      writeOnce: { type: boolean }
+      sensitive: { type: boolean }
+      constraints:
+        type: object
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+    # Per-type constraint compatibility. Use allOf [if/then] over four
+    # type buckets — better error messages than oneOf in ajv and
+    # python-jsonschema. Each branch sets the shape of `constraints` so
+    # incompatible constraint keys fail at meta-schema level.
+    allOf:
+      - if:
+          properties:
+            type:
+              enum: [integer, number, duration]
+          required: [type]
+        then:
+          properties:
+            constraints:
+              $ref: "#/$defs/constraintsNumeric"
+      - if:
+          properties:
+            type:
+              const: string
+          required: [type]
+        then:
+          properties:
+            constraints:
+              $ref: "#/$defs/constraintsString"
+      - if:
+          properties:
+            type:
+              const: json
+          required: [type]
+        then:
+          properties:
+            constraints:
+              $ref: "#/$defs/constraintsJSON"
+      - if:
+          properties:
+            type:
+              enum: [bool, time, url]
+          required: [type]
+        then:
+          properties:
+            constraints:
+              $ref: "#/$defs/constraintsOther"
+
+  constraintsNumeric:
+    description: Constraints valid for integer / number / duration fields.
+    type: object
+    properties:
+      minimum: { type: number }
+      maximum: { type: number }
+      exclusiveMinimum: { type: number }
+      exclusiveMaximum: { type: number }
+      enum:
+        type: array
+        items: true
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  constraintsString:
+    description: Constraints valid for string fields.
+    type: object
+    properties:
+      minLength: { type: integer, minimum: 0 }
+      maxLength: { type: integer, minimum: 0 }
+      pattern:
+        description: RE2 regex the value must match.
+        type: string
+      enum:
+        # Items are unrestricted — proto stores enum values as strings,
+        # but YAML authors typically write native primitives (numbers,
+        # bools) that the Go parser coerces to strings on import. Don't
+        # force authors to quote.
+        type: array
+        items: true
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  constraintsJSON:
+    description: Constraints valid for json fields.
+    type: object
+    properties:
+      json_schema:
+        description: Embedded JSON Schema (as a JSON-encoded string) for structural validation.
+        type: string
+      enum:
+        type: array
+        items: true
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  constraintsOther:
+    description: Constraints valid for bool / time / url fields.
+    type: object
+    properties:
+      enum:
+        type: array
+        items: true
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  info:
+    description: Optional schema-level metadata. OAS Info Object.
+    type: object
+    properties:
+      title: { type: string }
+      author: { type: string }
+      contact:
+        type: object
+        properties:
+          name: { type: string }
+          email:
+            type: string
+            format: email
+          url:
+            type: string
+            format: uri
+        patternProperties:
+          "^x-": true
+        unevaluatedProperties: false
+      labels:
+        type: object
+        additionalProperties: { type: string }
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  example:
+    type: object
+    required: [value]
+    properties:
+      value: { type: string }
+      summary: { type: string }
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  externalDocs:
+    type: object
+    required: [url]
+    properties:
+      url:
+        type: string
+        format: uri
+      description: { type: string }
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false
+
+  validation:
+    description: One CEL validation rule. See cel-validation.md.
+    type: object
+    required: [rule, message]
+    properties:
+      path:
+        description: Optional path prefix scoping the rule. Empty == schema-wide.
+        type: string
+      rule:
+        description: CEL expression source. Compilation deferred to Phase 2.
+        type: string
+        minLength: 1
+      message:
+        description: Human-readable failure message shown to clients.
+        type: string
+        minLength: 1
+      severity:
+        description: >-
+          error (default) rejects writes; warning is non-blocking
+          (reserved for Phase 2). Empty string permitted to match the
+          Go parser's default-to-error behavior.
+        type: string
+        enum: ["", "error", "warning"]
+      reason:
+        description: Optional machine-readable failure code.
+        type: string
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false

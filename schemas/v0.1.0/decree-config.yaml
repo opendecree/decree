@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://json-schema.org/draft/2020-12/schema
+#
+# OpenDecree config-format meta-schema (v0.1.0).
+#
+# Validates `decree.config.yaml` files — the values format that tenants
+# apply against a schema previously imported via decree.schema.yaml.
+# Layer-1 structural validation only: per-field type checking, constraint
+# enforcement, and cross-field rules (dependentRequired / validations) all
+# stay server-side, since they need the bound schema as context.
+#
+# This document is authored in YAML for readability and converted to JSON
+# at publish time. Both forms are committed alongside each other; tooling
+# may consume either.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://schemas.opendecree.io/schema/v0.1.0/decree-config.json"
+title: OpenDecree Config Format (v0.1.0)
+description: >-
+  Tenant-side import format for OpenDecree config values. A
+  decree.config.yaml file declares the values to apply against a
+  previously imported schema; the server enforces type compatibility and
+  cross-field rules at write time.
+
+type: object
+required: [spec_version, values]
+
+properties:
+  spec_version:
+    description: Decree config-format spec version. Must be "v1".
+    type: string
+    const: v1
+  $schema:
+    description: Optional pointer to this meta-schema. HTTPS URL.
+    type: string
+    format: uri
+    pattern: "^https://"
+  description:
+    description: Human-readable description of the config (e.g. release notes).
+    type: string
+  version:
+    description: >-
+      Informational config version. The server assigns the next version
+      on import; this field is round-tripped through ImportConfig /
+      ExportConfig for documentation purposes.
+    type: integer
+    minimum: 1
+  values:
+    description: >-
+      Map of field path to value entry. Field paths must reference real
+      fields in the bound schema; the server enforces this at import.
+      The value's wire shape depends on the schema's field type
+      (integer/number/string/bool/time/duration/url/json) — meta-schema
+      does not type-check the value itself.
+    type: object
+    minProperties: 1
+    propertyNames:
+      $ref: "#/$defs/fieldPath"
+    additionalProperties:
+      $ref: "#/$defs/configValue"
+
+patternProperties:
+  "^x-": true
+
+unevaluatedProperties: false
+
+$defs:
+  fieldPath:
+    description: Field path. ASCII letter/underscore start; alphanumeric, underscore, dot, hyphen.
+    type: string
+    pattern: "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+
+  configValue:
+    description: One value entry. The actual value's type is checked server-side against the schema.
+    type: object
+    required: [value]
+    properties:
+      value:
+        description: >-
+          The value to apply. Type must match the bound schema's field
+          type — checked server-side. Null indicates the field is being
+          cleared.
+      description:
+        description: Human-readable description of this specific value.
+        type: string
+    patternProperties:
+      "^x-": true
+    unevaluatedProperties: false

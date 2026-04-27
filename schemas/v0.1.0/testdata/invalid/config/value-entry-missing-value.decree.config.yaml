@@ -1,0 +1,5 @@
+# Asserts: each entry in values must contain a `value` key.
+spec_version: v1
+values:
+  payments.fee:
+    description: "no value provided"

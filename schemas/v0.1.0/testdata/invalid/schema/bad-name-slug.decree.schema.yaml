@@ -1,0 +1,7 @@
+# Asserts: name must be a slug (lowercase alphanumeric + hyphens, 1-63
+# chars). Underscores and uppercase rejected.
+spec_version: v1
+name: Bad_Name
+fields:
+  payments.fee:
+    type: string

@@ -1,0 +1,6 @@
+# Asserts: field type must be one of the 8 documented values.
+spec_version: v1
+name: payments
+fields:
+  payments.fee:
+    type: float64

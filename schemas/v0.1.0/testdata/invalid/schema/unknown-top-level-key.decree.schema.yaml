@@ -1,0 +1,8 @@
+# Asserts: unknown top-level keys are rejected (only x-* extensions
+# allowed at the top level).
+spec_version: v1
+name: payments
+fields:
+  payments.fee:
+    type: string
+unknown_top_level_key: bogus

@@ -1,0 +1,10 @@
+# Asserts: validations[*].severity must be one of "error" / "warning".
+spec_version: v1
+name: payments
+fields:
+  payments.x:
+    type: string
+validations:
+  - rule: "self.payments.x != ''"
+    message: "non-empty"
+    severity: critical
