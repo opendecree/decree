@@ -48,6 +48,8 @@ All changes are **breaking**. Per project policy (no backward compat pre-product
 | Reject unknown keys (`unevaluatedProperties: false`) | Typo prevention; matches OAS 3.1 |
 | Reserve `x-*` prefix for vendor extensions | Extensibility without polluting core format; matches OAS 3.1 |
 | `format:` stays free-form string | Recommend common values in docs, don't enforce (matches OAS) |
+| Reserve top-level `validations:` (list of CEL rules) | Cross-field validation key — see [cel-validation.md](cel-validation.md). Parser accepts and stores in v0.1.0; engine ships separately. Reserving up-front avoids a v0.2.0 breaking change. |
+| Reserve top-level `dependentRequired:` (JSON Schema 2020-12 keyword) | Declarative "field B required when field A present" — free of CEL. Native-substitutable cases should use it. |
 
 ### Final top-level shape (v0.1.0)
 
@@ -87,7 +89,17 @@ fields:                                   # required, min 1 entry
       ...
     x-custom-extension: ...               # allowed via x-* prefix
   x-top-level-extension: ...              # allowed at any level
+
+# Optional top-level keys for cross-field validation (reserved in v0.1.0):
+validations:                              # CEL rule list — engine ships separately
+  - path: payments
+    rule: "self.payments.min < self.payments.max"
+    message: "min must be < max"
+dependentRequired:                        # JSON Schema 2020-12 keyword
+  payments.refunds_enabled: [payments.refund_window]
 ```
+
+See [cel-validation.md](cel-validation.md) for the full design of `validations:` and the prior-art survey driving the binding shape (`self`).
 
 ### Field type system
 
@@ -189,6 +201,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 ### Cross-cutting
 
 - #129 — Pluggable schema parser: extract v1 parser behind an interface so future spec versions register as a single package + init(). Unblocks v2 without branches across the codebase.
+- #76 (Phase 1) — Reserve `validations:` and `dependentRequired:` keys in meta-schema + parser. No engine; rules round-trip through ImportSchema/GetSchema unevaluated. See [cel-validation.md](cel-validation.md). Must land in v0.1.0 to lock the schema shape.
 
 ## Open questions
 
