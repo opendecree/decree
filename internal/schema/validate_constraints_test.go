@@ -172,3 +172,86 @@ func TestValidateConstraints_MinLengthGreaterThanMaxLength_Rejected(t *testing.T
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "minLength")
 }
+
+// --- Prefix-overlap (cross-field) ---
+
+func mkField(path string) *pb.SchemaField {
+	return &pb.SchemaField{Path: path, Type: pb.FieldType_FIELD_TYPE_STRING}
+}
+
+func TestValidateNoPrefixOverlap_Empty(t *testing.T) {
+	require.NoError(t, validateNoPrefixOverlap(nil))
+	require.NoError(t, validateNoPrefixOverlap([]*pb.SchemaField{}))
+}
+
+func TestValidateNoPrefixOverlap_Single(t *testing.T) {
+	require.NoError(t, validateNoPrefixOverlap([]*pb.SchemaField{mkField("payments")}))
+}
+
+func TestValidateNoPrefixOverlap_NoOverlap(t *testing.T) {
+	require.NoError(t, validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payments.fee"),
+		mkField("payments.window"),
+		mkField("billing.invoice"),
+	}))
+}
+
+func TestValidateNoPrefixOverlap_Direct(t *testing.T) {
+	err := validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payments"),
+		mkField("payments.fee"),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"payments"`)
+	assert.Contains(t, err.Error(), `"payments.fee"`)
+}
+
+func TestValidateNoPrefixOverlap_DeepGap(t *testing.T) {
+	// "payments" is a strict prefix of "payments.refunds.window" even though
+	// the intermediate path "payments.refunds" is not declared.
+	err := validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payments"),
+		mkField("payments.refunds.window"),
+	})
+	require.Error(t, err)
+}
+
+func TestValidateNoPrefixOverlap_TransitiveSiblings(t *testing.T) {
+	// Sibling siblings are fine; only ancestor-descendant overlap fails.
+	err := validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("a.b"),
+		mkField("a.b.c"),
+		mkField("a.b.d"),
+	})
+	require.Error(t, err)
+	// First sorted pair (a.b, a.b.c) trips the check.
+	assert.Contains(t, err.Error(), `"a.b"`)
+	assert.Contains(t, err.Error(), `"a.b.c"`)
+}
+
+func TestValidateNoPrefixOverlap_SubstringNotPrefix(t *testing.T) {
+	// "payment" and "payments" share a string prefix but no path-segment
+	// boundary — must NOT be flagged.
+	require.NoError(t, validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payment"),
+		mkField("payments"),
+	}))
+}
+
+func TestValidateNoPrefixOverlap_SiblingsWithCommonPrefix(t *testing.T) {
+	// "payments.fee" and "payments.fees" — neither is an ancestor of the other.
+	require.NoError(t, validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payments.fee"),
+		mkField("payments.fees"),
+	}))
+}
+
+func TestValidateNoPrefixOverlap_UnsortedInput(t *testing.T) {
+	// Conflict must be caught regardless of input order.
+	err := validateNoPrefixOverlap([]*pb.SchemaField{
+		mkField("payments.refunds.window"),
+		mkField("billing"),
+		mkField("payments"),
+	})
+	require.Error(t, err)
+}
