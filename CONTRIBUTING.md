@@ -50,6 +50,7 @@ modify specs → generate code → test → lint → build → deploy → e2e te
 | `make docs` | Generate all documentation (API + CLI + man pages) | Mixed |
 | `make image` | Build the Docker image | Docker |
 | `make migrate` | Run database migrations | Docker |
+| `make validate-meta-schemas` | Validate canonical `*.decree.schema.yaml` and `*.decree.config.yaml` files against the v0.1.0 meta-schemas under `schemas/v0.1.0/` (requires `pip install jsonschema PyYAML`) | Local |
 | `make bench` | Run unit benchmarks | Local |
 | `make bench-e2e` | Run e2e benchmarks against docker stack | Docker |
 | `make clean` | Remove build artifacts and generated code | Mixed |

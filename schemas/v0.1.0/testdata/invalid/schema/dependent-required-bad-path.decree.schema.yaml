@@ -1,0 +1,10 @@
+# Asserts: dependentRequired keys must match the field-path regex
+# (note: existence-against-fields is checked Go-side, not by meta-schema).
+spec_version: v1
+name: payments
+fields:
+  payments.a:
+    type: string
+dependentRequired:
+  "1bad-path":
+    - payments.a

@@ -26,7 +26,7 @@ Published versions are immutable — you cannot change their fields. To evolve a
 Schemas are defined in YAML for import/export. The format uses syntax version `v1`:
 
 ```yaml
-# yaml-language-server: $schema=../../schemas/schema-yaml.json
+# yaml-language-server: $schema=../../schemas/v0.1.0/decree-schema.json
 spec_version: "v1"
 name: payments
 description: Payment processing configuration
@@ -101,7 +101,7 @@ fields:
       url: https://docs.example.com/webhooks
 ```
 
-A [JSON Schema](../../schemas/schema-yaml.json) is available for editor validation and autocomplete.
+JSON Schemas for editor validation and autocomplete are available under [`schemas/v0.1.0/`](../../schemas/v0.1.0/) — `decree-schema.json` validates the schema-definition format documented here, and `decree-config.json` validates the tenant-side config format.
 
 ### Required fields
 

@@ -1,0 +1,9 @@
+# Asserts: per-type constraint matrix rejects `pattern` on a bool field
+# (string-only constraint).
+spec_version: v1
+name: payments
+fields:
+  payments.enabled:
+    type: bool
+    constraints:
+      pattern: "^true$"

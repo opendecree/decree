@@ -1,0 +1,7 @@
+# Asserts: field paths must start with a letter or underscore. Leading
+# digit rejected.
+spec_version: v1
+name: payments
+fields:
+  1starts_with_digit:
+    type: string

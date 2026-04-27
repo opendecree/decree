@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif
+.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -80,6 +80,10 @@ lint-proto: $(TOOLS_SENTINEL)
 test:
 	go test ./... -race -count=1
 	@for mod in $(SDK_MODULES) cmd/decree; do (cd $$mod && go test ./... -race -count=1) || exit 1; done
+
+## validate-meta-schemas: Validate canonical schema/config YAMLs against the v0.1.0 meta-schemas
+validate-meta-schemas:
+	python3 scripts/validate-meta-schemas.py
 
 ## pre-commit: Run all before-commit checks (build, vet, format, lint, test, coverage)
 pre-commit:

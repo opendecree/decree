@@ -475,12 +475,42 @@ jobs:
           go-version-file: go.mod
           work-dir: .
 
+  # Validates every checked-in *.decree.schema.yaml and *.decree.config.yaml
+  # against the v0.1.0 meta-schemas, and asserts every fixture under
+  # schemas/v0.1.0/testdata/invalid/ FAILS validation. Closes #124.
+  #
+  # Runs unconditionally — no needs.changes gate — because the script also
+  # cross-checks the meta-schema sources themselves and is fast enough that
+  # path-filtering would add more complexity than it saves.
+  meta-schemas:
+    name: Meta-schemas check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install jsonschema
+        run: pip install --no-cache-dir 'jsonschema>=4.21' 'PyYAML>=6'
+
+      - name: Validate meta-schemas
+        run: make validate-meta-schemas
+
   # Aggregates all job results for branch protection. A single required check
   # that passes iff every listed job passed or was legitimately skipped.
   check:
     name: CI check
     if: always()
-    needs: [lint, test, sdk-compat, docs, e2e, examples, govulncheck, deps-review]
+    needs: [lint, test, sdk-compat, docs, e2e, examples, govulncheck, deps-review, meta-schemas]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

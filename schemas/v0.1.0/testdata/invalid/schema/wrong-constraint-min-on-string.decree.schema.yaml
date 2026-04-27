@@ -1,0 +1,9 @@
+# Asserts: per-type constraint matrix rejects `minimum` on a string
+# field (numeric-only constraint).
+spec_version: v1
+name: payments
+fields:
+  payments.label:
+    type: string
+    constraints:
+      minimum: 0

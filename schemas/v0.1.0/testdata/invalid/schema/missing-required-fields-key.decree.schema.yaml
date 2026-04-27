@@ -1,0 +1,3 @@
+# Asserts: top-level `fields` is required.
+spec_version: v1
+name: payments

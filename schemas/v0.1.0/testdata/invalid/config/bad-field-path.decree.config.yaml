@@ -1,0 +1,5 @@
+# Asserts: values map keys must match the field-path regex.
+spec_version: v1
+values:
+  "1bad-path":
+    value: 5
