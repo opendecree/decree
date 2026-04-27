@@ -592,23 +592,26 @@ func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest)
 		return nil, status.Error(codes.Internal, "unexpected nil schema response")
 	}
 
-	doc := schemaToYAML(getResp.Schema)
-	data, err := marshalSchemaYAML(doc)
+	specVersion := ""
+	if req.SpecVersion != nil {
+		specVersion = *req.SpecVersion
+	}
+	data, err := MarshalSchemaAt(getResp.Schema, specVersion)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to marshal schema to YAML")
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	return &pb.ExportSchemaResponse{YamlContent: data}, nil
 }
 
 func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest) (*pb.ImportSchemaResponse, error) {
-	doc, err := unmarshalSchemaYAML(req.YamlContent)
+	parsed, err := Dispatch(req.YamlContent)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema YAML: %v", err)
 	}
 
-	fields := yamlToProtoFields(doc)
-	depReqs := yamlToProtoDependentRequired(doc.DependentRequired)
+	fields := parsed.Fields
+	depReqs := parsed.DependentRequired
 	if err := validateDependentRequiredAgainstFields(depReqs, fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -616,22 +619,21 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to encode dependentRequired: %v", err)
 	}
-	validations := yamlToProtoValidations(doc.Validations)
-	validationsJSON, err := MarshalValidations(validations)
+	validationsJSON, err := MarshalValidations(parsed.Validations)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to encode validations: %v", err)
 	}
 	checksum := computeChecksum(fields)
 
 	// Check if schema already exists by name.
-	existing, err := s.store.GetSchemaByName(ctx, doc.Name)
+	existing, err := s.store.GetSchemaByName(ctx, parsed.Name)
 	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return nil, status.Error(codes.Internal, "failed to look up schema")
 	}
 
 	if errors.Is(err, domain.ErrNotFound) {
 		// New schema — create with v1.
-		resp, err := s.importCreateNew(ctx, doc, fields, checksum, depReqJSON, validationsJSON)
+		resp, err := s.importCreateNew(ctx, parsed, fields, checksum, depReqJSON, validationsJSON)
 		if err != nil || !req.AutoPublish {
 			return resp, err
 		}
@@ -656,17 +658,17 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	}
 
 	// Create new version.
-	resp, err := s.importNewVersion(ctx, existing, latestVersion, doc, fields, checksum, depReqJSON, validationsJSON)
+	resp, err := s.importNewVersion(ctx, existing, latestVersion, parsed, fields, checksum, depReqJSON, validationsJSON)
 	if err != nil || !req.AutoPublish {
 		return resp, err
 	}
 	return s.autoPublish(ctx, resp)
 }
 
-func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields []*pb.SchemaField, checksum string, depReqJSON, validationsJSON []byte) (*pb.ImportSchemaResponse, error) {
+func (s *Service) importCreateNew(ctx context.Context, parsed *pb.Schema, fields []*pb.SchemaField, checksum string, depReqJSON, validationsJSON []byte) (*pb.ImportSchemaResponse, error) {
 	schema, err := s.store.CreateSchema(ctx, CreateSchemaParams{
-		Name:        doc.Name,
-		Description: ptrString(doc.Description),
+		Name:        parsed.Name,
+		Description: ptrString(parsed.Description),
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "import: create schema", "error", err)
@@ -676,7 +678,7 @@ func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields [
 	version, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
 		SchemaID:          schema.ID,
 		Version:           1,
-		Description:       ptrString(doc.VersionDescription),
+		Description:       ptrString(parsed.VersionDescription),
 		Checksum:          checksum,
 		DependentRequired: depReqJSON,
 		Validations:       validationsJSON,
@@ -696,12 +698,12 @@ func (s *Service) importCreateNew(ctx context.Context, doc *SchemaYAML, fields [
 	}, nil
 }
 
-func (s *Service) importNewVersion(ctx context.Context, schema domain.Schema, latestVersion domain.SchemaVersion, doc *SchemaYAML, fields []*pb.SchemaField, checksum string, depReqJSON, validationsJSON []byte) (*pb.ImportSchemaResponse, error) {
+func (s *Service) importNewVersion(ctx context.Context, schema domain.Schema, latestVersion domain.SchemaVersion, parsed *pb.Schema, fields []*pb.SchemaField, checksum string, depReqJSON, validationsJSON []byte) (*pb.ImportSchemaResponse, error) {
 	newVersion, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
 		SchemaID:          schema.ID,
 		Version:           latestVersion.Version + 1,
 		ParentVersion:     &latestVersion.Version,
-		Description:       ptrString(doc.VersionDescription),
+		Description:       ptrString(parsed.VersionDescription),
 		Checksum:          checksum,
 		DependentRequired: depReqJSON,
 		Validations:       validationsJSON,

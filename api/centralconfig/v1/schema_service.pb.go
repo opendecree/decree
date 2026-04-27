@@ -1432,7 +1432,11 @@ type ExportSchemaRequest struct {
 	// Schema ID (UUID).
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Schema version to export. If omitted, exports the latest version.
-	Version       *int32 `protobuf:"varint,2,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	Version *int32 `protobuf:"varint,2,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	// Schema-format spec version to emit (e.g. "v1"). When omitted, defaults
+	// to the highest version the server supports. The server returns
+	// InvalidArgument if the requested version is not registered.
+	SpecVersion   *string `protobuf:"bytes,3,opt,name=spec_version,json=specVersion,proto3,oneof" json:"spec_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1479,6 +1483,13 @@ func (x *ExportSchemaRequest) GetVersion() int32 {
 		return *x.Version
 	}
 	return 0
+}
+
+func (x *ExportSchemaRequest) GetSpecVersion() string {
+	if x != nil && x.SpecVersion != nil {
+		return *x.SpecVersion
+	}
+	return ""
 }
 
 type ExportSchemaResponse struct {
@@ -1727,12 +1738,14 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\x15ListFieldLocksRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"K\n" +
 	"\x16ListFieldLocksResponse\x121\n" +
-	"\x05locks\x18\x01 \x03(\v2\x1b.centralconfig.v1.FieldLockR\x05locks\"P\n" +
+	"\x05locks\x18\x01 \x03(\v2\x1b.centralconfig.v1.FieldLockR\x05locks\"\x89\x01\n" +
 	"\x13ExportSchemaRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
-	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01B\n" +
+	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01\x12&\n" +
+	"\fspec_version\x18\x03 \x01(\tH\x01R\vspecVersion\x88\x01\x01B\n" +
 	"\n" +
-	"\b_version\"9\n" +
+	"\b_versionB\x0f\n" +
+	"\r_spec_version\"9\n" +
 	"\x14ExportSchemaResponse\x12!\n" +
 	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\"[\n" +
 	"\x13ImportSchemaRequest\x12!\n" +

@@ -336,6 +336,11 @@ message ExportSchemaRequest {
 
   // Schema version to export. If omitted, exports the latest version.
   optional int32 version = 2;
+
+  // Schema-format spec version to emit (e.g. "v1"). When omitted, defaults
+  // to the highest version the server supports. The server returns
+  // InvalidArgument if the requested version is not registered.
+  optional string spec_version = 3;
 }
 
 message ExportSchemaResponse {

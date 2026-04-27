@@ -359,6 +359,13 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "specVersion",
+            "description": "Schema-format spec version to emit (e.g. \"v1\"). When omitted, defaults\nto the highest version the server supports. The server returns\nInvalidArgument if the requested version is not registered.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -687,6 +694,13 @@
             "required": false,
             "type": "integer",
             "format": "int32"
+          },
+          {
+            "name": "specVersion",
+            "description": "Config-format spec version to emit (e.g. \"v1\"). When omitted, defaults\nto the highest version the server supports. The server returns\nInvalidArgument if the requested version is not registered.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [

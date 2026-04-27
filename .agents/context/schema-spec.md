@@ -200,7 +200,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ### Cross-cutting
 
-- #129 — Pluggable schema parser: extract v1 parser behind an interface so future spec versions register as a single package + init(). Unblocks v2 without branches across the codebase.
+- #129 — Pluggable schema parser. `Parser` interface + package-level registry in `internal/schema/parser.go` (and symmetric in `internal/config/parser.go`). Each spec version is a single sibling file (`parser_v1.go`, future `parser_v2.go`) that declares a parser struct and registers it via `init()`. The service layer dispatches through `schema.Dispatch(yaml)` on import and `schema.MarshalSchemaAt(s, version)` on export; layer-2 semantic checks run on the proto value after dispatch so they're shared across versions. Adding v2 means landing one new file; nothing else in the codebase changes.
 - #76 (Phase 1) — Reserve `validations:` and `dependentRequired:` keys in meta-schema + parser. No engine; rules round-trip through ImportSchema/GetSchema unevaluated. See [cel-validation.md](cel-validation.md). Must land in v0.1.0 to lock the schema shape.
 
 ## Open questions

@@ -809,10 +809,13 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 		description = *cv.Description
 	}
 
-	doc := configToYAML(version, description, rows, fieldTypes)
-	data, err := marshalConfigYAML(doc)
+	specVersion := ""
+	if req.SpecVersion != nil {
+		specVersion = *req.SpecVersion
+	}
+	data, err := MarshalConfigAt(version, description, rows, fieldTypes, specVersion)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to marshal YAML")
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	return &pb.ExportConfigResponse{YamlContent: data}, nil
@@ -833,11 +836,6 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		return nil, err
 	}
 
-	doc, err := unmarshalConfigYAML(req.YamlContent)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid config YAML: %v", err)
-	}
-
 	actor := s.getActor(ctx)
 
 	// Verify tenant exists.
@@ -845,17 +843,19 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		return nil, status.Error(codes.NotFound, "tenant not found")
 	}
 
-	// Get schema field types for type-aware conversion.
+	// Get schema field types for type-aware parsing.
 	fieldTypes, err := s.getFieldTypeMap(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert YAML values to string representations.
-	values, err := yamlToConfigValues(doc, fieldTypes)
+	// Dispatch to the parser registered for the document's spec_version,
+	// converting YAML values to canonical string form along the way.
+	parsed, err := DispatchImport(req.YamlContent, fieldTypes)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "value conversion error: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid config YAML: %v", err)
 	}
+	values := parsed.Values
 
 	// Check field locks and validate.
 	for _, v := range values {
@@ -900,8 +900,8 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	desc := "Import from YAML"
 	if req.Description != nil {
 		desc = *req.Description
-	} else if doc.Description != "" {
-		desc = doc.Description
+	} else if parsed.Description != "" {
+		desc = parsed.Description
 	}
 
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
