@@ -1181,7 +1181,11 @@ type ExportConfigRequest struct {
 	// Tenant ID (UUID).
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Config version to export. If omitted, exports the latest version.
-	Version       *int32 `protobuf:"varint,2,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	Version *int32 `protobuf:"varint,2,opt,name=version,proto3,oneof" json:"version,omitempty"`
+	// Config-format spec version to emit (e.g. "v1"). When omitted, defaults
+	// to the highest version the server supports. The server returns
+	// InvalidArgument if the requested version is not registered.
+	SpecVersion   *string `protobuf:"bytes,3,opt,name=spec_version,json=specVersion,proto3,oneof" json:"spec_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1228,6 +1232,13 @@ func (x *ExportConfigRequest) GetVersion() int32 {
 		return *x.Version
 	}
 	return 0
+}
+
+func (x *ExportConfigRequest) GetSpecVersion() string {
+	if x != nil && x.SpecVersion != nil {
+		return *x.SpecVersion
+	}
+	return ""
 }
 
 type ExportConfigResponse struct {
@@ -1478,12 +1489,14 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\vfield_paths\x18\x02 \x03(\tR\n" +
 	"fieldPaths\"K\n" +
 	"\x11SubscribeResponse\x126\n" +
-	"\x06change\x18\x01 \x01(\v2\x1e.centralconfig.v1.ConfigChangeR\x06change\"]\n" +
+	"\x06change\x18\x01 \x01(\v2\x1e.centralconfig.v1.ConfigChangeR\x06change\"\x96\x01\n" +
 	"\x13ExportConfigRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
-	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01B\n" +
+	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01\x12&\n" +
+	"\fspec_version\x18\x03 \x01(\tH\x01R\vspecVersion\x88\x01\x01B\n" +
 	"\n" +
-	"\b_version\"9\n" +
+	"\b_versionB\x0f\n" +
+	"\r_spec_version\"9\n" +
 	"\x14ExportConfigResponse\x12!\n" +
 	"\fyaml_content\x18\x01 \x01(\fR\vyamlContent\"\xbe\x01\n" +
 	"\x13ImportConfigRequest\x12\x1b\n" +

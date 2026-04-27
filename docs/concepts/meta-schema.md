@@ -99,6 +99,14 @@ https://schemas.opendecree.io/schema/v{MAJOR}.{MINOR}.{PATCH}/decree-{schema|con
 
 **Post-1.0.0 (future):** switch to major-only paths (`/v1/`) with permanent redirects from historical full-SemVer URLs. Matches the OpenAPI 3.x dated-URL practice.
 
+## Multi-version evolution
+
+The server supports multiple schema-format versions concurrently — schemas imported under `v1` continue to work after `v2` is registered, and the export path can emit either. Internally, each spec version is a small parser plug-in that registers itself in a package-level registry; adding `v2` means landing a single new file (e.g. `parser_v2.go`) that declares the parser and calls `init() { Register(&v2Parser{}) }`. The service layer dispatches through the registry on both `ImportSchema` and `ExportSchema` paths.
+
+`ExportSchema` (and `ExportConfig`) accept an optional `spec_version` request field — when omitted, the server emits the highest version it supports. Unknown values produce `InvalidArgument` with the supported version list in the error message.
+
+This pattern keeps the v1 code unchanged when v2 lands and gives the server a single registry of versions to advertise to clients.
+
 ## Stability policy
 
 The meta-schema follows SemVer. Versions are bumped in a separate cadence from the decree server release; the meta-schema version is always present in the URL.

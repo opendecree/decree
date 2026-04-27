@@ -758,6 +758,7 @@ Usage statistics are tracked asynchronously via batched read counters.
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
 | version | [int32](#int32) | optional | Config version to export. If omitted, exports the latest version. |
+| spec_version | [string](#string) | optional | Config-format spec version to emit (e.g. &#34;v1&#34;). When omitted, defaults to the highest version the server supports. The server returns InvalidArgument if the requested version is not registered. |
 
 
 
@@ -1307,6 +1308,7 @@ bypasses the cache and reads directly from the database.
 | ----- | ---- | ----- | ----------- |
 | id | [string](#string) |  | Schema ID (UUID). |
 | version | [int32](#int32) | optional | Schema version to export. If omitted, exports the latest version. |
+| spec_version | [string](#string) | optional | Schema-format spec version to emit (e.g. &#34;v1&#34;). When omitted, defaults to the highest version the server supports. The server returns InvalidArgument if the requested version is not registered. |
 
 
 
