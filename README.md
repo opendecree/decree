@@ -334,6 +334,11 @@ The API is defined in Protocol Buffers under [`proto/`](proto/), published to BS
 
 Values use a `TypedValue` oneof — integer, number, string, bool, timestamp, duration, url, json — with null support.
 
+The schema YAML format authors write to define their config shape is documented in [Schema Format](docs/concepts/schema-format.md). The corresponding [JSON Schema 2020-12 meta-schemas](docs/concepts/meta-schema.md) for editor IntelliSense and CI validation are published at:
+
+- `https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json` — validates `*.decree.schema.yaml`
+- `https://schemas.opendecree.io/schema/v0.1.0/decree-config.json` — validates `*.decree.config.yaml`
+
 All endpoints that accept a tenant or schema ID also accept the **name slug** — the server resolves automatically. Use UUIDs or human-readable names interchangeably:
 
 Generate client stubs in any language from BSR, or use the official SDKs:

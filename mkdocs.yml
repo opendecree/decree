@@ -38,6 +38,8 @@ nav:
   - Concepts:
       - Overview: concepts/overview.md
       - Schemas & Fields: concepts/schemas-and-fields.md
+      - Schema Format: concepts/schema-format.md
+      - Meta-schema: concepts/meta-schema.md
       - Tenants: concepts/tenants.md
       - Typed Values: concepts/typed-values.md
       - Versioning: concepts/versioning.md

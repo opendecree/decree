@@ -1,8 +1,12 @@
 # Schemas & Fields
 
-A **schema** defines the structure of a configuration — what fields exist, their types, constraints, and defaults. Schemas enforce consistency: every config value must belong to a field defined in the schema.
+A **schema** defines the structure of a configuration — what fields exist, their types, constraints, defaults, and cross-field rules. Schemas enforce consistency: every config value must belong to a field defined in the schema, with the right type and within the declared constraints.
 
-## Schema Lifecycle
+> **Alpha Software** — OpenDecree is under active development. The schema format may change without notice between versions. Not recommended for production use yet.
+
+For the canonical format reference (every key, every constraint, every option), see [Schema Format](schema-format.md). For the JSON Schema 2020-12 meta-schema and how to use it in your own tooling, see [Meta-schema](meta-schema.md).
+
+## Schema lifecycle
 
 ```mermaid
 stateDiagram-v2
@@ -19,18 +23,17 @@ stateDiagram-v2
 3. **Publish** — mark a version as immutable. Only published versions can be assigned to tenants.
 4. **Assign** — create a tenant bound to a published schema version.
 
-Published versions are immutable — you cannot change their fields. To evolve a schema, create a new version and publish it.
+Published versions are immutable — you cannot change their fields. To evolve a schema, create a new version and publish it. See [Versioning](versioning.md) for the version-evolution semantics.
 
-## Schema YAML Format
+## Quick example
 
-Schemas are defined in YAML for import/export. The format uses syntax version `v1`:
+A small schema in YAML:
 
 ```yaml
-# yaml-language-server: $schema=../../schemas/v0.1.0/decree-schema.json
-spec_version: "v1"
+# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json
+spec_version: v1
 name: payments
 description: Payment processing configuration
-version_description: Add timeout field
 
 fields:
   payments.enabled:
@@ -52,240 +55,42 @@ fields:
     constraints:
       enum: [USD, EUR, GBP]
 
-  payments.max_retries:
-    type: integer
-    description: Maximum retry attempts
-    constraints:
-      minimum: 0
-      maximum: 10
-
   payments.timeout:
     type: duration
     description: Payment processing timeout
-
-  payments.webhook:
-    type: url
-    description: Webhook endpoint for payment events
-    nullable: true
-
-  payments.metadata_schema:
-    type: json
-    description: Custom metadata shape
-    constraints:
-      json_schema: |
-        {"type": "object", "properties": {"ref": {"type": "string"}}}
-
-  payments.old_fee:
-    type: string
-    deprecated: true
-    redirect_to: payments.fee_rate
-
-  payments.currency:
-    type: string
-    description: Default settlement currency
-    writeOnce: true
-    tags: [compliance]
-    constraints:
-      enum: [USD, EUR, GBP]
-
-  api.webhook:
-    type: url
-    title: Payment Webhook
-    description: Webhook endpoint for payment events
-    nullable: true
-    tags: [integrations]
-    example: "https://example.com/webhooks/payments"
-    sensitive: true
-    externalDocs:
-      description: Webhook Integration Guide
-      url: https://docs.example.com/webhooks
 ```
 
-JSON Schemas for editor validation and autocomplete are available under [`schemas/v0.1.0/`](../../schemas/v0.1.0/) — `decree-schema.json` validates the schema-definition format documented here, and `decree-config.json` validates the tenant-side config format.
+The first-line `# yaml-language-server:` modeline tells editors with [yaml-language-server](https://github.com/redhat-developer/yaml-language-server) to auto-apply the [meta-schema](meta-schema.md) for IntelliSense and inline error highlighting.
 
-### Required fields
+For the full set of supported keys, types, constraints, and cross-field rule mechanisms (`dependentRequired`, `validations`), see the [Schema Format reference](schema-format.md).
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `syntax` | Yes | Must be `"v1"` |
-| `name` | Yes | Unique slug: lowercase alphanumeric + hyphens, 1-63 chars |
-| `fields` | Yes | At least one field definition |
-| `description` | No | Schema description |
-| `version` | No | Informational — server assigns the next version on import |
-| `version_description` | No | What changed in this version |
+## Strict mode
 
-## Field Types
+When writing config values against a schema, the server operates in **strict mode**: writes to field paths not defined in the tenant's schema are rejected. This prevents typos and undeclared fields from entering the config.
 
-Every field has a type that determines what values are accepted and how they're represented on the wire (via the [TypedValue](typed-values.md) oneof):
+## Field types in brief
 
-| YAML type | Proto type | Go type | Example value |
-|-----------|-----------|---------|---------------|
-| `integer` | `int64` | `int64` | `42`, `-1` |
-| `number` | `double` | `float64` | `3.14`, `0.025` |
-| `string` | `string` | `string` | `"hello"`, `"USD"` |
-| `bool` | `bool` | `bool` | `true`, `false` |
-| `time` | `google.protobuf.Timestamp` | `time.Time` | `2025-01-15T09:30:00Z` |
-| `duration` | `google.protobuf.Duration` | `time.Duration` | `24h`, `30s`, `500ms` |
-| `url` | `string` | `string` | `https://example.com/hook` |
-| `json` | `string` | `string` | `{"key": "value"}` |
+Fields are typed — every field declares one of eight types that controls wire encoding and validation:
 
-Type safety is enforced at the wire level — sending a string to an integer field is rejected by the server.
+`integer`, `number`, `string`, `bool`, `time`, `duration`, `url`, `json`.
 
-## Constraints
+See [Typed Values](typed-values.md) for the wire-level `TypedValue` oneof and [Schema Format — Field types](schema-format.md#field-types) for the full type table.
 
-Constraints are optional validation rules checked on every write (including import). Use OAS-style naming:
+## Cross-field rules in brief
 
-| Constraint | Applies to | Description |
-|-----------|-----------|-------------|
-| `minimum` | integer, number, duration | Minimum allowed value, inclusive (`>=`). |
-| `maximum` | integer, number, duration | Maximum allowed value, inclusive (`<=`). |
-| `exclusiveMinimum` | integer, number, duration | Exclusive minimum, strict (`>`). |
-| `exclusiveMaximum` | integer, number, duration | Exclusive maximum, strict (`<`). |
-| `minLength` | string | Minimum allowed string length. |
-| `maxLength` | string | Maximum allowed string length. |
-| `pattern` | string | Regular expression (RE2 syntax) the value must match. |
-| `enum` | any type | Allowed values. The value must be one of these. |
-| `json_schema` | json | JSON Schema document for structural validation. |
+Two complementary mechanisms cover cross-field invariants:
 
-URL fields are always validated for absolute URL format, even without explicit constraints.
+- **`dependentRequired:`** — declarative "if A is set, B must also be set". Free, no expression engine. Use for the simple cases.
+- **`validations:`** — reserved for cross-field rules expressed in [CEL](https://github.com/google/cel-spec). Use for arithmetic comparisons (`min < max`) and other invariants `dependentRequired` cannot express. The runtime engine ships in Phase 2; v0.1.0 reserves the key.
 
-Constraints are validated at schema creation time — applying a constraint to an incompatible type (e.g. `minimum` on a string, `minLength` on an integer) is rejected.
-
-### Constraint examples
-
-```yaml
-# Integer range (inclusive)
-constraints:
-  minimum: 0
-  maximum: 100
-
-# Number range (exclusive — value must be > 0 and < 1)
-constraints:
-  exclusiveMinimum: 0
-  exclusiveMaximum: 1
-
-# String length + pattern
-constraints:
-  minLength: 3
-  maxLength: 50
-  pattern: '^[A-Z]+$' # uppercase only
-
-# Enum
-constraints:
-  enum: [dev, staging, prod]
-
-# JSON Schema
-constraints:
-  json_schema: |
-    {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}
-```
-
-## Cross-field dependencies
-
-Use the top-level `dependentRequired:` key to declare "if field A is set, field B must also be set". The keyword matches [JSON Schema 2020-12 `dependentRequired`](https://json-schema.org/understanding-json-schema/reference/conditionals#dependentrequired) — keys are trigger field paths, values are lists of dependent paths.
-
-```yaml
-fields:
-  payments.refunds_enabled: { type: bool }
-  payments.refund_window:   { type: duration, nullable: true }
-
-dependentRequired:
-  payments.refunds_enabled: [payments.refund_window]
-```
-
-Semantics:
-
-- **Triggers on non-null.** A rule fires only when the trigger field has a non-null value in the post-merge configuration. Setting the trigger to null clears the requirement.
-- **Lint at import.** `ImportSchema` rejects rules where the trigger or any dependent does not name a defined field, where a trigger lists itself as a dependent, or where a dependent appears twice under the same trigger.
-- **Runtime enforcement.** Every config write (`SetField`, `SetFields`, `ImportConfig`, `RollbackToVersion`) evaluates all rules against the post-merge state inside the same transaction. A rule violation rejects the write with `InvalidArgument`.
-
-For arithmetic or other cross-field invariants that `dependentRequired` cannot express (`min < max`, `start_at < end_at`), see the [CEL validation design](../../.agents/context/cel-validation.md) — that path uses the reserved `validations:` key.
-
-## Field Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `nullable` | bool | `false` | Whether the field accepts null values. See [Typed Values — Null](typed-values.md). |
-| `deprecated` | bool | `false` | Mark the field as deprecated. Deprecated fields are still readable. |
-| `redirect_to` | string | — | When deprecated, reads can be redirected to this field path. |
-| `default` | string | — | Default value for the field (encoded as string). |
-| `description` | string | — | Human-readable description of the field's purpose. |
-| `title` | string | — | Human-friendly display name (e.g. `"Fee Rate"` for path `payments.fee_rate`). |
-| `example` | string | — | Single example value, encoded as string. |
-| `examples` | map | — | Named examples with optional summary. See below. |
-| `format` | string | — | Semantic format hint (e.g. `"email"`, `"semver"`, `"percentage"`). Informational only — not enforced. |
-| `tags` | list | — | Tags for grouping and categorization. See [Tags](#tags). |
-| `readOnly` | bool | `false` | Whether the field is system-managed and not user-editable. |
-| `writeOnce` | bool | `false` | Whether the field can only be set once and becomes immutable after. |
-| `sensitive` | bool | `false` | Whether the field's value should be masked in logs and UI. |
-| `externalDocs` | object | — | Link to external documentation (`url` + optional `description`). |
-
-### Named examples
-
-```yaml
-examples:
-  basic:
-    value: '{"payments": 100}'
-    summary: Default rate limits
-  strict:
-    value: '{"payments": 10, "refunds": 5}'
-    summary: Strict limits for trial accounts
-```
-
-## Tags
-
-Tags provide cross-cutting categorization for fields, independent of path hierarchy. They are useful for UI grouping, filtering, and documentation.
-
-### Paths vs tags
-
-Field paths use dot-separated prefixes to create a structural hierarchy (e.g. `payments.fee_rate`, `payments.currency`). Tags provide an orthogonal dimension for grouping fields by concern, regardless of where they sit in the path tree.
-
-These two systems are **independent** — a field's tag does not have to match its path prefix:
-
-```yaml
-fields:
-  # Path prefix: "api", but the tag reflects the domain concern
-  api.webhook_url:
-    type: url
-    tags: [integrations]
-
-  # Path prefix: "payments", tagged by both domain and compliance
-  payments.fee_rate:
-    type: number
-    tags: [billing, compliance]
-
-  # Same prefix, different tag
-  payments.currency:
-    type: string
-    tags: [compliance]
-```
-
-As a convention, it can be convenient to align tags with path prefixes for simple schemas, but this is not enforced and should not be assumed. Real schemas often tag fields across multiple path groups to support cross-cutting views like "all compliance-related fields" or "all integrations".
-
-## Import/Export Semantics
-
-### Import
-
-- Schema lookup by `name`:
-    - **Doesn't exist** → creates new schema with v1
-    - **Exists, fields differ** → creates the next version as a draft
-    - **Exists, fields identical** → returns `AlreadyExists` (no-op)
-- Imported versions are **drafts** by default. Use `--publish` (CLI) or `auto_publish` (API) to auto-publish on import.
-- The `version` field in YAML is informational — server assigns the next version
-- Full-replace semantics: the YAML defines the complete field set, not a diff
-
-### Export
-
-- Exports a specific version (or latest) as YAML
-- Server-generated fields excluded: `id`, `checksum`, `published`, `created_at`
-
-## Strict Mode
-
-When writing config values, the server operates in **strict mode**: writes to field paths not defined in the tenant's schema are rejected. This prevents typos and undeclared fields from entering the config.
+See [Schema Format — Cross-field rules](schema-format.md#cross-field-rules) for syntax and semantics.
 
 ## Related
 
-- [Typed Values](typed-values.md) — the TypedValue type system
-- [Tenants](tenants.md) — how schemas are assigned to tenants
-- [API Reference — SchemaService](../api/api-reference.md) — full RPC details
-- [CLI — decree schema](../cli/decree_schema.md) — managing schemas from the command line
+- [Schema Format](schema-format.md) — full format reference.
+- [Meta-schema](meta-schema.md) — JSON Schema 2020-12 meta-schema and how to use it in your tools.
+- [Typed Values](typed-values.md) — the wire-level `TypedValue` type system.
+- [Tenants](tenants.md) — how schemas are assigned to tenants.
+- [Versioning](versioning.md) — schema-version evolution.
+- [API Reference — SchemaService](../api/api-reference.md) — full RPC details.
+- [CLI — `decree schema`](../cli/decree_schema.md) — managing schemas from the command line.

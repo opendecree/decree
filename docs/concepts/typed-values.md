@@ -102,7 +102,7 @@ Type checking happens at multiple levels:
 2. **Config write** -- the server checks that the TypedValue variant matches the field type
 3. **Constraint enforcement** -- the value is checked against any defined constraints (range, pattern, enum, JSON Schema)
 
-For details on constraints, see [Schemas & Fields -- Constraints](schemas-and-fields.md#constraints).
+For details on constraints, see [Schema Format — Constraints](schema-format.md#constraints).
 
 ## Related
 
