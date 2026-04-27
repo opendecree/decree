@@ -354,6 +354,31 @@ func TestUpdateTenantSchema(t *testing.T) {
 	}
 }
 
+func TestUpdateTenant_BothFields(t *testing.T) {
+	ms := &mockSchemaTransport{}
+	client := New(ms, nil, nil, nil)
+
+	ms.updateTenantFn = func(_ context.Context, req *UpdateTenantRequest) (*Tenant, error) {
+		if req.Name == nil || *req.Name != "renamed" {
+			t.Fatalf("expected Name renamed, got %v", req.Name)
+		}
+		if req.SchemaVersion == nil || *req.SchemaVersion != int32(2) {
+			t.Fatalf("expected SchemaVersion 2, got %v", req.SchemaVersion)
+		}
+		return &Tenant{ID: "t1", Name: "renamed", SchemaVersion: 2, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
+	}
+
+	name := "renamed"
+	v := int32(2)
+	tenant, err := client.UpdateTenant(context.Background(), "t1", &name, &v)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tenant.Name != "renamed" || tenant.SchemaVersion != 2 {
+		t.Errorf("got %+v, want renamed/v2", tenant)
+	}
+}
+
 func TestDeleteTenant_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
 	client := New(ms, nil, nil, nil)
@@ -722,6 +747,11 @@ func TestServiceNotConfigured_AllMethods(t *testing.T) {
 	_, err = client.UpdateTenantSchema(ctx, "t1", 2)
 	if !errors.Is(err, ErrServiceNotConfigured) {
 		t.Errorf("UpdateTenantSchema: got error %v, want %v", err, ErrServiceNotConfigured)
+	}
+
+	_, err = client.UpdateTenant(ctx, "t1", nil, nil)
+	if !errors.Is(err, ErrServiceNotConfigured) {
+		t.Errorf("UpdateTenant: got error %v, want %v", err, ErrServiceNotConfigured)
 	}
 
 	err = client.DeleteTenant(ctx, "t1")
