@@ -33,9 +33,10 @@ export DECREE_SUBJECT=admin@example.com
 
 ## 3. Define a schema
 
-A schema defines the structure of your configuration — what fields exist, their types, and constraints. Create a file called `payments.yaml`:
+A schema defines the structure of your configuration — what fields exist, their types, and constraints. Create a file called `decree.schema.yaml` (or `<name>.decree.schema.yaml` if your repo holds multiple schemas):
 
 ```yaml
+# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json
 spec_version: "v1"
 name: payments
 description: Payment processing configuration
@@ -74,13 +75,13 @@ Import and publish it:
 
 ```bash
 # Import and auto-publish in one step
-decree schema import --publish payments.yaml
+decree schema import --publish decree.schema.yaml
 ```
 
 Or import as draft first, then publish separately:
 
 ```bash
-decree schema import payments.yaml
+decree schema import decree.schema.yaml
 decree schema publish <schema-id> 1
 ```
 
