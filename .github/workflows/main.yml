@@ -26,8 +26,8 @@ jobs:
   # parallel. Each pushes by digest only (push-by-digest=true) so the tag
   # remains free for the manifest job to claim.
   build:
-    name: Build ${{ matrix.image }} (${{ matrix.platform }})
-    runs-on: ${{ matrix.runner }}
+    name: Build ${{ matrix.image.name }} (${{ matrix.arch.platform }})
+    runs-on: ${{ matrix.arch.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -37,13 +37,8 @@ jobs:
         arch:
           - { platform: linux/amd64, runner: ubuntu-latest,    suffix: amd64 }
           - { platform: linux/arm64, runner: ubuntu-24.04-arm, suffix: arm64 }
-    # Flatten the 2D matrix manually so each job can address image+arch
-    # via the unified `matrix.image` and `matrix.platform` tuple keys.
-    # GHA's strategy.matrix already produces the cross product; we just
-    # alias the nested fields for readability inline.
     env:
       IMAGE_REF: ${{ format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image.name) }}
-      PLATFORM_TAG: ${{ matrix.arch.platform }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
