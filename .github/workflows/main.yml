@@ -84,7 +84,10 @@ jobs:
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.image.name }}-${{ matrix.arch.suffix }}
+          # Image name LAST so the manifest job's download pattern
+          # (`digests-*-<image>`) doesn't accidentally match a different
+          # image whose name starts with this one (decree vs decree-cli).
+          name: digests-${{ matrix.arch.suffix }}-${{ matrix.image.name }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -106,7 +109,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: /tmp/digests
-          pattern: digests-${{ matrix.image }}-*
+          pattern: digests-*-${{ matrix.image }}
           merge-multiple: true
 
       - name: Set up Docker Buildx
