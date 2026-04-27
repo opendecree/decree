@@ -713,6 +713,9 @@ func (s *Service) autoPublish(ctx context.Context, resp *pb.ImportSchemaResponse
 }
 
 func (s *Service) createFields(ctx context.Context, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
+	if err := validateNoPrefixOverlap(fields); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 	result := make([]domain.SchemaField, 0, len(fields))
 	for _, f := range fields {
 		if err := validateFieldConstraints(f); err != nil {
