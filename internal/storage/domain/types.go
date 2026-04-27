@@ -44,7 +44,11 @@ type SchemaVersion struct {
 	Description   *string
 	Checksum      string
 	Published     bool
-	CreatedAt     time.Time
+	// DependentRequired holds the JSON-encoded list of cross-field "B
+	// required when A present" rules. Empty array when no rules exist.
+	// Wire shape: [{trigger_field, dependent_fields[]}].
+	DependentRequired []byte
+	CreatedAt         time.Time
 }
 
 // SchemaField represents a field definition within a schema version.

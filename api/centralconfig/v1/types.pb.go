@@ -715,9 +715,17 @@ type Schema struct {
 	// When this version was created.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	// Optional schema metadata: ownership, contact, labels.
-	Info          *SchemaInfo `protobuf:"bytes,11,opt,name=info,proto3" json:"info,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Info *SchemaInfo `protobuf:"bytes,11,opt,name=info,proto3" json:"info,omitempty"`
+	// Cross-field "B required when A present" rules. Each entry declares one
+	// trigger field whose presence (non-null value) makes a list of dependent
+	// field paths required (also non-null). Equivalent to JSON Schema 2020-12
+	// dependentRequired, scoped to schema-level cross-field requirement.
+	// Lint-checked at ImportSchema time (every path must reference a real
+	// field; trigger may not appear in its own dependents). Enforced at every
+	// config write against the post-merge snapshot.
+	DependentRequired []*DependentRequiredEntry `protobuf:"bytes,12,rep,name=dependent_required,json=dependentRequired,proto3" json:"dependent_required,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Schema) Reset() {
@@ -827,6 +835,73 @@ func (x *Schema) GetInfo() *SchemaInfo {
 	return nil
 }
 
+func (x *Schema) GetDependentRequired() []*DependentRequiredEntry {
+	if x != nil {
+		return x.DependentRequired
+	}
+	return nil
+}
+
+// DependentRequiredEntry encodes one cross-field requirement: when the
+// trigger field has a non-null value, every dependent field path must also
+// have a non-null value. This is the proto wire form of JSON Schema 2020-12
+// dependentRequired, which uses a `map<path, list<path>>` shape — proto
+// maps cannot hold repeated values directly, so we use a repeated list of
+// entries.
+type DependentRequiredEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Field path whose presence triggers the requirement.
+	TriggerField string `protobuf:"bytes,1,opt,name=trigger_field,json=triggerField,proto3" json:"trigger_field,omitempty"`
+	// Field paths that must be present when the trigger has a non-null value.
+	DependentFields []string `protobuf:"bytes,2,rep,name=dependent_fields,json=dependentFields,proto3" json:"dependent_fields,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DependentRequiredEntry) Reset() {
+	*x = DependentRequiredEntry{}
+	mi := &file_centralconfig_v1_types_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DependentRequiredEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DependentRequiredEntry) ProtoMessage() {}
+
+func (x *DependentRequiredEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_types_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DependentRequiredEntry.ProtoReflect.Descriptor instead.
+func (*DependentRequiredEntry) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *DependentRequiredEntry) GetTriggerField() string {
+	if x != nil {
+		return x.TriggerField
+	}
+	return ""
+}
+
+func (x *DependentRequiredEntry) GetDependentFields() []string {
+	if x != nil {
+		return x.DependentFields
+	}
+	return nil
+}
+
 // Tenant represents an organization or entity that has its own configuration
 // based on an assigned schema version.
 type Tenant struct {
@@ -851,7 +926,7 @@ type Tenant struct {
 
 func (x *Tenant) Reset() {
 	*x = Tenant{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[7]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -863,7 +938,7 @@ func (x *Tenant) String() string {
 func (*Tenant) ProtoMessage() {}
 
 func (x *Tenant) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[7]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -876,7 +951,7 @@ func (x *Tenant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tenant.ProtoReflect.Descriptor instead.
 func (*Tenant) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Tenant) GetId() string {
@@ -938,7 +1013,7 @@ type FieldLock struct {
 
 func (x *FieldLock) Reset() {
 	*x = FieldLock{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[8]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -950,7 +1025,7 @@ func (x *FieldLock) String() string {
 func (*FieldLock) ProtoMessage() {}
 
 func (x *FieldLock) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[8]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -963,7 +1038,7 @@ func (x *FieldLock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldLock.ProtoReflect.Descriptor instead.
 func (*FieldLock) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *FieldLock) GetTenantId() string {
@@ -1008,7 +1083,7 @@ type TypedValue struct {
 
 func (x *TypedValue) Reset() {
 	*x = TypedValue{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[9]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1020,7 +1095,7 @@ func (x *TypedValue) String() string {
 func (*TypedValue) ProtoMessage() {}
 
 func (x *TypedValue) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[9]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1033,7 +1108,7 @@ func (x *TypedValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TypedValue.ProtoReflect.Descriptor instead.
 func (*TypedValue) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{9}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TypedValue) GetKind() isTypedValue_Kind {
@@ -1194,7 +1269,7 @@ type ConfigValue struct {
 
 func (x *ConfigValue) Reset() {
 	*x = ConfigValue{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[10]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1206,7 +1281,7 @@ func (x *ConfigValue) String() string {
 func (*ConfigValue) ProtoMessage() {}
 
 func (x *ConfigValue) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[10]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1219,7 +1294,7 @@ func (x *ConfigValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigValue.ProtoReflect.Descriptor instead.
 func (*ConfigValue) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{10}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ConfigValue) GetFieldPath() string {
@@ -1274,7 +1349,7 @@ type ConfigVersion struct {
 
 func (x *ConfigVersion) Reset() {
 	*x = ConfigVersion{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[11]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1286,7 +1361,7 @@ func (x *ConfigVersion) String() string {
 func (*ConfigVersion) ProtoMessage() {}
 
 func (x *ConfigVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[11]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1299,7 +1374,7 @@ func (x *ConfigVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigVersion.ProtoReflect.Descriptor instead.
 func (*ConfigVersion) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{11}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ConfigVersion) GetId() string {
@@ -1359,7 +1434,7 @@ type Config struct {
 
 func (x *Config) Reset() {
 	*x = Config{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[12]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1371,7 +1446,7 @@ func (x *Config) String() string {
 func (*Config) ProtoMessage() {}
 
 func (x *Config) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[12]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,7 +1459,7 @@ func (x *Config) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Config.ProtoReflect.Descriptor instead.
 func (*Config) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{12}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Config) GetTenantId() string {
@@ -1432,7 +1507,7 @@ type ConfigChange struct {
 
 func (x *ConfigChange) Reset() {
 	*x = ConfigChange{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[13]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1444,7 +1519,7 @@ func (x *ConfigChange) String() string {
 func (*ConfigChange) ProtoMessage() {}
 
 func (x *ConfigChange) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[13]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1457,7 +1532,7 @@ func (x *ConfigChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigChange.ProtoReflect.Descriptor instead.
 func (*ConfigChange) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{13}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ConfigChange) GetTenantId() string {
@@ -1539,7 +1614,7 @@ type AuditEntry struct {
 
 func (x *AuditEntry) Reset() {
 	*x = AuditEntry{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[14]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1551,7 +1626,7 @@ func (x *AuditEntry) String() string {
 func (*AuditEntry) ProtoMessage() {}
 
 func (x *AuditEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[14]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1564,7 +1639,7 @@ func (x *AuditEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEntry.ProtoReflect.Descriptor instead.
 func (*AuditEntry) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{14}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *AuditEntry) GetId() string {
@@ -1649,7 +1724,7 @@ type UsageStats struct {
 
 func (x *UsageStats) Reset() {
 	*x = UsageStats{}
-	mi := &file_centralconfig_v1_types_proto_msgTypes[15]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1661,7 +1736,7 @@ func (x *UsageStats) String() string {
 func (*UsageStats) ProtoMessage() {}
 
 func (x *UsageStats) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_types_proto_msgTypes[15]
+	mi := &file_centralconfig_v1_types_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1674,7 +1749,7 @@ func (x *UsageStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UsageStats.ProtoReflect.Descriptor instead.
 func (*UsageStats) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{15}
+	return file_centralconfig_v1_types_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *UsageStats) GetTenantId() string {
@@ -1790,7 +1865,7 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\rSchemaContact\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x10\n" +
-	"\x03url\x18\x03 \x01(\tR\x03url\"\xb6\x03\n" +
+	"\x03url\x18\x03 \x01(\tR\x03url\"\x8f\x04\n" +
 	"\x06Schema\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1804,8 +1879,12 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x120\n" +
-	"\x04info\x18\v \x01(\v2\x1c.centralconfig.v1.SchemaInfoR\x04infoB\x11\n" +
-	"\x0f_parent_version\"\xe6\x01\n" +
+	"\x04info\x18\v \x01(\v2\x1c.centralconfig.v1.SchemaInfoR\x04info\x12W\n" +
+	"\x12dependent_required\x18\f \x03(\v2(.centralconfig.v1.DependentRequiredEntryR\x11dependentRequiredB\x11\n" +
+	"\x0f_parent_version\"h\n" +
+	"\x16DependentRequiredEntry\x12#\n" +
+	"\rtrigger_field\x18\x01 \x01(\tR\ftriggerField\x12)\n" +
+	"\x10dependent_fields\x18\x02 \x03(\tR\x0fdependentFields\"\xe6\x01\n" +
 	"\x06Tenant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -1923,58 +2002,60 @@ func file_centralconfig_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_centralconfig_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_centralconfig_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_centralconfig_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_centralconfig_v1_types_proto_goTypes = []any{
-	(FieldType)(0),                // 0: centralconfig.v1.FieldType
-	(*FieldConstraints)(nil),      // 1: centralconfig.v1.FieldConstraints
-	(*SchemaField)(nil),           // 2: centralconfig.v1.SchemaField
-	(*FieldExample)(nil),          // 3: centralconfig.v1.FieldExample
-	(*ExternalDocs)(nil),          // 4: centralconfig.v1.ExternalDocs
-	(*SchemaInfo)(nil),            // 5: centralconfig.v1.SchemaInfo
-	(*SchemaContact)(nil),         // 6: centralconfig.v1.SchemaContact
-	(*Schema)(nil),                // 7: centralconfig.v1.Schema
-	(*Tenant)(nil),                // 8: centralconfig.v1.Tenant
-	(*FieldLock)(nil),             // 9: centralconfig.v1.FieldLock
-	(*TypedValue)(nil),            // 10: centralconfig.v1.TypedValue
-	(*ConfigValue)(nil),           // 11: centralconfig.v1.ConfigValue
-	(*ConfigVersion)(nil),         // 12: centralconfig.v1.ConfigVersion
-	(*Config)(nil),                // 13: centralconfig.v1.Config
-	(*ConfigChange)(nil),          // 14: centralconfig.v1.ConfigChange
-	(*AuditEntry)(nil),            // 15: centralconfig.v1.AuditEntry
-	(*UsageStats)(nil),            // 16: centralconfig.v1.UsageStats
-	nil,                           // 17: centralconfig.v1.SchemaField.ExamplesEntry
-	nil,                           // 18: centralconfig.v1.SchemaInfo.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 20: google.protobuf.Duration
+	(FieldType)(0),                 // 0: centralconfig.v1.FieldType
+	(*FieldConstraints)(nil),       // 1: centralconfig.v1.FieldConstraints
+	(*SchemaField)(nil),            // 2: centralconfig.v1.SchemaField
+	(*FieldExample)(nil),           // 3: centralconfig.v1.FieldExample
+	(*ExternalDocs)(nil),           // 4: centralconfig.v1.ExternalDocs
+	(*SchemaInfo)(nil),             // 5: centralconfig.v1.SchemaInfo
+	(*SchemaContact)(nil),          // 6: centralconfig.v1.SchemaContact
+	(*Schema)(nil),                 // 7: centralconfig.v1.Schema
+	(*DependentRequiredEntry)(nil), // 8: centralconfig.v1.DependentRequiredEntry
+	(*Tenant)(nil),                 // 9: centralconfig.v1.Tenant
+	(*FieldLock)(nil),              // 10: centralconfig.v1.FieldLock
+	(*TypedValue)(nil),             // 11: centralconfig.v1.TypedValue
+	(*ConfigValue)(nil),            // 12: centralconfig.v1.ConfigValue
+	(*ConfigVersion)(nil),          // 13: centralconfig.v1.ConfigVersion
+	(*Config)(nil),                 // 14: centralconfig.v1.Config
+	(*ConfigChange)(nil),           // 15: centralconfig.v1.ConfigChange
+	(*AuditEntry)(nil),             // 16: centralconfig.v1.AuditEntry
+	(*UsageStats)(nil),             // 17: centralconfig.v1.UsageStats
+	nil,                            // 18: centralconfig.v1.SchemaField.ExamplesEntry
+	nil,                            // 19: centralconfig.v1.SchemaInfo.LabelsEntry
+	(*timestamppb.Timestamp)(nil),  // 20: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),    // 21: google.protobuf.Duration
 }
 var file_centralconfig_v1_types_proto_depIdxs = []int32{
 	0,  // 0: centralconfig.v1.SchemaField.type:type_name -> centralconfig.v1.FieldType
 	1,  // 1: centralconfig.v1.SchemaField.constraints:type_name -> centralconfig.v1.FieldConstraints
-	17, // 2: centralconfig.v1.SchemaField.examples:type_name -> centralconfig.v1.SchemaField.ExamplesEntry
+	18, // 2: centralconfig.v1.SchemaField.examples:type_name -> centralconfig.v1.SchemaField.ExamplesEntry
 	4,  // 3: centralconfig.v1.SchemaField.external_docs:type_name -> centralconfig.v1.ExternalDocs
 	6,  // 4: centralconfig.v1.SchemaInfo.contact:type_name -> centralconfig.v1.SchemaContact
-	18, // 5: centralconfig.v1.SchemaInfo.labels:type_name -> centralconfig.v1.SchemaInfo.LabelsEntry
+	19, // 5: centralconfig.v1.SchemaInfo.labels:type_name -> centralconfig.v1.SchemaInfo.LabelsEntry
 	2,  // 6: centralconfig.v1.Schema.fields:type_name -> centralconfig.v1.SchemaField
-	19, // 7: centralconfig.v1.Schema.created_at:type_name -> google.protobuf.Timestamp
+	20, // 7: centralconfig.v1.Schema.created_at:type_name -> google.protobuf.Timestamp
 	5,  // 8: centralconfig.v1.Schema.info:type_name -> centralconfig.v1.SchemaInfo
-	19, // 9: centralconfig.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
-	19, // 10: centralconfig.v1.Tenant.updated_at:type_name -> google.protobuf.Timestamp
-	19, // 11: centralconfig.v1.TypedValue.time_value:type_name -> google.protobuf.Timestamp
-	20, // 12: centralconfig.v1.TypedValue.duration_value:type_name -> google.protobuf.Duration
-	10, // 13: centralconfig.v1.ConfigValue.value:type_name -> centralconfig.v1.TypedValue
-	19, // 14: centralconfig.v1.ConfigVersion.created_at:type_name -> google.protobuf.Timestamp
-	11, // 15: centralconfig.v1.Config.values:type_name -> centralconfig.v1.ConfigValue
-	10, // 16: centralconfig.v1.ConfigChange.old_value:type_name -> centralconfig.v1.TypedValue
-	10, // 17: centralconfig.v1.ConfigChange.new_value:type_name -> centralconfig.v1.TypedValue
-	19, // 18: centralconfig.v1.ConfigChange.changed_at:type_name -> google.protobuf.Timestamp
-	19, // 19: centralconfig.v1.AuditEntry.created_at:type_name -> google.protobuf.Timestamp
-	19, // 20: centralconfig.v1.UsageStats.last_read_at:type_name -> google.protobuf.Timestamp
-	3,  // 21: centralconfig.v1.SchemaField.ExamplesEntry.value:type_name -> centralconfig.v1.FieldExample
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	8,  // 9: centralconfig.v1.Schema.dependent_required:type_name -> centralconfig.v1.DependentRequiredEntry
+	20, // 10: centralconfig.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
+	20, // 11: centralconfig.v1.Tenant.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 12: centralconfig.v1.TypedValue.time_value:type_name -> google.protobuf.Timestamp
+	21, // 13: centralconfig.v1.TypedValue.duration_value:type_name -> google.protobuf.Duration
+	11, // 14: centralconfig.v1.ConfigValue.value:type_name -> centralconfig.v1.TypedValue
+	20, // 15: centralconfig.v1.ConfigVersion.created_at:type_name -> google.protobuf.Timestamp
+	12, // 16: centralconfig.v1.Config.values:type_name -> centralconfig.v1.ConfigValue
+	11, // 17: centralconfig.v1.ConfigChange.old_value:type_name -> centralconfig.v1.TypedValue
+	11, // 18: centralconfig.v1.ConfigChange.new_value:type_name -> centralconfig.v1.TypedValue
+	20, // 19: centralconfig.v1.ConfigChange.changed_at:type_name -> google.protobuf.Timestamp
+	20, // 20: centralconfig.v1.AuditEntry.created_at:type_name -> google.protobuf.Timestamp
+	20, // 21: centralconfig.v1.UsageStats.last_read_at:type_name -> google.protobuf.Timestamp
+	3,  // 22: centralconfig.v1.SchemaField.ExamplesEntry.value:type_name -> centralconfig.v1.FieldExample
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_centralconfig_v1_types_proto_init() }
@@ -1985,7 +2066,7 @@ func file_centralconfig_v1_types_proto_init() {
 	file_centralconfig_v1_types_proto_msgTypes[0].OneofWrappers = []any{}
 	file_centralconfig_v1_types_proto_msgTypes[1].OneofWrappers = []any{}
 	file_centralconfig_v1_types_proto_msgTypes[6].OneofWrappers = []any{}
-	file_centralconfig_v1_types_proto_msgTypes[9].OneofWrappers = []any{
+	file_centralconfig_v1_types_proto_msgTypes[10].OneofWrappers = []any{
 		(*TypedValue_IntegerValue)(nil),
 		(*TypedValue_NumberValue)(nil),
 		(*TypedValue_StringValue)(nil),
@@ -1995,16 +2076,16 @@ func file_centralconfig_v1_types_proto_init() {
 		(*TypedValue_UrlValue)(nil),
 		(*TypedValue_JsonValue)(nil),
 	}
-	file_centralconfig_v1_types_proto_msgTypes[10].OneofWrappers = []any{}
-	file_centralconfig_v1_types_proto_msgTypes[14].OneofWrappers = []any{}
+	file_centralconfig_v1_types_proto_msgTypes[11].OneofWrappers = []any{}
 	file_centralconfig_v1_types_proto_msgTypes[15].OneofWrappers = []any{}
+	file_centralconfig_v1_types_proto_msgTypes[16].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_centralconfig_v1_types_proto_rawDesc), len(file_centralconfig_v1_types_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -405,10 +405,28 @@ func TestUpdateTenant_NoFieldsUpdated_NotFound(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+// validatorStoreAdapter bridges schema's mockStore (with
+// GetSchemaVersionParams) to validation.Store (which expects
+// domain.SchemaVersionKey). Only methods exercised by ValidatorFactory
+// are forwarded; the rest are unused in this test.
+type validatorStoreAdapter struct{ s *mockStore }
+
+func (a *validatorStoreAdapter) GetTenantByID(ctx context.Context, id string) (domain.Tenant, error) {
+	return a.s.GetTenantByID(ctx, id)
+}
+
+func (a *validatorStoreAdapter) GetSchemaVersion(ctx context.Context, k domain.SchemaVersionKey) (domain.SchemaVersion, error) {
+	return a.s.GetSchemaVersion(ctx, GetSchemaVersionParams{SchemaID: k.SchemaID, Version: k.Version})
+}
+
+func (a *validatorStoreAdapter) GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error) {
+	return a.s.GetSchemaFields(ctx, schemaVersionID)
+}
+
 func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 	store := &mockStore{}
-	cache := validation.NewValidatorCache(0)
-	svc := NewService(store, testLogger, nil, cache)
+	factory := validation.NewValidatorFactory(&validatorStoreAdapter{s: store})
+	svc := NewService(store, testLogger, nil, factory)
 
 	newVersion := int32(2)
 	updated := testTenant()

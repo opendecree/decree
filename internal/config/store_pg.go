@@ -28,6 +28,12 @@ func NewPGStore(writePool, readPool *pgxpool.Pool) *PGStore {
 }
 
 // RunInTx executes fn within a database transaction.
+//
+// Both write and read query handles are bound to the same transaction so
+// that reads inside fn observe the transaction's own staged writes. This
+// matters for cross-field validators (e.g. dependentRequired) that need to
+// evaluate against the post-merge snapshot before commit — reading from
+// the read pool would return pre-tx state and miss the new values.
 func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	tx, err := s.writePool.Begin(ctx)
 	if err != nil {
@@ -35,10 +41,11 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
+	txQueries := s.write.WithTx(tx)
 	txStore := &PGStore{
 		writePool: s.writePool,
-		write:     s.write.WithTx(tx),
-		read:      s.read,
+		write:     txQueries,
+		read:      txQueries,
 	}
 
 	if err := fn(txStore); err != nil {

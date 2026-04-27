@@ -38,6 +38,9 @@ func schemaToProto(s domain.Schema, v domain.SchemaVersion, fields []domain.Sche
 	if v.Description != nil {
 		result.VersionDescription = *v.Description
 	}
+	if entries := UnmarshalDependentRequired(v.DependentRequired); len(entries) > 0 {
+		result.DependentRequired = entries
+	}
 	return result
 }
 

@@ -43,7 +43,11 @@ type SchemaYAML struct {
 	VersionDescription string                     `yaml:"version_description,omitempty"`
 	Info               *SchemaInfoYAML            `yaml:"info,omitempty"`
 	Fields             map[string]SchemaFieldYAML `yaml:"fields"`
-	Extensions         map[string]any             `yaml:",inline"`
+	// DependentRequired declares cross-field "B required when A present"
+	// rules. Keys and values must reference paths defined in Fields. Matches
+	// the JSON Schema 2020-12 keyword of the same name.
+	DependentRequired map[string][]string `yaml:"dependentRequired,omitempty"`
+	Extensions        map[string]any      `yaml:",inline"`
 }
 
 // SchemaInfoYAML contains optional schema-level metadata.
@@ -152,6 +156,9 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 	if len(doc.Fields) == 0 {
 		return fmt.Errorf("at least one field is required")
 	}
+	if err := validateDependentRequiredYAML(doc); err != nil {
+		return err
+	}
 	for path, f := range doc.Fields {
 		if !fieldPathPattern.MatchString(path) {
 			return fmt.Errorf("invalid field path %q: must match %s", path, fieldPathPattern)
@@ -176,6 +183,36 @@ func validateSchemaYAML(doc *SchemaYAML) error {
 			if err := validateExtensions("fields."+path+".examples."+exName, ex.Extensions); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// validateDependentRequiredYAML lint-checks the `dependentRequired:` map at
+// schema-validate time: every trigger key must reference a real field in the
+// schema; every dependent path must reference a real field; the trigger may
+// not appear in its own dependents list (a self-referential rule is always
+// vacuously true and indicates author error).
+func validateDependentRequiredYAML(doc *SchemaYAML) error {
+	if len(doc.DependentRequired) == 0 {
+		return nil
+	}
+	for trigger, dependents := range doc.DependentRequired {
+		if _, ok := doc.Fields[trigger]; !ok {
+			return fmt.Errorf("dependentRequired: trigger %q is not a defined field", trigger)
+		}
+		seen := make(map[string]struct{}, len(dependents))
+		for _, dep := range dependents {
+			if dep == trigger {
+				return fmt.Errorf("dependentRequired: trigger %q cannot list itself as a dependent", trigger)
+			}
+			if _, ok := doc.Fields[dep]; !ok {
+				return fmt.Errorf("dependentRequired: dependent %q (under trigger %q) is not a defined field", dep, trigger)
+			}
+			if _, dup := seen[dep]; dup {
+				return fmt.Errorf("dependentRequired: dependent %q listed twice under trigger %q", dep, trigger)
+			}
+			seen[dep] = struct{}{}
 		}
 	}
 	return nil
@@ -258,6 +295,7 @@ func schemaToYAML(s *pb.Schema) *SchemaYAML {
 		VersionDescription: s.VersionDescription,
 		Info:               schemaInfoToYAML(s.Info),
 		Fields:             make(map[string]SchemaFieldYAML, len(s.Fields)),
+		DependentRequired:  protoDependentRequiredToYAML(s.DependentRequired),
 	}
 
 	for _, f := range s.Fields {
@@ -363,6 +401,46 @@ func protoConstraintsToYAML(c *pb.FieldConstraints) *ConstraintsYAML {
 }
 
 // --- YAML → Proto ---
+
+// yamlToProtoDependentRequired converts the YAML map<trigger,[dependents]>
+// shape into the proto repeated-entry shape. Returns nil for an empty map so
+// the wire format stays compact.
+func yamlToProtoDependentRequired(m map[string][]string) []*pb.DependentRequiredEntry {
+	if len(m) == 0 {
+		return nil
+	}
+	triggers := make([]string, 0, len(m))
+	for k := range m {
+		triggers = append(triggers, k)
+	}
+	sort.Strings(triggers)
+	out := make([]*pb.DependentRequiredEntry, 0, len(triggers))
+	for _, t := range triggers {
+		deps := append([]string(nil), m[t]...)
+		sort.Strings(deps)
+		out = append(out, &pb.DependentRequiredEntry{
+			TriggerField:    t,
+			DependentFields: deps,
+		})
+	}
+	return out
+}
+
+// protoDependentRequiredToYAML converts the proto repeated-entry shape back
+// into the YAML map<trigger,[dependents]> shape. Returns nil when the input
+// is empty so the YAML key is omitted.
+func protoDependentRequiredToYAML(entries []*pb.DependentRequiredEntry) map[string][]string {
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(entries))
+	for _, e := range entries {
+		deps := append([]string(nil), e.DependentFields...)
+		sort.Strings(deps)
+		out[e.TriggerField] = deps
+	}
+	return out
+}
 
 func yamlToProtoFields(doc *SchemaYAML) []*pb.SchemaField {
 	fields := make([]*pb.SchemaField, 0, len(doc.Fields))

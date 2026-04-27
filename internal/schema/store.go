@@ -19,6 +19,10 @@ type CreateSchemaVersionParams struct {
 	ParentVersion *int32
 	Description   *string
 	Checksum      string
+	// DependentRequired is the JSON-encoded list of cross-field rules.
+	// Pass an empty []byte (or nil) when no rules exist; the store will
+	// persist `[]` so reads always return well-formed JSON.
+	DependentRequired []byte
 }
 
 // GetSchemaVersionParams identifies a specific schema version.
