@@ -310,6 +310,15 @@ Open issue #76 retitled as the umbrella; subtasks open as Phase 1/2/3 issues.
 - **Rules referencing redirected fields.** If `payments.old_path` redirects to `payments.new_path`, does `self.payments.old_path` resolve? Probably yes (transparently redirected). Confirm in Phase 2.
 - **Optional-ext friction.** If cel-go's `optional<T>` is awkward for nullable fields, fall back to `dyn` and document `null` handling. Decide after spike.
 - **Lock interaction.** Locked fields cannot be written, but rules over them still evaluate (using the locked value). No special handling expected; verify with test fixture.
+- **Contradiction detection.** Two rules can be jointly unsatisfiable (`self.a > self.b` paired with `self.b > self.a`; `self.x == 1` paired with `self.x == 2`). A schema with such rules rejects every config — every write fails the validation gate. Worth detecting at `ImportSchema` time so the schema author hears about it instead of every downstream user. Three options:
+
+  | Approach | Coverage | Cost |
+  |---|---|---|
+  | **AST pattern match** | Common shapes only: `a <op> b` + `b <op_inv> a`, `a == k1` + `a == k2`, `a > k_high` + `a < k_low`. Limited recall, zero false positives. | Cheap — small visitor over the parsed expression tree. |
+  | **Empty-set probe** | Generate N random configs against the typed env; if 100% fail every rule, warn "rules reject all sampled inputs". Statistical, false negatives possible, no false positives. | Cheap — N CEL evaluations at import time. |
+  | **SMT translation (z3)** | Sound for arithmetic-fragment CEL; undecidable for full CEL (string functions, list/map ops). | Heavy — adds an SMT solver dep, violates vanilla principle. |
+
+  Phase 2 ships **AST pattern match** (covers the obvious cases) plus **empty-set probe** (catches the rest of the "this schema is unusable" cases). SMT is out of scope. Both surface as warnings with `severity: warning` semantics — author can override if they know better, but the default is to reject at `ImportSchema`.
 
 ## References
 
