@@ -1,0 +1,73 @@
+# CodeQL advanced setup. Replaces default-setup once disabled in repo settings.
+# Advanced unlocks paths-ignore (skip generated code) and Go module caching
+# across runs — projected ~1-2 min faster vs default-setup.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "api/centralconfig/v1/**"
+      - "internal/storage/dbstore/*.gen.go"
+      - "**/*.md"
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 7 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+          - language: python
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config: |
+            paths-ignore:
+              - api/centralconfig/v1/**
+              - internal/storage/dbstore/*.gen.go
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
