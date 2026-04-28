@@ -523,6 +523,9 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, req.TenantId); err != nil {
+		return nil, err
+	}
 
 	var lockedValues []byte
 	if len(req.LockedValues) > 0 {
@@ -545,6 +548,9 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
 	}
+	if err := auth.CheckTenantAccess(ctx, req.TenantId); err != nil {
+		return nil, err
+	}
 
 	if err := s.store.DeleteFieldLock(ctx, DeleteFieldLockParams{
 		TenantID:  req.TenantId,
@@ -560,6 +566,9 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequest) (*pb.ListFieldLocksResponse, error) {
 	if !validUUID(req.TenantId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	}
+	if err := auth.CheckTenantAccess(ctx, req.TenantId); err != nil {
+		return nil, err
 	}
 
 	locks, err := s.store.GetFieldLocks(ctx, req.TenantId)

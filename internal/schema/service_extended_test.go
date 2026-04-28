@@ -245,6 +245,46 @@ func TestListFieldLocks_Success(t *testing.T) {
 	assert.Equal(t, "app.fee", resp.Locks[0].FieldPath)
 }
 
+// outOfScopeAdminCtx returns a context with admin claims scoped to a
+// different tenant than testTenantID. Used to verify lock RPCs reject
+// callers without tenant access.
+func outOfScopeAdminCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{"00000000-0000-0000-0000-000000000999"},
+	})
+}
+
+func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc := NewService(&mockStore{}, testLogger, nil, nil)
+
+	_, err := svc.LockField(outOfScopeAdminCtx(), &pb.LockFieldRequest{
+		TenantId:  testTenantID,
+		FieldPath: "app.fee",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc := NewService(&mockStore{}, testLogger, nil, nil)
+
+	_, err := svc.UnlockField(outOfScopeAdminCtx(), &pb.UnlockFieldRequest{
+		TenantId:  testTenantID,
+		FieldPath: "app.fee",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc := NewService(&mockStore{}, testLogger, nil, nil)
+
+	_, err := svc.ListFieldLocks(outOfScopeAdminCtx(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- UpdateTenant ---
 
 func TestUpdateTenant_UpdateName_Success(t *testing.T) {
