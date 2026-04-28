@@ -33,6 +33,12 @@ type GatewayConfig struct {
 	// OpenAPISpec is the raw OpenAPI JSON spec to serve at /docs/openapi.json.
 	// If nil, the docs endpoints are not registered.
 	OpenAPISpec []byte
+	// MaxRecvMsgBytes caps inbound gRPC response size from the upstream server.
+	// Zero or negative → DefaultMaxMsgBytes.
+	MaxRecvMsgBytes int
+	// MaxSendMsgBytes caps outbound gRPC request size to the upstream server.
+	// Zero or negative → DefaultMaxMsgBytes.
+	MaxSendMsgBytes int
 }
 
 // NewGateway creates a new HTTP gateway that proxies to the given gRPC address.
@@ -42,9 +48,22 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 		return nil, nil
 	}
 
+	recvCap := cfg.MaxRecvMsgBytes
+	if recvCap <= 0 {
+		recvCap = DefaultMaxMsgBytes
+	}
+	sendCap := cfg.MaxSendMsgBytes
+	if sendCap <= 0 {
+		sendCap = DefaultMaxMsgBytes
+	}
+
 	conn, err := grpc.NewClient(
 		cfg.GRPCAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(recvCap),
+			grpc.MaxCallSendMsgSize(sendCap),
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("dial gRPC server: %w", err)
