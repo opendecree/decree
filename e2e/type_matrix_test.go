@@ -42,9 +42,9 @@ var sampleSeq int64
 
 // typeCase describes one field type for matrix 3.
 type typeCase struct {
-	name      string                              // "string", "integer", ...
-	fieldType string                              // "FIELD_TYPE_STRING"
-	sample    func() *configclient.TypedValue     // a fresh sample value
+	name      string                                       // "string", "integer", ...
+	fieldType string                                       // "FIELD_TYPE_STRING"
+	sample    func() *configclient.TypedValue              // a fresh sample value
 	yamlValue func(sample *configclient.TypedValue) string // YAML literal for ImportConfig
 	verifyEq  func(t *testing.T, want, got *configclient.TypedValue)
 }

@@ -37,12 +37,12 @@ var allRoles = []roleName{roleSuperadmin, roleAdmin, roleUser}
 // clients bundles the SDK clients a matrix cell may need. The same conn is
 // reused; only the metadata-header role/tenant scoping differs per cell.
 type clients struct {
-	conn            *grpc.ClientConn
-	admin           *adminclient.Client
-	cfg             *configclient.Client
-	cfgTransport    *grpctransport.ConfigTransport // exposes Subscribe directly
-	role            roleName
-	tenantIDs       []string
+	conn         *grpc.ClientConn
+	admin        *adminclient.Client
+	cfg          *configclient.Client
+	cfgTransport *grpctransport.ConfigTransport // exposes Subscribe directly
+	role         roleName
+	tenantIDs    []string
 
 	// bootstrapAdmin is always a superadmin client. Use it inside invoke
 	// functions when a cell needs a throwaway resource (e.g. a schema to
@@ -51,16 +51,9 @@ type clients struct {
 	bootstrapAdmin *adminclient.Client
 }
 
-// scopedClients is an alias kept for callers that read more naturally
-// at the call site ("rebuild caller scoped to tenant X"). Identical to
-// clientsFor.
+// scopedClients returns SDK clients with x-role and x-tenant-id metadata
+// for the given role + tenant scope. Pass no tenant IDs for superadmin.
 func scopedClients(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs ...string) *clients {
-	return clientsFor(t, conn, role, tenantIDs...)
-}
-
-// clientsFor returns SDK clients with x-role and x-tenant-id metadata for
-// the given role + tenant scope. Pass no tenant IDs for superadmin.
-func clientsFor(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs ...string) *clients {
 	t.Helper()
 	subject := fmt.Sprintf("e2e-%s", role)
 	opts := []grpctransport.Option{
@@ -88,13 +81,22 @@ func clientsFor(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs ..
 // only about whether the auth gate fired, not whether the request was
 // otherwise valid.
 //
-// It also treats configclient.ErrLocked as an auth denial because the
+// It also treats configclient.ErrLocked as an auth denial. The
 // configclient SDK collapses every codes.PermissionDenied response into
 // ErrLocked (see sdk/grpctransport/errors.go:mapConfigError), losing the
-// distinction between a field-lock denial and a tenant-access denial.
-// Matrix tests that rely on this proxy must guarantee no actual field
-// locks are in play, so any ErrLocked observed is in fact a tenant-scope
-// denial.
+// distinction between a field-lock denial and a tenant-access denial at
+// the SDK layer. Callers must therefore guarantee that no field locks
+// exist on the target field at the time of the call. Both matrices that
+// invoke this helper meet that precondition structurally:
+//
+//   - matrix 1 (TestRoleActionMatrix) operates on a fresh fixture from
+//     bootstrapMatrixFixture, which never installs locks.
+//   - matrix 2 (TestTenantAccessMatrix) builds a brand-new fixture per
+//     subtest, so cells cannot leak lock state to one another.
+//
+// If a future cell installs a lock before invoking a write RPC through
+// the configclient SDK, ErrLocked stops being a reliable auth signal and
+// the cell must be reworked to call the proto client directly.
 func isAuthDenied(err error) bool {
 	if err == nil {
 		return false

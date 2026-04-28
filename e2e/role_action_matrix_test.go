@@ -117,16 +117,11 @@ func allRPCs() []rpcSpec {
 		{
 			name: "CreateTenant",
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				// CreateTenant runs CheckTenantAccess on the new tenant's UUID.
-				// For non-superadmin, the caller's scope must include that UUID.
-				// We let the server allocate the UUID, so the only role that
-				// can practically exercise this path without pre-knowing the ID
-				// is superadmin. Admin/user callers will trip CheckTenantAccess
-				// on the fresh ID — that is the documented behavior, not a bug,
-				// so we substitute an in-scope target for them by naming the
-				// tenant under their existing scope is impossible. Skip non-su.
+				// CreateTenant runs CheckTenantAccess(newTenantID); since the
+				// ID is server-generated, only superadmin (which bypasses
+				// scope) can satisfy the check.
 				if c.role != roleSuperadmin {
-					t.Skip("CreateTenant requires superadmin: the new tenant ID is server-assigned and cannot be in a non-superadmin caller's pre-existing scope")
+					t.Skip("CreateTenant: server-generated tenant ID can never be in a non-superadmin caller's pre-existing scope")
 				}
 				_, err := c.admin.CreateTenant(ctx, fmt.Sprintf("m1-ct-%s", randSuffix()), fx.schemaID, 1)
 				return err
@@ -242,8 +237,8 @@ func allRPCs() []rpcSpec {
 		{
 			name: "RollbackToVersion",
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				// Produce >=2 versions on the fixture so rollback has a target.
-				_ = c.bootstrapAdmin // not needed; fixture seeded one version, we add another
+				// Produce a second version so rollback has somewhere to roll
+				// back from; the fixture seeds version 1.
 				_ = c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("rb-%s", randSuffix()))
 				_, err := c.admin.RollbackConfig(ctx, fx.tenantID, 1, "matrix rollback")
 				return err
@@ -314,6 +309,9 @@ func TestRoleActionMatrix(t *testing.T) {
 			caller := buildRoleCaller(t, conn, role, fx.tenantID)
 			for _, spec := range rpcs {
 				spec := spec
+				// Subtest suffix is "_allow" because matrix 1 only asserts
+				// the allow direction with proper tenant scope. The deny
+				// direction (out-of-scope tenant) lives in matrix 2.
 				t.Run(spec.name+"_allow", func(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()

@@ -245,18 +245,24 @@ func TestListFieldLocks_Success(t *testing.T) {
 	assert.Equal(t, "app.fee", resp.Locks[0].FieldPath)
 }
 
-// outOfScopeAdminCtx returns a context with admin claims scoped to a
-// different tenant than testTenantID. Used to verify lock RPCs reject
+// otherTenantID is a tenant id distinct from testTenantID, used to scope
+// the caller's claims for "denied" tests of tenant-scoped RPCs.
+const otherTenantID = "00000000-0000-0000-0000-000000000999"
+
+// outOfScopeAdminCtx returns a context with admin claims scoped to
+// otherTenantID — i.e. NOT testTenantID. Used to verify lock RPCs reject
 // callers without tenant access.
 func outOfScopeAdminCtx() context.Context {
 	return auth.ContextWithClaims(context.Background(), &auth.Claims{
 		Role:      auth.RoleAdmin,
-		TenantIDs: []string{"00000000-0000-0000-0000-000000000999"},
+		TenantIDs: []string{otherTenantID},
 	})
 }
 
 func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
-	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.LockField(outOfScopeAdminCtx(), &pb.LockFieldRequest{
 		TenantId:  testTenantID,
@@ -267,7 +273,9 @@ func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 }
 
 func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
-	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.UnlockField(outOfScopeAdminCtx(), &pb.UnlockFieldRequest{
 		TenantId:  testTenantID,
@@ -278,7 +286,9 @@ func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 }
 
 func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
-	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	store := &mockStore{}
+	svc := NewService(store, testLogger, nil, nil)
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.ListFieldLocks(outOfScopeAdminCtx(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
 	require.Error(t, err)
