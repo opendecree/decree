@@ -360,8 +360,15 @@ jobs:
           file: build/Dockerfile
           load: true
           tags: decree-service
-          # Read-only: main.yml is the canonical writer for this cache.
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
+          # Two-tier cache:
+          #   - registry buildcache (read-only; main.yml is canonical writer)
+          #     supplies stable layers like base image + go mod download.
+          #   - GHA cache (read/write, shared scope) carries warm layers
+          #     forward from previous PR runs without round-tripping ghcr.
+          cache-from: |
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
+            type=gha,scope=server-build
+          cache-to: type=gha,scope=server-build,mode=max
 
       - name: Run E2E tests
         run: |
@@ -417,8 +424,15 @@ jobs:
           file: build/Dockerfile
           load: true
           tags: decree-service
-          # Read-only: main.yml is the canonical writer for this cache.
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
+          # Two-tier cache:
+          #   - registry buildcache (read-only; main.yml is canonical writer)
+          #     supplies stable layers like base image + go mod download.
+          #   - GHA cache (read/write, shared scope) carries warm layers
+          #     forward from previous PR runs without round-tripping ghcr.
+          cache-from: |
+            type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
+            type=gha,scope=server-build
+          cache-to: type=gha,scope=server-build,mode=max
 
       - name: Run examples
         run: make examples
