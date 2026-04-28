@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -68,7 +69,12 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		if err != nil {
 			return nil, err
 		}
+		if err := auth.CheckTenantAccess(ctx, resolved); err != nil {
+			return nil, err
+		}
 		params.TenantID = resolved
+	} else if claims, ok := auth.ClaimsFromContext(ctx); ok && !claims.IsSuperAdmin() {
+		return nil, status.Error(codes.PermissionDenied, "tenant_id required for non-superadmin callers")
 	}
 	if req.Actor != nil {
 		params.Actor = *req.Actor
@@ -110,6 +116,9 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -162,6 +171,9 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 	if err != nil {
 		return nil, err
 	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+		return nil, err
+	}
 
 	params := GetTenantUsageParams{
 		TenantID: tenantID,
@@ -200,6 +212,9 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
 		return nil, err
 	}
 

@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/opendecree/decree/sdk/adminclient"
 )
 
 // writeRPCSpec describes one write RPC that should enforce tenant access.
@@ -123,6 +125,76 @@ func TestTenantAccessMatrix(t *testing.T) {
 				otherFx := bootstrapMatrixFixture(t, "m2-out-other")
 
 				// Caller is scoped to a DIFFERENT tenant than the target.
+				caller := scopedClients(t, conn, roleAdmin, otherFx.tenantID)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				err := spec.invoke(ctx, t, caller, targetFx.tenantID, targetFx.schemaID)
+				assert.True(t, isAuthDenied(err),
+					"out-of-scope admin must be denied on %s; got: %v", spec.name, err)
+			})
+		})
+	}
+}
+
+// auditRPCs covers every audit read RPC. These are reads, but the bypass
+// class is the same as matrix 2: a handler that fails to call
+// auth.CheckTenantAccess lets a tenant-A admin read tenant-B data.
+func auditRPCs() []writeRPCSpec {
+	return []writeRPCSpec{
+		{
+			name: "QueryWriteLog",
+			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
+				_, err := c.admin.QueryWriteLog(ctx, adminclient.WithAuditTenant(tenantID))
+				return err
+			},
+		},
+		{
+			name: "GetFieldUsage",
+			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
+				_, err := c.admin.GetFieldUsage(ctx, tenantID, "app.name", nil, nil)
+				return err
+			},
+		},
+		{
+			name: "GetTenantUsage",
+			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
+				_, err := c.admin.GetTenantUsage(ctx, tenantID, nil, nil)
+				return err
+			},
+		},
+		{
+			name: "GetUnusedFields",
+			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
+				_, err := c.admin.GetUnusedFields(ctx, tenantID, time.Now().Add(-time.Hour))
+				return err
+			},
+		},
+	}
+}
+
+func TestAuditTenantAccessMatrix(t *testing.T) {
+	conn := dial(t)
+	rpcs := auditRPCs()
+
+	for _, spec := range rpcs {
+		spec := spec
+		t.Run(spec.name, func(t *testing.T) {
+			t.Run("in_scope_allowed", func(t *testing.T) {
+				fx := bootstrapMatrixFixture(t, "m2-audit-in")
+				caller := scopedClients(t, conn, roleAdmin, fx.tenantID)
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				err := spec.invoke(ctx, t, caller, fx.tenantID, fx.schemaID)
+				assert.False(t, isAuthDenied(err),
+					"in-scope admin must not get auth denial on %s; got: %v", spec.name, err)
+			})
+
+			t.Run("out_of_scope_denied", func(t *testing.T) {
+				targetFx := bootstrapMatrixFixture(t, "m2-audit-out-target")
+				otherFx := bootstrapMatrixFixture(t, "m2-audit-out-other")
+
 				caller := scopedClients(t, conn, roleAdmin, otherFx.tenantID)
 
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
