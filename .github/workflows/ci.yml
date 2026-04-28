@@ -66,7 +66,8 @@ jobs:
           persist-credentials: false
 
       - name: Run path filter
-        uses: dorny/paths-filter@v4
+        # dorny/paths-filter@v4
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d
         id: filter
         with:
           filters: |
@@ -162,6 +163,9 @@ jobs:
         if: github.ref != 'refs/heads/main'
         run: git fetch origin main:main
 
+      - name: Check supply-chain pins
+        run: ./scripts/check-supply-chain-pins.sh
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -169,7 +173,8 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: Go lint
-        uses: golangci/golangci-lint-action@v9
+        # golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20
         with:
           version: v2.11.4
 
@@ -484,7 +489,8 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
+        # golang/govulncheck-action@v1
+        uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
         with:
           go-version-file: go.mod
           work-dir: .
@@ -529,7 +535,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: All green gate
-        uses: re-actors/alls-green@release/v1
+        # re-actors/alls-green@release/v1
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: lint, test, sdk-compat, docs, e2e, examples, govulncheck, deps-review
