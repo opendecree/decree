@@ -520,8 +520,9 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 // --- Field locking ---
 
 func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.LockFieldResponse, error) {
-	if !validUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	var lockedValues []byte
@@ -530,7 +531,7 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 	}
 
 	if err := s.store.CreateFieldLock(ctx, CreateFieldLockParams{
-		TenantID:     req.TenantId,
+		TenantID:     tenant.ID,
 		FieldPath:    req.FieldPath,
 		LockedValues: lockedValues,
 	}); err != nil {
@@ -542,12 +543,13 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 }
 
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
-	if !validUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := s.store.DeleteFieldLock(ctx, DeleteFieldLockParams{
-		TenantID:  req.TenantId,
+		TenantID:  tenant.ID,
 		FieldPath: req.FieldPath,
 	}); err != nil {
 		s.logger.ErrorContext(ctx, "unlock field", "error", err)
@@ -558,11 +560,12 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 }
 
 func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequest) (*pb.ListFieldLocksResponse, error) {
-	if !validUUID(req.TenantId) {
-		return nil, status.Error(codes.InvalidArgument, "invalid tenant id")
+	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
+	if err != nil {
+		return nil, err
 	}
 
-	locks, err := s.store.GetFieldLocks(ctx, req.TenantId)
+	locks, err := s.store.GetFieldLocks(ctx, tenant.ID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list field locks")
 	}
