@@ -1,5 +1,6 @@
 # Build stage
-FROM golang:1.26-bookworm AS builder
+# golang:1.26-bookworm
+FROM golang@sha256:47ce5636e9936b2c5cbf708925578ef386b4f8872aec74a67bd13a627d242b19 AS builder
 
 WORKDIR /app
 
@@ -24,7 +25,8 @@ RUN cd cmd/decree && CGO_ENABLED=0 go build \
     -o /bin/decree .
 
 # Runtime stage
-FROM gcr.io/distroless/static-debian12:nonroot
+# gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1
 
 COPY --from=builder /bin/decree /bin/decree
 

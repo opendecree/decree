@@ -87,6 +87,29 @@ Standard development workflow checklists.
 - [ ] Edit release notes if needed: `gh release edit v{X.Y.Z} --notes "..."`
 - [ ] Milestone auto-closed by CI (verify)
 
+## Supply-chain pinning policy
+
+To prevent silent base-image or third-party-action substitution, the repo
+enforces these rules. CI runs `scripts/check-supply-chain-pins.sh` to keep
+PRs honest.
+
+- **Base images.** Every `FROM` line in `build/*` must pin to an
+  `image@sha256:<digest>`. Add a comment on the line above recording the
+  human-readable tag (e.g. `# golang:1.26-bookworm`). Dependabot's
+  `docker` ecosystem keeps these digests current.
+- **Third-party actions.** Every `uses:` reference to an action outside a
+  trusted org must pin to a 40-char commit SHA, with a comment on the line
+  above recording the original tag. Trusted orgs (`actions/`, `github/`,
+  `docker/`) may continue to pin by major-version tag. Dependabot's
+  `github-actions` ecosystem updates SHA pins automatically when the
+  original ref is itself a SHA.
+- **`docker run` invocations** in workflow steps follow the same digest
+  rule as `FROM` lines.
+
+When adding a new external action, run
+`gh api repos/<owner>/<repo>/git/ref/tags/<tag> --jq '.object.sha'` to
+resolve a tag to its commit SHA before pinning.
+
 ## Milestone Lifecycle
 
 Milestones represent efforts (e.g. "Admin GUI", "Security Review"), not releases.
