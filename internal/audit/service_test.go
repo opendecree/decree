@@ -14,8 +14,24 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
+
+const (
+	testTenantID  = "22222222-2222-2222-2222-222222222222"
+	otherTenantID = "00000000-0000-0000-0000-000000000999"
+)
+
+// outOfScopeAdminCtx returns context with admin claims scoped to otherTenantID
+// — i.e. NOT testTenantID. Used to verify audit RPCs reject callers without
+// tenant access.
+func outOfScopeAdminCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{otherTenantID},
+	})
+}
 
 type mockStore struct{ mock.Mock }
 
@@ -196,6 +212,57 @@ func TestGetUnusedFields_InvalidTenantID(t *testing.T) {
 		Since:    timestamppb.Now(),
 	})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// --- Tenant access enforcement ---
+
+func TestQueryWriteLog_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc, _ := newTestService()
+	tenantID := testTenantID
+
+	_, err := svc.QueryWriteLog(outOfScopeAdminCtx(), &pb.QueryWriteLogRequest{TenantId: &tenantID})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestQueryWriteLog_DeniedForNonSuperAdminWithoutTenantID(t *testing.T) {
+	svc, _ := newTestService()
+
+	_, err := svc.QueryWriteLog(outOfScopeAdminCtx(), &pb.QueryWriteLogRequest{})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestGetFieldUsage_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc, _ := newTestService()
+
+	_, err := svc.GetFieldUsage(outOfScopeAdminCtx(), &pb.GetFieldUsageRequest{
+		TenantId:  testTenantID,
+		FieldPath: "app.fee",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestGetTenantUsage_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc, _ := newTestService()
+
+	_, err := svc.GetTenantUsage(outOfScopeAdminCtx(), &pb.GetTenantUsageRequest{
+		TenantId: testTenantID,
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestGetUnusedFields_DeniedForOutOfScopeAdmin(t *testing.T) {
+	svc, _ := newTestService()
+
+	_, err := svc.GetUnusedFields(outOfScopeAdminCtx(), &pb.GetUnusedFieldsRequest{
+		TenantId: testTenantID,
+		Since:    timestamppb.Now(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 // --- Helpers ---
