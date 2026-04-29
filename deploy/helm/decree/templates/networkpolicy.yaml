@@ -1,0 +1,74 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "decree.fullname" . }}
+  labels:
+    {{- include "decree.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "decree.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        {{- if .Values.networkPolicy.ingressFrom }}
+        {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
+        {{- else }}
+        - podSelector: {}
+        {{- end }}
+      ports:
+        - port: {{ .Values.config.grpcPort }}
+          protocol: TCP
+        {{- if .Values.config.httpPort }}
+        - port: {{ .Values.config.httpPort }}
+          protocol: TCP
+        {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.egress.allowDNS }}
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.postgresCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - port: {{ $.Values.networkPolicy.egress.postgresPort }}
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.redisCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - port: {{ $.Values.networkPolicy.egress.redisPort }}
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.jwksCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - port: {{ $.Values.networkPolicy.egress.jwksPort }}
+          protocol: TCP
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.otelCIDR }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - port: {{ $.Values.networkPolicy.egress.otelPort }}
+          protocol: TCP
+    {{- end }}
+{{- end }}

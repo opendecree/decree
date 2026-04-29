@@ -5,7 +5,9 @@ replicaCount: 1
 image:
   repository: ghcr.io/opendecree/decree
   tag: ""  # defaults to Chart.appVersion
-  pullPolicy: IfNotPresent
+  # Always pull so security-patch updates on a moving tag propagate without manual rollout.
+  # Override to IfNotPresent only when pinning by digest (recommended for production).
+  pullPolicy: Always
 
 imagePullSecrets: []
 nameOverride: ""
@@ -97,13 +99,46 @@ ingress:
           pathType: Prefix
   tls: []
 
-resources: {}
-  # limits:
-  #   cpu: 500m
-  #   memory: 256Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# Default resource requests/limits keep a single pod from starving its node.
+# Override (or set to {}) for benchmarking, dev, or larger production sizing.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# NetworkPolicy restricts egress to the documented dependencies (PG, Redis, JWKS,
+# DNS, OTel collector) and ingress to the configured client paths. Disabled by
+# default during alpha; recommended for any multi-tenant or production cluster.
+networkPolicy:
+  enabled: false
+  # Pod selectors / namespace selectors permitted to reach the gRPC + HTTP ports.
+  # Empty = allow from any pod in the same namespace.
+  ingressFrom: []
+    # - podSelector:
+    #     matchLabels:
+    #       app: my-client
+    # - namespaceSelector:
+    #     matchLabels:
+    #       name: trusted-ns
+  egress:
+    # CIDR (or in-cluster selector) for PostgreSQL. Empty = no rule emitted.
+    postgresCIDR: ""
+    postgresPort: 5432
+    # CIDR (or in-cluster selector) for Redis.
+    redisCIDR: ""
+    redisPort: 6379
+    # JWKS endpoint host CIDR (when JWT auth is enabled).
+    jwksCIDR: ""
+    jwksPort: 443
+    # OpenTelemetry collector CIDR (when otel.enabled).
+    otelCIDR: ""
+    otelPort: 4317
+    # Allow DNS resolution (kube-dns / CoreDNS). Disable only in clusters with
+    # custom service discovery.
+    allowDNS: true
 
 nodeSelector: {}
 tolerations: []
