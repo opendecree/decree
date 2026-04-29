@@ -36,13 +36,9 @@ func newTestService() (*Service, *mockStore, *mockCache, *mockPublisher) {
 	c := &mockCache{}
 	pub := &mockPublisher{}
 	sub := &mockSubscriber{}
-	svc := NewService(ServiceConfig{
-		Store:      store,
-		Cache:      c,
-		Publisher:  pub,
-		Subscriber: sub,
-		Logger:     testLogger,
-	})
+	svc := NewService(store, c, pub, sub,
+		WithLogger(testLogger),
+	)
 	return svc, store, c, pub
 }
 
@@ -52,14 +48,10 @@ func newTestServiceWithValidation() (*Service, *mockStore) {
 	pub := &mockPublisher{}
 	sub := &mockSubscriber{}
 	vf := validation.NewValidatorFactory(store)
-	svc := NewService(ServiceConfig{
-		Store:      store,
-		Cache:      c,
-		Publisher:  pub,
-		Subscriber: sub,
-		Logger:     testLogger,
-		Validators: vf,
-	})
+	svc := NewService(store, c, pub, sub,
+		WithLogger(testLogger),
+		WithValidators(vf),
+	)
 	return svc, store
 }
 
@@ -552,12 +544,10 @@ func TestGetField_RecordsUsage(t *testing.T) {
 		audit.WithFlushInterval(time.Hour),
 		audit.WithLogger(testLogger),
 	)
-	svc := NewService(ServiceConfig{
-		Store:    store,
-		Cache:    c,
-		Logger:   testLogger,
-		Recorder: recorder,
-	})
+	svc := NewService(store, c, nil, nil,
+		WithLogger(testLogger),
+		WithRecorder(recorder),
+	)
 	ctx := context.Background()
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -587,12 +577,10 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 		audit.WithFlushInterval(time.Hour),
 		audit.WithLogger(testLogger),
 	)
-	svc := NewService(ServiceConfig{
-		Store:    store,
-		Cache:    c,
-		Logger:   testLogger,
-		Recorder: recorder,
-	})
+	svc := NewService(store, c, nil, nil,
+		WithLogger(testLogger),
+		WithRecorder(recorder),
+	)
 	ctx := context.Background()
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -630,12 +618,10 @@ func TestGetFields_RecordsUsage(t *testing.T) {
 		audit.WithFlushInterval(time.Hour),
 		audit.WithLogger(testLogger),
 	)
-	svc := NewService(ServiceConfig{
-		Store:    store,
-		Cache:    c,
-		Logger:   testLogger,
-		Recorder: recorder,
-	})
+	svc := NewService(store, c, nil, nil,
+		WithLogger(testLogger),
+		WithRecorder(recorder),
+	)
 	ctx := context.Background()
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -669,12 +655,10 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 		audit.WithFlushInterval(time.Hour),
 		audit.WithLogger(testLogger),
 	)
-	svc := NewService(ServiceConfig{
-		Store:    store,
-		Cache:    c,
-		Logger:   testLogger,
-		Recorder: recorder,
-	})
+	svc := NewService(store, c, nil, nil,
+		WithLogger(testLogger),
+		WithRecorder(recorder),
+	)
 	ctx := context.Background()
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).

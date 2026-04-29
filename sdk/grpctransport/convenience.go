@@ -34,10 +34,10 @@ func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) *configclien
 func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) *adminclient.Client {
 	cfg := buildConfig(opts)
 	return adminclient.New(
-		&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: cfg.auth},
-		&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: cfg.auth},
-		&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: cfg.auth},
-		&ServerTransport{rpc: pb.NewServerServiceClient(conn)},
+		adminclient.WithSchemaTransport(&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: cfg.auth}),
+		adminclient.WithConfigTransport(&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: cfg.auth}),
+		adminclient.WithAuditTransport(&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: cfg.auth}),
+		adminclient.WithServerTransport(&ServerTransport{rpc: pb.NewServerServiceClient(conn)}),
 	)
 }
 

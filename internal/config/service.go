@@ -35,17 +35,41 @@ func (e *dependentRequiredError) Unwrap() error { return e.err }
 
 const defaultCacheTTL = 5 * time.Minute
 
-// ServiceConfig holds dependencies for the ConfigService.
-type ServiceConfig struct {
-	Store        Store
-	Cache        cache.ConfigCache
-	Publisher    pubsub.Publisher
-	Subscriber   pubsub.Subscriber
-	Logger       *slog.Logger
-	CacheMetrics *telemetry.CacheMetrics
-	Metrics      *telemetry.ConfigMetrics
-	Validators   *validation.ValidatorFactory
-	Recorder     *audit.UsageRecorder
+// Option configures a Service.
+type Option func(*serviceOptions)
+
+type serviceOptions struct {
+	logger       *slog.Logger
+	cacheMetrics *telemetry.CacheMetrics
+	metrics      *telemetry.ConfigMetrics
+	validators   *validation.ValidatorFactory
+	recorder     *audit.UsageRecorder
+}
+
+// WithLogger sets the service logger. Defaults to slog.Default() when unset.
+func WithLogger(l *slog.Logger) Option {
+	return func(o *serviceOptions) { o.logger = l }
+}
+
+// WithCacheMetrics wires cache hit/miss metrics. Nil disables them.
+func WithCacheMetrics(m *telemetry.CacheMetrics) Option {
+	return func(o *serviceOptions) { o.cacheMetrics = m }
+}
+
+// WithMetrics wires write/version metrics. Nil disables them.
+func WithMetrics(m *telemetry.ConfigMetrics) Option {
+	return func(o *serviceOptions) { o.metrics = m }
+}
+
+// WithValidators wires the schema validator factory. Nil disables per-field
+// validation and dependentRequired checks.
+func WithValidators(v *validation.ValidatorFactory) Option {
+	return func(o *serviceOptions) { o.validators = v }
+}
+
+// WithRecorder wires an audit usage recorder. Nil disables read tracking.
+func WithRecorder(r *audit.UsageRecorder) Option {
+	return func(o *serviceOptions) { o.recorder = r }
 }
 
 // Service implements the ConfigService gRPC server.
@@ -62,18 +86,24 @@ type Service struct {
 	recorder     *audit.UsageRecorder
 }
 
-// NewService creates a new ConfigService.
-func NewService(cfg ServiceConfig) *Service {
+// NewService creates a new ConfigService. The four required dependencies
+// (store, cache, publisher, subscriber) are positional; everything else is
+// optional and may be passed via With...() options.
+func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher, subscriber pubsub.Subscriber, opts ...Option) *Service {
+	o := serviceOptions{logger: slog.Default()}
+	for _, opt := range opts {
+		opt(&o)
+	}
 	return &Service{
-		store:        cfg.Store,
-		cache:        cfg.Cache,
-		publisher:    cfg.Publisher,
-		subscriber:   cfg.Subscriber,
-		logger:       cfg.Logger,
-		cacheMetrics: cfg.CacheMetrics,
-		metrics:      cfg.Metrics,
-		validators:   cfg.Validators,
-		recorder:     cfg.Recorder,
+		store:        store,
+		cache:        cache,
+		publisher:    publisher,
+		subscriber:   subscriber,
+		logger:       o.logger,
+		cacheMetrics: o.cacheMetrics,
+		metrics:      o.metrics,
+		validators:   o.validators,
+		recorder:     o.recorder,
 	}
 }
 

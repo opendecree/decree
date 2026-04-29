@@ -55,11 +55,10 @@ func (f *fakeConfigTransport) SetFields(_ context.Context, req *configclient.Set
 func buildClients(t *testing.T, fields ...adminclient.Field) (*adminclient.Client, *configclient.Client, *fakeConfigTransport) {
 	t.Helper()
 	admin := adminclient.New(
-		&fakeSchemaTransport{
+		adminclient.WithSchemaTransport(&fakeSchemaTransport{
 			tenant: &adminclient.Tenant{ID: "t1", SchemaID: "s1", SchemaVersion: 1},
 			schema: &adminclient.Schema{ID: "s1", Version: 1, Fields: fields},
-		},
-		nil, nil, nil,
+		}),
 	)
 	tr := &fakeConfigTransport{}
 	cfg := configclient.New(tr)
