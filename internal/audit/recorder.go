@@ -7,10 +7,23 @@ import (
 	"time"
 )
 
-// RecorderConfig holds configuration for the UsageRecorder.
-type RecorderConfig struct {
-	FlushInterval time.Duration
-	Logger        *slog.Logger
+// Option configures a UsageRecorder.
+type Option func(*recorderOptions)
+
+type recorderOptions struct {
+	flushInterval time.Duration
+	logger        *slog.Logger
+}
+
+// WithFlushInterval sets how often pending stats are flushed to the store.
+// Zero or negative falls back to 30s.
+func WithFlushInterval(d time.Duration) Option {
+	return func(o *recorderOptions) { o.flushInterval = d }
+}
+
+// WithLogger sets the recorder logger. Defaults to slog.Default() when unset.
+func WithLogger(l *slog.Logger) Option {
+	return func(o *recorderOptions) { o.logger = l }
 }
 
 // usageKey identifies a unique (tenant, field) pair for batching.
@@ -42,19 +55,24 @@ type UsageRecorder struct {
 }
 
 // NewUsageRecorder creates a new recorder. Call Start to begin the background flush goroutine.
-func NewUsageRecorder(store Store, cfg RecorderConfig) *UsageRecorder {
-	interval := cfg.FlushInterval
-	if interval <= 0 {
-		interval = 30 * time.Second
+func NewUsageRecorder(store Store, opts ...Option) *UsageRecorder {
+	o := recorderOptions{
+		flushInterval: 30 * time.Second,
+		logger:        slog.Default(),
 	}
-	logger := cfg.Logger
-	if logger == nil {
-		logger = slog.Default()
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if o.flushInterval <= 0 {
+		o.flushInterval = 30 * time.Second
+	}
+	if o.logger == nil {
+		o.logger = slog.Default()
 	}
 	return &UsageRecorder{
 		store:    store,
-		logger:   logger,
-		interval: interval,
+		logger:   o.logger,
+		interval: o.flushInterval,
 		pending:  make(map[usageKey]*usageBucket),
 		done:     make(chan struct{}),
 	}

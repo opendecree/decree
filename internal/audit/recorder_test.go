@@ -17,10 +17,10 @@ import (
 var testRecorderLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
 func newTestRecorder(store *MemoryStore) *UsageRecorder {
-	return NewUsageRecorder(store, RecorderConfig{
-		FlushInterval: time.Hour, // manual flush in tests
-		Logger:        testRecorderLogger,
-	})
+	return NewUsageRecorder(store,
+		WithFlushInterval(time.Hour), // manual flush in tests
+		WithLogger(testRecorderLogger),
+	)
 }
 
 func TestRecordRead_SingleField(t *testing.T) {
@@ -151,10 +151,10 @@ func TestFlush_EmptyBuffer(t *testing.T) {
 
 func TestFlush_StoreError(t *testing.T) {
 	store := &failingStore{MemoryStore: NewMemoryStore(), err: errors.New("db down")}
-	r := NewUsageRecorder(store, RecorderConfig{
-		FlushInterval: time.Hour,
-		Logger:        testRecorderLogger,
-	})
+	r := NewUsageRecorder(store,
+		WithFlushInterval(time.Hour),
+		WithLogger(testRecorderLogger),
+	)
 
 	r.RecordRead("t1", "app.fee", nil)
 	err := r.Flush(context.Background())
@@ -173,10 +173,10 @@ func TestNilRecorder_SafeToCall(t *testing.T) {
 
 func TestAutoFlush(t *testing.T) {
 	store := NewMemoryStore()
-	r := NewUsageRecorder(store, RecorderConfig{
-		FlushInterval: 20 * time.Millisecond,
-		Logger:        testRecorderLogger,
-	})
+	r := NewUsageRecorder(store,
+		WithFlushInterval(20*time.Millisecond),
+		WithLogger(testRecorderLogger),
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go r.Start(ctx)
@@ -200,10 +200,10 @@ func TestAutoFlush(t *testing.T) {
 
 func TestStop_FinalFlush(t *testing.T) {
 	store := NewMemoryStore()
-	r := NewUsageRecorder(store, RecorderConfig{
-		FlushInterval: time.Hour, // won't auto-flush
-		Logger:        testRecorderLogger,
-	})
+	r := NewUsageRecorder(store,
+		WithFlushInterval(time.Hour), // won't auto-flush
+		WithLogger(testRecorderLogger),
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go r.Start(ctx)

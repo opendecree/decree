@@ -70,9 +70,33 @@ type Interceptor struct {
 	logger     *slog.Logger
 }
 
-// NewInterceptor creates a new auth interceptor.
-// jwksURL is the JWKS endpoint for key discovery. issuer is optional.
-func NewInterceptor(ctx context.Context, jwksURL, issuer string, logger *slog.Logger) (*Interceptor, error) {
+// InterceptorOption configures a JWT Interceptor.
+type InterceptorOption func(*interceptorOptions)
+
+type interceptorOptions struct {
+	issuer string
+	logger *slog.Logger
+}
+
+// WithIssuer enforces an expected `iss` claim during JWT validation.
+// When unset, the issuer claim is not checked.
+func WithIssuer(issuer string) InterceptorOption {
+	return func(o *interceptorOptions) { o.issuer = issuer }
+}
+
+// WithLogger sets the interceptor logger. Defaults to slog.Default() when unset.
+func WithLogger(l *slog.Logger) InterceptorOption {
+	return func(o *interceptorOptions) { o.logger = l }
+}
+
+// NewInterceptor creates a new auth interceptor. jwksURL is the JWKS endpoint
+// for key discovery; pass WithIssuer / WithLogger for optional configuration.
+func NewInterceptor(ctx context.Context, jwksURL string, opts ...InterceptorOption) (*Interceptor, error) {
+	o := interceptorOptions{logger: slog.Default()}
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	jwksCtx, jwksCancel := context.WithCancel(ctx)
 	jwks, err := keyfunc.NewDefaultCtx(jwksCtx, []string{jwksURL})
 	if err != nil {
@@ -83,8 +107,8 @@ func NewInterceptor(ctx context.Context, jwksURL, issuer string, logger *slog.Lo
 	return &Interceptor{
 		jwks:       jwks,
 		jwksCancel: jwksCancel,
-		issuer:     issuer,
-		logger:     logger,
+		issuer:     o.issuer,
+		logger:     o.logger,
 	}, nil
 }
 
