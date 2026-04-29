@@ -1,0 +1,43 @@
+name: Feature Request
+description: Suggest a new feature or improvement for the OpenDecree server, CLI, or Go SDKs
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? What's the use case?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you'd like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you've considered.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Server
+        - CLI
+        - Go SDK (configclient)
+        - Go SDK (adminclient)
+        - Go SDK (configwatcher)
+        - Go SDK (tools)
+        - Proto / API
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Mockups, examples, links to related discussions, or anything else that helps.
