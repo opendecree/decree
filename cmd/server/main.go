@@ -172,6 +172,17 @@ func run() int {
 		extraOpts = append(extraOpts, grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	}
 
+	var serverTLS *server.TLSConfig
+	if !cfg.InsecureListen {
+		serverTLS = &server.TLSConfig{
+			CertFile:     cfg.TLSCertFile,
+			KeyFile:      cfg.TLSKeyFile,
+			ClientCAFile: cfg.TLSClientCAFile,
+		}
+	} else {
+		logger.WarnContext(ctx, "INSECURE_LISTEN=1 set — gRPC server will accept plaintext connections (local dev only)")
+	}
+
 	srv, err := server.New(server.Config{
 		GRPCPort:        cfg.GRPCPort,
 		EnableServices:  cfg.EnableServices,
@@ -180,6 +191,8 @@ func run() int {
 		ExtraOptions:    extraOpts,
 		MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
 		MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
+		TLS:             serverTLS,
+		Insecure:        cfg.InsecureListen,
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)
@@ -253,6 +266,16 @@ func run() int {
 	// Optional HTTP gateway (REST/JSON proxy to gRPC).
 	var gw *server.Gateway
 	if cfg.HTTPPort != "" {
+		var gwTLS *server.GatewayTLSConfig
+		if !cfg.InsecureListen {
+			gwTLS = &server.GatewayTLSConfig{
+				CAFile:         cfg.TLSGatewayCAFile,
+				ServerName:     cfg.TLSGatewayServerName,
+				ClientCertFile: cfg.TLSGatewayClientCertFile,
+				ClientKeyFile:  cfg.TLSGatewayClientKeyFile,
+			}
+		}
+
 		gw, err = server.NewGateway(ctx, server.GatewayConfig{
 			HTTPPort:        cfg.HTTPPort,
 			GRPCAddr:        fmt.Sprintf("localhost:%s", cfg.GRPCPort),
@@ -260,6 +283,8 @@ func run() int {
 			OpenAPISpec:     openAPISpec,
 			MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
 			MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
+			TLS:             gwTLS,
+			Insecure:        cfg.InsecureListen,
 		})
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
@@ -300,20 +325,28 @@ func run() int {
 }
 
 type serverConfig struct {
-	GRPCPort             string
-	HTTPPort             string
-	StorageBackend       string
-	DBWriteURL           string
-	DBReadURL            string
-	RedisURL             string
-	EnableServices       []string
-	JWTIssuer            string
-	JWTJWKSURL           string
-	LogLevel             string
-	UsageTrackingEnabled bool
-	UsageFlushInterval   time.Duration
-	GRPCMaxRecvMsgBytes  int
-	GRPCMaxSendMsgBytes  int
+	GRPCPort                 string
+	HTTPPort                 string
+	StorageBackend           string
+	DBWriteURL               string
+	DBReadURL                string
+	RedisURL                 string
+	EnableServices           []string
+	JWTIssuer                string
+	JWTJWKSURL               string
+	LogLevel                 string
+	UsageTrackingEnabled     bool
+	UsageFlushInterval       time.Duration
+	GRPCMaxRecvMsgBytes      int
+	GRPCMaxSendMsgBytes      int
+	InsecureListen           bool
+	TLSCertFile              string
+	TLSKeyFile               string
+	TLSClientCAFile          string
+	TLSGatewayCAFile         string
+	TLSGatewayServerName     string
+	TLSGatewayClientCertFile string
+	TLSGatewayClientKeyFile  string
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -344,20 +377,28 @@ func loadConfig() serverConfig {
 	}
 
 	return serverConfig{
-		GRPCPort:             getEnv("GRPC_PORT", "9090"),
-		HTTPPort:             getEnv("HTTP_PORT", ""),
-		StorageBackend:       getEnv("STORAGE_BACKEND", "postgres"),
-		DBWriteURL:           dbWriteURL,
-		DBReadURL:            dbReadURL,
-		RedisURL:             getEnv("REDIS_URL", ""),
-		EnableServices:       parseServices(enableServices),
-		JWTIssuer:            getEnv("JWT_ISSUER", ""),
-		JWTJWKSURL:           getEnv("JWT_JWKS_URL", ""),
-		LogLevel:             getEnv("LOG_LEVEL", "info"),
-		UsageTrackingEnabled: getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
-		UsageFlushInterval:   flushInterval,
-		GRPCMaxRecvMsgBytes:  parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
-		GRPCMaxSendMsgBytes:  parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
+		GRPCPort:                 getEnv("GRPC_PORT", "9090"),
+		HTTPPort:                 getEnv("HTTP_PORT", ""),
+		StorageBackend:           getEnv("STORAGE_BACKEND", "postgres"),
+		DBWriteURL:               dbWriteURL,
+		DBReadURL:                dbReadURL,
+		RedisURL:                 getEnv("REDIS_URL", ""),
+		EnableServices:           parseServices(enableServices),
+		JWTIssuer:                getEnv("JWT_ISSUER", ""),
+		JWTJWKSURL:               getEnv("JWT_JWKS_URL", ""),
+		LogLevel:                 getEnv("LOG_LEVEL", "info"),
+		UsageTrackingEnabled:     getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
+		UsageFlushInterval:       flushInterval,
+		GRPCMaxRecvMsgBytes:      parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
+		GRPCMaxSendMsgBytes:      parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
+		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
+		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),
+		TLSClientCAFile:          getEnv("TLS_CLIENT_CA_FILE", ""),
+		TLSGatewayCAFile:         getEnv("TLS_GATEWAY_CA_FILE", ""),
+		TLSGatewayServerName:     getEnv("TLS_GATEWAY_SERVER_NAME", ""),
+		TLSGatewayClientCertFile: getEnv("TLS_GATEWAY_CLIENT_CERT_FILE", ""),
+		TLSGatewayClientKeyFile:  getEnv("TLS_GATEWAY_CLIENT_KEY_FILE", ""),
 	}
 }
 

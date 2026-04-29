@@ -34,6 +34,7 @@ func TestMemoryBackend_Integration(t *testing.T) {
 		EnableServices:  []string{"schema", "config", "audit"},
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 
