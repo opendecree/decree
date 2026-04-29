@@ -17,63 +17,46 @@ import (
 )
 
 // Gateway is an HTTP reverse proxy that translates REST/JSON requests to gRPC.
-// It is optional — only started when HTTPPort is configured.
+// It is optional — only started when httpPort is non-empty.
 type Gateway struct {
 	httpServer *http.Server
 	logger     *slog.Logger
 }
 
-// GatewayConfig holds configuration for the HTTP gateway.
-type GatewayConfig struct {
-	// HTTPPort is the port the gateway listens on. Empty means gateway is disabled.
-	HTTPPort string
-	// GRPCAddr is the gRPC server address to proxy to (e.g. "localhost:9090").
-	GRPCAddr string
-	// Logger for gateway operations.
-	Logger *slog.Logger
-	// OpenAPISpec is the raw OpenAPI JSON spec to serve at /docs/openapi.json.
-	// If nil, the docs endpoints are not registered.
-	OpenAPISpec []byte
-	// MaxRecvMsgBytes caps inbound gRPC response size from the upstream server.
-	// Zero or negative → DefaultMaxMsgBytes.
-	MaxRecvMsgBytes int
-	// MaxSendMsgBytes caps outbound gRPC request size to the upstream server.
-	// Zero or negative → DefaultMaxMsgBytes.
-	MaxSendMsgBytes int
-	// TLS configures the upstream gRPC dial. Required unless Insecure is true.
-	TLS *GatewayTLSConfig
-	// Insecure dials the upstream gRPC server in plaintext (INSECURE_LISTEN=1).
-	Insecure bool
-}
-
 // NewGateway creates a new HTTP gateway that proxies to the given gRPC address.
-// Returns nil if HTTPPort is empty (gateway disabled).
-func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
-	if cfg.HTTPPort == "" {
+// Returns nil if httpPort is empty (gateway disabled). Either WithGatewayTLS
+// or WithGatewayInsecure must be supplied.
+func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayOption) (*Gateway, error) {
+	if httpPort == "" {
 		return nil, nil
 	}
 
-	if cfg.TLS == nil && !cfg.Insecure {
-		return nil, errors.New("gateway TLS config is required; set Insecure=true (INSECURE_LISTEN=1) to opt out for local dev")
-	}
-	if cfg.TLS != nil && cfg.Insecure {
-		return nil, errors.New("gateway TLS and Insecure are mutually exclusive")
+	o := gatewayOptions{logger: slog.Default()}
+	for _, opt := range opts {
+		opt(&o)
 	}
 
-	recvCap := cfg.MaxRecvMsgBytes
+	if o.tls == nil && !o.insecure {
+		return nil, errors.New("gateway TLS config is required; pass WithGatewayTLS or WithGatewayInsecure for local dev (INSECURE_LISTEN=1)")
+	}
+	if o.tls != nil && o.insecure {
+		return nil, errors.New("WithGatewayTLS and WithGatewayInsecure are mutually exclusive")
+	}
+
+	recvCap := o.maxRecvMsgBytes
 	if recvCap <= 0 {
 		recvCap = DefaultMaxMsgBytes
 	}
-	sendCap := cfg.MaxSendMsgBytes
+	sendCap := o.maxSendMsgBytes
 	if sendCap <= 0 {
 		sendCap = DefaultMaxMsgBytes
 	}
 
 	var transportCreds grpc.DialOption
-	if cfg.Insecure {
+	if o.insecure {
 		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
 	} else {
-		creds, err := cfg.TLS.ClientCredentials()
+		creds, err := o.tls.ClientCredentials()
 		if err != nil {
 			return nil, fmt.Errorf("build gateway TLS credentials: %w", err)
 		}
@@ -81,7 +64,7 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 	}
 
 	conn, err := grpc.NewClient(
-		cfg.GRPCAddr,
+		grpcAddr,
 		transportCreds,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(recvCap),
@@ -112,11 +95,11 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 
 	// Wrap gateway mux with docs routes.
 	handler := http.Handler(mux)
-	if len(cfg.OpenAPISpec) > 0 {
+	if len(o.openAPISpec) > 0 {
 		top := http.NewServeMux()
 		top.HandleFunc("GET /docs/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(cfg.OpenAPISpec)
+			_, _ = w.Write(o.openAPISpec)
 		})
 		top.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -127,13 +110,13 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 	}
 
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.HTTPPort),
+		Addr:    fmt.Sprintf(":%s", httpPort),
 		Handler: handler,
 	}
 
 	return &Gateway{
 		httpServer: httpServer,
-		logger:     cfg.Logger,
+		logger:     o.logger,
 	}, nil
 }
 

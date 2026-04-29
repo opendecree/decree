@@ -93,12 +93,10 @@ func genCertBundle(t *testing.T, commonName string, isClient bool) certBundle {
 // its listen address + cleanup func.
 func startTLSServer(t *testing.T, tlsCfg *TLSConfig) (string, func()) {
 	t.Helper()
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		TLS:             tlsCfg,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithLogger(slog.Default()),
+		WithTLS(tlsCfg),
+	)
 	require.NoError(t, err)
 	addr := srv.listener.Addr().String()
 	go func() { _ = srv.Serve(context.Background()) }()

@@ -14,44 +14,36 @@ import (
 )
 
 func TestNewGateway_DisabledWhenNoPort(t *testing.T) {
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort: "",
-		GRPCAddr: "localhost:9090",
-		Logger:   slog.Default(),
-		Insecure: true,
-	})
+	gw, err := NewGateway(context.Background(), "", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
-	assert.Nil(t, gw, "gateway should be nil when HTTPPort is empty")
+	assert.Nil(t, gw, "gateway should be nil when httpPort is empty")
 }
 
 func TestNewGateway_CreatesWithValidConfig(t *testing.T) {
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort: "0",
-		GRPCAddr: "localhost:9090",
-		Logger:   slog.Default(),
-		Insecure: true,
-	})
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
 }
 
 func TestNewGateway_RequiresTLSOrInsecure(t *testing.T) {
-	_, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort: "0",
-		GRPCAddr: "localhost:9090",
-		Logger:   slog.Default(),
-	})
+	_, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "gateway TLS config is required")
 }
 
 func TestGateway_ServeAndShutdown(t *testing.T) {
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort: "0",
-		GRPCAddr: "localhost:9090",
-		Logger:   slog.Default(),
-		Insecure: true,
-	})
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
 
 	errCh := make(chan error, 1)
@@ -131,37 +123,31 @@ func TestForwardAuthHeaders_CaseInsensitive(t *testing.T) {
 
 func TestNewGateway_WithOpenAPISpec(t *testing.T) {
 	spec := []byte(`{"openapi":"3.0.0","info":{"title":"test"}}`)
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort:    "0",
-		GRPCAddr:    "localhost:9090",
-		Logger:      slog.Default(),
-		OpenAPISpec: spec,
-		Insecure:    true,
-	})
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithOpenAPISpec(spec),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
 }
 
 func TestNewGateway_WithoutOpenAPISpec(t *testing.T) {
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort: "0",
-		GRPCAddr: "localhost:9090",
-		Logger:   slog.Default(),
-		Insecure: true,
-	})
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
 }
 
 func TestGateway_DocsEndpoints(t *testing.T) {
 	spec := []byte(`{"swagger":"2.0","info":{"title":"test"}}`)
-	gw, err := NewGateway(context.Background(), GatewayConfig{
-		HTTPPort:    "0",
-		GRPCAddr:    "localhost:9090",
-		Logger:      slog.Default(),
-		OpenAPISpec: spec,
-		Insecure:    true,
-	})
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithOpenAPISpec(spec),
+		WithGatewayInsecure(),
+	)
 	require.NoError(t, err)
 
 	// Use the gateway's handler directly via httptest to avoid port binding.

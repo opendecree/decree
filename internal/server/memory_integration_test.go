@@ -29,13 +29,11 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Create server.
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		EnableServices:  []string{"schema", "config", "audit"},
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithEnableServices([]string{"schema", "config", "audit"}),
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 
 	// Wire in-memory stores.
