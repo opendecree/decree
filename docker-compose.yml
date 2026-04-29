@@ -71,6 +71,7 @@ services:
       ENABLE_SERVICES: "schema,config,audit"
       HTTP_PORT: "8080"
       USAGE_FLUSH_INTERVAL: "1s"
+      INSECURE_LISTEN: "1"
     ports:
       - "9090:9090"
       - "8080:8080"
