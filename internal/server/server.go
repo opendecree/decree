@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -20,91 +21,85 @@ type GRPCInterceptor interface {
 }
 
 // DefaultMaxMsgBytes is applied to inbound and outbound gRPC messages when
-// Config.MaxRecvMsgBytes / MaxSendMsgBytes are zero or negative.
+// WithMaxRecvMsgBytes / WithMaxSendMsgBytes are zero or negative.
 const DefaultMaxMsgBytes = 20 * 1024 * 1024
-
-// Config holds the server configuration.
-type Config struct {
-	GRPCPort        string
-	EnableServices  []string
-	Logger          *slog.Logger
-	AuthInterceptor GRPCInterceptor
-	ExtraOptions    []grpc.ServerOption
-	// MaxRecvMsgBytes caps inbound gRPC message size. Zero or negative → DefaultMaxMsgBytes.
-	MaxRecvMsgBytes int
-	// MaxSendMsgBytes caps outbound gRPC message size. Zero or negative → DefaultMaxMsgBytes.
-	MaxSendMsgBytes int
-	// TLS enables transport security. Required unless Insecure is true.
-	TLS *TLSConfig
-	// Insecure listens in plaintext. Intended for local dev (INSECURE_LISTEN=1).
-	Insecure bool
-}
 
 // Server wraps the gRPC server and health service.
 type Server struct {
-	grpcServer   *grpc.Server
-	healthServer *health.Server
-	listener     net.Listener
-	config       Config
+	grpcServer     *grpc.Server
+	healthServer   *health.Server
+	listener       net.Listener
+	logger         *slog.Logger
+	grpcPort       string
+	enableServices []string
 }
 
-// New creates a new gRPC server with interceptors.
-func New(cfg Config) (*Server, error) {
-	if cfg.TLS == nil && !cfg.Insecure {
-		return nil, errors.New("TLS config is required; set Insecure=true (INSECURE_LISTEN=1) to opt out for local dev")
-	}
-	if cfg.TLS != nil && cfg.Insecure {
-		return nil, errors.New("TLS and Insecure are mutually exclusive")
+// New creates a new gRPC server with interceptors. grpcPort and auth are
+// required; pass options for everything else. Either WithTLS or WithInsecure
+// must be supplied.
+func New(grpcPort string, auth GRPCInterceptor, opts ...Option) (*Server, error) {
+	o := options{logger: slog.Default()}
+	for _, opt := range opts {
+		opt(&o)
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.GRPCPort))
+	if o.tls == nil && !o.insecure {
+		return nil, errors.New("TLS config is required; pass WithTLS or WithInsecure for local dev (INSECURE_LISTEN=1)")
+	}
+	if o.tls != nil && o.insecure {
+		return nil, errors.New("WithTLS and WithInsecure are mutually exclusive")
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
 	if err != nil {
-		return nil, fmt.Errorf("listen on port %s: %w", cfg.GRPCPort, err)
+		return nil, fmt.Errorf("listen on port %s: %w", grpcPort, err)
 	}
 
-	recvCap := cfg.MaxRecvMsgBytes
+	recvCap := o.maxRecvMsgBytes
 	if recvCap <= 0 {
 		recvCap = DefaultMaxMsgBytes
 	}
-	sendCap := cfg.MaxSendMsgBytes
+	sendCap := o.maxSendMsgBytes
 	if sendCap <= 0 {
 		sendCap = DefaultMaxMsgBytes
 	}
 
-	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+5)
-	opts = append(opts, cfg.ExtraOptions...)
-	if cfg.TLS != nil {
-		creds, err := cfg.TLS.ServerCredentials()
+	grpcOpts := make([]grpc.ServerOption, 0, len(o.extraOptions)+5)
+	grpcOpts = append(grpcOpts, o.extraOptions...)
+	if o.tls != nil {
+		creds, err := o.tls.ServerCredentials()
 		if err != nil {
 			_ = listener.Close()
 			return nil, fmt.Errorf("build TLS credentials: %w", err)
 		}
-		opts = append(opts, grpc.Creds(creds))
+		grpcOpts = append(grpcOpts, grpc.Creds(creds))
 	}
 	// Recovery is registered first so it wraps auth and any future middleware.
-	opts = append(opts,
+	grpcOpts = append(grpcOpts,
 		grpc.MaxRecvMsgSize(recvCap),
 		grpc.MaxSendMsgSize(sendCap),
 		grpc.ChainUnaryInterceptor(
-			recoveryUnaryInterceptor(cfg.Logger),
-			cfg.AuthInterceptor.UnaryInterceptor(),
+			recoveryUnaryInterceptor(o.logger),
+			auth.UnaryInterceptor(),
 		),
 		grpc.ChainStreamInterceptor(
-			recoveryStreamInterceptor(cfg.Logger),
-			cfg.AuthInterceptor.StreamInterceptor(),
+			recoveryStreamInterceptor(o.logger),
+			auth.StreamInterceptor(),
 		),
 	)
 
-	grpcServer := grpc.NewServer(opts...)
+	grpcServer := grpc.NewServer(grpcOpts...)
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
 	reflection.Register(grpcServer)
 
 	return &Server{
-		grpcServer:   grpcServer,
-		healthServer: healthServer,
-		listener:     listener,
-		config:       cfg,
+		grpcServer:     grpcServer,
+		healthServer:   healthServer,
+		listener:       listener,
+		logger:         o.logger,
+		grpcPort:       grpcPort,
+		enableServices: o.enableServices,
 	}, nil
 }
 
@@ -120,23 +115,18 @@ func (s *Server) SetServiceHealthy(service string) {
 
 // Serve starts the gRPC server. Blocks until stopped.
 func (s *Server) Serve(ctx context.Context) error {
-	s.config.Logger.InfoContext(ctx, "gRPC server listening", "port", s.config.GRPCPort)
+	s.logger.InfoContext(ctx, "gRPC server listening", "port", s.grpcPort)
 	return s.grpcServer.Serve(s.listener)
 }
 
 // GracefulStop gracefully stops the gRPC server.
 func (s *Server) GracefulStop(ctx context.Context) {
-	s.config.Logger.InfoContext(ctx, "shutting down gRPC server")
+	s.logger.InfoContext(ctx, "shutting down gRPC server")
 	s.healthServer.Shutdown()
 	s.grpcServer.GracefulStop()
 }
 
 // IsServiceEnabled checks if a service name is in the enabled list.
 func (s *Server) IsServiceEnabled(name string) bool {
-	for _, svc := range s.config.EnableServices {
-		if svc == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.enableServices, name)
 }

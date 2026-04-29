@@ -32,58 +32,48 @@ func (n *noopInterceptor) StreamInterceptor() grpc.StreamServerInterceptor {
 }
 
 func TestNew_Success(t *testing.T) {
-	srv, err := New(Config{
-		GRPCPort:        "0", // OS-assigned port
-		EnableServices:  []string{"schema", "config"},
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithEnableServices([]string{"schema", "config"}),
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 	assert.NotNil(t, srv.GRPCServer())
 	srv.GracefulStop(context.Background())
 }
 
 func TestNew_InvalidPort(t *testing.T) {
-	_, err := New(Config{
-		GRPCPort:        "99999",
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	_, err := New("99999", &noopInterceptor{},
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	assert.Error(t, err)
 }
 
 func TestNew_RequiresTLSOrInsecure(t *testing.T) {
-	_, err := New(Config{
-		GRPCPort:        "0",
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-	})
+	_, err := New("0", &noopInterceptor{},
+		WithLogger(slog.Default()),
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "TLS config is required")
 }
 
 func TestNew_TLSAndInsecureMutuallyExclusive(t *testing.T) {
-	_, err := New(Config{
-		GRPCPort:        "0",
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-		TLS:             &TLSConfig{CertFile: "x", KeyFile: "y"},
-	})
+	_, err := New("0", &noopInterceptor{},
+		WithLogger(slog.Default()),
+		WithInsecure(),
+		WithTLS(&TLSConfig{CertFile: "x", KeyFile: "y"}),
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mutually exclusive")
 }
 
 func TestIsServiceEnabled(t *testing.T) {
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		EnableServices:  []string{"schema", "config"},
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithEnableServices([]string{"schema", "config"}),
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 	defer srv.GracefulStop(context.Background())
 
@@ -93,13 +83,11 @@ func TestIsServiceEnabled(t *testing.T) {
 }
 
 func TestSetServiceHealthy(t *testing.T) {
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		EnableServices:  []string{"schema"},
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithEnableServices([]string{"schema"}),
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 	defer srv.GracefulStop(context.Background())
 
@@ -131,14 +119,12 @@ var echoServiceDesc = grpc.ServiceDesc{
 // registers the echo service, and returns a connected client + cleanup func.
 func startTestServer(t *testing.T, recvCap, sendCap int) (*grpc.ClientConn, func()) {
 	t.Helper()
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		MaxRecvMsgBytes: recvCap,
-		MaxSendMsgBytes: sendCap,
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithLogger(slog.Default()),
+		WithMaxRecvMsgBytes(recvCap),
+		WithMaxSendMsgBytes(sendCap),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 
 	srv.grpcServer.RegisterService(&echoServiceDesc, struct{}{})
@@ -271,12 +257,10 @@ func startPanicServer(t *testing.T) (*grpc.ClientConn, *bytes.Buffer, func()) {
 	logBuf := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		Logger:          logger,
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithLogger(logger),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 	srv.grpcServer.RegisterService(&panicServiceDesc, struct{}{})
 
@@ -351,13 +335,11 @@ func TestRecovery_Stream_ReturnsInternalAndLogs(t *testing.T) {
 }
 
 func TestServe_AndGracefulStop(t *testing.T) {
-	srv, err := New(Config{
-		GRPCPort:        "0",
-		EnableServices:  []string{"schema"},
-		Logger:          slog.Default(),
-		AuthInterceptor: &noopInterceptor{},
-		Insecure:        true,
-	})
+	srv, err := New("0", &noopInterceptor{},
+		WithEnableServices([]string{"schema"}),
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
 	require.NoError(t, err)
 
 	errCh := make(chan error, 1)

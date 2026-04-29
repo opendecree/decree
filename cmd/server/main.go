@@ -183,17 +183,19 @@ func run() int {
 		logger.WarnContext(ctx, "INSECURE_LISTEN=1 set — gRPC server will accept plaintext connections (local dev only)")
 	}
 
-	srv, err := server.New(server.Config{
-		GRPCPort:        cfg.GRPCPort,
-		EnableServices:  cfg.EnableServices,
-		Logger:          logger,
-		AuthInterceptor: authInterceptor,
-		ExtraOptions:    extraOpts,
-		MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
-		MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
-		TLS:             serverTLS,
-		Insecure:        cfg.InsecureListen,
-	})
+	srvOpts := []server.Option{
+		server.WithEnableServices(cfg.EnableServices),
+		server.WithLogger(logger),
+		server.WithGRPCServerOptions(extraOpts...),
+		server.WithMaxRecvMsgBytes(cfg.GRPCMaxRecvMsgBytes),
+		server.WithMaxSendMsgBytes(cfg.GRPCMaxSendMsgBytes),
+	}
+	if cfg.InsecureListen {
+		srvOpts = append(srvOpts, server.WithInsecure())
+	} else {
+		srvOpts = append(srvOpts, server.WithTLS(serverTLS))
+	}
+	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvOpts...)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)
 		return 1
@@ -276,16 +278,18 @@ func run() int {
 			}
 		}
 
-		gw, err = server.NewGateway(ctx, server.GatewayConfig{
-			HTTPPort:        cfg.HTTPPort,
-			GRPCAddr:        fmt.Sprintf("localhost:%s", cfg.GRPCPort),
-			Logger:          logger,
-			OpenAPISpec:     openAPISpec,
-			MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
-			MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
-			TLS:             gwTLS,
-			Insecure:        cfg.InsecureListen,
-		})
+		gwOpts := []server.GatewayOption{
+			server.WithGatewayLogger(logger),
+			server.WithOpenAPISpec(openAPISpec),
+			server.WithGatewayMaxRecvMsgBytes(cfg.GRPCMaxRecvMsgBytes),
+			server.WithGatewayMaxSendMsgBytes(cfg.GRPCMaxSendMsgBytes),
+		}
+		if cfg.InsecureListen {
+			gwOpts = append(gwOpts, server.WithGatewayInsecure())
+		} else {
+			gwOpts = append(gwOpts, server.WithGatewayTLS(gwTLS))
+		}
+		gw, err = server.NewGateway(ctx, cfg.HTTPPort, fmt.Sprintf("localhost:%s", cfg.GRPCPort), gwOpts...)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
 			return 1
