@@ -29,7 +29,7 @@ OpenDecree manages **business-oriented configuration** — approval rules, fee s
 
 OpenDecree sits between feature flags (release toggles) and infrastructure config (low-level key-value) — purpose-built for **typed business configuration**.
 
-| Capability | Feature Flags | Infrastructure Config | **OpenDecree** |
+| Capability | Feature Flags | Infrastructure Config\* | **OpenDecree** |
 |---|---|---|---|
 | Typed values | bool / variant only | strings only | ✓ native types (int, number, string, bool, time, duration, url, json) |
 | Schema validation | ✗ | ✗ | ✓ constraints + JSON Schema, enforced on every write |
@@ -40,6 +40,10 @@ OpenDecree sits between feature flags (release toggles) and infrastructure confi
 | Versioning + rollback | limited | ✗ | ✓ every change versioned, rollback to any state |
 
 Examples by category: feature flags (LaunchDarkly, ConfigCat, Flagsmith), infrastructure config (etcd, Consul, Spring Cloud Config, AWS AppConfig, Azure App Configuration).
+
+\* Cloud config services (AWS AppConfig, Azure App Configuration) offer limited validation, but lack schema registries, multi-tenancy, and gRPC streaming — and are vendor-locked.
+
+**What makes OpenDecree unique:** no other open-source tool combines schema-first typed configuration with native multi-tenancy, field-level locking, gRPC streaming, and versioned rollback in a single Go binary.
 
 ### Features
 
