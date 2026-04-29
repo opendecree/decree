@@ -18,6 +18,10 @@ type GRPCInterceptor interface {
 	StreamInterceptor() grpc.StreamServerInterceptor
 }
 
+// DefaultMaxMsgBytes is applied to inbound and outbound gRPC messages when
+// Config.MaxRecvMsgBytes / MaxSendMsgBytes are zero or negative.
+const DefaultMaxMsgBytes = 20 * 1024 * 1024
+
 // Config holds the server configuration.
 type Config struct {
 	GRPCPort        string
@@ -25,6 +29,10 @@ type Config struct {
 	Logger          *slog.Logger
 	AuthInterceptor GRPCInterceptor
 	ExtraOptions    []grpc.ServerOption
+	// MaxRecvMsgBytes caps inbound gRPC message size. Zero or negative → DefaultMaxMsgBytes.
+	MaxRecvMsgBytes int
+	// MaxSendMsgBytes caps outbound gRPC message size. Zero or negative → DefaultMaxMsgBytes.
+	MaxSendMsgBytes int
 }
 
 // Server wraps the gRPC server and health service.
@@ -42,9 +50,20 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("listen on port %s: %w", cfg.GRPCPort, err)
 	}
 
-	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+2)
+	recvCap := cfg.MaxRecvMsgBytes
+	if recvCap <= 0 {
+		recvCap = DefaultMaxMsgBytes
+	}
+	sendCap := cfg.MaxSendMsgBytes
+	if sendCap <= 0 {
+		sendCap = DefaultMaxMsgBytes
+	}
+
+	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+4)
 	opts = append(opts, cfg.ExtraOptions...)
 	opts = append(opts,
+		grpc.MaxRecvMsgSize(recvCap),
+		grpc.MaxSendMsgSize(sendCap),
 		grpc.ChainUnaryInterceptor(cfg.AuthInterceptor.UnaryInterceptor()),
 		grpc.ChainStreamInterceptor(cfg.AuthInterceptor.StreamInterceptor()),
 	)

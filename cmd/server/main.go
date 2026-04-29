@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -177,6 +178,8 @@ func run() int {
 		Logger:          logger,
 		AuthInterceptor: authInterceptor,
 		ExtraOptions:    extraOpts,
+		MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
+		MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
 	})
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)
@@ -251,10 +254,12 @@ func run() int {
 	var gw *server.Gateway
 	if cfg.HTTPPort != "" {
 		gw, err = server.NewGateway(ctx, server.GatewayConfig{
-			HTTPPort:    cfg.HTTPPort,
-			GRPCAddr:    fmt.Sprintf("localhost:%s", cfg.GRPCPort),
-			Logger:      logger,
-			OpenAPISpec: openAPISpec,
+			HTTPPort:        cfg.HTTPPort,
+			GRPCAddr:        fmt.Sprintf("localhost:%s", cfg.GRPCPort),
+			Logger:          logger,
+			OpenAPISpec:     openAPISpec,
+			MaxRecvMsgBytes: cfg.GRPCMaxRecvMsgBytes,
+			MaxSendMsgBytes: cfg.GRPCMaxSendMsgBytes,
 		})
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
@@ -307,6 +312,8 @@ type serverConfig struct {
 	LogLevel             string
 	UsageTrackingEnabled bool
 	UsageFlushInterval   time.Duration
+	GRPCMaxRecvMsgBytes  int
+	GRPCMaxSendMsgBytes  int
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -349,7 +356,24 @@ func loadConfig() serverConfig {
 		LogLevel:             getEnv("LOG_LEVEL", "info"),
 		UsageTrackingEnabled: getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
 		UsageFlushInterval:   flushInterval,
+		GRPCMaxRecvMsgBytes:  parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
+		GRPCMaxSendMsgBytes:  parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
 	}
+}
+
+// parseEnvInt parses an integer env var. Returns fallback when unset or invalid;
+// invalid values exit with an error so misconfiguration is loud, not silent.
+func parseEnvInt(key string, fallback int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		slog.Error("invalid integer env var", "key", key, "value", raw, "error", err)
+		os.Exit(1)
+	}
+	return v
 }
 
 func getEnv(key, fallback string) string {

@@ -16,6 +16,8 @@ OpenDecree is configured entirely through environment variables. No config files
 | `LOG_LEVEL` | Log verbosity. One of: `debug`, `info`, `warn`, `error`. Logs are JSON-formatted to stdout. | `info` | No |
 | `USAGE_TRACKING_ENABLED` | Enable automatic recording of config field reads (`GetField`, `GetConfig`, `GetFields`). Set to `false` to disable. | `true` | No |
 | `USAGE_FLUSH_INTERVAL` | How often accumulated read counts are flushed to storage. Format: Go duration (e.g., `30s`, `1m`). | `30s` | No |
+| `GRPC_MAX_RECV_MSG_BYTES` | Maximum size of an inbound gRPC message, in bytes. Requests above this return `ResourceExhausted`. Set to `0` for the default. | `20971520` (20 MiB) | No |
+| `GRPC_MAX_SEND_MSG_BYTES` | Maximum size of an outbound gRPC message, in bytes. Responses above this return `ResourceExhausted` to the client. Set to `0` for the default. | `20971520` (20 MiB) | No |
 
 ### In-Memory Mode
 

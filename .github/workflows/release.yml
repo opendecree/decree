@@ -175,7 +175,8 @@ jobs:
           go-version: "1.25"
 
       - name: Run goreleaser
-        uses: goreleaser/goreleaser-action@v7
+        # goreleaser/goreleaser-action@v7
+        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8
         with:
           version: "~> v2"
           args: release --clean
@@ -194,7 +195,8 @@ jobs:
           persist-credentials: false
 
       - name: Push to BSR
-        uses: bufbuild/buf-action@v1
+        # bufbuild/buf-action@v1
+        uses: bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff
         with:
           token: ${{ secrets.BUF_TOKEN }}
           push: true
