@@ -1,4 +1,9 @@
 changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
   categories:
     - title: "⚠️ Breaking Changes"
       labels:
@@ -23,6 +28,10 @@ changelog:
     - title: "Documentation"
       labels:
         - docs
+        - documentation
+    - title: "Dependencies"
+      labels:
+        - dependencies
     - title: "Other Changes"
       labels:
         - "*"
