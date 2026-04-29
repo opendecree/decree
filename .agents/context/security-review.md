@@ -148,11 +148,18 @@ a unary/stream interceptor.
 Fix: cap field count (e.g. 10 000), schema-document bytes (e.g. 5 MB),
 and wrap compilation in a context deadline (e.g. 5 s).
 
-Field count + doc bytes landed via `schema.Limits` (`internal/schema/limits.go`),
-configurable through `WithLimits` and env vars `SCHEMA_MAX_FIELDS` /
-`SCHEMA_MAX_DOC_BYTES`. Compile timeout still pending — needs a refactor
-of `internal/validation/json_schema.go` since `jsonschema/v6` has no
-`CompileContext`.
+All four bounds shipped:
+
+- Field count + doc bytes via `schema.Limits` (`internal/schema/limits.go`),
+  configurable through `schema.WithLimits` and env vars `SCHEMA_MAX_FIELDS` /
+  `SCHEMA_MAX_DOC_BYTES`.
+- Compile timeout + structural depth scan via `validation.Limits`
+  (`internal/validation/limits.go`), configurable through
+  `validation.WithLimits` and env vars `SCHEMA_COMPILE_TIMEOUT` /
+  `SCHEMA_MAX_REF_DEPTH`. Because `jsonschema/v6` has no `CompileContext`,
+  the timeout is a goroutine-level wrapper — the underlying compile may
+  continue past the deadline, but the depth pre-scan and upstream doc-byte
+  cap bound the worst-case work.
 
 ### 7. Audit log not tamper-evident — High
 
