@@ -14,7 +14,7 @@ const (
 	yamlSpecVersionV1 = "v1"
 	// metaSchemaURL is the canonical URL of the meta-schema that validates
 	// decree.schema.yaml documents at this spec version. Emitted on export.
-	metaSchemaURL = "https://schemas.opendecree.io/schema/v0.1.0/decree.json"
+	metaSchemaURL = "https://schemas.opendecree.dev/schema/v0.1.0/decree.json"
 )
 
 // schemaURNPattern matches decree schema URNs: urn:decree:schema:<segment>(:<segment>)*

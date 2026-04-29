@@ -14,7 +14,7 @@ The canonical reference for the **decree.schema.yaml** format — every top-leve
 Place the modeline on line 1 of every file so editors with [yaml-language-server](https://github.com/redhat-developer/yaml-language-server) auto-apply schema validation and IntelliSense:
 
 ```yaml
-# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json
+# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json
 ```
 
 The CLI is filename-agnostic — `decree apply some-other-name.yaml` keeps working. The convention drives editor discovery only.
@@ -22,10 +22,10 @@ The CLI is filename-agnostic — `decree apply some-other-name.yaml` keeps worki
 ## Top-level shape
 
 ```yaml
-# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json
+# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json
 
 spec_version: v1                                # required, const "v1"
-$schema: https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json  # optional
+$schema: https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json  # optional
 $id: urn:decree:schema:payments:v3              # optional URN
 
 name: payments                                  # required slug

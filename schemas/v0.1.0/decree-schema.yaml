@@ -14,7 +14,7 @@
 # may consume either.
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://schemas.opendecree.io/schema/v0.1.0/decree-schema.json"
+$id: "https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json"
 title: OpenDecree Schema Format (v0.1.0)
 description: >-
   Schema definition format for OpenDecree. A decree.schema.yaml file

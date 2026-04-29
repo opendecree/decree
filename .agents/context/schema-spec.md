@@ -54,10 +54,10 @@ All changes are **breaking**. Per project policy (no backward compat pre-product
 ### Final top-level shape (v0.1.0)
 
 ```yaml
-# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree.json
+# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree.json
 
 spec_version: v1                          # required, const "v1" (the decree format version)
-$schema: https://schemas.opendecree.io/schema/v0.1.0/decree.json  # optional
+$schema: https://schemas.opendecree.dev/schema/v0.1.0/decree.json  # optional
 $id: urn:decree:schema:payments:v3        # optional
 name: payments                            # required, slug ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
 description: Payments service config      # optional
@@ -140,12 +140,12 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 - **Canonical filenames:** `decree.schema.yaml`, `decree.config.yaml`
 - **Generic globs:** `*.decree.schema.yaml`, `*.decree.config.yaml` (for repos with multiple schemas)
-- **Modeline:** `# yaml-language-server: $schema=https://schemas.opendecree.io/schema/v0.1.0/decree.json` on line 1 of every example
+- **Modeline:** `# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree.json` on line 1 of every example
 - **CLI stays filename-agnostic** — `decree apply some-other-name.yaml` must keep working. The convention drives editor discovery only.
 
 ## Publishing
 
-- **URL pattern:** `https://schemas.opendecree.io/schema/v{MAJOR}.{MINOR}.{PATCH}/decree.json`
+- **URL pattern:** `https://schemas.opendecree.dev/schema/v{MAJOR}.{MINOR}.{PATCH}/decree.json`
 - **Pre-stable:** full SemVer in path (`/v0.1.0/`)
 - **Post-1.0.0:** switch to major-only paths (`/v1/`) with permanent redirects from historical full-SemVer URLs
 - **Hosting:** TBD (GitHub Pages on a dedicated repo, or static-hosted redirect to raw GitHub content). Must be HTTPS, stable, `Content-Type: application/schema+json`.
@@ -155,7 +155,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
     "name": "OpenDecree Schema",
     "description": "OpenDecree configuration schema",
     "fileMatch": ["decree.schema.yaml", "decree.schema.yml", "*.decree.schema.yaml", "*.decree.schema.yml"],
-    "url": "https://schemas.opendecree.io/schema/v0.1.0/decree.json"
+    "url": "https://schemas.opendecree.dev/schema/v0.1.0/decree.json"
   }
   ```
 
@@ -191,7 +191,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ### Phase C — Publishing
 
-- #125 — Host meta-schema at `https://schemas.opendecree.io/schema/v0.1.0/decree.json`
+- #125 — Host meta-schema at `https://schemas.opendecree.dev/schema/v0.1.0/decree.json`
 - #126 — Submit schemastore.org PR
 
 ### Phase D — Docs
@@ -205,7 +205,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ## Open questions
 
-- **Hosting target for `schemas.opendecree.io`** — dedicated GitHub Pages repo? Cloudflare redirect to raw GitHub content? Needs DNS + CORS setup.
+- **Hosting target for `schemas.opendecree.dev`** — dedicated GitHub Pages repo? Cloudflare redirect to raw GitHub content? Needs DNS + CORS setup.
 - **Bundling tool** — hand-rolled Python script vs off-the-shelf (e.g. `json-dereference-cli`). Go with off-the-shelf if one exists and is maintained.
 - **Does the CLI emit `$schema`/`$id` on export?** — `decree schema export` should probably inject `$schema` by default, make `$id` opt-in.
 - **Post-v1.0.0 URL migration** — when the spec promotes to 1.0.0, keep `/v0.1.0/` live forever or redirect? Preserve forever matches OpenAPI's dated-URL practice.
