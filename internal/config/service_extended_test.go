@@ -29,7 +29,7 @@ func TestGetFields_Success(t *testing.T) {
 
 	val := "hello"
 	chk := "abc"
-	store.On("GetConfigValueAtVersion", ctx, mock.Anything).Return(GetConfigValueAtVersionRow{
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{
 		FieldPath: "app.name", Value: &val, Checksum: &chk,
 	}, nil)
 
@@ -48,7 +48,7 @@ func TestGetFields_SkipsMissing(t *testing.T) {
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 
 	resp, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
 		TenantId:   tenantID1,
@@ -62,6 +62,89 @@ func TestGetFields_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
 	_, err := svc.GetFields(context.Background(), &pb.GetFieldsRequest{TenantId: ""})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+// TestGetFields_PreservesOrder verifies the per-field fan-out preserves
+// request order regardless of completion order. Per-path mock matchers let us
+// assert each value lands in the right slot.
+func TestGetFields_PreservesOrder(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+
+	paths := []string{"a.one", "a.two", "a.three", "a.four", "a.five"}
+	for _, p := range paths {
+		val := "v-" + p
+		store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+			TenantID: tenantID1, FieldPath: p, Version: 1,
+		}).Return(GetConfigValueAtVersionRow{FieldPath: p, Value: &val}, nil)
+	}
+
+	resp, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
+		TenantId:   tenantID1,
+		FieldPaths: paths,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Values, len(paths))
+	for i, p := range paths {
+		assert.Equal(t, p, resp.Values[i].FieldPath, "slot %d", i)
+	}
+}
+
+// TestGetFields_MixedMissingAndPresent verifies that NotFound rows are
+// dropped while present rows retain their request order.
+func TestGetFields_MixedMissingAndPresent(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+
+	present := "x"
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "have.first", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{FieldPath: "have.first", Value: &present}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "missing", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "have.second", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{FieldPath: "have.second", Value: &present}, nil)
+
+	resp, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
+		TenantId:   tenantID1,
+		FieldPaths: []string{"have.first", "missing", "have.second"},
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.Values, 2)
+	assert.Equal(t, "have.first", resp.Values[0].FieldPath)
+	assert.Equal(t, "have.second", resp.Values[1].FieldPath)
+}
+
+// TestGetFields_PropagatesError verifies a non-NotFound store error
+// surfaces as Internal and aborts the group.
+func TestGetFields_PropagatesError(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	val := "ok"
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "ok.path", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{FieldPath: "ok.path", Value: &val}, nil).Maybe()
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "boom", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{}, errors.New("db exploded"))
+
+	_, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
+		TenantId:   tenantID1,
+		FieldPaths: []string{"ok.path", "boom"},
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
 // --- Slug resolution tests ---
@@ -120,7 +203,7 @@ func TestSetFields_Success(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", ctx, mock.Anything).Return(domain.ConfigVersion{
 		ID: versionID2, Version: 2, CreatedAt: time.Now(),
 	}, nil)

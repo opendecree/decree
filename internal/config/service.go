@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,7 +34,13 @@ type dependentRequiredError struct{ err error }
 func (e *dependentRequiredError) Error() string { return e.err.Error() }
 func (e *dependentRequiredError) Unwrap() error { return e.err }
 
-const defaultCacheTTL = 5 * time.Minute
+const (
+	defaultCacheTTL = 5 * time.Minute
+
+	// getFieldsConcurrency caps in-flight per-field reads in GetFields.
+	// Bounded so a large FieldPaths request cannot exhaust the DB pool.
+	getFieldsConcurrency = 16
+)
 
 // Option configures a Service.
 type Option func(*serviceOptions)
@@ -141,13 +148,30 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		return nil, err
 	}
 
-	// Resolve version.
-	version, err := s.resolveVersion(ctx, tenantID, req.Version)
-	if err != nil {
+	// Version resolution and type-map lookup hit different stores
+	// (config vs schema/validators) and are independent — fan out.
+	// Plain errgroup (no WithContext) keeps the parent ctx unchanged so
+	// downstream calls and tests see the same ctx identity.
+	var (
+		version int32
+		types   map[string]domain.FieldType
+		g       errgroup.Group
+	)
+	g.Go(func() error {
+		v, err := s.resolveVersion(ctx, tenantID, req.Version)
+		if err != nil {
+			return err
+		}
+		version = v
+		return nil
+	})
+	g.Go(func() error {
+		types = s.fieldTypeMap(ctx, tenantID)
+		return nil
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-
-	types := s.fieldTypeMap(ctx, tenantID)
 
 	// If descriptions not requested, try cache.
 	if !req.IncludeDescriptions {
@@ -277,34 +301,69 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		return nil, err
 	}
 
-	version, err := s.resolveVersion(ctx, tenantID, req.Version)
-	if err != nil {
-		return nil, err
+	// Version and type-map are independent — fan out. Plain errgroup keeps
+	// parent ctx identity for downstream calls + tests.
+	var (
+		version int32
+		types   map[string]domain.FieldType
+	)
+	{
+		var g errgroup.Group
+		g.Go(func() error {
+			v, err := s.resolveVersion(ctx, tenantID, req.Version)
+			if err != nil {
+				return err
+			}
+			version = v
+			return nil
+		})
+		g.Go(func() error {
+			types = s.fieldTypeMap(ctx, tenantID)
+			return nil
+		})
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
 	}
 
-	types := s.fieldTypeMap(ctx, tenantID)
-	values := make([]*pb.ConfigValue, 0, len(req.FieldPaths))
-	for _, path := range req.FieldPaths {
-		row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
-			TenantID:  tenantID,
-			FieldPath: path,
-			Version:   version,
-		})
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				continue // Skip missing fields.
+	// Fan out per-field reads. Slot index preserves request order; nil slots
+	// are missing fields and get filtered after the group completes.
+	rows := make([]*pb.ConfigValue, len(req.FieldPaths))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(getFieldsConcurrency)
+	for i, path := range req.FieldPaths {
+		g.Go(func() error {
+			row, err := s.store.GetConfigValueAtVersion(gctx, GetConfigValueAtVersionParams{
+				TenantID:  tenantID,
+				FieldPath: path,
+				Version:   version,
+			})
+			if err != nil {
+				if errors.Is(err, domain.ErrNotFound) {
+					return nil // Missing field: leave slot nil.
+				}
+				return status.Error(codes.Internal, "failed to get field")
 			}
-			return nil, status.Error(codes.Internal, "failed to get field")
+			cv := &pb.ConfigValue{
+				FieldPath: row.FieldPath,
+				Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
+				Checksum:  derefString(row.Checksum),
+			}
+			if req.IncludeDescriptions && row.Description != nil {
+				cv.Description = row.Description
+			}
+			rows[i] = cv
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	values := make([]*pb.ConfigValue, 0, len(rows))
+	for _, cv := range rows {
+		if cv != nil {
+			values = append(values, cv)
 		}
-		cv := &pb.ConfigValue{
-			FieldPath: row.FieldPath,
-			Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
-			Checksum:  derefString(row.Checksum),
-		}
-		if req.IncludeDescriptions && row.Description != nil {
-			cv.Description = row.Description
-		}
-		values = append(values, cv)
 	}
 
 	// Record usage for all returned fields.
@@ -911,19 +970,29 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		return nil, status.Error(codes.AlreadyExists, "no changes to apply")
 	}
 
-	// Collect old values for audit and change events.
+	// Collect old values for audit and change events. Fan out the per-field
+	// reads — getCurrentValue is N independent point lookups; large imports
+	// would otherwise pay the round-trip cost N times sequentially.
 	type changeRecord struct {
 		fieldPath string
 		oldValue  string
 		newValue  string
 	}
-	changes := make([]changeRecord, 0, len(values))
-	for _, v := range values {
-		changes = append(changes, changeRecord{
-			fieldPath: v.FieldPath,
-			oldValue:  s.getCurrentValue(ctx, tenantID, v.FieldPath, latestVersion),
-			newValue:  v.Value,
-		})
+	changes := make([]changeRecord, len(values))
+	{
+		changeG, changeCtx := errgroup.WithContext(ctx)
+		changeG.SetLimit(getFieldsConcurrency)
+		for i, v := range values {
+			changeG.Go(func() error {
+				changes[i] = changeRecord{
+					fieldPath: v.FieldPath,
+					oldValue:  s.getCurrentValue(changeCtx, tenantID, v.FieldPath, latestVersion),
+					newValue:  v.Value,
+				}
+				return nil
+			})
+		}
+		_ = changeG.Wait() // getCurrentValue swallows errors internally.
 	}
 
 	// Import description.
