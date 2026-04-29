@@ -90,6 +90,21 @@ spec:
             - name: JWT_ISSUER
               value: {{ .Values.auth.jwtIssuer | quote }}
             {{- end }}
+            {{- if .Values.rateLimit.enabled }}
+            - name: RATE_LIMIT_ENABLED
+              value: "true"
+            - name: RATE_LIMIT_ANON_RPS
+              value: {{ .Values.rateLimit.anonRPS | quote }}
+            - name: RATE_LIMIT_AUTHED_RPS
+              value: {{ .Values.rateLimit.authedRPS | quote }}
+            - name: RATE_LIMIT_SUPERADMIN_RPS
+              value: {{ .Values.rateLimit.superadminRPS | quote }}
+            - name: RATE_LIMIT_BURST
+              value: {{ .Values.rateLimit.burst | quote }}
+            {{- else }}
+            - name: RATE_LIMIT_ENABLED
+              value: "false"
+            {{- end }}
             {{- if .Values.otel.enabled }}
             - name: OTEL_ENABLED
               value: "true"
@@ -123,6 +138,10 @@ spec:
             {{- end }}
             {{- if .Values.otel.metricsSchema }}
             - name: OTEL_METRICS_SCHEMA
+              value: "true"
+            {{- end }}
+            {{- if .Values.otel.metricsRateLimit }}
+            - name: OTEL_METRICS_RATE_LIMIT
               value: "true"
             {{- end }}
             {{- end }}

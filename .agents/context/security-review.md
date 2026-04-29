@@ -40,7 +40,7 @@ external deployment, not the alpha cluster.
 | 2 | Critical | Infra | gRPC + gateway-to-gRPC traffic is plaintext by default; no TLS option in `server.Config`; Helm chart has no cert wiring; DB/Redis TLS not validated | #213 |
 | 3 | High | Infra | No panic recovery interceptor — a panic in any handler crashes the server and may leak stack to client | #214 |
 | 4 | High | Data | `sensitive: true` flag is stored but NOT honoured in audit log, Subscribe stream, ExportConfig, Redis cache, or validation error messages | #215 |
-| 5 | High | Infra | No rate limiting at all (no per-tenant, per-method, or global limiter) | #216 |
+| 5 | High | Infra | No rate limiting at all (no per-tenant, per-method, or global limiter) | #216 ✓ |
 | 6 | High | Input | Schema-complexity bounds missing — no max field count, no max schema-doc size, no JSON-Schema compilation timeout | #217 |
 | 7 | High | Data | Audit log is append-only by convention only — no hash-chain, no UPDATE/DELETE constraint; admin mutations (schema/tenant) not audited | #218 |
 | 9 | Medium | Auth | Metadata header values (`x-tenant-id`, `x-subject`, `x-role`) have no length / charset limits; tenant-resolve error leaks raw `%v` | #219 |
@@ -123,14 +123,13 @@ audit confirms it does not. Fix: route audit/subscribe/export/cache/
 validation-error paths through a sensitive-aware redaction helper that
 takes the schema field definition.
 
-### 5. No rate limiting — High
+### 5. No rate limiting — High ✓ RESOLVED (#216)
 
-Codebase grep finds zero references to `rate.Limiter`,
-`golang.org/x/time/rate`, token-bucket, or Redis-based limiters.
-Anonymous endpoints (`grpc.health.v1.Health`,
-`centralconfig.v1.ServerService/GetServerInfo`) and authenticated
-endpoints alike are unbounded. Fix: per-tenant + per-method limiter as
-a unary/stream interceptor.
+Implemented in `internal/ratelimit/`. Per-tenant + per-method in-process
+token-bucket limiter via `golang.org/x/time/rate`. Health check exempt.
+Returns `codes.ResourceExhausted` + `RetryInfo` detail. `Limiter` interface
+allows future Redis-backed replacement. `OTEL_METRICS_RATE_LIMIT` counter
+for observability.
 
 ### 6. Schema-complexity bounds missing — High
 

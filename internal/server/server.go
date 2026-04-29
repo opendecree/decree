@@ -74,18 +74,24 @@ func New(grpcPort string, auth GRPCInterceptor, opts ...Option) (*Server, error)
 		}
 		grpcOpts = append(grpcOpts, grpc.Creds(creds))
 	}
-	// Recovery is registered first so it wraps auth and any future middleware.
+	// Recovery wraps all middleware. Auth runs second. Rate limiter (when set) runs after auth.
+	unaryChain := []grpc.UnaryServerInterceptor{
+		recoveryUnaryInterceptor(o.logger),
+		auth.UnaryInterceptor(),
+	}
+	streamChain := []grpc.StreamServerInterceptor{
+		recoveryStreamInterceptor(o.logger),
+		auth.StreamInterceptor(),
+	}
+	if o.rateLimiter != nil {
+		unaryChain = append(unaryChain, o.rateLimiter.UnaryInterceptor())
+		streamChain = append(streamChain, o.rateLimiter.StreamInterceptor())
+	}
 	grpcOpts = append(grpcOpts,
 		grpc.MaxRecvMsgSize(recvCap),
 		grpc.MaxSendMsgSize(sendCap),
-		grpc.ChainUnaryInterceptor(
-			recoveryUnaryInterceptor(o.logger),
-			auth.UnaryInterceptor(),
-		),
-		grpc.ChainStreamInterceptor(
-			recoveryStreamInterceptor(o.logger),
-			auth.StreamInterceptor(),
-		),
+		grpc.ChainUnaryInterceptor(unaryChain...),
+		grpc.ChainStreamInterceptor(streamChain...),
 	)
 
 	grpcServer := grpc.NewServer(grpcOpts...)

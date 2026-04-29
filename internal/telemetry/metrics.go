@@ -106,6 +106,31 @@ func (m *SchemaMetrics) RecordPublish(ctx context.Context) {
 	}
 }
 
+// RateLimitMetrics records rate-limit rejection counters.
+type RateLimitMetrics struct {
+	rejected metric.Int64Counter
+}
+
+// NewRateLimitMetrics creates rate-limit metrics. Returns nil if not enabled.
+func NewRateLimitMetrics(cfg Config) *RateLimitMetrics {
+	if !cfg.Enabled || !cfg.MetricsRateLimit {
+		return nil
+	}
+	meter := otel.Meter(meterName)
+	rejected, _ := meter.Int64Counter("ratelimit.rejected",
+		metric.WithDescription("Number of requests rejected by the rate limiter"))
+	return &RateLimitMetrics{rejected: rejected}
+}
+
+// Counter returns the underlying Int64Counter and true when metrics are enabled,
+// or a nil interface and false when disabled.
+func (m *RateLimitMetrics) Counter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.rejected, true
+}
+
 // StartDBPoolMetrics starts a background goroutine that periodically records
 // DB connection pool statistics. Returns immediately if not enabled.
 func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pgxpool.Pool) {

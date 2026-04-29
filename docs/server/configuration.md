@@ -57,6 +57,20 @@ TLS_GATEWAY_CLIENT_CERT_FILE=/etc/decree/tls/gateway.crt
 TLS_GATEWAY_CLIENT_KEY_FILE=/etc/decree/tls/gateway.key
 ```
 
+### Rate Limiting
+
+Rate limiting is **enabled by default** using an in-process token-bucket limiter (per-tenant + per-method). The health check endpoint (`/grpc.health.v1.Health/*`) is always exempt.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `RATE_LIMIT_ENABLED` | Set to `false` to disable rate limiting entirely. | `true` | No |
+| `RATE_LIMIT_ANON_RPS` | Requests per second for unauthenticated callers (shared global bucket per method). | `10` | No |
+| `RATE_LIMIT_AUTHED_RPS` | Requests per second per tenant for authenticated callers. | `100` | No |
+| `RATE_LIMIT_SUPERADMIN_RPS` | Requests per second per superadmin identity. `0` = unlimited. | `0` | No |
+| `RATE_LIMIT_BURST` | Token bucket burst size (applies to all role classes). | `10` | No |
+
+Rejected requests return `codes.ResourceExhausted` with a `RetryInfo` detail (1 s retry hint). The in-process limiter does not share state across replicas; for multi-replica deployments, implement the `Limiter` interface backed by Redis.
+
 ### In-Memory Mode
 
 Set `STORAGE_BACKEND=memory` to run without PostgreSQL or Redis. All data is stored in memory and lost on restart. Useful for evaluation, local development, and testing:

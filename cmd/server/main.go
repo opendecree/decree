@@ -27,6 +27,7 @@ import (
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/config"
 	"github.com/opendecree/decree/internal/pubsub"
+	"github.com/opendecree/decree/internal/ratelimit"
 	"github.com/opendecree/decree/internal/schema"
 	"github.com/opendecree/decree/internal/server"
 	"github.com/opendecree/decree/internal/storage"
@@ -34,6 +35,8 @@ import (
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
 	"github.com/opendecree/decree/internal/version"
+
+	"golang.org/x/time/rate"
 )
 
 //go:embed openapi.json
@@ -213,6 +216,30 @@ func run() int {
 		logger.WarnContext(ctx, "INSECURE_LISTEN=1 set — gRPC server will accept plaintext connections (local dev only)")
 	}
 
+	// Rate limiter (nil when disabled; nil WithRateLimiter is a no-op).
+	rlMetrics := telemetry.NewRateLimitMetrics(otelCfg)
+	var rlInterceptor *ratelimit.Interceptor
+	if cfg.RateLimitEnabled {
+		rlCfg := ratelimit.Config{
+			Anonymous:     ratelimit.NewInProcess(rate.Limit(cfg.RateLimitAnonRPS), cfg.RateLimitBurst),
+			Authenticated: ratelimit.NewInProcess(rate.Limit(cfg.RateLimitAuthedRPS), cfg.RateLimitBurst),
+		}
+		if cfg.RateLimitSuperAdminRPS > 0 {
+			rlCfg.SuperAdmin = ratelimit.NewInProcess(rate.Limit(cfg.RateLimitSuperAdminRPS), cfg.RateLimitBurst)
+		}
+		rlOpts := []ratelimit.Option{ratelimit.WithInterceptorLogger(logger)}
+		if counter, ok := rlMetrics.Counter(); ok {
+			rlOpts = append(rlOpts, ratelimit.WithRejectedCounter(counter))
+		}
+		rlInterceptor = ratelimit.New(rlCfg, rlOpts...)
+		logger.InfoContext(ctx, "rate limiting enabled",
+			"anon_rps", cfg.RateLimitAnonRPS,
+			"authed_rps", cfg.RateLimitAuthedRPS,
+			"superadmin_rps", cfg.RateLimitSuperAdminRPS,
+			"burst", cfg.RateLimitBurst,
+		)
+	}
+
 	srvOpts := []server.Option{
 		server.WithEnableServices(cfg.EnableServices),
 		server.WithLogger(logger),
@@ -224,6 +251,9 @@ func run() int {
 		srvOpts = append(srvOpts, server.WithInsecure())
 	} else {
 		srvOpts = append(srvOpts, server.WithTLS(serverTLS))
+	}
+	if rlInterceptor != nil {
+		srvOpts = append(srvOpts, server.WithRateLimiter(rlInterceptor))
 	}
 	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvOpts...)
 	if err != nil {
@@ -400,6 +430,11 @@ type serverConfig struct {
 	TLSGatewayServerName     string
 	TLSGatewayClientCertFile string
 	TLSGatewayClientKeyFile  string
+	RateLimitEnabled         bool
+	RateLimitAnonRPS         float64
+	RateLimitAuthedRPS       float64
+	RateLimitSuperAdminRPS   float64 // 0 = unlimited
+	RateLimitBurst           int
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -466,6 +501,11 @@ func loadConfig() serverConfig {
 		TLSGatewayServerName:     getEnv("TLS_GATEWAY_SERVER_NAME", ""),
 		TLSGatewayClientCertFile: getEnv("TLS_GATEWAY_CLIENT_CERT_FILE", ""),
 		TLSGatewayClientKeyFile:  getEnv("TLS_GATEWAY_CLIENT_KEY_FILE", ""),
+		RateLimitEnabled:         getEnv("RATE_LIMIT_ENABLED", "true") != "false",
+		RateLimitAnonRPS:         parseEnvFloat("RATE_LIMIT_ANON_RPS", 10),
+		RateLimitAuthedRPS:       parseEnvFloat("RATE_LIMIT_AUTHED_RPS", 100),
+		RateLimitSuperAdminRPS:   parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
+		RateLimitBurst:           parseEnvInt("RATE_LIMIT_BURST", 10),
 	}
 }
 
@@ -479,6 +519,19 @@ func parseEnvInt(key string, fallback int) int {
 	v, err := strconv.Atoi(raw)
 	if err != nil {
 		slog.Error("invalid integer env var", "key", key, "value", raw, "error", err)
+		os.Exit(1)
+	}
+	return v
+}
+
+func parseEnvFloat(key string, fallback float64) float64 {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		slog.Error("invalid float env var", "key", key, "value", raw, "error", err)
 		os.Exit(1)
 	}
 	return v

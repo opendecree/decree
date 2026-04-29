@@ -22,25 +22,28 @@ type Config struct {
 	MetricsConfig bool
 	// MetricsSchema enables schema publish counter.
 	MetricsSchema bool
+	// MetricsRateLimit enables the rate-limit rejection counter (role + method attributes).
+	MetricsRateLimit bool
 }
 
 // AnyMetrics returns true if any metric flag is enabled.
 func (c Config) AnyMetrics() bool {
-	return c.MetricsGRPC || c.MetricsDBPool || c.MetricsCache || c.MetricsConfig || c.MetricsSchema
+	return c.MetricsGRPC || c.MetricsDBPool || c.MetricsCache || c.MetricsConfig || c.MetricsSchema || c.MetricsRateLimit
 }
 
 // ConfigFromEnv parses telemetry configuration from environment variables.
 func ConfigFromEnv() Config {
 	return Config{
-		Enabled:       envBool("OTEL_ENABLED"),
-		TracesGRPC:    envBool("OTEL_TRACES_GRPC"),
-		TracesDB:      envBool("OTEL_TRACES_DB"),
-		TracesRedis:   envBool("OTEL_TRACES_REDIS"),
-		MetricsGRPC:   envBool("OTEL_METRICS_GRPC"),
-		MetricsDBPool: envBool("OTEL_METRICS_DB_POOL"),
-		MetricsCache:  envBool("OTEL_METRICS_CACHE"),
-		MetricsConfig: envBool("OTEL_METRICS_CONFIG"),
-		MetricsSchema: envBool("OTEL_METRICS_SCHEMA"),
+		Enabled:          envBool("OTEL_ENABLED"),
+		TracesGRPC:       envBool("OTEL_TRACES_GRPC"),
+		TracesDB:         envBool("OTEL_TRACES_DB"),
+		TracesRedis:      envBool("OTEL_TRACES_REDIS"),
+		MetricsGRPC:      envBool("OTEL_METRICS_GRPC"),
+		MetricsDBPool:    envBool("OTEL_METRICS_DB_POOL"),
+		MetricsCache:     envBool("OTEL_METRICS_CACHE"),
+		MetricsConfig:    envBool("OTEL_METRICS_CONFIG"),
+		MetricsSchema:    envBool("OTEL_METRICS_SCHEMA"),
+		MetricsRateLimit: envBool("OTEL_METRICS_RATE_LIMIT"),
 	}
 }
 
