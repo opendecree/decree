@@ -13,7 +13,7 @@ import (
 
 func TestGetSchemaVersion_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.getSchemaFn = func(_ context.Context, id string, version *int32) (*Schema, error) {
 		if id != "s1" || version == nil || *version != int32(2) {
@@ -33,7 +33,7 @@ func TestGetSchemaVersion_Success(t *testing.T) {
 
 func TestListSchemas_AutoPaginate(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, pageToken string) (*ListSchemasResponse, error) {
 		if pageToken == "" {
@@ -58,7 +58,7 @@ func TestListSchemas_AutoPaginate(t *testing.T) {
 
 func TestUpdateSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.updateSchemaFn = func(_ context.Context, req *UpdateSchemaRequest) (*Schema, error) {
 		if req.ID != "s1" {
@@ -84,7 +84,7 @@ func TestUpdateSchema_Success(t *testing.T) {
 
 func TestDeleteSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.deleteSchemaFn = func(_ context.Context, id string) error {
 		if id != "s1" {
@@ -99,7 +99,7 @@ func TestDeleteSchema_Success(t *testing.T) {
 
 func TestExportSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.exportSchemaFn = func(_ context.Context, _ string, _ *int32) ([]byte, error) {
 		return []byte("spec_version: v1"), nil
@@ -116,7 +116,7 @@ func TestExportSchema_Success(t *testing.T) {
 
 func TestExportSchema_SpecificVersion(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.exportSchemaFn = func(_ context.Context, id string, version *int32) ([]byte, error) {
 		if id != "s1" || version == nil || *version != int32(2) {
@@ -134,7 +134,7 @@ func TestExportSchema_SpecificVersion(t *testing.T) {
 
 func TestImportSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.importSchemaFn = func(_ context.Context, yamlContent []byte, autoPublish bool) (*Schema, error) {
 		if autoPublish {
@@ -154,7 +154,7 @@ func TestImportSchema_Success(t *testing.T) {
 
 func TestImportSchema_AutoPublish(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.importSchemaFn = func(_ context.Context, _ []byte, autoPublish bool) (*Schema, error) {
 		if !autoPublish {
@@ -174,7 +174,7 @@ func TestImportSchema_AutoPublish(t *testing.T) {
 
 func TestPublishSchema_AlreadyPublished(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.publishSchemaFn = func(_ context.Context, _ string, _ int32) (*Schema, error) {
 		return nil, ErrFailedPrecondition
@@ -188,7 +188,7 @@ func TestPublishSchema_AlreadyPublished(t *testing.T) {
 
 func TestPublishSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.publishSchemaFn = func(_ context.Context, id string, version int32) (*Schema, error) {
 		if id != "s1" || version != int32(1) {
@@ -210,7 +210,7 @@ func TestPublishSchema_Success(t *testing.T) {
 
 func TestGetTenant_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.getTenantFn = func(_ context.Context, id string) (*Tenant, error) {
 		if id != "t1" {
@@ -230,7 +230,7 @@ func TestGetTenant_Success(t *testing.T) {
 
 func TestGetTenant_NotFound(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.getTenantFn = func(_ context.Context, _ string) (*Tenant, error) {
 		return nil, ErrNotFound
@@ -244,7 +244,7 @@ func TestGetTenant_NotFound(t *testing.T) {
 
 func TestListTenants_WithSchemaFilter(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listTenantsFn = func(_ context.Context, schemaID *string, _ int32, _ string) (*ListTenantsResponse, error) {
 		if schemaID == nil || *schemaID != "s1" {
@@ -268,7 +268,7 @@ func TestListTenants_WithSchemaFilter(t *testing.T) {
 
 func TestListTenants_NoFilter(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listTenantsFn = func(_ context.Context, schemaID *string, _ int32, _ string) (*ListTenantsResponse, error) {
 		if schemaID != nil {
@@ -285,7 +285,7 @@ func TestListTenants_NoFilter(t *testing.T) {
 
 func TestListTenants_AutoPaginate(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listTenantsFn = func(_ context.Context, _ *string, _ int32, pageToken string) (*ListTenantsResponse, error) {
 		if pageToken == "" {
@@ -310,7 +310,7 @@ func TestListTenants_AutoPaginate(t *testing.T) {
 
 func TestUpdateTenantName(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.updateTenantFn = func(_ context.Context, req *UpdateTenantRequest) (*Tenant, error) {
 		if req.Name == nil || *req.Name != "new-name" {
@@ -333,7 +333,7 @@ func TestUpdateTenantName(t *testing.T) {
 
 func TestUpdateTenantSchema(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.updateTenantFn = func(_ context.Context, req *UpdateTenantRequest) (*Tenant, error) {
 		if req.SchemaVersion == nil || *req.SchemaVersion != int32(2) {
@@ -356,7 +356,7 @@ func TestUpdateTenantSchema(t *testing.T) {
 
 func TestUpdateTenant_BothFields(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.updateTenantFn = func(_ context.Context, req *UpdateTenantRequest) (*Tenant, error) {
 		if req.Name == nil || *req.Name != "renamed" {
@@ -381,7 +381,7 @@ func TestUpdateTenant_BothFields(t *testing.T) {
 
 func TestDeleteTenant_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.deleteTenantFn = func(_ context.Context, id string) error {
 		if id != "t1" {
@@ -398,7 +398,7 @@ func TestDeleteTenant_Success(t *testing.T) {
 
 func TestListFieldLocks_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listFieldLocksFn = func(_ context.Context, tenantID string) ([]FieldLock, error) {
 		if tenantID != "t1" {
@@ -426,7 +426,7 @@ func TestListFieldLocks_Success(t *testing.T) {
 
 func TestLockField_WithValues(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.lockFieldFn = func(_ context.Context, tenantID, fieldPath string, lockedValues []string) error {
 		if tenantID != "t1" || fieldPath != "app.env" {
@@ -445,7 +445,7 @@ func TestLockField_WithValues(t *testing.T) {
 
 func TestLockField_NoValues(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.lockFieldFn = func(_ context.Context, _, _ string, lockedValues []string) error {
 		if len(lockedValues) != 0 {
@@ -463,7 +463,7 @@ func TestLockField_NoValues(t *testing.T) {
 
 func TestGetFieldUsage_Success(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 
 	ma.getFieldUsageFn = func(_ context.Context, tenantID, fieldPath string, start, end *time.Time) (*UsageStats, error) {
 		if tenantID != "t1" || fieldPath != "app.fee" {
@@ -486,7 +486,7 @@ func TestGetFieldUsage_Success(t *testing.T) {
 
 func TestGetFieldUsage_WithTimeRange(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 
 	start := time.Now().Add(-time.Hour)
 	end := time.Now()
@@ -506,7 +506,7 @@ func TestGetFieldUsage_WithTimeRange(t *testing.T) {
 
 func TestGetTenantUsage_Success(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 
 	ma.getTenantUsageFn = func(_ context.Context, tenantID string, _, _ *time.Time) ([]*UsageStats, error) {
 		if tenantID != "t1" {
@@ -529,7 +529,7 @@ func TestGetTenantUsage_Success(t *testing.T) {
 
 func TestGetUnusedFields_Success(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 
 	ma.getUnusedFieldsFn = func(_ context.Context, tenantID string, _ time.Time) ([]string, error) {
 		if tenantID != "t1" {
@@ -580,7 +580,7 @@ func TestAuditFilters(t *testing.T) {
 
 func TestQueryWriteLog_AutoPaginate(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 
 	ma.queryWriteLogFn = func(_ context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		if req.PageToken == "" {
@@ -607,7 +607,7 @@ func TestQueryWriteLog_AutoPaginate(t *testing.T) {
 
 func TestGetConfigVersion_Success(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 
 	mc.getVersionFn = func(_ context.Context, tenantID string, version int32) (*Version, error) {
 		if tenantID != "t1" || version != int32(3) {
@@ -630,7 +630,7 @@ func TestGetConfigVersion_Success(t *testing.T) {
 
 func TestImportConfig_WithMode(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 
 	mc.importConfigFn = func(_ context.Context, req *ImportConfigRequest) (*Version, error) {
 		if req.TenantID != "t1" {
@@ -656,7 +656,7 @@ func TestImportConfig_WithMode(t *testing.T) {
 
 func TestImportConfig_DefaultMode(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 
 	mc.importConfigFn = func(_ context.Context, req *ImportConfigRequest) (*Version, error) {
 		if req.Mode != ImportModeMerge {
@@ -680,7 +680,7 @@ func TestTransportError_Propagated(t *testing.T) {
 	ms.getSchemaFn = func(_ context.Context, _ string, _ *int32) (*Schema, error) {
 		return nil, sentinel
 	}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	_, err := client.GetSchema(context.Background(), "s1")
 	if !errors.Is(err, sentinel) {
@@ -691,7 +691,7 @@ func TestTransportError_Propagated(t *testing.T) {
 // --- Service not configured (all methods) ---
 
 func TestServiceNotConfigured_AllMethods(t *testing.T) {
-	client := New(nil, nil, nil, nil)
+	client := New()
 	ctx := context.Background()
 
 	_, err := client.GetSchemaVersion(ctx, "s1", 1)

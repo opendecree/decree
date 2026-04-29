@@ -244,17 +244,13 @@ func run() int {
 		logger.InfoContext(ctx, "schema service enabled")
 	}
 	if srv.IsServiceEnabled("config") {
-		configSvc := config.NewService(config.ServiceConfig{
-			Store:        configStore,
-			Cache:        configCache,
-			Publisher:    publisher,
-			Subscriber:   subscriber,
-			Logger:       logger,
-			CacheMetrics: cacheMetrics,
-			Metrics:      configMetrics,
-			Validators:   validatorFactory,
-			Recorder:     recorder,
-		})
+		configSvc := config.NewService(configStore, configCache, publisher, subscriber,
+			config.WithLogger(logger),
+			config.WithCacheMetrics(cacheMetrics),
+			config.WithMetrics(configMetrics),
+			config.WithValidators(validatorFactory),
+			config.WithRecorder(recorder),
+		)
 		pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
 		srv.SetServiceHealthy("centralconfig.v1.ConfigService")
 		logger.InfoContext(ctx, "config service enabled")

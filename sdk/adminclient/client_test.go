@@ -164,14 +164,14 @@ func TestNew(t *testing.T) {
 	ms := &mockSchemaTransport{}
 	mc := &mockConfigTransport{}
 	ma := &mockAuditTransport{}
-	client := New(ms, mc, ma, nil)
+	client := New(WithSchemaTransport(ms), WithConfigTransport(mc), WithAuditTransport(ma))
 	if client == nil {
 		t.Fatal("expected non-nil client")
 	}
 }
 
 func TestNew_NilTransports(t *testing.T) {
-	client := New(nil, nil, nil, nil)
+	client := New()
 	if client == nil {
 		t.Fatal("expected non-nil client even with nil transports")
 	}
@@ -179,7 +179,7 @@ func TestNew_NilTransports(t *testing.T) {
 
 func TestCreateSchema_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 	ctx := context.Background()
 
 	ms.createSchemaFn = func(_ context.Context, req *CreateSchemaRequest) (*Schema, error) {
@@ -203,7 +203,7 @@ func TestCreateSchema_Success(t *testing.T) {
 
 func TestGetSchema_NotFound(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 	ctx := context.Background()
 
 	ms.getSchemaFn = func(_ context.Context, _ string, _ *int32) (*Schema, error) {
@@ -218,7 +218,7 @@ func TestGetSchema_NotFound(t *testing.T) {
 
 func TestCreateTenant_Success(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 	ctx := context.Background()
 
 	ms.createTenantFn = func(_ context.Context, req *CreateTenantRequest) (*Tenant, error) {
@@ -236,7 +236,7 @@ func TestCreateTenant_Success(t *testing.T) {
 
 func TestCreateTenant_UnpublishedSchema(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 	ctx := context.Background()
 
 	ms.createTenantFn = func(_ context.Context, _ *CreateTenantRequest) (*Tenant, error) {
@@ -251,7 +251,7 @@ func TestCreateTenant_UnpublishedSchema(t *testing.T) {
 
 func TestLockUnlockField(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 	ctx := context.Background()
 
 	ms.lockFieldFn = func(_ context.Context, _, _ string, _ []string) error { return nil }
@@ -267,7 +267,7 @@ func TestLockUnlockField(t *testing.T) {
 
 func TestListConfigVersions_AutoPaginate(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 	ctx := context.Background()
 
 	mc.listVersionsFn = func(_ context.Context, _ string, _ int32, pageToken string) (*ListVersionsResponse, error) {
@@ -293,7 +293,7 @@ func TestListConfigVersions_AutoPaginate(t *testing.T) {
 
 func TestRollbackConfig_Success(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 	ctx := context.Background()
 
 	mc.rollbackFn = func(_ context.Context, _ string, _ int32, _ string) (*Version, error) {
@@ -311,7 +311,7 @@ func TestRollbackConfig_Success(t *testing.T) {
 
 func TestExportImportConfig(t *testing.T) {
 	mc := &mockConfigTransport{}
-	client := New(nil, mc, nil, nil)
+	client := New(WithConfigTransport(mc))
 	ctx := context.Background()
 
 	mc.exportConfigFn = func(_ context.Context, _ string, _ *int32) ([]byte, error) {
@@ -341,7 +341,7 @@ func TestExportImportConfig(t *testing.T) {
 
 func TestQueryWriteLog_Success(t *testing.T) {
 	ma := &mockAuditTransport{}
-	client := New(nil, nil, ma, nil)
+	client := New(WithAuditTransport(ma))
 	ctx := context.Background()
 
 	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
@@ -374,7 +374,7 @@ func TestGetServerInfo_Success(t *testing.T) {
 			}, nil
 		},
 	}
-	client := New(nil, nil, nil, ms)
+	client := New(WithServerTransport(ms))
 	info, err := client.GetServerInfo(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -394,7 +394,7 @@ func TestGetServerInfo_Success(t *testing.T) {
 }
 
 func TestServiceNotConfigured(t *testing.T) {
-	client := New(nil, nil, nil, nil)
+	client := New()
 	ctx := context.Background()
 
 	_, err := client.GetSchema(ctx, "s1")
@@ -420,7 +420,7 @@ func TestServiceNotConfigured(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_LatestIsPublished(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return &ListSchemasResponse{
@@ -442,7 +442,7 @@ func TestGetLatestPublishedSchemaVersion_LatestIsPublished(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_WalksBackFromDraft(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return &ListSchemasResponse{
@@ -474,7 +474,7 @@ func TestGetLatestPublishedSchemaVersion_WalksBackFromDraft(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_NoPublishedVersion(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return &ListSchemasResponse{
@@ -493,7 +493,7 @@ func TestGetLatestPublishedSchemaVersion_NoPublishedVersion(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_SchemaNameNotFound(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return &ListSchemasResponse{Schemas: []*Schema{{ID: "s_other", Name: "other", Published: true}}}, nil
@@ -507,7 +507,7 @@ func TestGetLatestPublishedSchemaVersion_SchemaNameNotFound(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_ListError(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return nil, errors.New("rpc failed")
@@ -521,7 +521,7 @@ func TestGetLatestPublishedSchemaVersion_ListError(t *testing.T) {
 
 func TestGetLatestPublishedSchemaVersion_GetSchemaVersionError(t *testing.T) {
 	ms := &mockSchemaTransport{}
-	client := New(ms, nil, nil, nil)
+	client := New(WithSchemaTransport(ms))
 
 	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
 		return &ListSchemasResponse{Schemas: []*Schema{{ID: "s1", Name: "payments", Version: 3, Published: false}}}, nil
