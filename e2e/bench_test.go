@@ -166,6 +166,51 @@ func BenchmarkMixed_90Read_10Write(b *testing.B) {
 	}
 }
 
+// --- GetFields fan-out benchmark (varying field counts) ---
+
+func BenchmarkGetFields_N10(b *testing.B) {
+	benchGetFields(b, "bench-gf10", 10)
+}
+
+func BenchmarkGetFields_N50(b *testing.B) {
+	benchGetFields(b, "bench-gf50", 50)
+}
+
+func benchGetFields(b *testing.B, name string, fieldCount int) {
+	b.Helper()
+	conn := dialBench(b)
+	admin := newAdminClient(conn)
+	cfg := newConfigClient(conn)
+	ctx := context.Background()
+
+	fields := make([]adminclient.Field, fieldCount)
+	paths := make([]string, fieldCount)
+	for i := range fields {
+		paths[i] = fmt.Sprintf("f.field_%d", i)
+		fields[i] = adminclient.Field{Path: paths[i], Type: "FIELD_TYPE_STRING"}
+	}
+	s, err := admin.CreateSchema(ctx, name, fields, "")
+	require.NoError(b, err)
+	_, err = admin.PublishSchema(ctx, s.ID, 1)
+	require.NoError(b, err)
+
+	tenant, err := admin.CreateTenant(ctx, name+"-tenant", s.ID, 1)
+	require.NoError(b, err)
+	for i, p := range paths {
+		require.NoError(b, cfg.Set(ctx, tenant.ID, p, fmt.Sprintf("val-%d", i)))
+	}
+
+	b.Cleanup(func() {
+		_ = admin.DeleteTenant(ctx, tenant.ID)
+		_ = admin.DeleteSchema(ctx, s.ID)
+	})
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, _ = cfg.GetFields(ctx, tenant.ID, paths)
+	}
+}
+
 // --- Import benchmark (varying field counts) ---
 
 func BenchmarkImport_10Fields(b *testing.B) {

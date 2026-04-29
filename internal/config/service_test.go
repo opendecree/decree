@@ -162,7 +162,7 @@ func TestSetField_ChecksumMismatch(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{Value: strPtr("old-value")}, nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
@@ -207,7 +207,7 @@ func TestGetField_NotFound(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 
 	_, err := svc.GetField(ctx, &pb.GetFieldRequest{
@@ -319,7 +319,7 @@ values:
 		Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 2}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID20, TenantID: tenantID1, Version: 3, CreatedBy: "unknown"}, nil)
@@ -446,12 +446,12 @@ values:
 		Return(domain.ConfigVersion{Version: 1}, nil)
 
 	// app.name has same value -> should be skipped in merge mode
-	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
 		return p.FieldPath == "app.name"
 	})).Return(GetConfigValueAtVersionRow{Value: strPtr("same")}, nil)
 
 	// app.other has different value -> should be included
-	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
 		return p.FieldPath == "app.other"
 	})).Return(GetConfigValueAtVersionRow{Value: strPtr("old")}, nil)
 
@@ -502,12 +502,12 @@ values:
 		Return(domain.ConfigVersion{Version: 1}, nil)
 
 	// app.existing has a value -> should be skipped in defaults mode
-	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
 		return p.FieldPath == "app.existing"
 	})).Return(GetConfigValueAtVersionRow{Value: strPtr("already-set")}, nil)
 
 	// app.missing has no value -> should be included
-	store.On("GetConfigValueAtVersion", ctx, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
 		return p.FieldPath == "app.missing"
 	})).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 
@@ -552,7 +552,7 @@ func TestGetField_RecordsUsage(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{FieldPath: "app.fee", Value: strPtr("0.5")}, nil)
 
 	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "app.fee"})
@@ -627,9 +627,9 @@ func TestGetFields_RecordsUsage(t *testing.T) {
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 	// Each requested path returns a different row.
-	store.On("GetConfigValueAtVersion", ctx, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.x", Version: 1}).
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.x", Version: 1}).
 		Return(GetConfigValueAtVersionRow{FieldPath: "b.x", Value: strPtr("v1")}, nil)
-	store.On("GetConfigValueAtVersion", ctx, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.y", Version: 1}).
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{TenantID: tenantID1, FieldPath: "b.y", Version: 1}).
 		Return(GetConfigValueAtVersionRow{FieldPath: "b.y", Value: strPtr("v2")}, nil)
 
 	_, err := svc.GetFields(ctx, &pb.GetFieldsRequest{
@@ -685,7 +685,7 @@ func TestGetField_NilRecorder_NoPanic(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("GetConfigValueAtVersion", ctx, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{FieldPath: "x", Value: strPtr("1")}, nil)
 
 	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "x"})

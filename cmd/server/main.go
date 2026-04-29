@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/exaring/otelpgx"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -104,37 +106,62 @@ func run() int {
 			GetSchemaFieldsFn: memSchema.GetSchemaFields,
 		}
 	} else {
-		// Database.
-		var dbOpts []storage.Option
-		if otelCfg.TracesDB {
-			dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
-		}
-		db, err := storage.NewDB(ctx, cfg.DBWriteURL, cfg.DBReadURL, dbOpts...)
-		if err != nil {
-			logger.ErrorContext(ctx, "failed to connect to database", "error", err)
-			return 1
-		}
-		defer db.Close()
-		logger.InfoContext(ctx, "connected to database")
-
-		// Redis.
+		// Parse Redis URL up-front so a malformed URL fails before we spawn
+		// any connect goroutines (also avoids a torn-down DB pool on URL error).
 		redisOpts, err := redis.ParseURL(cfg.RedisURL)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to parse redis url", "error", err)
 			return 1
 		}
-		redisClient := redis.NewClient(redisOpts)
-		defer func() { _ = redisClient.Close() }()
-		if err := redisClient.Ping(ctx).Err(); err != nil {
-			logger.ErrorContext(ctx, "failed to connect to redis", "error", err)
+
+		// Connect to PostgreSQL and Redis in parallel — independent backends,
+		// each blocking on network I/O. First failure cancels the other.
+		var (
+			db          *storage.DB
+			redisClient *redis.Client
+		)
+		initG, initCtx := errgroup.WithContext(ctx)
+		initG.Go(func() error {
+			var dbOpts []storage.Option
+			if otelCfg.TracesDB {
+				dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
+			}
+			d, err := storage.NewDB(initCtx, cfg.DBWriteURL, cfg.DBReadURL, dbOpts...)
+			if err != nil {
+				return fmt.Errorf("connect to database: %w", err)
+			}
+			db = d
+			return nil
+		})
+		initG.Go(func() error {
+			c := redis.NewClient(redisOpts)
+			if err := c.Ping(initCtx).Err(); err != nil {
+				_ = c.Close()
+				return fmt.Errorf("connect to redis: %w", err)
+			}
+			if otelCfg.TracesRedis {
+				if err := redisotel.InstrumentTracing(c); err != nil {
+					_ = c.Close()
+					return fmt.Errorf("instrument redis tracing: %w", err)
+				}
+			}
+			redisClient = c
+			return nil
+		})
+		if err := initG.Wait(); err != nil {
+			// Either backend failed; close the survivor (if any) and bail.
+			if db != nil {
+				db.Close()
+			}
+			if redisClient != nil {
+				_ = redisClient.Close()
+			}
+			logger.ErrorContext(ctx, "failed to initialize backends", "error", err)
 			return 1
 		}
-		if otelCfg.TracesRedis {
-			if err := redisotel.InstrumentTracing(redisClient); err != nil {
-				logger.ErrorContext(ctx, "failed to instrument redis tracing", "error", err)
-				return 1
-			}
-		}
+		defer db.Close()
+		defer func() { _ = redisClient.Close() }()
+		logger.InfoContext(ctx, "connected to database")
 		logger.InfoContext(ctx, "connected to redis")
 
 		configStore = config.NewPGStore(db.WritePool, db.ReadPool)
@@ -308,34 +335,40 @@ func run() int {
 		}
 	}
 
-	// Start server in background.
-	errCh := make(chan error, 2)
-	go func() {
-		errCh <- srv.Serve(ctx)
-	}()
+	// Run gRPC + (optional) HTTP gateway under errgroup. First failure cancels
+	// the group context; both serve loops are joined deterministically via
+	// g.Wait below — no manual errCh / send-on-closed races.
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return srv.Serve(gctx) })
 	if gw != nil {
-		go func() {
-			errCh <- gw.Serve(ctx)
-		}()
+		g.Go(func() error { return gw.Serve(gctx) })
 	}
 
-	// Wait for shutdown signal.
+	// Wait for either a shutdown signal or an early serve failure.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	select {
 	case sig := <-sigCh:
 		logger.InfoContext(ctx, "received signal, shutting down", "signal", sig)
-	case err := <-errCh:
-		logger.ErrorContext(ctx, "server error", "error", err)
+	case <-gctx.Done():
+		// A serve goroutine returned. The actual error is collected from g.Wait below.
 	}
 
+	// Trigger graceful shutdown. srv.Serve / gw.Serve do not unblock on ctx
+	// cancellation — they need explicit Stop / Shutdown.
 	cancel()
 	recorder.Stop() // nil-safe; waits for final flush
 	if gw != nil {
 		gw.Shutdown(ctx)
 	}
 	srv.GracefulStop(ctx)
+
+	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
+		logger.ErrorContext(ctx, "server error", "error", err)
+		return 1
+	}
 	logger.InfoContext(ctx, "decree stopped")
 	return 0
 }
