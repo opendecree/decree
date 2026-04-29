@@ -70,6 +70,40 @@ func containsStr(slice []string, s string) bool {
 	return false
 }
 
+// Option configures a Service.
+type Option func(*serviceOptions)
+
+type serviceOptions struct {
+	logger    *slog.Logger
+	metrics   *telemetry.SchemaMetrics
+	validator *validation.ValidatorFactory
+	limits    Limits
+}
+
+// WithLogger sets the service logger. Defaults to slog.Default() when unset.
+func WithLogger(l *slog.Logger) Option {
+	return func(o *serviceOptions) { o.logger = l }
+}
+
+// WithMetrics wires schema metrics. Nil disables them.
+func WithMetrics(m *telemetry.SchemaMetrics) Option {
+	return func(o *serviceOptions) { o.metrics = m }
+}
+
+// WithValidators wires the schema validator factory. Production callers
+// should pass the same factory the config service uses so cache
+// invalidation is observed by both. Nil is acceptable for tests that do
+// not exercise tenant updates.
+func WithValidators(v *validation.ValidatorFactory) Option {
+	return func(o *serviceOptions) { o.validator = v }
+}
+
+// WithLimits caps schema document size and field count. Zero fields mean
+// no limit for that dimension. Defaults to [DefaultLimits] when unset.
+func WithLimits(l Limits) Option {
+	return func(o *serviceOptions) { o.limits = l }
+}
+
 // Service implements the SchemaService gRPC server.
 type Service struct {
 	pb.UnimplementedSchemaServiceServer
@@ -77,18 +111,25 @@ type Service struct {
 	logger    *slog.Logger
 	metrics   *telemetry.SchemaMetrics
 	validator *validation.ValidatorFactory
+	limits    Limits
 }
 
-// NewService creates a new SchemaService. The validator factory may be nil
-// for tests that do not exercise tenant updates; production callers should
-// pass the same factory the config service uses so cache invalidation is
-// observed by both.
-func NewService(store Store, logger *slog.Logger, metrics *telemetry.SchemaMetrics, validator *validation.ValidatorFactory) *Service {
+// NewService creates a new SchemaService. Only the store is required;
+// everything else is optional and may be passed via With...() options.
+func NewService(store Store, opts ...Option) *Service {
+	o := serviceOptions{
+		logger: slog.Default(),
+		limits: DefaultLimits(),
+	}
+	for _, opt := range opts {
+		opt(&o)
+	}
 	return &Service{
 		store:     store,
-		logger:    logger,
-		metrics:   metrics,
-		validator: validator,
+		logger:    o.logger,
+		metrics:   o.metrics,
+		validator: o.validator,
+		limits:    o.limits,
 	}
 }
 
@@ -100,6 +141,9 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 	}
 	if !isValidSlug(req.Name) {
 		return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
+	}
+	if s.limits.MaxFields > 0 && len(req.Fields) > s.limits.MaxFields {
+		return nil, status.Errorf(codes.InvalidArgument, "schema has %d fields, exceeds limit of %d", len(req.Fields), s.limits.MaxFields)
 	}
 
 	schema, err := s.store.CreateSchema(ctx, CreateSchemaParams{
@@ -608,12 +652,18 @@ func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest)
 }
 
 func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest) (*pb.ImportSchemaResponse, error) {
+	if s.limits.MaxDocBytes > 0 && len(req.YamlContent) > s.limits.MaxDocBytes {
+		return nil, status.Errorf(codes.InvalidArgument, "schema document is %d bytes, exceeds limit of %d", len(req.YamlContent), s.limits.MaxDocBytes)
+	}
 	parsed, err := Dispatch(req.YamlContent)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema YAML: %v", err)
 	}
 
 	fields := parsed.Fields
+	if s.limits.MaxFields > 0 && len(fields) > s.limits.MaxFields {
+		return nil, status.Errorf(codes.InvalidArgument, "schema has %d fields, exceeds limit of %d", len(fields), s.limits.MaxFields)
+	}
 	depReqs := parsed.DependentRequired
 	if err := validateDependentRequiredAgainstFields(depReqs, fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)

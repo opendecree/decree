@@ -41,7 +41,7 @@ func testTenant() domain.Tenant {
 
 func TestListSchemas_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{
 		testSchema(),
@@ -56,7 +56,7 @@ func TestListSchemas_Success(t *testing.T) {
 
 func TestListSchemas_Pagination(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	s1 := testSchema()
 	s2 := testSchema()
@@ -96,7 +96,7 @@ func TestListSchemas_Pagination(t *testing.T) {
 }
 
 func TestListSchemas_InvalidPageToken(t *testing.T) {
-	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	svc := NewService(&mockStore{}, WithLogger(testLogger))
 
 	_, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageToken: "garbage"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -106,7 +106,7 @@ func TestListSchemas_InvalidPageToken(t *testing.T) {
 
 func TestDeleteSchema_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetSchemaByID", mock.Anything, testSchemaID).Return(testSchema(), nil)
 	store.On("DeleteSchema", mock.Anything, testSchemaID).Return(nil)
@@ -117,7 +117,7 @@ func TestDeleteSchema_Success(t *testing.T) {
 
 func TestDeleteSchema_InvalidID(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	// "bad" is not a UUID, so resolveSchema tries name lookup.
 	store.On("GetSchemaByName", mock.Anything, "bad").Return(domain.Schema{}, domain.ErrNotFound)
@@ -129,7 +129,7 @@ func TestDeleteSchema_InvalidID(t *testing.T) {
 
 func TestGetTenant_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
@@ -140,7 +140,7 @@ func TestGetTenant_Success(t *testing.T) {
 
 func TestGetTenant_NotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	missingID := "99999999-9999-9999-9999-999999999999"
 	store.On("GetTenantByID", mock.Anything, missingID).Return(domain.Tenant{}, domain.ErrNotFound)
@@ -153,7 +153,7 @@ func TestGetTenant_NotFound(t *testing.T) {
 
 func TestListTenants_BySchema(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	schemaID := testSchemaID
 	store.On("ListTenantsBySchema", mock.Anything, mock.Anything).Return([]domain.Tenant{testTenant()}, nil)
@@ -165,7 +165,7 @@ func TestListTenants_BySchema(t *testing.T) {
 
 func TestListTenants_All(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListTenants", mock.Anything, mock.Anything).Return([]domain.Tenant{testTenant()}, nil)
 
@@ -178,7 +178,7 @@ func TestListTenants_All(t *testing.T) {
 
 func TestDeleteTenant_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("DeleteTenant", mock.Anything, testTenantID).Return(nil)
@@ -189,7 +189,7 @@ func TestDeleteTenant_Success(t *testing.T) {
 
 func TestDeleteTenant_InvalidID(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByName", mock.Anything, "bad").Return(domain.Tenant{}, domain.ErrNotFound)
 	_, err := svc.DeleteTenant(context.Background(), &pb.DeleteTenantRequest{Id: "bad"})
@@ -200,7 +200,7 @@ func TestDeleteTenant_InvalidID(t *testing.T) {
 
 func TestLockField_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("CreateFieldLock", mock.Anything, mock.Anything).Return(nil)
@@ -216,7 +216,7 @@ func TestLockField_Success(t *testing.T) {
 
 func TestUnlockField_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("DeleteFieldLock", mock.Anything, mock.Anything).Return(nil)
@@ -232,7 +232,7 @@ func TestUnlockField_Success(t *testing.T) {
 
 func TestListFieldLocks_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	store.On("GetFieldLocks", mock.Anything, testTenantID).Return([]domain.TenantFieldLock{
@@ -261,7 +261,7 @@ func outOfScopeAdminCtx() context.Context {
 
 func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.LockField(outOfScopeAdminCtx(), &pb.LockFieldRequest{
@@ -274,7 +274,7 @@ func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 
 func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.UnlockField(outOfScopeAdminCtx(), &pb.UnlockFieldRequest{
@@ -287,7 +287,7 @@ func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 
 func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
 	_, err := svc.ListFieldLocks(outOfScopeAdminCtx(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
@@ -299,7 +299,7 @@ func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
 
 func TestUpdateTenant_UpdateName_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	newName := "new-acme"
 	updated := testTenant()
@@ -322,7 +322,7 @@ func TestUpdateTenant_UpdateName_Success(t *testing.T) {
 
 func TestUpdateTenant_UpdateSchemaVersion_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	newVersion := int32(2)
 	updated := testTenant()
@@ -345,7 +345,7 @@ func TestUpdateTenant_UpdateSchemaVersion_Success(t *testing.T) {
 
 func TestUpdateTenant_UpdateBothNameAndVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	newName := "renamed"
 	newVersion := int32(3)
@@ -377,7 +377,7 @@ func TestUpdateTenant_UpdateBothNameAndVersion(t *testing.T) {
 
 func TestUpdateTenant_NoFieldsUpdated_FetchesCurrent(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
@@ -391,7 +391,7 @@ func TestUpdateTenant_NoFieldsUpdated_FetchesCurrent(t *testing.T) {
 
 func TestUpdateTenant_InvalidID(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	// "bad" is not a UUID, so resolveTenant tries name lookup.
 	store.On("GetTenantByName", mock.Anything, "bad").Return(domain.Tenant{}, domain.ErrNotFound)
@@ -401,7 +401,7 @@ func TestUpdateTenant_InvalidID(t *testing.T) {
 
 func TestUpdateTenant_InvalidSlugName(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	badName := "NOT A SLUG!"
@@ -414,7 +414,7 @@ func TestUpdateTenant_InvalidSlugName(t *testing.T) {
 
 func TestUpdateTenant_NameNotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	newName := "new-name"
@@ -429,7 +429,7 @@ func TestUpdateTenant_NameNotFound(t *testing.T) {
 
 func TestUpdateTenant_SchemaVersionNotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	v := int32(99)
@@ -444,7 +444,7 @@ func TestUpdateTenant_SchemaVersionNotFound(t *testing.T) {
 
 func TestUpdateTenant_NoFieldsUpdated_NotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	missingID := "99999999-9999-9999-9999-999999999999"
 	store.On("GetTenantByID", mock.Anything, missingID).Return(domain.Tenant{}, domain.ErrNotFound)
@@ -476,7 +476,7 @@ func (a *validatorStoreAdapter) GetSchemaFields(ctx context.Context, schemaVersi
 func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 	store := &mockStore{}
 	factory := validation.NewValidatorFactory(&validatorStoreAdapter{s: store})
-	svc := NewService(store, testLogger, nil, factory)
+	svc := NewService(store, WithLogger(testLogger), WithValidators(factory))
 
 	newVersion := int32(2)
 	updated := testTenant()
@@ -498,7 +498,7 @@ func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 
 func TestGetTenant_ByName(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByName", mock.Anything, "acme").Return(testTenant(), nil)
 
@@ -509,7 +509,7 @@ func TestGetTenant_ByName(t *testing.T) {
 
 func TestGetSchema_ByName(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetSchemaByName", mock.Anything, "test-schema").Return(testSchema(), nil)
 	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
@@ -526,7 +526,7 @@ func TestGetSchema_ByName(t *testing.T) {
 
 func TestListTenants_SuperadminSeesAll(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
 		Role: auth.RoleSuperAdmin,
@@ -544,7 +544,7 @@ func TestListTenants_SuperadminSeesAll(t *testing.T) {
 
 func TestListTenants_NonSuperadminFiltered(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	allowedIDs := []string{testTenantID}
 	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
@@ -566,7 +566,7 @@ func TestListTenants_NonSuperadminFiltered(t *testing.T) {
 
 func TestListTenants_BySchemaFiltered(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	allowedIDs := []string{testTenantID}
 	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
@@ -587,7 +587,7 @@ func TestListTenants_BySchemaFiltered(t *testing.T) {
 
 func TestListTenants_NoAuthContext_SeesAll(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background() // No auth claims — permissive.
 
 	store.On("ListTenants", ctx, ListTenantsParams{
@@ -601,7 +601,7 @@ func TestListTenants_NoAuthContext_SeesAll(t *testing.T) {
 }
 
 func TestListTenants_InvalidPageToken(t *testing.T) {
-	svc := NewService(&mockStore{}, testLogger, nil, nil)
+	svc := NewService(&mockStore{}, WithLogger(testLogger))
 	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
 
 	_, err := svc.ListTenants(ctx, &pb.ListTenantsRequest{PageToken: "garbage"})
@@ -612,7 +612,7 @@ func TestListTenants_InvalidPageToken(t *testing.T) {
 
 func TestExportSchema_LatestVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
@@ -635,7 +635,7 @@ func TestExportSchema_LatestVersion(t *testing.T) {
 
 func TestExportSchema_SpecificVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 	v := int32(2)
 
@@ -657,7 +657,7 @@ func TestExportSchema_SpecificVersion(t *testing.T) {
 
 func TestExportSchema_SchemaNotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).Return(domain.Schema{}, domain.ErrNotFound)
@@ -668,7 +668,7 @@ func TestExportSchema_SchemaNotFound(t *testing.T) {
 
 func TestExportSchema_InvalidID(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetSchemaByName", mock.Anything, "bad").Return(domain.Schema{}, domain.ErrNotFound)
 	_, err := svc.ExportSchema(context.Background(), &pb.ExportSchemaRequest{Id: "bad"})
@@ -683,7 +683,7 @@ func validYAML(name string) []byte {
 
 func TestImportSchema_NewSchema(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByName", ctx, "my-schema").Return(domain.Schema{}, domain.ErrNotFound)
@@ -705,7 +705,7 @@ func TestImportSchema_NewSchema(t *testing.T) {
 
 func TestImportSchema_NewSchemaWithAutoPublish(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByName", ctx, "pub-schema").Return(domain.Schema{}, domain.ErrNotFound)
@@ -734,7 +734,7 @@ func TestImportSchema_NewSchemaWithAutoPublish(t *testing.T) {
 
 func TestImportSchema_ExistingSchemaNewVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	existingSchema := domain.Schema{ID: testSchemaID, Name: "my-schema"}
@@ -761,7 +761,7 @@ func TestImportSchema_ExistingSchemaNewVersion(t *testing.T) {
 
 func TestImportSchema_IdenticalChecksum_AlreadyExists(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	// Compute the real checksum that the service will produce for this YAML.
@@ -794,7 +794,7 @@ func TestImportSchema_IdenticalChecksum_AlreadyExists(t *testing.T) {
 
 func TestImportSchema_InvalidYAML(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	_, err := svc.ImportSchema(context.Background(), &pb.ImportSchemaRequest{
 		YamlContent: []byte("not: valid: yaml: content"),
@@ -804,7 +804,7 @@ func TestImportSchema_InvalidYAML(t *testing.T) {
 
 func TestImportSchema_MissingSyntax(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	_, err := svc.ImportSchema(context.Background(), &pb.ImportSchemaRequest{
 		YamlContent: []byte("name: test\nfields:\n  app.name:\n    type: string\n"),
@@ -814,7 +814,7 @@ func TestImportSchema_MissingSyntax(t *testing.T) {
 
 func TestImportSchema_LookupError(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByName", ctx, "my-schema").
@@ -828,7 +828,7 @@ func TestImportSchema_LookupError(t *testing.T) {
 
 func TestImportSchema_ExistingWithAutoPublish(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	existingSchema := domain.Schema{ID: testSchemaID, Name: "my-schema"}

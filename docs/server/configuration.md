@@ -18,6 +18,8 @@ OpenDecree is configured entirely through environment variables. No config files
 | `USAGE_FLUSH_INTERVAL` | How often accumulated read counts are flushed to storage. Format: Go duration (e.g., `30s`, `1m`). | `30s` | No |
 | `GRPC_MAX_RECV_MSG_BYTES` | Maximum size of an inbound gRPC message, in bytes. Requests above this return `ResourceExhausted`. Set to `0` for the default. | `20971520` (20 MiB) | No |
 | `GRPC_MAX_SEND_MSG_BYTES` | Maximum size of an outbound gRPC message, in bytes. Responses above this return `ResourceExhausted` to the client. Set to `0` for the default. | `20971520` (20 MiB) | No |
+| `SCHEMA_MAX_FIELDS` | Maximum number of fields per schema accepted by `CreateSchema` and `ImportSchema`. Requests above this return `InvalidArgument`. Set to `0` to disable. | `10000` | No |
+| `SCHEMA_MAX_DOC_BYTES` | Maximum serialized YAML document size accepted by `ImportSchema`, in bytes. Requests above this return `InvalidArgument`. Set to `0` to disable. | `5242880` (5 MiB) | No |
 
 ## Transport Security (TLS)
 
