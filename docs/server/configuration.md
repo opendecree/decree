@@ -20,6 +20,8 @@ OpenDecree is configured entirely through environment variables. No config files
 | `GRPC_MAX_SEND_MSG_BYTES` | Maximum size of an outbound gRPC message, in bytes. Responses above this return `ResourceExhausted` to the client. Set to `0` for the default. | `20971520` (20 MiB) | No |
 | `SCHEMA_MAX_FIELDS` | Maximum number of fields per schema accepted by `CreateSchema` and `ImportSchema`. Requests above this return `InvalidArgument`. Set to `0` to disable. | `10000` | No |
 | `SCHEMA_MAX_DOC_BYTES` | Maximum serialized YAML document size accepted by `ImportSchema`, in bytes. Requests above this return `InvalidArgument`. Set to `0` to disable. | `5242880` (5 MiB) | No |
+| `SCHEMA_COMPILE_TIMEOUT` | Wall-clock cap on a single JSON-Schema compile (per-field constraint). Format: Go duration (e.g., `5s`, `2s`). Set to `0` to disable the timeout. | `5s` | No |
+| `SCHEMA_MAX_REF_DEPTH` | Maximum structural nesting depth of a JSON-Schema constraint document. Schemas deeper than this are rejected before compilation. Set to `0` to disable. | `64` | No |
 
 ## Transport Security (TLS)
 

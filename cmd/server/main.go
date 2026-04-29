@@ -210,7 +210,12 @@ func run() int {
 	schemaMetrics := telemetry.NewSchemaMetrics(otelCfg)
 
 	// Validator factory (shared between schema + config services).
-	validatorFactory := validation.NewValidatorFactory(validatorStore)
+	validatorFactory := validation.NewValidatorFactory(validatorStore,
+		validation.WithLimits(validation.Limits{
+			CompileTimeout: cfg.SchemaCompileTimeout,
+			MaxDepth:       cfg.SchemaMaxRefDepth,
+		}),
+	)
 
 	// Usage recorder — async batched read tracking for audit stats.
 	var recorder *audit.UsageRecorder
@@ -352,6 +357,8 @@ type serverConfig struct {
 	GRPCMaxSendMsgBytes      int
 	SchemaMaxFields          int
 	SchemaMaxDocBytes        int
+	SchemaCompileTimeout     time.Duration
+	SchemaMaxRefDepth        int
 	InsecureListen           bool
 	TLSCertFile              string
 	TLSKeyFile               string
@@ -389,6 +396,16 @@ func loadConfig() serverConfig {
 		}
 	}
 
+	compileTimeout := 5 * time.Second
+	if v := getEnv("SCHEMA_COMPILE_TIMEOUT", ""); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			slog.Error("invalid duration env var", "key", "SCHEMA_COMPILE_TIMEOUT", "value", v, "error", err)
+			os.Exit(1)
+		}
+		compileTimeout = d
+	}
+
 	return serverConfig{
 		GRPCPort:                 getEnv("GRPC_PORT", "9090"),
 		HTTPPort:                 getEnv("HTTP_PORT", ""),
@@ -406,6 +423,8 @@ func loadConfig() serverConfig {
 		GRPCMaxSendMsgBytes:      parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
 		SchemaMaxFields:          parseEnvInt("SCHEMA_MAX_FIELDS", 10_000),
 		SchemaMaxDocBytes:        parseEnvInt("SCHEMA_MAX_DOC_BYTES", 5*1024*1024),
+		SchemaCompileTimeout:     compileTimeout,
+		SchemaMaxRefDepth:        parseEnvInt("SCHEMA_MAX_REF_DEPTH", 64),
 		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
 		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),
