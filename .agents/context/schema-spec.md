@@ -54,10 +54,10 @@ All changes are **breaking**. Per project policy (no backward compat pre-product
 ### Final top-level shape (v0.1.0)
 
 ```yaml
-# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree.json
+# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json
 
 spec_version: v1                          # required, const "v1" (the decree format version)
-$schema: https://schemas.opendecree.dev/schema/v0.1.0/decree.json  # optional
+$schema: https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json  # optional
 $id: urn:decree:schema:payments:v3        # optional
 name: payments                            # required, slug ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
 description: Payments service config      # optional
@@ -140,22 +140,30 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 - **Canonical filenames:** `decree.schema.yaml`, `decree.config.yaml`
 - **Generic globs:** `*.decree.schema.yaml`, `*.decree.config.yaml` (for repos with multiple schemas)
-- **Modeline:** `# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree.json` on line 1 of every example
+- **Modeline:** `# yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json` on line 1 of every `*.decree.schema.yaml`; use `decree-config.json` on `*.decree.config.yaml`
 - **CLI stays filename-agnostic** — `decree apply some-other-name.yaml` must keep working. The convention drives editor discovery only.
 
 ## Publishing
 
-- **URL pattern:** `https://schemas.opendecree.dev/schema/v{MAJOR}.{MINOR}.{PATCH}/decree.json`
+- **URL pattern:** two files per version:
+  - `https://schemas.opendecree.dev/schema/v{MAJOR}.{MINOR}.{PATCH}/decree-schema.json` — validates `*.decree.schema.yaml`
+  - `https://schemas.opendecree.dev/schema/v{MAJOR}.{MINOR}.{PATCH}/decree-config.json` — validates `*.decree.config.yaml`
 - **Pre-stable:** full SemVer in path (`/v0.1.0/`)
 - **Post-1.0.0:** switch to major-only paths (`/v1/`) with permanent redirects from historical full-SemVer URLs
-- **Hosting:** TBD (GitHub Pages on a dedicated repo, or static-hosted redirect to raw GitHub content). Must be HTTPS, stable, `Content-Type: application/schema+json`.
-- **schemastore.org:** PR against `SchemaStore/schemastore` adding entry to `src/api/json/catalog.json`:
+- **Hosting:** GitHub Pages on the `opendecree/decree` repo (custom domain `schemas.opendecree.dev` via Cloudflare CNAME, DNS-only). The Pages workflow deploys an explicitly-built `_site/` artifact, so only the `schema/v*/...` files are served; the rest of the repo is not exposed. Content-Type is `application/json` (the issue accepts this as fallback for `application/schema+json`); CORS allows cross-origin (`access-control-allow-origin: *` is the GitHub Pages default for static files). May extract to a dedicated repo if decree's Pages slot is needed for other content.
+- **schemastore.org:** PR against `SchemaStore/schemastore` adding **two entries** to `src/api/json/catalog.json`:
   ```json
   {
     "name": "OpenDecree Schema",
-    "description": "OpenDecree configuration schema",
+    "description": "OpenDecree schema definition (opendecree.dev)",
     "fileMatch": ["decree.schema.yaml", "decree.schema.yml", "*.decree.schema.yaml", "*.decree.schema.yml"],
-    "url": "https://schemas.opendecree.dev/schema/v0.1.0/decree.json"
+    "url": "https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json"
+  },
+  {
+    "name": "OpenDecree Config",
+    "description": "OpenDecree configuration values (opendecree.dev)",
+    "fileMatch": ["decree.config.yaml", "decree.config.yml", "*.decree.config.yaml", "*.decree.config.yml"],
+    "url": "https://schemas.opendecree.dev/schema/v0.1.0/decree-config.json"
   }
   ```
 
@@ -191,7 +199,7 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ### Phase C — Publishing
 
-- #125 — Host meta-schema at `https://schemas.opendecree.dev/schema/v0.1.0/decree.json`
+- #125 — Host meta-schemas at `https://schemas.opendecree.dev/schema/v0.1.0/decree-{schema,config}.json`
 - #126 — Submit schemastore.org PR
 
 ### Phase D — Docs
