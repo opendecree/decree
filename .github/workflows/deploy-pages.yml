@@ -1,0 +1,132 @@
+# Deploy meta-schemas to GitHub Pages at schemas.opendecree.dev.
+#
+# Publishes JSON Schema 2020-12 documents under schemas/v*/ to
+# https://schemas.opendecree.dev/schema/v*/decree-{schema,config}.json so
+# editors (via schemastore.org), CI linters, and other tooling can fetch
+# the meta-schemas by URL. Closes #125.
+#
+# Allowlist publishing model:
+#   The job builds _site/ from scratch, copies only the JSON files, runs
+#   an audit step that fails on unrecognized files, and uploads exactly
+#   _site/ as the Pages artifact. The rest of the repo is not exposed —
+#   Pages serves only what's in the artifact.
+#
+# Triggers:
+#   - push to main when schemas/** or this workflow itself changes
+#   - workflow_dispatch (manual republish for debugging or post-DNS fixups)
+#
+# Bootstrap requirement:
+#   Custom domain schemas.opendecree.dev must be configured in the repo's
+#   Settings → Pages with Source: GitHub Actions. Cloudflare CNAME
+#   schemas → opendecree.github.io must be in place. See
+#   docs/development/schemas-hosting-runbook.md for one-time setup.
+
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'schemas/**'
+      - 'scripts/generate-schema-index.py'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy meta-schemas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install jsonschema + PyYAML
+        run: pip install --no-cache-dir 'jsonschema>=4.21' 'PyYAML>=6'
+
+      # Reuses the script that ci.yml already runs on PRs — same checks,
+      # second pass on main before publish.
+      - name: Validate meta-schemas
+        run: python3 scripts/validate-meta-schemas.py
+
+      # Belt-and-braces: publish-time check that the URL inside the
+      # artifact matches the URL it will be served at. Catches the
+      # rare case where a rename slips through without updating $id.
+      - name: Validate $id matches publish URL
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in schemas/v*/decree-schema.json schemas/v*/decree-config.json; do
+            ver=$(basename "$(dirname "$f")")
+            base=$(basename "$f")
+            expected="https://schemas.opendecree.dev/schema/${ver}/${base}"
+            actual=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("$id",""))' "$f")
+            if [ "$actual" != "$expected" ]; then
+              echo "::error file=$f::\$id mismatch — expected $expected, got $actual"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Build _site/
+        run: |
+          set -euo pipefail
+          mkdir -p _site/schema
+          for d in schemas/v*/; do
+            ver=$(basename "$d")
+            mkdir -p "_site/schema/${ver}"
+            cp "${d}decree-schema.json" "_site/schema/${ver}/"
+            cp "${d}decree-config.json" "_site/schema/${ver}/"
+          done
+          python3 scripts/generate-schema-index.py _site
+
+      # Allowlist guard: refuse to upload anything that isn't on the
+      # explicit list of expected files. A workflow bug that copies
+      # extra paths into _site/ (e.g. .git, .github, internal/) gets
+      # caught here, not at the Pages edge.
+      - name: Audit _site/ contents
+        run: |
+          set -euo pipefail
+          unexpected=$(find _site -type f \
+            ! -path '_site/index.html' \
+            ! -path '_site/robots.txt' \
+            ! -regex '_site/schema/v[0-9]+\.[0-9]+\.[0-9]+/decree-\(schema\|config\)\.json' \
+            -print)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unexpected files in _site/ — refusing to publish:"
+            echo "$unexpected"
+            exit 1
+          fi
+          echo "Files to be published:"
+          find _site -type f | sort
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
