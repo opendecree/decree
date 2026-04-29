@@ -27,15 +27,19 @@ OpenDecree manages **business-oriented configuration** — approval rules, fee s
 
 ### How is this different?
 
-**Feature flag tools** (LaunchDarkly, ConfigCat, Flagsmith) focus on boolean/multivariate flags for release management — not structured business configuration with schemas.
+OpenDecree sits between feature flags (release toggles) and infrastructure config (low-level key-value) — purpose-built for **typed business configuration**.
 
-**Infrastructure config tools** (etcd, Consul, Spring Cloud Config) are low-level key-value stores without typed schemas, validation, or multi-tenancy.
+| Capability | Feature Flags | Infrastructure Config | **OpenDecree** |
+|---|---|---|---|
+| Typed values | bool / variant only | strings only | ✓ native types (int, number, string, bool, time, duration, url, json) |
+| Schema validation | ✗ | ✗ | ✓ constraints + JSON Schema, enforced on every write |
+| Multi-tenant | limited (segments) | ✗ | ✓ first-class, with field-level locking |
+| Audit trail | limited | ✗ | ✓ full who/what/when/why history |
+| Real-time updates | ✓ SDK polling/SSE | ✓ watch APIs | ✓ gRPC streaming subscriptions |
+| Admin UI | ✓ (vendor-hosted) | ✗ | ✓ open-source admin GUI |
+| Versioning + rollback | limited | ✗ | ✓ every change versioned, rollback to any state |
 
-**Cloud config services** (AWS AppConfig, Azure App Configuration) offer some validation but lack schema registries, gRPC APIs, real-time subscriptions, and are vendor-locked.
-
-**What makes OpenDecree unique:**
-
-No existing open-source tool combines a schema-first approach to typed configuration with native multi-tenancy, constraint validation, field-level locking, gRPC streaming, and versioned rollback — all in a single Go binary.
+Examples by category: feature flags (LaunchDarkly, ConfigCat, Flagsmith), infrastructure config (etcd, Consul, Spring Cloud Config, AWS AppConfig, Azure App Configuration).
 
 ### Features
 
