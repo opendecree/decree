@@ -21,6 +21,27 @@ You should receive a response within 48 hours. We will work with you to understa
 |---------|-----------|
 | latest  | Yes       |
 
+## Artifact Attestations
+
+All release binaries and Docker images are signed with [Sigstore](https://sigstore.dev) via GitHub Actions artifact attestations ([SLSA](https://slsa.dev) provenance).
+
+### Verify a downloaded binary
+
+```bash
+gh attestation verify decree_linux_amd64.tar.gz --owner opendecree
+```
+
+Replace the filename with the archive you downloaded (e.g. `decree-server_darwin_arm64.tar.gz`).
+
+### Verify a Docker image
+
+```bash
+gh attestation verify oci://ghcr.io/opendecree/decree:VERSION --owner opendecree
+gh attestation verify oci://ghcr.io/opendecree/decree-cli:VERSION --owner opendecree
+```
+
+Replace `VERSION` with the release version (e.g. `0.10.0-alpha.1`).
+
 ## Scope
 
 This policy covers the OpenDecree server, CLI, and SDK packages in this repository.
