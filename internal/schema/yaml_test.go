@@ -307,9 +307,9 @@ func TestYAMLValidation_SchemaAndID(t *testing.T) {
 	})
 
 	t.Run("both accepted when well-formed", func(t *testing.T) {
-		doc, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$schema: https://schemas.opendecree.io/schema/v0.1.0/decree.json\n$id: urn:decree:schema:test:v1" + validBody))
+		doc, err := unmarshalSchemaYAML([]byte("spec_version: \"v1\"\n$schema: https://schemas.opendecree.dev/schema/v0.1.0/decree.json\n$id: urn:decree:schema:test:v1" + validBody))
 		require.NoError(t, err)
-		assert.Equal(t, "https://schemas.opendecree.io/schema/v0.1.0/decree.json", doc.Schema)
+		assert.Equal(t, "https://schemas.opendecree.dev/schema/v0.1.0/decree.json", doc.Schema)
 		assert.Equal(t, "urn:decree:schema:test:v1", doc.ID)
 	})
 

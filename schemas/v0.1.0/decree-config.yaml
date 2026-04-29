@@ -13,7 +13,7 @@
 # may consume either.
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://schemas.opendecree.io/schema/v0.1.0/decree-config.json"
+$id: "https://schemas.opendecree.dev/schema/v0.1.0/decree-config.json"
 title: OpenDecree Config Format (v0.1.0)
 description: >-
   Tenant-side import format for OpenDecree config values. A

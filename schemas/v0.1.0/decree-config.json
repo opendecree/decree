@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.opendecree.io/schema/v0.1.0/decree-config.json",
+  "$id": "https://schemas.opendecree.dev/schema/v0.1.0/decree-config.json",
   "title": "OpenDecree Config Format (v0.1.0)",
   "description": "Tenant-side import format for OpenDecree config values. A decree.config.yaml file declares the values to apply against a previously imported schema; the server enforces type compatibility and cross-field rules at write time.",
   "type": "object",
