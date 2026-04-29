@@ -61,11 +61,18 @@ func New(cfg Config) (*Server, error) {
 
 	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+4)
 	opts = append(opts, cfg.ExtraOptions...)
+	// Recovery is registered first so it wraps auth and any future middleware.
 	opts = append(opts,
 		grpc.MaxRecvMsgSize(recvCap),
 		grpc.MaxSendMsgSize(sendCap),
-		grpc.ChainUnaryInterceptor(cfg.AuthInterceptor.UnaryInterceptor()),
-		grpc.ChainStreamInterceptor(cfg.AuthInterceptor.StreamInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			recoveryUnaryInterceptor(cfg.Logger),
+			cfg.AuthInterceptor.UnaryInterceptor(),
+		),
+		grpc.ChainStreamInterceptor(
+			recoveryStreamInterceptor(cfg.Logger),
+			cfg.AuthInterceptor.StreamInterceptor(),
+		),
 	)
 
 	grpcServer := grpc.NewServer(opts...)

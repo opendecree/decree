@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"testing"
 	"time"
@@ -190,6 +192,134 @@ func TestServer_ZeroCap_AppliesDefault(t *testing.T) {
 	out, err := invokeEcho(ctx, conn, make([]byte, 1024))
 	require.NoError(t, err)
 	assert.Len(t, out.Value, 1024)
+}
+
+// panicServiceDesc registers a service with a unary handler that panics and
+// a streaming handler that panics. Used to drive recovery-interceptor tests.
+//
+// The unary Handler dispatches through `interceptor` per the gRPC codegen
+// contract — without that, configured unary interceptors are bypassed. Stream
+// interceptors are wired by the framework, so the stream Handler can panic
+// directly.
+var panicServiceDesc = grpc.ServiceDesc{
+	ServiceName: "test.Panic",
+	HandlerType: (*any)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Boom",
+			Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+				in := &wrapperspb.BytesValue{}
+				if err := dec(in); err != nil {
+					return nil, err
+				}
+				inner := func(context.Context, any) (any, error) {
+					panic("kaboom-unary")
+				}
+				if interceptor == nil {
+					return inner(ctx, in)
+				}
+				info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/test.Panic/Boom"}
+				return interceptor(ctx, in, info, inner)
+			},
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName: "BoomStream",
+			Handler: func(_ any, ss grpc.ServerStream) error {
+				in := &wrapperspb.BytesValue{}
+				if err := ss.RecvMsg(in); err != nil {
+					return err
+				}
+				panic("kaboom-stream")
+			},
+			ClientStreams: true,
+			ServerStreams: true,
+		},
+	},
+}
+
+func startPanicServer(t *testing.T) (*grpc.ClientConn, *bytes.Buffer, func()) {
+	t.Helper()
+	logBuf := &bytes.Buffer{}
+	logger := slog.New(slog.NewJSONHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	srv, err := New(Config{
+		GRPCPort:        "0",
+		Logger:          logger,
+		AuthInterceptor: &noopInterceptor{},
+	})
+	require.NoError(t, err)
+	srv.grpcServer.RegisterService(&panicServiceDesc, struct{}{})
+
+	addr := srv.listener.Addr().String()
+	go func() { _ = srv.Serve(context.Background()) }()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	cleanup := func() {
+		_ = conn.Close()
+		srv.GracefulStop(context.Background())
+	}
+	return conn, logBuf, cleanup
+}
+
+func TestRecovery_Unary_ReturnsInternalAndLogs(t *testing.T) {
+	conn, logBuf, cleanup := startPanicServer(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	in := wrapperspb.Bytes([]byte("ping"))
+	out := &wrapperspb.BytesValue{}
+	err := conn.Invoke(ctx, "/test.Panic/Boom", in, out)
+
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Internal, st.Code())
+	assert.Equal(t, genericInternalError, st.Message())
+	assert.NotContains(t, st.Message(), "kaboom-unary", "panic value must not leak to client")
+
+	// Log line is JSON-per-line; assert the structured fields rather than substrings.
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(bytes.TrimRight(logBuf.Bytes(), "\n"), &entry))
+	assert.Equal(t, "panic in unary handler", entry["msg"])
+	assert.Equal(t, "/test.Panic/Boom", entry["method"])
+	assert.Equal(t, "kaboom-unary", entry["panic"])
+	assert.Contains(t, entry["stack"], "recovery.go")
+}
+
+func TestRecovery_Stream_ReturnsInternalAndLogs(t *testing.T) {
+	conn, logBuf, cleanup := startPanicServer(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	desc := &grpc.StreamDesc{StreamName: "BoomStream", ClientStreams: true, ServerStreams: true}
+	stream, err := conn.NewStream(ctx, desc, "/test.Panic/BoomStream")
+	require.NoError(t, err)
+	require.NoError(t, stream.SendMsg(wrapperspb.Bytes([]byte("ping"))))
+	require.NoError(t, stream.CloseSend())
+
+	out := &wrapperspb.BytesValue{}
+	err = stream.RecvMsg(out)
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Internal, st.Code())
+	assert.Equal(t, genericInternalError, st.Message())
+	assert.NotContains(t, st.Message(), "kaboom-stream", "panic value must not leak to client")
+
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(bytes.TrimRight(logBuf.Bytes(), "\n"), &entry))
+	assert.Equal(t, "panic in stream handler", entry["msg"])
+	assert.Equal(t, "/test.Panic/BoomStream", entry["method"])
+	assert.Equal(t, "kaboom-stream", entry["panic"])
+	assert.Contains(t, entry["stack"], "recovery.go")
 }
 
 func TestServe_AndGracefulStop(t *testing.T) {
