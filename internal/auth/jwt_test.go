@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -272,16 +273,33 @@ func TestUnaryInterceptor_CorrectIssuer(t *testing.T) {
 }
 
 func TestUnaryInterceptor_UnknownRole(t *testing.T) {
-	interceptor := newTestInterceptor(t, "")
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(jwksJSON())
+	}))
+	t.Cleanup(srv.Close)
+
+	interceptor, err := NewInterceptor(context.Background(), srv.URL, WithLogger(logger))
+	require.NoError(t, err)
+	t.Cleanup(interceptor.Close)
 	unary := interceptor.UnaryInterceptor()
 
 	claims := validClaims("editor", "tenant-1")
 	ctx := ctxWithBearer(signToken(t, claims))
 
-	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), "unknown role")
+	msg := status.Convert(err).Message()
+	assert.Equal(t, "unknown role", msg)
+	assert.NotContains(t, msg, "editor")
+
+	logged := logBuf.String()
+	assert.Contains(t, logged, "unknown role")
+	assert.Contains(t, logged, "editor")
 }
 
 func TestUnaryInterceptor_NonSuperadminMissingTenantID(t *testing.T) {

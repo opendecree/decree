@@ -1,7 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -184,6 +188,139 @@ func TestMetadata_ServerServiceBypass(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
+}
+
+func TestMetadata_OversizedSubject(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{"x-subject": strings.Repeat("a", maxSubjectLen+1)})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestMetadata_HugeSubjectHeader(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{"x-subject": strings.Repeat("a", maxHeaderLen+1)})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestMetadata_NonPrintableSubject(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{"x-subject": "user\x00@example.com"})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "printable ASCII")
+}
+
+func TestMetadata_OversizedRole(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject": "user@example.com",
+		"x-role":    strings.Repeat("a", maxRoleLen+1),
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestMetadata_OversizedTenantHeader(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "user@example.com",
+		"x-role":      "admin",
+		"x-tenant-id": strings.Repeat("a", maxHeaderLen+1),
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestMetadata_TooManyTenantIDs(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ids := make([]string, maxTenantIDs+1)
+	for i := range ids {
+		ids[i] = "t"
+	}
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "admin@example.com",
+		"x-role":      "admin",
+		"x-tenant-id": strings.Join(ids, ","),
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "exceeds")
+}
+
+func TestMetadata_TenantResolverErrorSanitised(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	resolver := func(_ context.Context, _ string) (string, error) {
+		return "", errors.New("pq: relation \"tenants\" does not exist")
+	}
+	interceptor := NewMetadataInterceptor(resolver, WithMetadataLogger(logger))
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "admin@example.com",
+		"x-role":      "admin",
+		"x-tenant-id": "tenant-123",
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	msg := status.Convert(err).Message()
+	assert.Equal(t, "failed to resolve tenant", msg)
+	assert.NotContains(t, msg, "pq:")
+	assert.NotContains(t, msg, "tenants")
+
+	logged := logBuf.String()
+	assert.Contains(t, logged, "tenant resolution failed")
+	assert.Contains(t, logged, "pq: relation")
+}
+
+func TestMetadata_UnknownRoleSanitised(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	interceptor := NewMetadataInterceptor(nil, WithMetadataLogger(logger))
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject": "user@example.com",
+		"x-role":    "secretrole",
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, "unknown role", status.Convert(err).Message())
+
+	logged := logBuf.String()
+	assert.Contains(t, logged, "unknown role")
+	assert.Contains(t, logged, "secretrole")
 }
 
 func TestMetadata_StreamInterceptor(t *testing.T) {

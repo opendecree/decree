@@ -165,7 +165,7 @@ func run() int {
 		authInterceptor = jwtInterceptor
 		logger.InfoContext(ctx, "JWT auth enabled", "jwks_url", cfg.JWTJWKSURL)
 	} else {
-		authInterceptor = auth.NewMetadataInterceptor(tenantResolver(schemaStoreVal))
+		authInterceptor = auth.NewMetadataInterceptor(tenantResolver(schemaStoreVal), auth.WithMetadataLogger(logger))
 		logger.InfoContext(ctx, "metadata auth enabled — pass x-subject, x-role, x-tenant-id headers")
 	}
 

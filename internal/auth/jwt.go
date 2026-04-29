@@ -168,7 +168,8 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 	switch claims.Role {
 	case RoleSuperAdmin, RoleAdmin, RoleUser:
 	default:
-		return nil, status.Errorf(codes.PermissionDenied, "unknown role: %s", claims.Role)
+		i.logger.WarnContext(ctx, "jwt auth: unknown role", "role", string(claims.Role), "subject", claims.Subject)
+		return nil, status.Error(codes.PermissionDenied, "unknown role")
 	}
 
 	// Non-superadmin must have at least one tenant_id.
