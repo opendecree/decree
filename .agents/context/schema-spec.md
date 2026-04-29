@@ -167,6 +167,11 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
   }
   ```
 
+## Hosting
+
+- **Resolved:** GitHub Pages on the `opendecree/decree` repo itself, with custom domain `schemas.opendecree.dev` via a Cloudflare CNAME (DNS-only, gray cloud). The `.github/workflows/deploy-pages.yml` workflow builds an explicit `_site/` artifact from `schemas/v*/...` and uploads only that to Pages — no other repo content is exposed. CORS comes for free (`access-control-allow-origin: *` on GitHub Pages static files); content-type is `application/json` (the issue's acceptance criteria treat this as an acceptable fallback for `application/schema+json`).
+- **One-time setup steps** are documented in [`docs/development/schemas-hosting-runbook.md`](../../docs/development/schemas-hosting-runbook.md). May extract to a dedicated `opendecree/schemas` repo later if decree's Pages slot is needed for something else (docs landing, API reference). The public URL stays stable across that move thanks to the CNAME.
+
 ## CI
 
 - **Primary tool:** `check-jsonschema` (Python, wraps `jsonschema` library, excellent error messages, built-in YAML support, default Draft 2020-12)
@@ -213,7 +218,6 @@ Meta-schema encodes this via `allOf` with 4 `if/then` branches keyed on `type`.
 
 ## Open questions
 
-- **Hosting target for `schemas.opendecree.dev`** — dedicated GitHub Pages repo? Cloudflare redirect to raw GitHub content? Needs DNS + CORS setup.
 - **Bundling tool** — hand-rolled Python script vs off-the-shelf (e.g. `json-dereference-cli`). Go with off-the-shelf if one exists and is maintained.
 - **Does the CLI emit `$schema`/`$id` on export?** — `decree schema export` should probably inject `$schema` by default, make `$id` opt-in.
 - **Post-v1.0.0 URL migration** — when the spec promotes to 1.0.0, keep `/v0.1.0/` live forever or redirect? Preserve forever matches OpenAPI's dated-URL practice.
