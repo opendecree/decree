@@ -153,7 +153,10 @@ func run() int {
 	// Auth interceptor.
 	var authInterceptor server.GRPCInterceptor
 	if cfg.JWTJWKSURL != "" {
-		jwtInterceptor, jwtErr := auth.NewInterceptor(ctx, cfg.JWTJWKSURL, cfg.JWTIssuer, logger)
+		jwtInterceptor, jwtErr := auth.NewInterceptor(ctx, cfg.JWTJWKSURL,
+			auth.WithIssuer(cfg.JWTIssuer),
+			auth.WithLogger(logger),
+		)
 		if jwtErr != nil {
 			logger.ErrorContext(ctx, "failed to create auth interceptor", "error", jwtErr)
 			return 1
@@ -212,10 +215,10 @@ func run() int {
 	// Usage recorder — async batched read tracking for audit stats.
 	var recorder *audit.UsageRecorder
 	if cfg.UsageTrackingEnabled {
-		recorder = audit.NewUsageRecorder(auditStoreVal, audit.RecorderConfig{
-			FlushInterval: cfg.UsageFlushInterval,
-			Logger:        logger,
-		})
+		recorder = audit.NewUsageRecorder(auditStoreVal,
+			audit.WithFlushInterval(cfg.UsageFlushInterval),
+			audit.WithLogger(logger),
+		)
 		go recorder.Start(ctx)
 		logger.InfoContext(ctx, "usage tracking enabled", "flush_interval", cfg.UsageFlushInterval)
 	} else {

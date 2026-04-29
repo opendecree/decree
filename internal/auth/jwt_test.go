@@ -68,7 +68,10 @@ func newTestInterceptor(t *testing.T, issuer string) *Interceptor {
 	t.Cleanup(srv.Close)
 
 	ctx := context.Background()
-	interceptor, err := NewInterceptor(ctx, srv.URL, issuer, testLogger)
+	interceptor, err := NewInterceptor(ctx, srv.URL,
+		WithIssuer(issuer),
+		WithLogger(testLogger),
+	)
 	require.NoError(t, err)
 	t.Cleanup(interceptor.Close)
 	return interceptor

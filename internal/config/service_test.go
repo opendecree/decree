@@ -548,10 +548,10 @@ func TestGetField_RecordsUsage(t *testing.T) {
 	store := &mockStore{}
 	c := &mockCache{}
 	auditStore := audit.NewMemoryStore()
-	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
-		FlushInterval: time.Hour,
-		Logger:        testLogger,
-	})
+	recorder := audit.NewUsageRecorder(auditStore,
+		audit.WithFlushInterval(time.Hour),
+		audit.WithLogger(testLogger),
+	)
 	svc := NewService(ServiceConfig{
 		Store:    store,
 		Cache:    c,
@@ -583,10 +583,10 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 	store := &mockStore{}
 	c := &mockCache{}
 	auditStore := audit.NewMemoryStore()
-	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
-		FlushInterval: time.Hour,
-		Logger:        testLogger,
-	})
+	recorder := audit.NewUsageRecorder(auditStore,
+		audit.WithFlushInterval(time.Hour),
+		audit.WithLogger(testLogger),
+	)
 	svc := NewService(ServiceConfig{
 		Store:    store,
 		Cache:    c,
@@ -626,10 +626,10 @@ func TestGetFields_RecordsUsage(t *testing.T) {
 	store := &mockStore{}
 	c := &mockCache{}
 	auditStore := audit.NewMemoryStore()
-	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
-		FlushInterval: time.Hour,
-		Logger:        testLogger,
-	})
+	recorder := audit.NewUsageRecorder(auditStore,
+		audit.WithFlushInterval(time.Hour),
+		audit.WithLogger(testLogger),
+	)
 	svc := NewService(ServiceConfig{
 		Store:    store,
 		Cache:    c,
@@ -665,10 +665,10 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 	store := &mockStore{}
 	c := &mockCache{}
 	auditStore := audit.NewMemoryStore()
-	recorder := audit.NewUsageRecorder(auditStore, audit.RecorderConfig{
-		FlushInterval: time.Hour,
-		Logger:        testLogger,
-	})
+	recorder := audit.NewUsageRecorder(auditStore,
+		audit.WithFlushInterval(time.Hour),
+		audit.WithLogger(testLogger),
+	)
 	svc := NewService(ServiceConfig{
 		Store:    store,
 		Cache:    c,
