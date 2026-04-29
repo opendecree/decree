@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -33,6 +34,10 @@ type Config struct {
 	MaxRecvMsgBytes int
 	// MaxSendMsgBytes caps outbound gRPC message size. Zero or negative → DefaultMaxMsgBytes.
 	MaxSendMsgBytes int
+	// TLS enables transport security. Required unless Insecure is true.
+	TLS *TLSConfig
+	// Insecure listens in plaintext. Intended for local dev (INSECURE_LISTEN=1).
+	Insecure bool
 }
 
 // Server wraps the gRPC server and health service.
@@ -45,6 +50,13 @@ type Server struct {
 
 // New creates a new gRPC server with interceptors.
 func New(cfg Config) (*Server, error) {
+	if cfg.TLS == nil && !cfg.Insecure {
+		return nil, errors.New("TLS config is required; set Insecure=true (INSECURE_LISTEN=1) to opt out for local dev")
+	}
+	if cfg.TLS != nil && cfg.Insecure {
+		return nil, errors.New("TLS and Insecure are mutually exclusive")
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%s", cfg.GRPCPort))
 	if err != nil {
 		return nil, fmt.Errorf("listen on port %s: %w", cfg.GRPCPort, err)
@@ -59,8 +71,16 @@ func New(cfg Config) (*Server, error) {
 		sendCap = DefaultMaxMsgBytes
 	}
 
-	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+4)
+	opts := make([]grpc.ServerOption, 0, len(cfg.ExtraOptions)+5)
 	opts = append(opts, cfg.ExtraOptions...)
+	if cfg.TLS != nil {
+		creds, err := cfg.TLS.ServerCredentials()
+		if err != nil {
+			_ = listener.Close()
+			return nil, fmt.Errorf("build TLS credentials: %w", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
 	// Recovery is registered first so it wraps auth and any future middleware.
 	opts = append(opts,
 		grpc.MaxRecvMsgSize(recvCap),

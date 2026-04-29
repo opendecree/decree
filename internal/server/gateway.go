@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -39,6 +40,10 @@ type GatewayConfig struct {
 	// MaxSendMsgBytes caps outbound gRPC request size to the upstream server.
 	// Zero or negative → DefaultMaxMsgBytes.
 	MaxSendMsgBytes int
+	// TLS configures the upstream gRPC dial. Required unless Insecure is true.
+	TLS *GatewayTLSConfig
+	// Insecure dials the upstream gRPC server in plaintext (INSECURE_LISTEN=1).
+	Insecure bool
 }
 
 // NewGateway creates a new HTTP gateway that proxies to the given gRPC address.
@@ -46,6 +51,13 @@ type GatewayConfig struct {
 func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 	if cfg.HTTPPort == "" {
 		return nil, nil
+	}
+
+	if cfg.TLS == nil && !cfg.Insecure {
+		return nil, errors.New("gateway TLS config is required; set Insecure=true (INSECURE_LISTEN=1) to opt out for local dev")
+	}
+	if cfg.TLS != nil && cfg.Insecure {
+		return nil, errors.New("gateway TLS and Insecure are mutually exclusive")
 	}
 
 	recvCap := cfg.MaxRecvMsgBytes
@@ -57,9 +69,20 @@ func NewGateway(ctx context.Context, cfg GatewayConfig) (*Gateway, error) {
 		sendCap = DefaultMaxMsgBytes
 	}
 
+	var transportCreds grpc.DialOption
+	if cfg.Insecure {
+		transportCreds = grpc.WithTransportCredentials(insecure.NewCredentials())
+	} else {
+		creds, err := cfg.TLS.ClientCredentials()
+		if err != nil {
+			return nil, fmt.Errorf("build gateway TLS credentials: %w", err)
+		}
+		transportCreds = grpc.WithTransportCredentials(creds)
+	}
+
 	conn, err := grpc.NewClient(
 		cfg.GRPCAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		transportCreds,
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(recvCap),
 			grpc.MaxCallSendMsgSize(sendCap),

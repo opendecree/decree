@@ -18,6 +18,7 @@ func TestNewGateway_DisabledWhenNoPort(t *testing.T) {
 		HTTPPort: "",
 		GRPCAddr: "localhost:9090",
 		Logger:   slog.Default(),
+		Insecure: true,
 	})
 	require.NoError(t, err)
 	assert.Nil(t, gw, "gateway should be nil when HTTPPort is empty")
@@ -28,9 +29,20 @@ func TestNewGateway_CreatesWithValidConfig(t *testing.T) {
 		HTTPPort: "0",
 		GRPCAddr: "localhost:9090",
 		Logger:   slog.Default(),
+		Insecure: true,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
+}
+
+func TestNewGateway_RequiresTLSOrInsecure(t *testing.T) {
+	_, err := NewGateway(context.Background(), GatewayConfig{
+		HTTPPort: "0",
+		GRPCAddr: "localhost:9090",
+		Logger:   slog.Default(),
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gateway TLS config is required")
 }
 
 func TestGateway_ServeAndShutdown(t *testing.T) {
@@ -38,6 +50,7 @@ func TestGateway_ServeAndShutdown(t *testing.T) {
 		HTTPPort: "0",
 		GRPCAddr: "localhost:9090",
 		Logger:   slog.Default(),
+		Insecure: true,
 	})
 	require.NoError(t, err)
 
@@ -123,6 +136,7 @@ func TestNewGateway_WithOpenAPISpec(t *testing.T) {
 		GRPCAddr:    "localhost:9090",
 		Logger:      slog.Default(),
 		OpenAPISpec: spec,
+		Insecure:    true,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
@@ -133,6 +147,7 @@ func TestNewGateway_WithoutOpenAPISpec(t *testing.T) {
 		HTTPPort: "0",
 		GRPCAddr: "localhost:9090",
 		Logger:   slog.Default(),
+		Insecure: true,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, gw)
@@ -145,6 +160,7 @@ func TestGateway_DocsEndpoints(t *testing.T) {
 		GRPCAddr:    "localhost:9090",
 		Logger:      slog.Default(),
 		OpenAPISpec: spec,
+		Insecure:    true,
 	})
 	require.NoError(t, err)
 

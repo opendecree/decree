@@ -19,6 +19,40 @@ OpenDecree is configured entirely through environment variables. No config files
 | `GRPC_MAX_RECV_MSG_BYTES` | Maximum size of an inbound gRPC message, in bytes. Requests above this return `ResourceExhausted`. Set to `0` for the default. | `20971520` (20 MiB) | No |
 | `GRPC_MAX_SEND_MSG_BYTES` | Maximum size of an outbound gRPC message, in bytes. Responses above this return `ResourceExhausted` to the client. Set to `0` for the default. | `20971520` (20 MiB) | No |
 
+## Transport Security (TLS)
+
+TLS is **required by default** for the gRPC server and the gateway-to-gRPC dial. Set `INSECURE_LISTEN=1` to opt out for local dev only.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `INSECURE_LISTEN` | Set to `1` to listen in plaintext and have the gateway dial gRPC in plaintext. **Local dev only.** | -- | No |
+| `TLS_CERT_FILE` | Path to the server's PEM-encoded TLS certificate. | -- | Yes (unless `INSECURE_LISTEN=1`) |
+| `TLS_KEY_FILE` | Path to the server's PEM-encoded private key. | -- | Yes (unless `INSECURE_LISTEN=1`) |
+| `TLS_CLIENT_CA_FILE` | Path to PEM CA bundle that signs allowed client certificates. When set, the server requires and verifies client certificates (mTLS). | -- | No |
+| `TLS_GATEWAY_CA_FILE` | CA bundle the gateway uses to verify the upstream gRPC server's certificate. When unset, the system root pool is used. | system roots | No |
+| `TLS_GATEWAY_SERVER_NAME` | SNI / verification hostname the gateway expects on the upstream gRPC certificate. | dial address host | No |
+| `TLS_GATEWAY_CLIENT_CERT_FILE` | Client certificate the gateway presents to the upstream gRPC server (when the server requires mTLS). | -- | No |
+| `TLS_GATEWAY_CLIENT_KEY_FILE` | Private key for `TLS_GATEWAY_CLIENT_CERT_FILE`. Must be set together with the cert file. | -- | No |
+
+Example (TLS, no mTLS):
+
+```bash
+TLS_CERT_FILE=/etc/decree/tls/server.crt
+TLS_KEY_FILE=/etc/decree/tls/server.key
+TLS_GATEWAY_CA_FILE=/etc/decree/tls/server.crt   # self-signed: trust the server cert
+TLS_GATEWAY_SERVER_NAME=localhost
+```
+
+Example (mTLS):
+
+```bash
+TLS_CERT_FILE=/etc/decree/tls/server.crt
+TLS_KEY_FILE=/etc/decree/tls/server.key
+TLS_CLIENT_CA_FILE=/etc/decree/tls/clients-ca.crt
+TLS_GATEWAY_CLIENT_CERT_FILE=/etc/decree/tls/gateway.crt
+TLS_GATEWAY_CLIENT_KEY_FILE=/etc/decree/tls/gateway.key
+```
+
 ### In-Memory Mode
 
 Set `STORAGE_BACKEND=memory` to run without PostgreSQL or Redis. All data is stored in memory and lost on restart. Useful for evaluation, local development, and testing:

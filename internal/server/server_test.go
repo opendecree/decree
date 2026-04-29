@@ -37,6 +37,7 @@ func TestNew_Success(t *testing.T) {
 		EnableServices:  []string{"schema", "config"},
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, srv.GRPCServer())
@@ -48,8 +49,31 @@ func TestNew_InvalidPort(t *testing.T) {
 		GRPCPort:        "99999",
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	assert.Error(t, err)
+}
+
+func TestNew_RequiresTLSOrInsecure(t *testing.T) {
+	_, err := New(Config{
+		GRPCPort:        "0",
+		Logger:          slog.Default(),
+		AuthInterceptor: &noopInterceptor{},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TLS config is required")
+}
+
+func TestNew_TLSAndInsecureMutuallyExclusive(t *testing.T) {
+	_, err := New(Config{
+		GRPCPort:        "0",
+		Logger:          slog.Default(),
+		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
+		TLS:             &TLSConfig{CertFile: "x", KeyFile: "y"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "mutually exclusive")
 }
 
 func TestIsServiceEnabled(t *testing.T) {
@@ -58,6 +82,7 @@ func TestIsServiceEnabled(t *testing.T) {
 		EnableServices:  []string{"schema", "config"},
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 	defer srv.GracefulStop(context.Background())
@@ -73,6 +98,7 @@ func TestSetServiceHealthy(t *testing.T) {
 		EnableServices:  []string{"schema"},
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 	defer srv.GracefulStop(context.Background())
@@ -111,6 +137,7 @@ func startTestServer(t *testing.T, recvCap, sendCap int) (*grpc.ClientConn, func
 		AuthInterceptor: &noopInterceptor{},
 		MaxRecvMsgBytes: recvCap,
 		MaxSendMsgBytes: sendCap,
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 
@@ -248,6 +275,7 @@ func startPanicServer(t *testing.T) (*grpc.ClientConn, *bytes.Buffer, func()) {
 		GRPCPort:        "0",
 		Logger:          logger,
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 	srv.grpcServer.RegisterService(&panicServiceDesc, struct{}{})
@@ -328,6 +356,7 @@ func TestServe_AndGracefulStop(t *testing.T) {
 		EnableServices:  []string{"schema"},
 		Logger:          slog.Default(),
 		AuthInterceptor: &noopInterceptor{},
+		Insecure:        true,
 	})
 	require.NoError(t, err)
 
