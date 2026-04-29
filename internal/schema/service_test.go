@@ -28,7 +28,7 @@ const (
 
 func TestCreateSchema_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
@@ -54,7 +54,7 @@ func TestCreateSchema_Success(t *testing.T) {
 
 func TestCreateSchema_EmptyName(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 
 	_, err := svc.CreateSchema(context.Background(), &pb.CreateSchemaRequest{Name: ""})
 
@@ -66,7 +66,7 @@ func TestCreateSchema_EmptyName(t *testing.T) {
 
 func TestGetSchema_LatestVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
@@ -85,7 +85,7 @@ func TestGetSchema_LatestVersion(t *testing.T) {
 
 func TestGetSchema_SpecificVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	v := int32(2)
@@ -106,7 +106,7 @@ func TestGetSchema_SpecificVersion(t *testing.T) {
 
 func TestGetSchema_NotFound(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
@@ -122,7 +122,7 @@ func TestGetSchema_NotFound(t *testing.T) {
 
 func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	oldVersionID := "00000000-0000-0000-0000-000000000010"
@@ -159,7 +159,7 @@ func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 
 func TestPublishSchema_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
@@ -180,7 +180,7 @@ func TestPublishSchema_Success(t *testing.T) {
 
 func TestCreateTenant_RequiresPublishedSchema(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
@@ -198,7 +198,7 @@ func TestCreateTenant_RequiresPublishedSchema(t *testing.T) {
 
 func TestCreateTenant_Success(t *testing.T) {
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
@@ -229,7 +229,7 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 	// CreateSchemaFieldParams → domain.SchemaField → DB → fieldToProto.
 
 	store := &mockStore{}
-	svc := NewService(store, testLogger, nil, nil)
+	svc := NewService(store, WithLogger(testLogger))
 	ctx := context.Background()
 
 	title := "Fee Rate"

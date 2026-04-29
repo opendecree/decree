@@ -148,6 +148,12 @@ a unary/stream interceptor.
 Fix: cap field count (e.g. 10 000), schema-document bytes (e.g. 5 MB),
 and wrap compilation in a context deadline (e.g. 5 s).
 
+Field count + doc bytes landed via `schema.Limits` (`internal/schema/limits.go`),
+configurable through `WithLimits` and env vars `SCHEMA_MAX_FIELDS` /
+`SCHEMA_MAX_DOC_BYTES`. Compile timeout still pending — needs a refactor
+of `internal/validation/json_schema.go` since `jsonschema/v6` has no
+`CompileContext`.
+
 ### 7. Audit log not tamper-evident — High
 
 `db/migrations/001_initial_schema.sql:106-118` defines

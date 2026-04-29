@@ -238,7 +238,15 @@ func run() int {
 
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
-		schemaSvc := schema.NewService(schemaStoreVal, logger, schemaMetrics, validatorFactory)
+		schemaSvc := schema.NewService(schemaStoreVal,
+			schema.WithLogger(logger),
+			schema.WithMetrics(schemaMetrics),
+			schema.WithValidators(validatorFactory),
+			schema.WithLimits(schema.Limits{
+				MaxFields:   cfg.SchemaMaxFields,
+				MaxDocBytes: cfg.SchemaMaxDocBytes,
+			}),
+		)
 		pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 		srv.SetServiceHealthy("centralconfig.v1.SchemaService")
 		logger.InfoContext(ctx, "schema service enabled")
@@ -342,6 +350,8 @@ type serverConfig struct {
 	UsageFlushInterval       time.Duration
 	GRPCMaxRecvMsgBytes      int
 	GRPCMaxSendMsgBytes      int
+	SchemaMaxFields          int
+	SchemaMaxDocBytes        int
 	InsecureListen           bool
 	TLSCertFile              string
 	TLSKeyFile               string
@@ -394,6 +404,8 @@ func loadConfig() serverConfig {
 		UsageFlushInterval:       flushInterval,
 		GRPCMaxRecvMsgBytes:      parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
 		GRPCMaxSendMsgBytes:      parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
+		SchemaMaxFields:          parseEnvInt("SCHEMA_MAX_FIELDS", 10_000),
+		SchemaMaxDocBytes:        parseEnvInt("SCHEMA_MAX_DOC_BYTES", 5*1024*1024),
 		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
 		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),
