@@ -24,13 +24,17 @@ type ValidatorFactory struct {
 	store      Store
 	cache      *ValidatorCache
 	rulesCache sync.Map // tenantID → []byte (raw dependent_required JSON)
+	limits     Limits
 }
 
-// NewValidatorFactory creates a new validator factory.
-func NewValidatorFactory(store Store) *ValidatorFactory {
+// NewValidatorFactory creates a new validator factory. Pass [WithLimits]
+// to override the JSON-Schema compile defaults.
+func NewValidatorFactory(store Store, opts ...Option) *ValidatorFactory {
+	o := resolveOptions(opts)
 	return &ValidatorFactory{
-		store: store,
-		cache: NewValidatorCache(0),
+		store:  store,
+		cache:  NewValidatorCache(0),
+		limits: o.limits,
 	}
 }
 
@@ -107,7 +111,7 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID string) (
 			constraints = &pb.FieldConstraints{}
 			_ = json.Unmarshal(field.Constraints, constraints)
 		}
-		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, constraints)
+		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, constraints, WithLimits(f.limits))
 	}
 
 	f.cache.Set(tenantID, validators)

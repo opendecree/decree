@@ -59,8 +59,11 @@ func (v *FieldValidator) Validate(tv *pb.TypedValue) error {
 	return nil
 }
 
-// NewFieldValidator creates a validator for a schema field.
-func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, constraints *pb.FieldConstraints) *FieldValidator {
+// NewFieldValidator creates a validator for a schema field. Pass
+// [WithLimits] to override the JSON-Schema compile defaults; without it,
+// [DefaultLimits] is used.
+func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, constraints *pb.FieldConstraints, opts ...Option) *FieldValidator {
+	o := resolveOptions(opts)
 	v := &FieldValidator{
 		fieldPath:       fieldPath,
 		fieldType:       fieldType,
@@ -140,7 +143,7 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 
 	case pb.FieldType_FIELD_TYPE_JSON:
 		if constraints.JsonSchema != nil {
-			jv, err := newJSONSchemaValidator(*constraints.JsonSchema)
+			jv, err := newJSONSchemaValidator(*constraints.JsonSchema, o.limits)
 			if err == nil {
 				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 					val := tv.Kind.(*pb.TypedValue_JsonValue).JsonValue
