@@ -379,6 +379,9 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 // --- Write operations ---
 
 func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.SetFieldResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -478,6 +481,9 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 }
 
 func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.SetFieldsResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -675,6 +681,9 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 }
 
 func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersionRequest) (*pb.RollbackToVersionResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -911,6 +920,9 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 }
 
 func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest) (*pb.ImportConfigResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
