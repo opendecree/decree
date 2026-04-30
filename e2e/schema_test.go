@@ -139,3 +139,25 @@ fields:
 	_ = admin.DeleteSchema(ctx, s.ID)
 	_ = admin.DeleteSchema(ctx, newSchema.ID)
 }
+
+// TestImportSchema_BadRegex verifies that importing a schema with an invalid
+// regex constraint fails immediately with an InvalidArgument error rather than
+// silently accepting the schema and producing confusing errors at write time.
+func TestImportSchema_BadRegex(t *testing.T) {
+	conn := dial(t)
+	admin := newAdminClient(conn)
+	ctx := context.Background()
+
+	badRegexYAML := []byte(`spec_version: "v1"
+name: bad-regex-e2e
+fields:
+  config.code:
+    type: string
+    constraints:
+      pattern: "[invalid"
+`)
+
+	_, err := admin.ImportSchema(ctx, badRegexYAML)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, adminclient.ErrInvalidArgument)
+}

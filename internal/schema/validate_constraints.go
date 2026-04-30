@@ -2,11 +2,25 @@ package schema
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
+
+// validateFieldConstraintsBatch runs validateFieldConstraints for each field in
+// the slice and returns the first error encountered. It is used by ImportSchema
+// to validate all constraints before any storage writes, ensuring that bad
+// patterns (e.g. invalid regex) are rejected immediately with a clear error.
+func validateFieldConstraintsBatch(fields []*pb.SchemaField) error {
+	for _, f := range fields {
+		if err := validateFieldConstraints(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // validateNoPrefixOverlap rejects schemas where one field path is a strict
 // prefix of another (e.g. "payments" alongside "payments.fee"). Such schemas
@@ -73,9 +87,14 @@ func validateFieldConstraints(field *pb.SchemaField) error {
 		return fmt.Errorf("field %s: 'maxLength' constraint is not valid for type %s (only string)", path, ft)
 	}
 
-	// Pattern: string only
+	// Pattern: string only, and must compile as a valid Go regexp.
 	if c.Regex != nil && ft != pb.FieldType_FIELD_TYPE_STRING {
 		return fmt.Errorf("field %s: 'pattern' constraint is not valid for type %s (only string)", path, ft)
+	}
+	if c.Regex != nil && ft == pb.FieldType_FIELD_TYPE_STRING {
+		if _, err := regexp.Compile(*c.Regex); err != nil {
+			return fmt.Errorf("field %s: invalid regex constraint: %w", path, err)
+		}
 	}
 
 	// JSON Schema: json only
