@@ -76,7 +76,7 @@ Rejected requests return `codes.ResourceExhausted` with a `RetryInfo` detail (1 
 Set `STORAGE_BACKEND=memory` to run without PostgreSQL or Redis. All data is stored in memory and lost on restart. Useful for evaluation, local development, and testing:
 
 ```bash
-STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
+INSECURE_LISTEN=1 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
 ```
 
 ### REST/JSON Gateway
