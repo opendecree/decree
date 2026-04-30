@@ -23,8 +23,7 @@ changelog:
     - title: "Infrastructure"
       labels:
         - ci
-        - docker
-        - helm
+        - infra
     - title: "Documentation"
       labels:
         - docs
