@@ -861,3 +861,53 @@ func TestImportSchema_ExistingWithAutoPublish(t *testing.T) {
 	assert.Equal(t, int32(2), resp.Schema.Version)
 	store.AssertExpectations(t)
 }
+
+func TestImportSchema_BadRegexConstraint_NewSchema(t *testing.T) {
+	// A schema with an invalid regex pattern must be rejected at import time
+	// (InvalidArgument) before any storage write, not silently persisted and
+	// only caught at validation time with a confusing error far from the root cause.
+	//
+	// Patterns are double-quoted in the YAML to avoid YAML-level parse errors;
+	// the invalidity must be caught at the Go regexp compilation stage.
+	badPatterns := []struct{ name, pat string }{
+		{"unclosed_bracket", `"(?P<name"`},
+		{"bare_repetition", `"(?i"`},
+	}
+	for _, tc := range badPatterns {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &mockStore{}
+			svc := NewService(store, WithLogger(testLogger))
+
+			yaml := []byte("spec_version: v1\nname: bad-regex\nfields:\n  app.name:\n    type: string\n    constraints:\n      pattern: " + tc.pat + "\n")
+			_, err := svc.ImportSchema(context.Background(), &pb.ImportSchemaRequest{
+				YamlContent: yaml,
+			})
+			assert.Equal(t, codes.InvalidArgument, status.Code(err), "expected InvalidArgument for pattern %s", tc.pat)
+			assert.Contains(t, err.Error(), "invalid regex constraint", "expected error message for pattern %s", tc.pat)
+			// No storage calls should have been made.
+			store.AssertNotCalled(t, "GetSchemaByName")
+			store.AssertNotCalled(t, "CreateSchema")
+		})
+	}
+}
+
+func TestImportSchema_BadRegexConstraint_ExistingSchema(t *testing.T) {
+	// Importing a new version of an existing schema with a bad regex must also
+	// be rejected before any storage write occurs.
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := context.Background()
+
+	// The constraint check runs before the schema name lookup, so no store
+	// calls are expected at all.
+	yaml := []byte("spec_version: v1\nname: my-schema\nfields:\n  app.name:\n    type: string\n    constraints:\n      pattern: \"(?P<name\"\n")
+	_, err := svc.ImportSchema(ctx, &pb.ImportSchemaRequest{
+		YamlContent: yaml,
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "invalid regex constraint")
+	// Verify no storage calls were made — the error must surface before any write.
+	store.AssertNotCalled(t, "GetSchemaByName")
+	store.AssertNotCalled(t, "CreateSchema")
+	store.AssertNotCalled(t, "CreateSchemaVersion")
+}
