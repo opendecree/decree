@@ -62,6 +62,14 @@ func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) 
 	return tenant, nil
 }
 
+// errToStatus maps a domain store error to a gRPC status error.
+func errToStatus(err error, notFoundMsg, failedMsg string) error {
+	if errors.Is(err, domain.ErrNotFound) {
+		return status.Error(codes.NotFound, notFoundMsg)
+	}
+	return status.Error(codes.Internal, failedMsg)
+}
+
 func containsStr(slice []string, s string) bool {
 	for _, v := range slice {
 		if v == s {
@@ -200,10 +208,7 @@ func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.
 
 	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get schema")
+		return nil, errToStatus(err, "schema not found", "failed to get schema")
 	}
 
 	var version domain.SchemaVersion
@@ -216,10 +221,7 @@ func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.
 		version, err = s.store.GetLatestSchemaVersion(ctx, schema.ID)
 	}
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema version not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get schema version")
+		return nil, errToStatus(err, "schema version not found", "failed to get schema version")
 	}
 
 	fields, err := s.store.GetSchemaFields(ctx, version.ID)
@@ -283,10 +285,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 
 	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get schema")
+		return nil, errToStatus(err, "schema not found", "failed to get schema")
 	}
 
 	// Get latest version to derive from.
@@ -352,10 +351,7 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 	}
 	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve schema")
+		return nil, errToStatus(err, "schema not found", "failed to resolve schema")
 	}
 
 	if err := s.store.DeleteSchema(ctx, schema.ID); err != nil {
@@ -376,10 +372,7 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 
 	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get schema")
+		return nil, errToStatus(err, "schema not found", "failed to get schema")
 	}
 
 	version, err := s.store.PublishSchemaVersion(ctx, PublishSchemaVersionParams{
@@ -387,10 +380,7 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 		Version:  req.Version,
 	})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema version not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to publish schema version")
+		return nil, errToStatus(err, "schema version not found", "failed to publish schema version")
 	}
 
 	fields, err := s.store.GetSchemaFields(ctx, version.ID)
@@ -428,10 +418,7 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		Version:  req.SchemaVersion,
 	})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "schema version not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get schema version")
+		return nil, errToStatus(err, "schema version not found", "failed to get schema version")
 	}
 	if !version.Published {
 		return nil, status.Error(codes.FailedPrecondition, "schema version must be published before assigning to a tenant")
@@ -532,10 +519,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 			Name: *req.Name,
 		})
 		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				return nil, status.Error(codes.NotFound, "tenant not found")
-			}
-			return nil, status.Error(codes.Internal, "failed to update tenant name")
+			return nil, errToStatus(err, "tenant not found", "failed to update tenant name")
 		}
 	}
 
@@ -546,10 +530,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 			SchemaVersion: *req.SchemaVersion,
 		})
 		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				return nil, status.Error(codes.NotFound, "tenant not found")
-			}
-			return nil, status.Error(codes.Internal, "failed to update tenant schema version")
+			return nil, errToStatus(err, "tenant not found", "failed to update tenant schema version")
 		}
 		// Invalidate cached validators and dependentRequired rules — the tenant
 		// now binds a different schema version, so both per-field validators
@@ -565,10 +546,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 		var err error
 		tenant, err = s.store.GetTenantByID(ctx, tenantID)
 		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				return nil, status.Error(codes.NotFound, "tenant not found")
-			}
-			return nil, status.Error(codes.Internal, "failed to get tenant")
+			return nil, errToStatus(err, "tenant not found", "failed to get tenant")
 		}
 	}
 
