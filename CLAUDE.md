@@ -15,7 +15,7 @@ Schema-driven business configuration management service. Multi-tenant, gRPC API,
 | DB queries | sqlc | v1.30.0 |
 | DB migrations | goose | v3.27.0 |
 | Cache + pub/sub | Redis | 7 |
-| Auth | JWT (JWKS validation) | — |
+| Auth | Metadata headers (default); JWT/JWKS opt-in; RBAC via Guard chain | — |
 | Testing | testify | — |
 | Deployment | Kubernetes (Helm) | — |
 | Observability | OpenTelemetry | — |
@@ -66,7 +66,9 @@ internal/
 ├── schema/          # SchemaService implementation
 ├── config/          # ConfigService implementation
 ├── audit/           # AuditService implementation
-├── auth/            # JWT validation
+├── auth/            # JWT validation (opt-in JWKS)
+├── authz/           # Guard chain (TenantScopeGuard, RolePolicyGuard, FieldLockGuard)
+├── ratelimit/       # Per-tenant + per-method token-bucket rate limiting
 ├── validation/      # Field validation
 ├── pubsub/          # Change propagation (Redis impl behind interface)
 ├── cache/           # Config cache (Redis impl behind interface)
