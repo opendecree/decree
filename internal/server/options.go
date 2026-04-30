@@ -17,6 +17,7 @@ type options struct {
 	maxSendMsgBytes int
 	tls             *TLSConfig
 	insecure        bool
+	rateLimiter     GRPCInterceptor // optional; runs after auth
 }
 
 // WithLogger sets the server logger. Defaults to slog.Default() when unset.
@@ -58,4 +59,10 @@ func WithTLS(cfg *TLSConfig) Option {
 // (INSECURE_LISTEN=1). Mutually exclusive with WithTLS.
 func WithInsecure() Option {
 	return func(o *options) { o.insecure = true }
+}
+
+// WithRateLimiter adds a rate-limit interceptor that runs after authentication.
+// Pass nil to disable rate limiting.
+func WithRateLimiter(rl GRPCInterceptor) Option {
+	return func(o *options) { o.rateLimiter = rl }
 }

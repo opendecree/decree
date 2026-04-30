@@ -68,6 +68,20 @@ auth:
   # Expected JWT issuer (optional, only used with JWT).
   jwtIssuer: ""
 
+# --- Rate limiting ---
+
+rateLimit:
+  # Master switch. Set to false to disable all rate limiting.
+  enabled: true
+  # Requests per second for unauthenticated (anonymous) callers — shared global bucket per method.
+  anonRPS: "10"
+  # Requests per second per tenant for authenticated callers.
+  authedRPS: "100"
+  # Requests per second per superadmin identity. "0" = unlimited.
+  superadminRPS: "0"
+  # Token bucket burst size (applies to all role classes).
+  burst: "10"
+
 # --- Observability (all opt-in) ---
 
 otel:
@@ -80,6 +94,7 @@ otel:
   metricsCache: false
   metricsConfig: false
   metricsSchema: false
+  metricsRateLimit: false
 
 # --- Kubernetes resources ---
 
