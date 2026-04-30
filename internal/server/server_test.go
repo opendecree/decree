@@ -300,7 +300,7 @@ func TestRecovery_Unary_ReturnsInternalAndLogs(t *testing.T) {
 	require.NoError(t, json.Unmarshal(bytes.TrimRight(logBuf.Bytes(), "\n"), &entry))
 	assert.Equal(t, "panic in unary handler", entry["msg"])
 	assert.Equal(t, "/test.Panic/Boom", entry["method"])
-	assert.Equal(t, "kaboom-unary", entry["panic"])
+	assert.Equal(t, `"kaboom-unary"`, entry["panic"])
 	assert.Contains(t, entry["stack"], "recovery.go")
 }
 
@@ -330,7 +330,7 @@ func TestRecovery_Stream_ReturnsInternalAndLogs(t *testing.T) {
 	require.NoError(t, json.Unmarshal(bytes.TrimRight(logBuf.Bytes(), "\n"), &entry))
 	assert.Equal(t, "panic in stream handler", entry["msg"])
 	assert.Equal(t, "/test.Panic/BoomStream", entry["method"])
-	assert.Equal(t, "kaboom-stream", entry["panic"])
+	assert.Equal(t, `"kaboom-stream"`, entry["panic"])
 	assert.Contains(t, entry["stack"], "recovery.go")
 }
 

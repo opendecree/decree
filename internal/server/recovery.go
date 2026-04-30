@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strconv"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -13,6 +15,17 @@ import (
 // genericInternalError is returned to clients on panic. It deliberately omits
 // the panic value so handler internals are not leaked across the trust boundary.
 const genericInternalError = "internal server error"
+
+// sanitizePanicValue converts a panic value to a safe, bounded string for
+// logging. It truncates to 1024 bytes and quotes the result to prevent log
+// injection from attacker-controlled panic values.
+func sanitizePanicValue(v any) string {
+	s := fmt.Sprintf("%v", v)
+	if len(s) > 1024 {
+		s = s[:1024] + "...[truncated]"
+	}
+	return strconv.Quote(s)
+}
 
 // recoveryUnaryInterceptor returns a unary interceptor that recovers from panics
 // in downstream handlers, logs the panic with a stack trace, and returns
@@ -24,7 +37,7 @@ func recoveryUnaryInterceptor(logger *slog.Logger) grpc.UnaryServerInterceptor {
 			if r := recover(); r != nil {
 				logger.ErrorContext(ctx, "panic in unary handler",
 					"method", info.FullMethod,
-					"panic", r,
+					"panic", sanitizePanicValue(r),
 					"stack", string(debug.Stack()),
 				)
 				err = status.Error(codes.Internal, genericInternalError)
@@ -41,7 +54,7 @@ func recoveryStreamInterceptor(logger *slog.Logger) grpc.StreamServerInterceptor
 			if r := recover(); r != nil {
 				logger.ErrorContext(ss.Context(), "panic in stream handler",
 					"method", info.FullMethod,
-					"panic", r,
+					"panic", sanitizePanicValue(r),
 					"stack", string(debug.Stack()),
 				)
 				err = status.Error(codes.Internal, genericInternalError)
