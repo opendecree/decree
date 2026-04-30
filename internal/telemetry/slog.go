@@ -7,22 +7,22 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// NewLogHandler wraps an slog.Handler to inject trace_id and span_id
-// from the context into every log record. When no active span is present,
-// the log record passes through unmodified.
+// NewLogHandler wraps an slog.Handler to inject context-carried fields into
+// every log record: trace_id and span_id from the active OTel span (when
+// present), and tenant_id, actor, and request_id set by WithLogFields.
 func NewLogHandler(inner slog.Handler) slog.Handler {
-	return &traceLogHandler{inner: inner}
+	return &contextLogHandler{inner: inner}
 }
 
-type traceLogHandler struct {
+type contextLogHandler struct {
 	inner slog.Handler
 }
 
-func (h *traceLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+func (h *contextLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.inner.Enabled(ctx, level)
 }
 
-func (h *traceLogHandler) Handle(ctx context.Context, record slog.Record) error {
+func (h *contextLogHandler) Handle(ctx context.Context, record slog.Record) error {
 	span := trace.SpanFromContext(ctx)
 	if span.SpanContext().IsValid() {
 		record.AddAttrs(
@@ -30,13 +30,22 @@ func (h *traceLogHandler) Handle(ctx context.Context, record slog.Record) error 
 			slog.String("span_id", span.SpanContext().SpanID().String()),
 		)
 	}
+	if v, _ := ctx.Value(logTenantIDKey{}).(string); v != "" {
+		record.AddAttrs(slog.String("tenant_id", v))
+	}
+	if v, _ := ctx.Value(logActorKey{}).(string); v != "" {
+		record.AddAttrs(slog.String("actor", v))
+	}
+	if v, _ := ctx.Value(logRequestIDKey{}).(string); v != "" {
+		record.AddAttrs(slog.String("request_id", v))
+	}
 	return h.inner.Handle(ctx, record)
 }
 
-func (h *traceLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &traceLogHandler{inner: h.inner.WithAttrs(attrs)}
+func (h *contextLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &contextLogHandler{inner: h.inner.WithAttrs(attrs)}
 }
 
-func (h *traceLogHandler) WithGroup(name string) slog.Handler {
-	return &traceLogHandler{inner: h.inner.WithGroup(name)}
+func (h *contextLogHandler) WithGroup(name string) slog.Handler {
+	return &contextLogHandler{inner: h.inner.WithGroup(name)}
 }

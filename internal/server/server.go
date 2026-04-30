@@ -74,14 +74,18 @@ func New(grpcPort string, auth GRPCInterceptor, opts ...Option) (*Server, error)
 		}
 		grpcOpts = append(grpcOpts, grpc.Creds(creds))
 	}
-	// Recovery wraps all middleware. Auth runs second. Rate limiter (when set) runs after auth.
+	// Recovery wraps all middleware. Auth runs second. Log-fields runs third to
+	// pull identity from auth claims into context for the slog handler.
+	// Rate limiter (when set) runs after log-fields.
 	unaryChain := []grpc.UnaryServerInterceptor{
 		recoveryUnaryInterceptor(o.logger),
 		auth.UnaryInterceptor(),
+		logFieldsUnaryInterceptor(),
 	}
 	streamChain := []grpc.StreamServerInterceptor{
 		recoveryStreamInterceptor(o.logger),
 		auth.StreamInterceptor(),
+		logFieldsStreamInterceptor(),
 	}
 	if o.rateLimiter != nil {
 		unaryChain = append(unaryChain, o.rateLimiter.UnaryInterceptor())
