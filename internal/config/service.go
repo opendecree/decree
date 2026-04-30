@@ -16,6 +16,7 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/pubsub"
@@ -51,6 +52,7 @@ type serviceOptions struct {
 	metrics      *telemetry.ConfigMetrics
 	validators   *validation.ValidatorFactory
 	recorder     *audit.UsageRecorder
+	guard        authz.Guard
 }
 
 // WithLogger sets the service logger. Defaults to slog.Default() when unset.
@@ -79,6 +81,11 @@ func WithRecorder(r *audit.UsageRecorder) Option {
 	return func(o *serviceOptions) { o.recorder = r }
 }
 
+// WithGuard overrides the default authorization guard chain.
+func WithGuard(g authz.Guard) Option {
+	return func(o *serviceOptions) { o.guard = g }
+}
+
 // Service implements the ConfigService gRPC server.
 type Service struct {
 	pb.UnimplementedConfigServiceServer
@@ -91,6 +98,7 @@ type Service struct {
 	metrics      *telemetry.ConfigMetrics
 	validators   *validation.ValidatorFactory
 	recorder     *audit.UsageRecorder
+	guard        authz.Guard
 }
 
 // NewService creates a new ConfigService. The four required dependencies
@@ -100,6 +108,13 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 	o := serviceOptions{logger: slog.Default()}
 	for _, opt := range opts {
 		opt(&o)
+	}
+	if o.guard == nil {
+		o.guard = authz.Chain(
+			authz.TenantScopeGuard{},
+			authz.RolePolicyGuard{},
+			authz.NewFieldLockGuard(store),
+		)
 	}
 	return &Service{
 		store:        store,
@@ -111,6 +126,7 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 		metrics:      o.metrics,
 		validators:   o.validators,
 		recorder:     o.recorder,
+		guard:        o.guard,
 	}
 }
 
@@ -144,7 +160,7 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -250,7 +266,7 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -297,7 +313,7 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -379,9 +395,6 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 // --- Write operations ---
 
 func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.SetFieldResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
-		return nil, err
-	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -392,7 +405,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: req.FieldPath}); err != nil {
 		return nil, err
 	}
 
@@ -403,9 +416,6 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		if err := s.checkChecksum(ctx, tenantID, req.FieldPath, *req.ExpectedChecksum); err != nil {
 			return nil, err
 		}
-	}
-	if err := s.checkFieldLock(ctx, tenantID, req.FieldPath); err != nil {
-		return nil, err
 	}
 	if err := s.validateField(ctx, tenantID, req.FieldPath, req.Value); err != nil {
 		return nil, err
@@ -481,9 +491,6 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 }
 
 func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.SetFieldsResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
-		return nil, err
-	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -494,7 +501,9 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+
+	// Upfront role + tenant check before the per-field loop (loop may be empty).
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -507,7 +516,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 				return nil, err
 			}
 		}
-		if err := s.checkFieldLock(ctx, tenantID, update.FieldPath); err != nil {
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: update.FieldPath}); err != nil {
 			return nil, err
 		}
 		if err := s.validateField(ctx, tenantID, update.FieldPath, update.Value); err != nil {
@@ -615,7 +624,7 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -662,7 +671,7 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -681,9 +690,6 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 }
 
 func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersionRequest) (*pb.RollbackToVersionResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
-		return nil, err
-	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -694,7 +700,7 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -800,7 +806,7 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 		}
 		return status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return err
 	}
 
@@ -862,7 +868,7 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -920,9 +926,6 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 }
 
 func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest) (*pb.ImportConfigResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
-		return nil, err
-	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		if req.TenantId == "" {
@@ -933,7 +936,9 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		}
 		return nil, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+
+	// Upfront role + tenant check before any store reads.
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -960,7 +965,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 	// Check field locks and validate.
 	for _, v := range values {
-		if err := s.checkFieldLock(ctx, tenantID, v.FieldPath); err != nil {
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: v.FieldPath}); err != nil {
 			return nil, err
 		}
 		// Convert string value to TypedValue for validation.
@@ -1233,24 +1238,6 @@ func (s *Service) checkChecksum(ctx context.Context, tenantID string, fieldPath,
 	actual := derefString(row.Checksum)
 	if actual != expected {
 		return status.Errorf(codes.Aborted, "checksum mismatch for %s: expected %s, got %s", fieldPath, expected, actual)
-	}
-	return nil
-}
-
-func (s *Service) checkFieldLock(ctx context.Context, tenantID string, fieldPath string) error {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if !ok || claims.Role == auth.RoleSuperAdmin {
-		return nil // SuperAdmin bypasses locks.
-	}
-
-	locks, err := s.store.GetFieldLocks(ctx, tenantID)
-	if err != nil {
-		return status.Error(codes.Internal, "failed to check field locks")
-	}
-	for _, lock := range locks {
-		if lock.FieldPath == fieldPath {
-			return status.Errorf(codes.PermissionDenied, "field %s is locked", fieldPath)
-		}
 	}
 	return nil
 }

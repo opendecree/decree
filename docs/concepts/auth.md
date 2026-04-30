@@ -110,6 +110,26 @@ environment:
   JWT_ISSUER: "https://auth.example.com"
 ```
 
+## Pluggable Guard Layer
+
+Authorization checks are centralised in the `internal/authz` package as a composable guard interface:
+
+```go
+type Guard interface {
+    Check(ctx context.Context, action Action, resource Resource) error
+}
+```
+
+Three built-in guards compose the default chain:
+
+| Guard | What it checks |
+|-------|---------------|
+| `TenantScopeGuard` | Caller has access to `resource.TenantID` |
+| `RolePolicyGuard` | `ActionWrite` → admin+; `ActionAdmin` → superadmin; `ActionRead` → pass |
+| `FieldLockGuard` | Write to `resource.FieldPath` is not locked (config service only) |
+
+`ChainGuard` runs them in order, stopping on the first error. To add a new authorization axis (e.g. rate-limit-per-field, IP allowlist), implement `Guard` and pass a new chain via `WithGuard(authz.Chain(...))` to the relevant service constructor.
+
 ## Related
 
 - [Server Configuration](../server/configuration.md) -- all auth-related environment variables

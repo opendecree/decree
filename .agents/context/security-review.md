@@ -382,11 +382,11 @@ to be correctly protected at the audit date:
 ## Out-of-scope / tracked elsewhere
 
 - **Release artifact attestations** — already tracked at #159 (P0).
-- **Role-based RPC policy** — #205 implemented (feat/role-rpc-policy-205):
-  `RequireSuperAdmin` + `RequireAdminOrAbove` helpers in `internal/auth/access.go`,
-  enforcement in schema and config service handlers, unit tests in
-  `role_policy_test.go`, e2e matrix updated. #206 (pluggable Guard interface)
-  deferred until #205 merges.
+- **Role-based RPC policy + pluggable guard** — #205 + #206 implemented:
+  `RequireSuperAdmin` + `RequireAdminOrAbove` in `internal/auth/access.go`.
+  `internal/authz` package provides `Guard` interface, `ChainGuard`, `TenantScopeGuard`,
+  `RolePolicyGuard`, `FieldLockGuard`. All three services wire the chain via
+  `WithGuard`; `checkFieldLock` removed from config service.
 - **Audit cross-tenant visibility for superadmin** — verified correct
   per the #207 fix (commit `fa1bcb9`).
 - **CEL validation security** — engine not yet implemented; design

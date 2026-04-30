@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
@@ -55,7 +56,7 @@ func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) 
 		}
 		return domain.Tenant{}, status.Error(codes.Internal, "failed to resolve tenant")
 	}
-	if err := auth.CheckTenantAccess(ctx, tenant.ID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenant.ID}); err != nil {
 		return domain.Tenant{}, err
 	}
 	return tenant, nil
@@ -78,6 +79,7 @@ type serviceOptions struct {
 	metrics   *telemetry.SchemaMetrics
 	validator *validation.ValidatorFactory
 	limits    Limits
+	guard     authz.Guard
 }
 
 // WithLogger sets the service logger. Defaults to slog.Default() when unset.
@@ -104,6 +106,11 @@ func WithLimits(l Limits) Option {
 	return func(o *serviceOptions) { o.limits = l }
 }
 
+// WithGuard overrides the default authorization guard chain.
+func WithGuard(g authz.Guard) Option {
+	return func(o *serviceOptions) { o.guard = g }
+}
+
 // Service implements the SchemaService gRPC server.
 type Service struct {
 	pb.UnimplementedSchemaServiceServer
@@ -112,6 +119,7 @@ type Service struct {
 	metrics   *telemetry.SchemaMetrics
 	validator *validation.ValidatorFactory
 	limits    Limits
+	guard     authz.Guard
 }
 
 // NewService creates a new SchemaService. Only the store is required;
@@ -124,19 +132,23 @@ func NewService(store Store, opts ...Option) *Service {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	if o.guard == nil {
+		o.guard = authz.Chain(authz.TenantScopeGuard{}, authz.RolePolicyGuard{})
+	}
 	return &Service{
 		store:     store,
 		logger:    o.logger,
 		metrics:   o.metrics,
 		validator: o.validator,
 		limits:    o.limits,
+		guard:     o.guard,
 	}
 }
 
 // --- Schema operations ---
 
 func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest) (*pb.CreateSchemaResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Name == "" {
@@ -262,7 +274,7 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 }
 
 func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest) (*pb.UpdateSchemaResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -332,7 +344,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 }
 
 func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest) (*pb.DeleteSchemaResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -355,7 +367,7 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 }
 
 func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaRequest) (*pb.PublishSchemaResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -396,7 +408,7 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 // --- Tenant operations ---
 
 func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest) (*pb.CreateTenantResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Name == "" {
@@ -499,7 +511,7 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	resolved, err := s.resolveTenantWithAccess(ctx, req.Id)
@@ -566,7 +578,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
@@ -585,7 +597,7 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 // --- Field locking ---
 
 func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.LockFieldResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
@@ -611,7 +623,7 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 }
 
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
-	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
@@ -679,7 +691,7 @@ func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest)
 }
 
 func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest) (*pb.ImportSchemaResponse, error) {
-	if err := auth.RequireSuperAdmin(ctx); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if s.limits.MaxDocBytes > 0 && len(req.YamlContent) > s.limits.MaxDocBytes {
