@@ -128,6 +128,10 @@ New Claude Code skills: `/before-pr` (PR checklist), `/merge` (merge + cleanup),
 
 Labels aligned across decree, decree-python, decree-typescript, decree-ui (14 common labels, size S/M/L with descriptions). `admin-gui` label renamed to `decree-ui`. Project auto-add workflow (`project.yml`) added to all 4 repos — new issues/PRs auto-appear on OpenDecree Roadmap board. Admin GUI issues #131, #128, #126 moved from decree to decree-ui. CI improvement issues created (12 total: hardening, performance, readability × 4 repos).
 
+## Context-Carried Log Fields (#239)
+
+`telemetry.NewLogHandler` extended to inject `tenant_id`, `actor`, and `request_id` from context into every slog record. New `telemetry.WithLogFields(ctx, tenantID, actor, requestID)` stores the values. New `server.logFieldsUnaryInterceptor` / `logFieldsStreamInterceptor` run after auth, pull `auth.Claims` from context, and call `WithLogFields` with a fresh UUID v4 `request_id`. Handler now always applied (not gated on OTel). Stdlib only.
+
 ## Seed Decoupling (#137, #140)
 
 `decree seed <file>` dispatches on which top-level sections are present (schema-only / tenant-only / schema+tenant / config-only / combined). Config-only files name the target schema via `tenant.schema`; `tenant.schema_version` omitted → latest published version resolved client-side via new `adminclient.GetLatestPublishedSchemaVersion` (walks backward past drafts). Re-seeding identical content is now a no-op on both axes — `ImportConfig` returning `AlreadyExists` is treated as a skip instead of erroring. Tenant-schema mismatches in config-only mode error out rather than silently re-binding. Combined envelope preserved byte-for-byte. Design brief: `.agents/context/seed-decoupling.md`.

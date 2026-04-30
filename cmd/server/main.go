@@ -50,8 +50,7 @@ func run() int {
 	cfg := loadConfig()
 	otelCfg := telemetry.ConfigFromEnv()
 
-	// Logger — wrap with trace correlation if OTel is enabled.
-	logger := newLogger(cfg.LogLevel, otelCfg.Enabled)
+	logger := newLogger(cfg.LogLevel)
 	logger.Info("starting decree", "version", version.Version, "commit", version.Commit)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -565,7 +564,7 @@ func parseServices(s string) []string {
 	return services
 }
 
-func newLogger(level string, traceCorrelation bool) *slog.Logger {
+func newLogger(level string) *slog.Logger {
 	var logLevel slog.Level
 	switch strings.ToLower(level) {
 	case "debug":
@@ -577,9 +576,6 @@ func newLogger(level string, traceCorrelation bool) *slog.Logger {
 	default:
 		logLevel = slog.LevelInfo
 	}
-	var handler slog.Handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
-	if traceCorrelation {
-		handler = telemetry.NewLogHandler(handler)
-	}
-	return slog.New(handler)
+	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	return slog.New(telemetry.NewLogHandler(handler))
 }

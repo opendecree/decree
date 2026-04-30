@@ -142,3 +142,47 @@ func TestLogHandler_WithGroup_WrapsInnerResult(t *testing.T) {
 	got := attrsOf(inner.records[len(inner.records)-1])
 	assert.Equal(t, span.SpanContext().SpanID().String(), got["span_id"])
 }
+
+func TestLogHandler_Handle_WithLogFields_InjectsIdentity(t *testing.T) {
+	inner := &capturingHandler{}
+	h := NewLogHandler(inner)
+
+	ctx := WithLogFields(context.Background(), "tenant-abc", "alice", "req-123")
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
+	require.NoError(t, h.Handle(ctx, r))
+	require.Len(t, inner.records, 1)
+
+	got := attrsOf(inner.records[0])
+	assert.Equal(t, "tenant-abc", got["tenant_id"])
+	assert.Equal(t, "alice", got["actor"])
+	assert.Equal(t, "req-123", got["request_id"])
+}
+
+func TestLogHandler_Handle_EmptyLogFields_Omitted(t *testing.T) {
+	inner := &capturingHandler{}
+	h := NewLogHandler(inner)
+
+	ctx := WithLogFields(context.Background(), "", "", "")
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
+	require.NoError(t, h.Handle(ctx, r))
+	require.Len(t, inner.records, 1)
+
+	got := attrsOf(inner.records[0])
+	assert.NotContains(t, got, "tenant_id")
+	assert.NotContains(t, got, "actor")
+	assert.NotContains(t, got, "request_id")
+}
+
+func TestLogHandler_Handle_NoLogFields_Omitted(t *testing.T) {
+	inner := &capturingHandler{}
+	h := NewLogHandler(inner)
+
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, "msg", 0)
+	require.NoError(t, h.Handle(context.Background(), r))
+	require.Len(t, inner.records, 1)
+
+	got := attrsOf(inner.records[0])
+	assert.NotContains(t, got, "tenant_id")
+	assert.NotContains(t, got, "actor")
+	assert.NotContains(t, got, "request_id")
+}
