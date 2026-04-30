@@ -37,6 +37,19 @@ func NewService(store Store, logger *slog.Logger, resolver TenantResolver) *Serv
 	}
 }
 
+// resolveTenantWithAccess resolves a tenant and checks read access in one step.
+// Returns a gRPC status error on failure — callers can return the error directly.
+func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) (string, error) {
+	tenantID, err := s.resolveTenantID(ctx, idOrName)
+	if err != nil {
+		return "", err
+	}
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
+		return "", err
+	}
+	return tenantID, nil
+}
+
 // resolveTenantID resolves a tenant UUID or slug. If no resolver is set, requires UUID.
 func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string, error) {
 	if idOrName == "" {
@@ -117,11 +130,8 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 }
 
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -170,11 +180,8 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 }
 
 func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequest) (*pb.GetTenantUsageResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -213,11 +220,8 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 }
 
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
-		return nil, err
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 

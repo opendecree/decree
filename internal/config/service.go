@@ -131,36 +131,52 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 }
 
 // resolveTenantID resolves a tenant UUID or name slug to a canonical UUID.
+// Returns a gRPC status error on failure — callers can return the error directly.
 // Slug resolution happens before access checks — access checks require the UUID,
 // and all downstream store operations use UUIDs as primary keys.
 func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string, error) {
 	if idOrName == "" {
-		return "", fmt.Errorf("tenant id or name required")
+		return "", status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
 	if domain.IsUUID(idOrName) {
 		return idOrName, nil
 	}
 	tenant, err := s.store.GetTenantByName(ctx, idOrName)
 	if err != nil {
-		return "", err
+		if errors.Is(err, domain.ErrNotFound) {
+			return "", status.Error(codes.NotFound, "tenant not found")
+		}
+		return "", status.Error(codes.Internal, "failed to resolve tenant")
 	}
 	return tenant.ID, nil
+}
+
+// resolveTenantWithAccess resolves a tenant and checks caller access in one step.
+// Returns a gRPC status error on failure — callers can return the error directly.
+func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string, action authz.Action) (string, error) {
+	tenantID, err := s.resolveTenantID(ctx, idOrName)
+	if err != nil {
+		return "", err
+	}
+	if err := s.guard.Check(ctx, action, authz.Resource{TenantID: tenantID}); err != nil {
+		return "", err
+	}
+	return tenantID, nil
+}
+
+// errToStatus maps a domain store error to a gRPC status error.
+func errToStatus(err error, notFoundMsg, failedMsg string) error {
+	if errors.Is(err, domain.ErrNotFound) {
+		return status.Error(codes.NotFound, notFoundMsg)
+	}
+	return status.Error(codes.Internal, failedMsg)
 }
 
 // --- Read operations ---
 
 func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -256,17 +272,8 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 }
 
 func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.GetFieldResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -281,10 +288,7 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		Version:   version,
 	})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "field not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get field")
+		return nil, errToStatus(err, "field not found", "failed to get field")
 	}
 
 	types := s.fieldTypeMap(ctx, tenantID)
@@ -303,17 +307,8 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 }
 
 func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.GetFieldsResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -397,13 +392,7 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.SetFieldResponse, error) {
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
+		return nil, err
 	}
 	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: req.FieldPath}); err != nil {
 		return nil, err
@@ -491,19 +480,9 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 }
 
 func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.SetFieldsResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
-	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-
 	// Upfront role + tenant check before the per-field loop (loop may be empty).
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
+	if err != nil {
 		return nil, err
 	}
 
@@ -614,17 +593,8 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 // --- Version operations ---
 
 func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest) (*pb.ListVersionsResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -661,17 +631,8 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 }
 
 func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*pb.GetVersionResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -680,27 +641,15 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 		Version:  req.Version,
 	})
 	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "version not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to get version")
+		return nil, errToStatus(err, "version not found", "failed to get version")
 	}
 
 	return &pb.GetVersionResponse{ConfigVersion: configVersionToProto(version)}, nil
 }
 
 func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersionRequest) (*pb.RollbackToVersionResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -796,17 +745,8 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamingServer[pb.SubscribeResponse]) error {
 	ctx := stream.Context()
 
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return status.Error(codes.NotFound, "tenant not found")
-		}
-		return status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return err
 	}
 
@@ -858,17 +798,8 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 // --- Import/export ---
 
 func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest) (*pb.ExportConfigResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -926,19 +857,9 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 }
 
 func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest) (*pb.ImportConfigResponse, error) {
-	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
-	if err != nil {
-		if req.TenantId == "" {
-			return nil, status.Error(codes.InvalidArgument, "tenant id or name required")
-		}
-		if errors.Is(err, domain.ErrNotFound) {
-			return nil, status.Error(codes.NotFound, "tenant not found")
-		}
-		return nil, status.Error(codes.Internal, "failed to resolve tenant")
-	}
-
 	// Upfront role + tenant check before any store reads.
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID}); err != nil {
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
+	if err != nil {
 		return nil, err
 	}
 
