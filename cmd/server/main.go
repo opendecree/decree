@@ -389,10 +389,15 @@ func run() int {
 	// cancellation — they need explicit Stop / Shutdown.
 	cancel()
 	recorder.Stop() // nil-safe; waits for final flush
+
+	// Use a fresh context for the grace period — the original ctx is already
+	// cancelled, so passing it would cause immediate timeout.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 	if gw != nil {
-		gw.Shutdown(ctx)
+		gw.Shutdown(shutdownCtx)
 	}
-	srv.GracefulStop(ctx)
+	srv.GracefulStop(shutdownCtx)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		logger.ErrorContext(ctx, "server error", "error", err)
