@@ -51,6 +51,8 @@ func mapAdminError(err error) error {
 		return adminclient.ErrAlreadyExists
 	case codes.FailedPrecondition:
 		return adminclient.ErrFailedPrecondition
+	case codes.InvalidArgument:
+		return adminclient.InvalidArgumentError(st.Message())
 	default:
 		return err
 	}

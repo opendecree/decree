@@ -189,7 +189,7 @@ constraints:
     {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}
 ```
 
-The `pattern` constraint uses [RE2](https://github.com/google/re2/wiki/Syntax) syntax — a subset of PCRE without backtracking. ReDoS-safe by construction.
+The `pattern` constraint uses [RE2](https://github.com/google/re2/wiki/Syntax) syntax — a subset of PCRE without backtracking. ReDoS-safe by construction. An invalid pattern is rejected at import time with `InvalidArgument`; the schema is not stored.
 
 ## Cross-field rules
 

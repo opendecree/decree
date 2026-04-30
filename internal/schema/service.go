@@ -684,6 +684,11 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	if s.limits.MaxFields > 0 && len(fields) > s.limits.MaxFields {
 		return nil, status.Errorf(codes.InvalidArgument, "schema has %d fields, exceeds limit of %d", len(fields), s.limits.MaxFields)
 	}
+	// Validate field constraints (including regex compilation) before any
+	// storage write so that bad patterns are caught immediately.
+	if err := validateFieldConstraintsBatch(fields); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
 	depReqs := parsed.DependentRequired
 	if err := validateDependentRequiredAgainstFields(depReqs, fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)

@@ -47,6 +47,25 @@ func TestValidateConstraints_StringPattern(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateConstraints_InvalidRegex_Rejected(t *testing.T) {
+	badPatterns := []string{
+		"[invalid",
+		"(?P<",
+		"*",
+		"(?i",
+	}
+	for _, pat := range badPatterns {
+		t.Run(pat, func(t *testing.T) {
+			err := validateFieldConstraints(&pb.SchemaField{
+				Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
+				Constraints: &pb.FieldConstraints{Regex: ps(pat)},
+			})
+			assert.Error(t, err, "expected error for invalid regex %q", pat)
+			assert.Contains(t, err.Error(), "invalid regex constraint")
+		})
+	}
+}
+
 func TestValidateConstraints_DurationMinMax(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_DURATION,
