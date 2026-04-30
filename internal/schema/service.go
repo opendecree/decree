@@ -136,6 +136,9 @@ func NewService(store Store, opts ...Option) *Service {
 // --- Schema operations ---
 
 func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest) (*pb.CreateSchemaResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
@@ -259,6 +262,9 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 }
 
 func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest) (*pb.UpdateSchemaResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
@@ -326,6 +332,9 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 }
 
 func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest) (*pb.DeleteSchemaResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
@@ -346,6 +355,9 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 }
 
 func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaRequest) (*pb.PublishSchemaResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
@@ -384,6 +396,9 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 // --- Tenant operations ---
 
 func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest) (*pb.CreateTenantResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
@@ -484,6 +499,9 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	resolved, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
 		return nil, err
@@ -548,6 +566,9 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
 		return nil, err
@@ -564,6 +585,9 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 // --- Field locking ---
 
 func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.LockFieldResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -587,6 +611,9 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 }
 
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
+	if err := auth.RequireAdminOrAbove(ctx); err != nil {
+		return nil, err
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -652,6 +679,9 @@ func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest)
 }
 
 func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest) (*pb.ImportSchemaResponse, error) {
+	if err := auth.RequireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
 	if s.limits.MaxDocBytes > 0 && len(req.YamlContent) > s.limits.MaxDocBytes {
 		return nil, status.Errorf(codes.InvalidArgument, "schema document is %d bytes, exceeds limit of %d", len(req.YamlContent), s.limits.MaxDocBytes)
 	}

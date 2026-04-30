@@ -6,23 +6,17 @@ package e2e
 //
 // Iterates {superadmin, admin, user} × every authenticated RPC and asserts
 // allow/deny. The point is to catch any new RPC that forgets to call
-// auth.CheckTenantAccess (or, in future, a role-based gate). Each cell is
-// scoped so the caller HAS access to the target tenant; matrix 2 covers
-// the out-of-scope case.
+// auth.CheckTenantAccess or a role gate. Each cell is scoped so the caller
+// HAS access to the target tenant; matrix 2 covers the out-of-scope case.
 //
-// Current policy (docs/concepts/auth.md describes the intended policy):
+// Policy (docs/concepts/auth.md):
 //
 //   - superadmin: allowed on every RPC
-//   - admin (with x-tenant-id matching target): allowed on every RPC
-//   - user  (with x-tenant-id matching target): allowed on every RPC
+//   - admin: read + write config, manage field locks; denied schema management and tenant creation
+//   - user: read-only; denied all mutating RPCs
 //
-// The intended policy in docs/concepts/auth.md narrows admin/user further
-// (e.g. schema management is superadmin-only, user is read-only). The
-// server does not yet enforce that role-action policy — only tenant
-// scoping is enforced today. This matrix is the harness that will fail
-// loudly when role-based gating is added without an expected-policy
-// update; conversely, it locks down today's surface so a regression
-// (e.g. an RPC silently dropping its CheckTenantAccess call) is caught.
+// Per-cell expected policy is declared in each rpcSpec.policy field.
+// Update that field when adding a new RPC or changing the role policy.
 
 import (
 	"context"
@@ -37,6 +31,27 @@ import (
 	"github.com/opendecree/decree/sdk/configclient"
 )
 
+// allow is shorthand for a fully-allowed policy (all three roles).
+var allow = map[roleName]bool{
+	roleSuperadmin: true,
+	roleAdmin:      true,
+	roleUser:       true,
+}
+
+// superadminOnly is a policy that only superadmin can execute.
+var superadminOnly = map[roleName]bool{
+	roleSuperadmin: true,
+	roleAdmin:      false,
+	roleUser:       false,
+}
+
+// adminOrAbove is a policy that superadmin and admin can execute but user cannot.
+var adminOrAbove = map[roleName]bool{
+	roleSuperadmin: true,
+	roleAdmin:      true,
+	roleUser:       false,
+}
+
 // rpcSpec describes one RPC under test.
 type rpcSpec struct {
 	name string
@@ -44,6 +59,8 @@ type rpcSpec struct {
 	// It may use bootstrapAdmin (always superadmin) to create throwaway
 	// resources. The returned error is checked with isAuthDenied.
 	invoke func(ctx context.Context, t *testing.T, role *clients, fx *matrixFixture) error
+	// policy maps each roleName to true (expect allow) or false (expect deny).
+	policy map[roleName]bool
 }
 
 // allRPCs covers every authenticated RPC across SchemaService,
@@ -53,28 +70,32 @@ func allRPCs() []rpcSpec {
 	return []rpcSpec{
 		// --- SchemaService — schema management ---
 		{
-			name: "CreateSchema",
+			name:   "CreateSchema",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				_, err := c.admin.CreateSchema(ctx, fmt.Sprintf("m1-create-%s", randSuffix()), oneStringField(), "")
 				return err
 			},
 		},
 		{
-			name: "GetSchema",
+			name:   "GetSchema",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetSchema(ctx, fx.schemaID)
 				return err
 			},
 		},
 		{
-			name: "ListSchemas",
+			name:   "ListSchemas",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				_, err := c.admin.ListSchemas(ctx)
 				return err
 			},
 		},
 		{
-			name: "UpdateSchema",
+			name:   "UpdateSchema",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				s := mustCreateThrowawaySchema(ctx, t, c.bootstrapAdmin, "m1-update")
 				_, err := c.admin.UpdateSchema(ctx, s.ID,
@@ -83,7 +104,8 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
-			name: "PublishSchema",
+			name:   "PublishSchema",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				s := mustCreateThrowawaySchema(ctx, t, c.bootstrapAdmin, "m1-publish")
 				_, err := c.admin.PublishSchema(ctx, s.ID, 1)
@@ -91,21 +113,24 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
-			name: "DeleteSchema",
+			name:   "DeleteSchema",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				s := mustCreateThrowawaySchema(ctx, t, c.bootstrapAdmin, "m1-delete")
 				return c.admin.DeleteSchema(ctx, s.ID)
 			},
 		},
 		{
-			name: "ExportSchema",
+			name:   "ExportSchema",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.ExportSchema(ctx, fx.schemaID, nil)
 				return err
 			},
 		},
 		{
-			name: "ImportSchema",
+			name:   "ImportSchema",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				yaml := []byte(fmt.Sprintf("name: m1-import-%s\nfields:\n  - path: x\n    type: FIELD_TYPE_STRING\n", randSuffix()))
 				_, err := c.admin.ImportSchema(ctx, yaml)
@@ -115,34 +140,34 @@ func allRPCs() []rpcSpec {
 
 		// --- SchemaService — tenant management ---
 		{
-			name: "CreateTenant",
+			name:   "CreateTenant",
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				// CreateTenant runs CheckTenantAccess(newTenantID); since the
-				// ID is server-generated, only superadmin (which bypasses
-				// scope) can satisfy the check.
-				if c.role != roleSuperadmin {
-					t.Skip("CreateTenant: server-generated tenant ID can never be in a non-superadmin caller's pre-existing scope")
-				}
+				// Non-superadmin callers are denied by the role check before
+				// reaching the server-generated tenant ID scoping problem.
 				_, err := c.admin.CreateTenant(ctx, fmt.Sprintf("m1-ct-%s", randSuffix()), fx.schemaID, 1)
 				return err
 			},
 		},
 		{
-			name: "GetTenant",
+			name:   "GetTenant",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetTenant(ctx, fx.tenantID)
 				return err
 			},
 		},
 		{
-			name: "ListTenants",
+			name:   "ListTenants",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				_, err := c.admin.ListTenants(ctx, "")
 				return err
 			},
 		},
 		{
-			name: "UpdateTenant",
+			name:   "UpdateTenant",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				newName := fmt.Sprintf("m1-upd-%s", randSuffix())
 				_, err := c.admin.UpdateTenant(ctx, fx.tenantID, &newName, nil)
@@ -150,19 +175,21 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
-			name: "DeleteTenant",
+			name:   "DeleteTenant",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				// Delete a throwaway tenant. For non-superadmin, rebuild the
-				// caller's scope to include the throwaway tenant's UUID so
-				// CheckTenantAccess passes; the role × action assertion is
-				// what we are isolating.
+				// Delete a throwaway tenant. Rebuild the caller's scope to
+				// include the throwaway tenant UUID so CheckTenantAccess passes;
+				// the role × action gate is what we are isolating here.
+				// For user, RequireAdminOrAbove fires before CheckTenantAccess.
 				tenant := mustCreateThrowawayTenant(ctx, t, c.bootstrapAdmin, "m1-dt", fx.schemaID)
 				caller := scopedClients(t, c.conn, c.role, tenant.ID)
 				return caller.admin.DeleteTenant(ctx, tenant.ID)
 			},
 		},
 		{
-			name: "LockField",
+			name:   "LockField",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				field := fmt.Sprintf("app.lock-%s", randSuffix())
 				// Field doesn't exist in schema, so server may return
@@ -171,13 +198,15 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
-			name: "UnlockField",
+			name:   "UnlockField",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				return c.admin.UnlockField(ctx, fx.tenantID, "app.name")
 			},
 		},
 		{
-			name: "ListFieldLocks",
+			name:   "ListFieldLocks",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.ListFieldLocks(ctx, fx.tenantID)
 				return err
@@ -186,34 +215,39 @@ func allRPCs() []rpcSpec {
 
 		// --- ConfigService ---
 		{
-			name: "GetConfig",
+			name:   "GetConfig",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.cfg.GetAll(ctx, fx.tenantID)
 				return err
 			},
 		},
 		{
-			name: "GetField",
+			name:   "GetField",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.cfg.Get(ctx, fx.tenantID, "app.name")
 				return err
 			},
 		},
 		{
-			name: "GetFields",
+			name:   "GetFields",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.cfg.GetFields(ctx, fx.tenantID, []string{"app.name"})
 				return err
 			},
 		},
 		{
-			name: "SetField",
+			name:   "SetField",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				return c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("m1-%s", randSuffix()))
 			},
 		},
 		{
-			name: "SetFields",
+			name:   "SetFields",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				return c.cfg.SetMany(ctx, fx.tenantID, map[string]string{
 					"app.name": fmt.Sprintf("m1-many-%s", randSuffix()),
@@ -221,44 +255,52 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
-			name: "ListVersions",
+			name:   "ListVersions",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.ListConfigVersions(ctx, fx.tenantID)
 				return err
 			},
 		},
 		{
-			name: "GetVersion",
+			name:   "GetVersion",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetConfigVersion(ctx, fx.tenantID, 1)
 				return err
 			},
 		},
 		{
-			name: "RollbackToVersion",
+			name:   "RollbackToVersion",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				// Produce a second version so rollback has somewhere to roll
-				// back from; the fixture seeds version 1.
+				// Produce a second version so rollback has somewhere to go;
+				// the fixture seeds version 1. For user, the Set call is also
+				// denied but the error is discarded — RollbackConfig is the
+				// RPC under test.
 				_ = c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("rb-%s", randSuffix()))
 				_, err := c.admin.RollbackConfig(ctx, fx.tenantID, 1, "matrix rollback")
 				return err
 			},
 		},
 		{
-			name: "Subscribe",
+			name:   "Subscribe",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				return invokeSubscribe(c, fx.tenantID)
 			},
 		},
 		{
-			name: "ExportConfig",
+			name:   "ExportConfig",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.ExportConfig(ctx, fx.tenantID, nil)
 				return err
 			},
 		},
 		{
-			name: "ImportConfig",
+			name:   "ImportConfig",
+			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				yaml := []byte(fmt.Sprintf("values:\n  app.name: import-%s\n", randSuffix()))
 				_, err := c.admin.ImportConfig(ctx, fx.tenantID, yaml, "matrix import")
@@ -268,28 +310,32 @@ func allRPCs() []rpcSpec {
 
 		// --- AuditService ---
 		{
-			name: "QueryWriteLog",
+			name:   "QueryWriteLog",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.QueryWriteLog(ctx, adminclient.WithAuditTenant(fx.tenantID))
 				return err
 			},
 		},
 		{
-			name: "GetFieldUsage",
+			name:   "GetFieldUsage",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetFieldUsage(ctx, fx.tenantID, "app.name", nil, nil)
 				return err
 			},
 		},
 		{
-			name: "GetTenantUsage",
+			name:   "GetTenantUsage",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetTenantUsage(ctx, fx.tenantID, nil, nil)
 				return err
 			},
 		},
 		{
-			name: "GetUnusedFields",
+			name:   "GetUnusedFields",
+			policy: allow,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				_, err := c.admin.GetUnusedFields(ctx, fx.tenantID, time.Time{})
 				return err
@@ -309,16 +355,20 @@ func TestRoleActionMatrix(t *testing.T) {
 			caller := buildRoleCaller(t, conn, role, fx.tenantID)
 			for _, spec := range rpcs {
 				spec := spec
-				// Subtest suffix is "_allow" because matrix 1 only asserts
-				// the allow direction with proper tenant scope. The deny
-				// direction (out-of-scope tenant) lives in matrix 2.
-				t.Run(spec.name+"_allow", func(t *testing.T) {
+				expectAllow := spec.policy[role]
+				t.Run(spec.name, func(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
 					err := spec.invoke(ctx, t, caller, fx)
-					assert.False(t, isAuthDenied(err),
-						"role=%s rpc=%s expected no auth denial; got: %v",
-						role, spec.name, err)
+					if expectAllow {
+						assert.False(t, isAuthDenied(err),
+							"role=%s rpc=%s expected allow; got: %v",
+							role, spec.name, err)
+					} else {
+						assert.True(t, isAuthDenied(err),
+							"role=%s rpc=%s expected auth denial; got: %v",
+							role, spec.name, err)
+					}
 				})
 			}
 		})

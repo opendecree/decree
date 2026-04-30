@@ -22,6 +22,32 @@ func CheckTenantAccess(ctx context.Context, tenantID string) error {
 	return status.Errorf(codes.PermissionDenied, "no access to tenant %s", tenantID)
 }
 
+// RequireSuperAdmin returns PermissionDenied if the caller is not superadmin.
+// No-ops when no auth context is present (internal/test calls).
+func RequireSuperAdmin(ctx context.Context) error {
+	claims, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	if claims.IsSuperAdmin() {
+		return nil
+	}
+	return status.Error(codes.PermissionDenied, "superadmin required")
+}
+
+// RequireAdminOrAbove returns PermissionDenied for the user (read-only) role.
+// No-ops when no auth context is present (internal/test calls).
+func RequireAdminOrAbove(ctx context.Context) error {
+	claims, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	if claims.Role == RoleUser {
+		return status.Error(codes.PermissionDenied, "admin or superadmin required")
+	}
+	return nil
+}
+
 // AllowedTenantIDs returns the caller's allowed tenant IDs.
 // Returns nil for superadmins (meaning all tenants).
 func AllowedTenantIDs(ctx context.Context) []string {
