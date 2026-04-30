@@ -198,8 +198,9 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		return nil
 	})
 	g.Go(func() error {
-		types = s.fieldTypeMap(ctx, tenantID)
-		return nil
+		var err error
+		types, err = s.fieldTypeMap(ctx, tenantID)
+		return err
 	})
 	if err := g.Wait(); err != nil {
 		return nil, err
@@ -291,7 +292,10 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		return nil, errToStatus(err, "field not found", "failed to get field")
 	}
 
-	types := s.fieldTypeMap(ctx, tenantID)
+	types, err := s.fieldTypeMap(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	cv := &pb.ConfigValue{
 		FieldPath: row.FieldPath,
 		Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
@@ -329,8 +333,9 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 			return nil
 		})
 		g.Go(func() error {
-			types = s.fieldTypeMap(ctx, tenantID)
-			return nil
+			var err error
+			types, err = s.fieldTypeMap(ctx, tenantID)
+			return err
 		})
 		if err := g.Wait(); err != nil {
 			return nil, err
@@ -756,7 +761,10 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 	}
 	defer cancel()
 
-	types := s.fieldTypeMap(ctx, tenantID)
+	types, err := s.fieldTypeMap(ctx, tenantID)
+	if err != nil {
+		return err
+	}
 	filterPaths := make(map[string]struct{}, len(req.FieldPaths))
 	for _, p := range req.FieldPaths {
 		filterPaths[p] = struct{}{}
@@ -1165,14 +1173,18 @@ func (s *Service) checkChecksum(ctx context.Context, tenantID string, fieldPath,
 
 // validateField validates a typed value against the schema constraints.
 // In strict mode, rejects fields not defined in the schema.
+// Returns codes.Internal if the validator store is unavailable — fail-closed
+// is correct here because silently skipping validation would allow writes that
+// should be rejected (security/correctness bug).
 func (s *Service) validateField(ctx context.Context, tenantID, fieldPath string, value *pb.TypedValue) error {
 	if s.validators == nil {
 		return nil
 	}
 	validators, err := s.validators.GetValidators(ctx, tenantID)
 	if err != nil {
-		s.logger.WarnContext(ctx, "failed to get validators", "error", err)
-		return nil // don't block writes on validator lookup failure
+		s.logger.ErrorContext(ctx, "validator lookup failed; rejecting write to fail-closed",
+			"tenant_id", tenantID, "field", fieldPath, "error", err)
+		return status.Error(codes.Internal, "validator lookup failed")
 	}
 	v, ok := validators[fieldPath]
 	if !ok {
@@ -1246,22 +1258,25 @@ func mapDependentRequiredErr(err error, fallback func() error) error {
 }
 
 // fieldTypeMap returns a map of field path -> domain field type for a tenant's schema.
-// Returns nil if validators are not configured (all fields treated as STRING).
-func (s *Service) fieldTypeMap(ctx context.Context, tenantID string) map[string]domain.FieldType {
+// Returns (nil, nil) if validators are not configured (all fields treated as STRING).
+// Returns an error if the validator store is unavailable — callers must propagate
+// this error to avoid returning data with silently wrong types.
+func (s *Service) fieldTypeMap(ctx context.Context, tenantID string) (map[string]domain.FieldType, error) {
 	if s.validators == nil {
-		return nil
+		return nil, nil
 	}
 	validators, err := s.validators.GetValidators(ctx, tenantID)
 	if err != nil {
-		s.logger.DebugContext(ctx, "failed to get validators for field type lookup", "error", err)
-		return nil
+		s.logger.ErrorContext(ctx, "validator lookup failed for field type resolution",
+			"tenant_id", tenantID, "error", err)
+		return nil, status.Error(codes.Internal, "validator lookup failed")
 	}
 	m := make(map[string]domain.FieldType, len(validators))
 	for path, v := range validators {
 		m[path] = v.DomainFieldType()
 	}
 	s.logger.DebugContext(ctx, "resolved field types for tenant", "tenant", tenantID, "fields", len(m))
-	return m
+	return m, nil
 }
 
 // lookupFieldType returns the field type from a type map, defaulting to STRING.
