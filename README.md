@@ -191,12 +191,14 @@ decree seed examples/seed.yaml --server decree:9090 --wait --wait-timeout 60s
 go install github.com/opendecree/decree/cmd/server@latest
 
 # Start with in-memory storage — zero dependencies
-STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
+INSECURE_LISTEN=1 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
 
 # Open http://localhost:8080/docs for Swagger UI
 # All requests need x-subject header:
 curl -H "x-subject: admin" http://localhost:8080/v1/schemas
 ```
+
+> **TLS required in production.** `INSECURE_LISTEN=1` disables TLS for local development only. See [Transport Security (TLS)](docs/server/configuration.md#transport-security-tls) for production setup.
 
 ### Docker Compose (production-like)
 
@@ -301,6 +303,15 @@ Single binary exposing three gRPC services + REST/JSON gateway. All external dep
 | `REDIS_URL` | Redis connection string | required if postgres |
 | `ENABLE_SERVICES` | Services to enable: `schema`, `config`, `audit` | all |
 | `LOG_LEVEL` | `debug`, `info`, `warn`, `error` | `info` |
+| `INSECURE_LISTEN` | Set to `1` to accept plaintext gRPC (local dev only) | disabled |
+| `TLS_CERT_FILE` | Path to PEM server certificate | required unless `INSECURE_LISTEN=1` |
+| `TLS_KEY_FILE` | Path to PEM server private key | required unless `INSECURE_LISTEN=1` |
+| `TLS_CLIENT_CA_FILE` | CA bundle for client certificates (enables mTLS) | disabled |
+| `RATE_LIMIT_ENABLED` | Set to `false` to disable rate limiting | `true` |
+| `RATE_LIMIT_ANON_RPS` | Requests per second for unauthenticated callers | `10` |
+| `RATE_LIMIT_AUTHED_RPS` | Requests per second per authenticated tenant | `100` |
+| `RATE_LIMIT_SUPERADMIN_RPS` | Requests per second per superadmin (`0` = unlimited) | `0` |
+| `RATE_LIMIT_BURST` | Token bucket burst size (all role classes) | `10` |
 
 ### Authentication
 
