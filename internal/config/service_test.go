@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -690,4 +691,61 @@ func TestGetField_NilRecorder_NoPanic(t *testing.T) {
 
 	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "x"})
 	require.NoError(t, err)
+}
+
+// --- Fail-closed validator lookup (issue #285) ---
+
+// TestValidateField_ValidatorLookupError asserts that validateField returns
+// codes.Internal (fail-closed) when the validator store is unavailable,
+// rather than silently skipping validation (fail-open).
+func TestValidateField_ValidatorLookupError(t *testing.T) {
+	svc, store := newTestServiceWithValidation()
+	ctx := context.Background()
+
+	storeErr := errors.New("db connection lost")
+	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)
+
+	tv := &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "hello"}}
+	err := svc.validateField(ctx, tenantID1, "some.field", tv)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "must fail-closed with codes.Internal, not silently skip")
+}
+
+// TestFieldTypeMap_ValidatorLookupError asserts that fieldTypeMap propagates
+// a validator-store error rather than returning nil (which would silently
+// coerce all response types to STRING).
+func TestFieldTypeMap_ValidatorLookupError(t *testing.T) {
+	svc, store := newTestServiceWithValidation()
+	ctx := context.Background()
+
+	storeErr := errors.New("db connection lost")
+	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)
+
+	types, err := svc.fieldTypeMap(ctx, tenantID1)
+
+	require.Error(t, err)
+	assert.Nil(t, types)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// TestSetField_ValidatorLookupError asserts that SetField returns codes.Internal
+// when the validator store is unavailable (end-to-end fail-closed path).
+func TestSetField_ValidatorLookupError(t *testing.T) {
+	svc, store := newTestServiceWithValidation()
+	ctx := context.Background()
+
+	storeErr := errors.New("schema store unavailable")
+	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+
+	tv := &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}}
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.flag",
+		Value:     tv,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
 }
