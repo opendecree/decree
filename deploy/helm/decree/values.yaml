@@ -60,6 +60,26 @@ redis:
   #   maxmemory 256mb
   #   maxmemory-policy allkeys-lru
 
+# --- Transport Security (TLS) ---
+
+tls:
+  # Set insecure: true for local/dev clusters where TLS termination is handled externally.
+  # WARNING: disables gRPC encryption — never use in production.
+  insecure: false
+  # Name of a Kubernetes TLS Secret (type: kubernetes.io/tls) containing tls.crt and tls.key.
+  # Required when insecure is false.
+  certSecret: ""
+  # Name of a Kubernetes Secret containing ca.crt. Enables mTLS client verification.
+  clientCASecret: ""
+  gateway:
+    # CA bundle Secret (ca.crt) the HTTP→gRPC gateway uses to verify the upstream gRPC server cert.
+    # Defaults to system roots when empty.
+    caSecret: ""
+    # SNI hostname the gateway expects on the upstream gRPC certificate.
+    serverName: ""
+    # Secret containing tls.crt + tls.key for the gateway to present as a client cert (mTLS).
+    clientCertSecret: ""
+
 # --- Authentication ---
 
 auth:

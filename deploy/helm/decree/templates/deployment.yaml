@@ -145,6 +145,57 @@ spec:
               value: "true"
             {{- end }}
             {{- end }}
+            {{- if .Values.tls.insecure }}
+            - name: INSECURE_LISTEN
+              value: "1"
+            {{- end }}
+            {{- if .Values.tls.certSecret }}
+            - name: TLS_CERT_FILE
+              value: /etc/decree/tls/server/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/decree/tls/server/tls.key
+            {{- end }}
+            {{- if .Values.tls.clientCASecret }}
+            - name: TLS_CLIENT_CA_FILE
+              value: /etc/decree/tls/client-ca/ca.crt
+            {{- end }}
+            {{- if .Values.tls.gateway.caSecret }}
+            - name: TLS_GATEWAY_CA_FILE
+              value: /etc/decree/tls/gateway-ca/ca.crt
+            {{- end }}
+            {{- if .Values.tls.gateway.serverName }}
+            - name: TLS_GATEWAY_SERVER_NAME
+              value: {{ .Values.tls.gateway.serverName | quote }}
+            {{- end }}
+            {{- if .Values.tls.gateway.clientCertSecret }}
+            - name: TLS_GATEWAY_CLIENT_CERT_FILE
+              value: /etc/decree/tls/gateway-client/tls.crt
+            - name: TLS_GATEWAY_CLIENT_KEY_FILE
+              value: /etc/decree/tls/gateway-client/tls.key
+            {{- end }}
+          {{- if or .Values.tls.certSecret .Values.tls.clientCASecret .Values.tls.gateway.caSecret .Values.tls.gateway.clientCertSecret }}
+          volumeMounts:
+            {{- if .Values.tls.certSecret }}
+            - name: tls-server
+              mountPath: /etc/decree/tls/server
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.clientCASecret }}
+            - name: tls-client-ca
+              mountPath: /etc/decree/tls/client-ca
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.gateway.caSecret }}
+            - name: tls-gateway-ca
+              mountPath: /etc/decree/tls/gateway-ca
+              readOnly: true
+            {{- end }}
+            {{- if .Values.tls.gateway.clientCertSecret }}
+            - name: tls-gateway-client
+              mountPath: /etc/decree/tls/gateway-client
+              readOnly: true
+            {{- end }}
+          {{- end }}
           readinessProbe:
             grpc:
               port: {{ .Values.config.grpcPort }}
@@ -159,6 +210,29 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if or .Values.tls.certSecret .Values.tls.clientCASecret .Values.tls.gateway.caSecret .Values.tls.gateway.clientCertSecret }}
+      volumes:
+        {{- if .Values.tls.certSecret }}
+        - name: tls-server
+          secret:
+            secretName: {{ .Values.tls.certSecret }}
+        {{- end }}
+        {{- if .Values.tls.clientCASecret }}
+        - name: tls-client-ca
+          secret:
+            secretName: {{ .Values.tls.clientCASecret }}
+        {{- end }}
+        {{- if .Values.tls.gateway.caSecret }}
+        - name: tls-gateway-ca
+          secret:
+            secretName: {{ .Values.tls.gateway.caSecret }}
+        {{- end }}
+        {{- if .Values.tls.gateway.clientCertSecret }}
+        - name: tls-gateway-client
+          secret:
+            secretName: {{ .Values.tls.gateway.clientCertSecret }}
+        {{- end }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
