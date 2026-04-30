@@ -10,6 +10,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -23,6 +24,7 @@ type Service struct {
 	store         Store
 	logger        *slog.Logger
 	resolveTenant TenantResolver
+	guard         authz.Guard
 }
 
 // NewService creates a new AuditService.
@@ -31,6 +33,7 @@ func NewService(store Store, logger *slog.Logger, resolver TenantResolver) *Serv
 		store:         store,
 		logger:        logger,
 		resolveTenant: resolver,
+		guard:         authz.Chain(authz.TenantScopeGuard{}),
 	}
 }
 
@@ -69,7 +72,7 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		if err != nil {
 			return nil, err
 		}
-		if err := auth.CheckTenantAccess(ctx, resolved); err != nil {
+		if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: resolved}); err != nil {
 			return nil, err
 		}
 		params.TenantID = resolved
@@ -118,7 +121,7 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 	if err != nil {
 		return nil, err
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -171,7 +174,7 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 	if err != nil {
 		return nil, err
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
@@ -214,7 +217,7 @@ func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRe
 	if err != nil {
 		return nil, err
 	}
-	if err := auth.CheckTenantAccess(ctx, tenantID); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenantID}); err != nil {
 		return nil, err
 	}
 
