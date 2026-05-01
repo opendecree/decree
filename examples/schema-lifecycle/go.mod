@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/opendecree/decree/sdk/adminclient v0.3.1
 	github.com/opendecree/decree/sdk/grpctransport v0.0.0-00010101000000-000000000000
-	google.golang.org/grpc v1.79.3
+	google.golang.org/grpc v1.80.0
 )
 
 require (
