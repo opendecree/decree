@@ -5,10 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
+
+// manPageDate pins the timestamp embedded in generated man pages so the
+// output is byte-deterministic across runs. cobra/doc defaults to
+// time.Now(), which produces a different "Mon YYYY" header every month
+// and breaks the docs-up-to-date CI check on the 1st of each month.
+var manPageDate = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 var genDocsCmd = &cobra.Command{
 	Use:    "gen-docs [output-dir]",
@@ -66,6 +73,7 @@ var genManCmd = &cobra.Command{
 			Section: "1",
 			Source:  "OpenDecree",
 			Manual:  "OpenDecree CLI",
+			Date:    &manPageDate,
 		}
 
 		rootCmd.DisableAutoGenTag = true
