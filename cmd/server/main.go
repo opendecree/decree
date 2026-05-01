@@ -239,22 +239,8 @@ func run() int {
 		)
 	}
 
-	srvOpts := []server.Option{
-		server.WithEnableServices(cfg.EnableServices),
-		server.WithLogger(logger),
-		server.WithGRPCServerOptions(extraOpts...),
-		server.WithMaxRecvMsgBytes(cfg.GRPCMaxRecvMsgBytes),
-		server.WithMaxSendMsgBytes(cfg.GRPCMaxSendMsgBytes),
-	}
-	if cfg.InsecureListen {
-		srvOpts = append(srvOpts, server.WithInsecure())
-	} else {
-		srvOpts = append(srvOpts, server.WithTLS(serverTLS))
-	}
-	if rlInterceptor != nil {
-		srvOpts = append(srvOpts, server.WithRateLimiter(rlInterceptor))
-	}
-	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvOpts...)
+	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rlInterceptor)
+	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvBuild.Opts...)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)
 		return 1
@@ -346,18 +332,8 @@ func run() int {
 			}
 		}
 
-		gwOpts := []server.GatewayOption{
-			server.WithGatewayLogger(logger),
-			server.WithOpenAPISpec(openAPISpec),
-			server.WithGatewayMaxRecvMsgBytes(cfg.GRPCMaxRecvMsgBytes),
-			server.WithGatewayMaxSendMsgBytes(cfg.GRPCMaxSendMsgBytes),
-		}
-		if cfg.InsecureListen {
-			gwOpts = append(gwOpts, server.WithGatewayInsecure())
-		} else {
-			gwOpts = append(gwOpts, server.WithGatewayTLS(gwTLS))
-		}
-		gw, err = server.NewGateway(ctx, cfg.HTTPPort, fmt.Sprintf("localhost:%s", cfg.GRPCPort), gwOpts...)
+		gwBuild := buildGatewayOptions(cfg, logger, openAPISpec, gwTLS)
+		gw, err = server.NewGateway(ctx, cfg.HTTPPort, fmt.Sprintf("localhost:%s", cfg.GRPCPort), gwBuild.Opts...)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
 			return 1
