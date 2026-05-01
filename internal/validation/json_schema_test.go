@@ -53,6 +53,17 @@ func TestNewJSONSchemaValidator_TimeoutZeroIsUnbounded(t *testing.T) {
 	require.NotNil(t, v)
 }
 
+func TestNewJSONSchemaValidator_CompileTimeoutFires(t *testing.T) {
+	// A 1ns timeout has timer.C ready before the compile goroutine can be
+	// scheduled, unmarshal the document, and push to the (buffered) result
+	// channel — the select therefore reaches the timeout branch.
+	doc := `{"type":"object","properties":{"name":{"type":"string"}}}`
+	v, err := newJSONSchemaValidator(doc, Limits{CompileTimeout: 1 * time.Nanosecond, MaxDepth: 0})
+	require.Error(t, err)
+	require.Nil(t, v)
+	assert.Contains(t, err.Error(), "compile json schema: timeout after")
+}
+
 func TestScanJSONDepth(t *testing.T) {
 	// Object nesting.
 	require.NoError(t, scanJSONDepth(`{"a":{"b":{"c":1}}}`, 5))
