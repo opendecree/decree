@@ -30,8 +30,7 @@ func (g FieldLockGuard) Check(ctx context.Context, action Action, r Resource) er
 	if action != ActionWrite || r.FieldPath == "" {
 		return nil
 	}
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if !ok || claims.Role == auth.RoleSuperAdmin {
+	if auth.IsSuperAdmin(ctx) {
 		return nil
 	}
 	locks, err := g.store.GetFieldLocks(ctx, r.TenantID)

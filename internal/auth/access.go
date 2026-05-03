@@ -69,6 +69,13 @@ func AllowedTenantIDs(ctx context.Context) []string {
 	return claims.TenantIDs
 }
 
+// IsSuperAdmin reports whether the caller has the superadmin role.
+// Returns true when no auth context is present (permissive, consistent with other access helpers).
+func IsSuperAdmin(ctx context.Context) bool {
+	claims, ok := ClaimsFromContext(ctx)
+	return !ok || claims.IsSuperAdmin()
+}
+
 // MustHaveClaims returns codes.Unauthenticated if no auth claims are present in ctx.
 // Use in handler bodies as a defense-in-depth guard for RPCs that must never be
 // reachable without authentication, even if the method is accidentally added to skipAuth.
