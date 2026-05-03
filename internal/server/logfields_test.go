@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"regexp"
 	"testing"
@@ -40,6 +41,22 @@ func TestNewRequestID_UniqueUUIDv4(t *testing.T) {
 	a := newRequestID()
 	b := newRequestID()
 	assert.Regexp(t, uuidRE, a)
+	assert.NotEqual(t, a, b)
+}
+
+type failReader struct{}
+
+func (failReader) Read([]byte) (int, error) { return 0, errors.New("entropy unavailable") }
+
+func TestNewRequestID_RandFailure_FallbackToCounter(t *testing.T) {
+	orig := randReader
+	t.Cleanup(func() { randReader = orig })
+	randReader = failReader{}
+
+	a := newRequestID()
+	b := newRequestID()
+	assert.Regexp(t, uuidRE, a)
+	assert.Regexp(t, uuidRE, b)
 	assert.NotEqual(t, a, b)
 }
 
