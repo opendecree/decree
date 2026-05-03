@@ -3,14 +3,21 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/telemetry"
+)
+
+var (
+	randReader   io.Reader    = rand.Reader
+	reqIDCounter atomic.Uint64
 )
 
 // logFieldsUnaryInterceptor injects tenant_id, actor, and request_id into the
@@ -38,10 +45,14 @@ func enrichLogFields(ctx context.Context) context.Context {
 	return telemetry.WithLogFields(ctx, tenantID, actor, newRequestID())
 }
 
-// newRequestID returns a random UUID v4.
+// newRequestID returns a UUID v4. On rand failure (OS entropy starvation),
+// falls back to an atomic counter so IDs remain unique and log correlation intact.
 func newRequestID() string {
 	var b [16]byte
-	_, _ = io.ReadFull(rand.Reader, b[:])
+	if _, err := io.ReadFull(randReader, b[:]); err != nil {
+		n := reqIDCounter.Add(1)
+		binary.BigEndian.PutUint64(b[8:], n)
+	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
