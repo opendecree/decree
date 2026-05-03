@@ -4,21 +4,22 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/opendecree/decree/sdk/adminclient"
 )
 
 // docker-compose pins the server to:
-//   SCHEMA_MAX_FIELDS=100
-//   SCHEMA_MAX_DOC_BYTES=4096
+//
+//	SCHEMA_MAX_FIELDS=100
+//	SCHEMA_MAX_DOC_BYTES=4096
+//
 // so these tests can trip each limit with small payloads.
 const (
 	maxFields   = 100
@@ -43,8 +44,8 @@ func TestValidationLimits_MaxFieldsRejected(t *testing.T) {
 
 	_, err := admin.CreateSchema(ctx, fmt.Sprintf("limits-fields-%s", randSuffix()), fields, "")
 	require.Error(t, err)
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), fmt.Sprintf("exceeds limit of %d", maxFields))
+	assert.True(t, errors.Is(err, adminclient.ErrInvalidArgument))
+	assert.Contains(t, err.Error(), fmt.Sprintf("exceeds limit of %d", maxFields))
 }
 
 // TestValidationLimits_MaxFieldsAtLimitAccepted: CreateSchema with
@@ -92,6 +93,6 @@ fields:
 
 	_, err := admin.ImportSchema(ctx, yaml)
 	require.Error(t, err)
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	assert.Contains(t, status.Convert(err).Message(), fmt.Sprintf("exceeds limit of %d", maxDocBytes))
+	assert.True(t, errors.Is(err, adminclient.ErrInvalidArgument))
+	assert.Contains(t, err.Error(), fmt.Sprintf("exceeds limit of %d", maxDocBytes))
 }
