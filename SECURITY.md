@@ -19,7 +19,10 @@ You should receive a response within 48 hours. We will work with you to understa
 
 | Version | Supported |
 |---------|-----------|
-| latest  | Yes       |
+| 0.10.x (alpha) | ✅ |
+| < 0.10 | ❌ |
+
+During alpha, only the latest minor release receives security backports. See [GitHub Releases](https://github.com/opendecree/decree/releases) for the current version.
 
 ## Artifact Attestations
 
