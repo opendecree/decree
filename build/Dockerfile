@@ -19,7 +19,7 @@ RUN CGO_ENABLED=0 go build \
 
 # Runtime stage
 # gcr.io/distroless/static-debian12:nonroot
-FROM gcr.io/distroless/static-debian12@sha256:a9329520abc449e3b14d5bc3a6ffae065bdde0f02667fa10880c49b35c109fd1
+FROM gcr.io/distroless/static-debian12@sha256:20bc6c0bc4d625a22a8fde3e55f6515709b32055ef8fb9cfbddaa06d1760f838
 
 COPY --from=builder /bin/decree /bin/decree
 
