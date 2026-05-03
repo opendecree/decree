@@ -292,7 +292,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Image name LAST so the manifest job's download pattern
           # (`digests-*-<image>`) doesn't accidentally match a different
@@ -321,7 +321,7 @@ jobs:
       IMAGE_REF: ${{ format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image) }}
     steps:
       - name: Download digest artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
           pattern: digests-*-${{ matrix.image }}
