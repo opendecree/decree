@@ -49,7 +49,8 @@ Standard development workflow checklists.
 - [ ] No "CCS" or stale naming references in docs
 - [ ] No merge conflict markers in any file: `grep -r '<<<<<<' .`
 - [ ] Gitleaks clean: `docker run --rm -v $(pwd):/path zricethezav/gitleaks:latest git /path`
-- [ ] Docker images build and run: `STORAGE_BACKEND=memory` smoke test
+- [ ] Supply-chain pins valid: `./scripts/check-supply-chain-pins.sh`
+- [ ] Docker images build and run: `INSECURE_LISTEN=1 STORAGE_BACKEND=memory` smoke test
 - [ ] Coverage ratchet passes
 - [ ] Coverage badge is accurate: `./scripts/coverage.sh` matches README badge
 - [ ] Go SDK coverage up to date: `go test -cover ./sdk/...` matches README badge
@@ -79,6 +80,7 @@ Standard development workflow checklists.
 - [ ] Docker images pull: `docker pull ghcr.io/opendecree/decree:{X.Y.Z}`
 - [ ] Docker image runs: `docker run --rm -e STORAGE_BACKEND=memory ghcr.io/opendecree/decree:{X.Y.Z}`
 - [ ] CLI image pulls: `docker pull ghcr.io/opendecree/decree-cli:{X.Y.Z}`
+- [ ] Artifact attestations verified: `gh attestation verify oci://ghcr.io/opendecree/decree:{X.Y.Z} --owner opendecree` (see [SECURITY.md](../../SECURITY.md) for full instructions)
 - [ ] Goreleaser binaries attached (checksums.txt + platform tarballs)
 - [ ] BSR module updated: check buf.build/opendecree/decree
 - [ ] `go install github.com/opendecree/decree/cmd/decree@v{X.Y.Z}` works
