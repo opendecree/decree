@@ -15,10 +15,9 @@ import (
 	"github.com/opendecree/decree/internal/telemetry"
 )
 
-var (
-	randReader   io.Reader    = rand.Reader
-	reqIDCounter atomic.Uint64
-)
+var randReader io.Reader = rand.Reader
+
+var reqIDCounter atomic.Uint64
 
 // logFieldsUnaryInterceptor injects tenant_id, actor, and request_id into the
 // context after auth so the slog handler attaches them to every log record.
