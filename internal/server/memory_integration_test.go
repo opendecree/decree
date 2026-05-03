@@ -14,6 +14,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/audit"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/cache"
 	"github.com/opendecree/decree/internal/config"
 	"github.com/opendecree/decree/internal/pubsub"
@@ -27,9 +28,10 @@ import (
 // and verifies the core schema→tenant→config flow works end-to-end.
 func TestMemoryBackend_Integration(t *testing.T) {
 	ctx := context.Background()
+	authCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("x-subject", "integration-test"))
 
 	// Create server.
-	srv, err := New("0", &noopInterceptor{},
+	srv, err := New("0", auth.NewMetadataInterceptor(nil),
 		WithEnableServices([]string{"schema", "config", "audit"}),
 		WithLogger(slog.Default()),
 		WithInsecure(),
@@ -84,7 +86,7 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	configClient := pb.NewConfigServiceClient(conn)
 
 	// 1. Create schema.
-	createResp, err := schemaClient.CreateSchema(ctx, &pb.CreateSchemaRequest{
+	createResp, err := schemaClient.CreateSchema(authCtx, &pb.CreateSchemaRequest{
 		Name: "test-payments",
 		Fields: []*pb.SchemaField{
 			{Path: "fee", Type: pb.FieldType_FIELD_TYPE_NUMBER, Nullable: true},
@@ -97,18 +99,17 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	assert.Equal(t, int32(1), createResp.Schema.Version)
 
 	// 2. Publish schema.
-	_, err = schemaClient.PublishSchema(ctx, &pb.PublishSchemaRequest{Id: schemaID, Version: 1})
+	_, err = schemaClient.PublishSchema(authCtx, &pb.PublishSchemaRequest{Id: schemaID, Version: 1})
 	require.NoError(t, err)
 
 	// 3. Create tenant.
-	tenantResp, err := schemaClient.CreateTenant(ctx, &pb.CreateTenantRequest{
+	tenantResp, err := schemaClient.CreateTenant(authCtx, &pb.CreateTenantRequest{
 		Name: "acme", SchemaId: schemaID, SchemaVersion: 1,
 	})
 	require.NoError(t, err)
 	tenantID := tenantResp.Tenant.Id
 
 	// 4. Set config value.
-	authCtx := metadata.AppendToOutgoingContext(ctx, "x-subject", "test-user")
 	_, err = configClient.SetField(authCtx, &pb.SetFieldRequest{
 		TenantId:  tenantID,
 		FieldPath: "fee",
@@ -117,20 +118,20 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 5. Read config value.
-	getResp, err := configClient.GetField(ctx, &pb.GetFieldRequest{
+	getResp, err := configClient.GetField(authCtx, &pb.GetFieldRequest{
 		TenantId: tenantID, FieldPath: "fee",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 0.025, getResp.Value.GetValue().GetNumberValue())
 
 	// 6. List versions.
-	versionsResp, err := configClient.ListVersions(ctx, &pb.ListVersionsRequest{TenantId: tenantID})
+	versionsResp, err := configClient.ListVersions(authCtx, &pb.ListVersionsRequest{TenantId: tenantID})
 	require.NoError(t, err)
 	assert.Len(t, versionsResp.Versions, 1)
 
 	// 7. Cleanup.
-	_, err = schemaClient.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: tenantID})
+	_, err = schemaClient.DeleteTenant(authCtx, &pb.DeleteTenantRequest{Id: tenantID})
 	require.NoError(t, err)
-	_, err = schemaClient.DeleteSchema(ctx, &pb.DeleteSchemaRequest{Id: schemaID})
+	_, err = schemaClient.DeleteSchema(authCtx, &pb.DeleteSchemaRequest{Id: schemaID})
 	require.NoError(t, err)
 }

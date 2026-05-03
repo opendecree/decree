@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -24,12 +25,16 @@ const (
 	testTenantID  = "00000000-0000-0000-0000-000000000003"
 )
 
+func superadminCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
+}
+
 // --- CreateSchema ---
 
 func TestCreateSchema_Success(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
 		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
@@ -56,7 +61,7 @@ func TestCreateSchema_EmptyName(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
 
-	_, err := svc.CreateSchema(context.Background(), &pb.CreateSchemaRequest{Name: ""})
+	_, err := svc.CreateSchema(superadminCtx(), &pb.CreateSchemaRequest{Name: ""})
 
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -123,7 +128,7 @@ func TestGetSchema_NotFound(t *testing.T) {
 func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	oldVersionID := "00000000-0000-0000-0000-000000000010"
 	newVersionID := "00000000-0000-0000-0000-000000000011"
@@ -160,7 +165,7 @@ func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 func TestPublishSchema_Success(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
@@ -181,7 +186,7 @@ func TestPublishSchema_Success(t *testing.T) {
 func TestCreateTenant_RequiresPublishedSchema(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
 		Return(domain.SchemaVersion{Published: false}, nil)
@@ -199,7 +204,7 @@ func TestCreateTenant_RequiresPublishedSchema(t *testing.T) {
 func TestCreateTenant_Success(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
 		Return(domain.SchemaVersion{Published: true}, nil)
@@ -230,7 +235,7 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	title := "Fee Rate"
 	format := "percentage"

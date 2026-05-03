@@ -23,6 +23,10 @@ import (
 
 var testLogger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 
+func superadminCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
+}
+
 const (
 	tenantID1       = "00000001-0000-0000-0000-000000000000"
 	versionID2      = "00000002-0000-0000-0000-000000000000"
@@ -129,7 +133,7 @@ func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
 
 func TestSetField_Success(t *testing.T) {
 	svc, store, cache, pub := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).
 		Return([]domain.TenantFieldLock{}, nil)
@@ -157,7 +161,7 @@ func TestSetField_Success(t *testing.T) {
 
 func TestSetField_ChecksumMismatch(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	wrongChecksum := "wrong"
 
@@ -224,7 +228,7 @@ func TestGetField_NotFound(t *testing.T) {
 
 func TestRollbackToVersion_Success(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{
@@ -295,7 +299,7 @@ func TestExportConfig_Success(t *testing.T) {
 
 func TestImportConfig_Success(t *testing.T) {
 	svc, store, cache, pub := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	yamlContent := []byte(`
 spec_version: "v1"
@@ -347,7 +351,7 @@ values:
 
 func TestImportConfig_ValidationRejectsUnknownField(t *testing.T) {
 	svc, store := newTestServiceWithValidation()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	yamlContent := []byte(`
 spec_version: "v1"
@@ -379,7 +383,7 @@ values:
 
 func TestImportConfig_ValidationRejectsConstraintViolation(t *testing.T) {
 	svc, store := newTestServiceWithValidation()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	// Import an integer value that exceeds max constraint.
 	yamlContent := []byte(`
@@ -421,7 +425,7 @@ values:
 
 func TestImportConfig_MergeMode_SkipsSameValues(t *testing.T) {
 	svc, store, cache, pub := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	yamlContent := []byte(`
 spec_version: "v1"
@@ -477,7 +481,7 @@ values:
 
 func TestImportConfig_DefaultsMode_SkipsExistingValues(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	yamlContent := []byte(`
 spec_version: "v1"
@@ -733,7 +737,7 @@ func TestFieldTypeMap_ValidatorLookupError(t *testing.T) {
 // when the validator store is unavailable (end-to-end fail-closed path).
 func TestSetField_ValidatorLookupError(t *testing.T) {
 	svc, store := newTestServiceWithValidation()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	storeErr := errors.New("schema store unavailable")
 	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)

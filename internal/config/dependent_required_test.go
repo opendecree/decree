@@ -61,7 +61,7 @@ func setupDependentRequiredService(t *testing.T) (*Service, *mockStore) {
 // dependent path is null must return InvalidArgument.
 func TestSetField_DependentRequired_TriggerSetWithoutDependent_Rejected(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -94,7 +94,7 @@ func TestSetField_DependentRequired_TriggerSetWithoutDependent_Rejected(t *testi
 // snapshot.
 func TestSetField_DependentRequired_BothPresent_Allowed(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -132,7 +132,7 @@ func TestSetField_DependentRequired_BothPresent_Allowed(t *testing.T) {
 // if the dependent is also absent.
 func TestSetField_DependentRequired_TriggerAbsent_Allowed(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -168,7 +168,7 @@ func TestSetField_DependentRequired_TriggerAbsent_Allowed(t *testing.T) {
 // builder treats as absent.
 func TestSetField_DependentRequired_TriggerSetToNull_Allowed(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -203,7 +203,7 @@ func TestSetField_DependentRequired_TriggerSetToNull_Allowed(t *testing.T) {
 // path runs the check once over the post-merge snapshot, not per field.
 func TestSetFields_DependentRequired_AggregateCheck(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -264,7 +264,7 @@ func TestEnforceDependentRequiredInTx_NoRules_NoSnapshotRead(t *testing.T) {
 // state.
 func TestRollbackToVersion_DependentRequired_Rejected(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	// Rollback target (version 2) had only the trigger set; dependent never existed.
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
@@ -301,7 +301,7 @@ func TestRollbackToVersion_DependentRequired_Rejected(t *testing.T) {
 // with InvalidArgument.
 func TestImportConfig_DependentRequired_Rejected(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).

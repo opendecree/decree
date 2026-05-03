@@ -7,6 +7,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Access functions in this file are permissive when no auth claims are present in the
+// context. The interceptor layer (MetadataInterceptor or JWTInterceptor) is the gate
+// that requires authentication before claims are set.
+//
+// Consequence: any method accidentally added to skipAuth bypasses not just
+// authentication but all authz checks too. Handlers for RPCs that must never be
+// reachable without auth should call MustHaveClaims first as a defense-in-depth guard.
+
 // CheckTenantAccess verifies the caller has access to the given tenant.
 // Returns nil for superadmins. Returns PermissionDenied if the tenant is
 // not in the caller's tenant_ids list.
@@ -59,4 +67,15 @@ func AllowedTenantIDs(ctx context.Context) []string {
 		return nil // nil = all tenants
 	}
 	return claims.TenantIDs
+}
+
+// MustHaveClaims returns codes.Unauthenticated if no auth claims are present in ctx.
+// Use in handler bodies as a defense-in-depth guard for RPCs that must never be
+// reachable without authentication, even if the method is accidentally added to skipAuth.
+func MustHaveClaims(ctx context.Context) error {
+	_, ok := ClaimsFromContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "authentication required")
+	}
+	return nil
 }
