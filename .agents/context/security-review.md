@@ -385,7 +385,7 @@ to be correctly protected at the audit date:
 
 - **Release artifact attestations** — already tracked at #159 (P0).
 - **Role-based RPC policy + pluggable guard** — #205 + #206 implemented:
-  `RequireSuperAdmin` + `RequireAdminOrAbove` in `internal/auth/access.go`.
+  `RequireSuperAdmin`, `RequireAdminOrAbove`, `IsSuperAdmin` (bool, nil-safe) in `internal/auth/access.go`.
   `internal/authz` package provides `Guard` interface, `ChainGuard`, `TenantScopeGuard`,
   `RolePolicyGuard`, `FieldLockGuard`. All three services wire the chain via
   `WithGuard`; `checkFieldLock` removed from config service.
