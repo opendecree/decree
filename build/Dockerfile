@@ -1,6 +1,6 @@
 # Build stage
 # golang:1.26-bookworm
-FROM golang@sha256:47ce5636e9936b2c5cbf708925578ef386b4f8872aec74a67bd13a627d242b19 AS builder
+FROM golang@sha256:b54cbf583d390341599d7bcbc062425c081105cc5ef6d170ced98ef9d047c716 AS builder
 
 WORKDIR /app
 
