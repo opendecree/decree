@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -33,7 +32,7 @@ func TestCreateSchema_ExceedsMaxFields(t *testing.T) {
 		{Path: "b", Type: pb.FieldType_FIELD_TYPE_STRING},
 		{Path: "c", Type: pb.FieldType_FIELD_TYPE_STRING},
 	}
-	_, err := svc.CreateSchema(context.Background(), &pb.CreateSchemaRequest{
+	_, err := svc.CreateSchema(superadminCtx(), &pb.CreateSchemaRequest{
 		Name:   "too-big",
 		Fields: fields,
 	})
@@ -58,7 +57,7 @@ func TestCreateSchema_AtLimitAllowed(t *testing.T) {
 	store.On("CreateSchemaField", mock.Anything, mock.Anything).
 		Return(domain.SchemaField{Path: "a", FieldType: "string"}, nil)
 
-	_, err := svc.CreateSchema(context.Background(), &pb.CreateSchemaRequest{
+	_, err := svc.CreateSchema(superadminCtx(), &pb.CreateSchemaRequest{
 		Name: "ok",
 		Fields: []*pb.SchemaField{
 			{Path: "a", Type: pb.FieldType_FIELD_TYPE_STRING},
@@ -76,7 +75,7 @@ func TestImportSchema_ExceedsMaxDocBytes(t *testing.T) {
 	)
 
 	yaml := []byte(strings.Repeat("x", 200))
-	_, err := svc.ImportSchema(context.Background(), &pb.ImportSchemaRequest{
+	_, err := svc.ImportSchema(superadminCtx(), &pb.ImportSchemaRequest{
 		YamlContent: yaml,
 	})
 
@@ -93,7 +92,7 @@ func TestImportSchema_ExceedsMaxFields(t *testing.T) {
 	)
 
 	yaml := []byte("spec_version: v1\nname: too-many\nfields:\n  a:\n    type: string\n  b:\n    type: string\n")
-	_, err := svc.ImportSchema(context.Background(), &pb.ImportSchemaRequest{
+	_, err := svc.ImportSchema(superadminCtx(), &pb.ImportSchemaRequest{
 		YamlContent: yaml,
 	})
 

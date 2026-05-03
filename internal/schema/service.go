@@ -148,6 +148,9 @@ func NewService(store Store, opts ...Option) *Service {
 // --- Schema operations ---
 
 func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest) (*pb.CreateSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -268,6 +271,9 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 }
 
 func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest) (*pb.UpdateSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -335,6 +341,9 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 }
 
 func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest) (*pb.DeleteSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -355,6 +364,9 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 }
 
 func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaRequest) (*pb.PublishSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -390,6 +402,9 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 // --- Tenant operations ---
 
 func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest) (*pb.CreateTenantResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -490,6 +505,9 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 }
 
 func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest) (*pb.UpdateTenantResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -548,6 +566,9 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 }
 
 func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest) (*pb.DeleteTenantResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -567,6 +588,9 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 // --- Field locking ---
 
 func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.LockFieldResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -593,6 +617,9 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 }
 
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
 		return nil, err
 	}
@@ -661,6 +688,9 @@ func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest)
 }
 
 func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest) (*pb.ImportSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
 		return nil, err
 	}

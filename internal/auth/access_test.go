@@ -73,3 +73,14 @@ func TestClaims_IsSuperAdmin(t *testing.T) {
 	assert.False(t, (&Claims{Role: RoleAdmin}).IsSuperAdmin())
 	assert.False(t, (&Claims{Role: RoleUser}).IsSuperAdmin())
 }
+
+func TestMustHaveClaims_NoClaims(t *testing.T) {
+	err := MustHaveClaims(context.Background())
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestMustHaveClaims_WithClaims(t *testing.T) {
+	ctx := ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin})
+	assert.NoError(t, MustHaveClaims(ctx))
+}

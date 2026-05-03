@@ -33,6 +33,10 @@ func outOfScopeAdminCtx() context.Context {
 	})
 }
 
+func superadminCtx() context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
+}
+
 type mockStore struct{ mock.Mock }
 
 func (m *mockStore) QueryAuditWriteLog(ctx context.Context, arg QueryWriteLogParams) ([]domain.AuditWriteLog, error) {
@@ -70,7 +74,7 @@ func newTestService() (*Service, *mockStore) {
 
 func TestQueryWriteLog_Success(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("QueryAuditWriteLog", ctx, mock.Anything).Return([]domain.AuditWriteLog{
 		{
@@ -90,7 +94,7 @@ func TestQueryWriteLog_Success(t *testing.T) {
 
 func TestQueryWriteLog_WithFilters(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	tenantID := "22222222-2222-2222-2222-222222222222"
 	actor := "admin"
@@ -110,7 +114,7 @@ func TestQueryWriteLog_WithFilters(t *testing.T) {
 
 func TestQueryWriteLog_InvalidTenantID(t *testing.T) {
 	svc, _ := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	bad := "not-a-uuid"
 	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{TenantId: &bad})
@@ -119,7 +123,7 @@ func TestQueryWriteLog_InvalidTenantID(t *testing.T) {
 
 func TestQueryWriteLog_DefaultPageSize(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
 		return p.Limit == 51 // 50 (default page size) + 1 (to detect next page)
@@ -131,7 +135,7 @@ func TestQueryWriteLog_DefaultPageSize(t *testing.T) {
 
 func TestQueryWriteLog_InvalidPageToken(t *testing.T) {
 	svc, _ := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageToken: "garbage"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))

@@ -69,6 +69,9 @@ func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string,
 }
 
 func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogRequest) (*pb.QueryWriteLogResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
 
 	offset, err := pagination.DecodePageToken(req.PageToken)

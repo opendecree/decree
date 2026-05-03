@@ -199,7 +199,7 @@ func TestGetConfig_TenantNameNotFound(t *testing.T) {
 
 func TestSetFields_Success(t *testing.T) {
 	svc, store, cache, pub := newTestService()
-	ctx := context.Background()
+	ctx := superadminCtx()
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
@@ -224,7 +224,7 @@ func TestSetFields_Success(t *testing.T) {
 
 func TestSetFields_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
-	_, err := svc.SetFields(context.Background(), &pb.SetFieldsRequest{TenantId: ""})
+	_, err := svc.SetFields(superadminCtx(), &pb.SetFieldsRequest{TenantId: ""})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 

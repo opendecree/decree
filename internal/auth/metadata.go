@@ -13,6 +13,14 @@ import (
 )
 
 // skipAuth returns true for gRPC methods that should bypass authentication.
+//
+// Methods listed here are exempt from BOTH authentication and authorization.
+// Only public, side-effect-free RPCs belong here (e.g. health checks).
+// Adding any authenticated method silently bypasses all auth and authz checks.
+// Every entry requires an explicit security review.
+//
+// TODO(security): Audit whether /centralconfig.v1.ServerService/ belongs here.
+// It was added alongside health checks but is not documented as a public endpoint.
 func skipAuth(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/") ||
 		strings.HasPrefix(fullMethod, "/centralconfig.v1.ServerService/")
