@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -69,6 +70,7 @@ func TestWatcher_ConcurrentRegisterAndPaths(t *testing.T) {
 		opts: options{
 			minBackoff: 10 * time.Millisecond,
 			maxBackoff: 50 * time.Millisecond,
+			logger:     slog.Default(),
 		},
 	}
 
@@ -116,7 +118,7 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 	w := &Watcher{
 		transport: tr,
 		tenantID:  "t1",
-		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond, logger: slog.Default()},
 		fields:    make(map[string]*fieldEntry),
 		done:      make(chan struct{}),
 	}
