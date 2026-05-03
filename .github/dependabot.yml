@@ -1,16 +1,11 @@
 version: 2
 updates:
+  # ── Tier: server (go 1.25) ───────────────────────────────────────────────
+  # Root module, e2e, and examples run on our build environment; no floor cap.
   - package-ecosystem: gomod
     directories:
       - /
-      - /api
-      - /cmd/decree
       - /e2e
-      - /sdk/configclient
-      - /sdk/adminclient
-      - /sdk/configwatcher
-      - /sdk/grpctransport
-      - /sdk/tools
       - /examples/quickstart
       - /examples/setup
       - /examples/schema-lifecycle
@@ -31,17 +26,83 @@ updates:
         update-types:
           - minor
           - patch
+
+  # ── Tier: 1.24-floor (api, CLI, grpctransport, tools) ───────────────────
+  # Must not cross go 1.25. Ignore any dep that forces the go directive above
+  # 1.24, including otel ≥ 1.42 (requires go 1.25) and grpc-gateway ≥ 2.29.
+  - package-ecosystem: gomod
+    directories:
+      - /api
+      - /cmd/decree
+      - /sdk/grpctransport
+      - /sdk/tools
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
     ignore:
-      # The Go ecosystem is moving its floor to Go 1.25 in lockstep. We hold the
-      # SDK transport floor at 1.24, so any dep version that requires Go 1.25 is
-      # ignored until we revisit the floor. Re-evaluate periodically.
+      # Pin go directive at 1.24 floor.
+      - dependency-name: "go"
+        versions: [">=1.25"]
+      # otel 1.42+ requires go 1.25; hold at 1.41.x until we raise the floor.
+      - dependency-name: "go.opentelemetry.io/otel"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/sdk"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/sdk/metric"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+        versions: [">=1.42.0"]
+      # grpc-gateway 2.29+ also requires go 1.25.
       - dependency-name: "github.com/grpc-ecosystem/grpc-gateway/v2"
         versions: [">=2.29.0"]
-      - dependency-name: "go.opentelemetry.io/otel"
-        versions: [">=1.43.0"]
-      - dependency-name: "go.opentelemetry.io/otel/sdk/metric"
-        versions: [">=1.43.0"]
 
+  # ── Tier: 1.22-floor (SDK core: configclient, adminclient, configwatcher) ─
+  # Consumer-facing SDK modules; must stay installable with go 1.22 toolchains.
+  - package-ecosystem: gomod
+    directories:
+      - /sdk/configclient
+      - /sdk/adminclient
+      - /sdk/configwatcher
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Pin go directive at 1.22 floor.
+      - dependency-name: "go"
+        versions: [">=1.23"]
+      # otel 1.42+ requires go 1.25; grpc-gateway 2.29+ requires go 1.25.
+      - dependency-name: "go.opentelemetry.io/otel"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/sdk"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/sdk/metric"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+        versions: [">=1.42.0"]
+      - dependency-name: "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+        versions: [">=1.42.0"]
+      - dependency-name: "github.com/grpc-ecosystem/grpc-gateway/v2"
+        versions: [">=2.29.0"]
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -56,6 +117,7 @@ updates:
           - minor
           - patch
 
+  # ── Docker ───────────────────────────────────────────────────────────────
   - package-ecosystem: docker
     directory: /build
     schedule:
