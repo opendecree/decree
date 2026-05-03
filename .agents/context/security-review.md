@@ -129,7 +129,9 @@ Implemented in `internal/ratelimit/`. Per-tenant + per-method in-process
 token-bucket limiter via `golang.org/x/time/rate`. Health check exempt.
 Returns `codes.ResourceExhausted` + `RetryInfo` detail. `Limiter` interface
 allows future Redis-backed replacement. `OTEL_METRICS_RATE_LIMIT` counter
-for observability.
+for observability. Bucket map is LRU-capped (`defaultMaxBuckets=100_000`,
+configurable via `WithMaxBuckets`) — prevents unbounded growth from cycling
+subjects (#287).
 
 ### 6. Schema-complexity bounds missing — High
 
