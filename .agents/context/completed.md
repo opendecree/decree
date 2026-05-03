@@ -136,6 +136,37 @@ Labels aligned across decree, decree-python, decree-typescript, decree-ui (14 co
 
 `decree seed <file>` dispatches on which top-level sections are present (schema-only / tenant-only / schema+tenant / config-only / combined). Config-only files name the target schema via `tenant.schema`; `tenant.schema_version` omitted → latest published version resolved client-side via new `adminclient.GetLatestPublishedSchemaVersion` (walks backward past drafts). Re-seeding identical content is now a no-op on both axes — `ImportConfig` returning `AlreadyExists` is treated as a skip instead of erroring. Tenant-schema mismatches in config-only mode error out rather than silently re-binding. Combined envelope preserved byte-for-byte. Design brief: `.agents/context/seed-decoupling.md`.
 
+## Security Hardening (alpha.2 cycle)
+
+Seven attack surfaces addressed from the 2026-04-30 pre-release audit:
+
+- **TLS-by-default (#230)** — gRPC + gateway enforce TLS; `INSECURE_LISTEN=1` required to opt out. Cert auto-generated if not provided.
+- **Panic recovery (#229)** — unary + stream `panicRecoveryInterceptor` converts panics to `codes.Internal`, logs stack trace; server stays up.
+- **Rate limiting (#216 / #267)** — per-tenant + per-method in-process token-bucket via `golang.org/x/time/rate`. Health check exempt. `OTEL_METRICS_RATE_LIMIT` OTel counter. `Limiter` interface for future Redis backend. LRU-capped at 100k buckets via `WithMaxBuckets` (#287).
+- **Validation limits (#217 / #254 / #256)** — `schema.Limits{MaxFields, MaxDocBytes}` blocks oversized imports at `CreateSchema`/`ImportSchema`. JSON-Schema compile has a configurable timeout + recursive-depth pre-scan to prevent ReDoS.
+- **Audit tenant access (#207 / #209)** — `GetAuditLog` / `ListAuditLogs` enforce `auth.CheckTenantAccess`; superadmin bypass preserved.
+- **Metadata bounds (#260)** — `x-tenant-id`, `x-subject`, and `x-role` headers capped in length; malformed values return `codes.Unauthenticated` with a safe error message.
+- **gRPC message size limits (#212 / #226)** — `WithMaxRecvMsgBytes` / `WithMaxSendMsgBytes` on both server and gateway; default 4 MB, configurable via env.
+
+**Pluggable Guard chain (#269 / #270)** — `authz.Guard` interface + `ChainGuard` replaces ad-hoc per-method checks. `resolveTenantWithAccess` and `errToStatus` extracted from all three service packages into shared helpers.
+
+**Supply chain (#266 / #227)** — Docker image and Go binary artifact attestations (Sigstore/SLSA) via GitHub Actions. All base images digest-pinned; non-trusted Actions SHA-pinned. `scripts/check-supply-chain-pins.sh` enforced in CI.
+
+**Helm hardening (#261)** — resource requests/limits, `NetworkPolicy` template, `imagePullPolicy: Always` for non-digest refs.
+
+## Schema Publishing (alpha.2 cycle)
+
+Meta-schemas published to `schemas.opendecree.dev` via GitHub Pages (#263). The `schema-spec.md` design brief documents the schema YAML format and versioning contract for tooling authors.
+
+## Functional Options Refactor (alpha.2 cycle)
+
+All seven top-level constructors migrated from positional config structs to `With...()` functional options. Required args stay positional; only optional knobs become options. Covered by MIGRATION.md (#275/#323).
+
+- **#235** — `server.New` + `server.NewGateway`: `WithLogger`, `WithEnableServices`, `WithGRPCServerOptions`, `WithMaxRecvMsgBytes`, `WithMaxSendMsgBytes`, `WithTLS`, `WithInsecure`
+- **#236** — `audit.NewUsageRecorder` + `auth.NewInterceptor`: `WithFlushInterval`, `WithLogger` (RecorderConfig struct removed)
+- **#249** — `config.NewService` + `adminclient.New`: `WithLogger`, `WithPageSize`, `WithTimeout`
+- **#254** — `schema.NewService`: `WithLogger`, `WithLimits`
+
 ## v0.10.0-alpha.2 P0 Blockers (#275, #279–#284)
 
 Seven P0 issues cleared to unblock the alpha.2 milestone:
