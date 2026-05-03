@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"regexp"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,16 +18,9 @@ import (
 	"github.com/opendecree/decree/internal/validation"
 )
 
-var uuidRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-// validUUID checks whether s is a valid UUID string.
-func validUUID(s string) bool {
-	return uuidRe.MatchString(s)
-}
-
 // resolveSchema looks up a schema by UUID or name slug.
 func (s *Service) resolveSchema(ctx context.Context, idOrName string) (domain.Schema, error) {
-	if validUUID(idOrName) {
+	if domain.IsUUID(idOrName) {
 		return s.store.GetSchemaByID(ctx, idOrName)
 	}
 	return s.store.GetSchemaByName(ctx, idOrName)
@@ -36,7 +28,7 @@ func (s *Service) resolveSchema(ctx context.Context, idOrName string) (domain.Sc
 
 // resolveTenant looks up a tenant by UUID or name slug.
 func (s *Service) resolveTenant(ctx context.Context, idOrName string) (domain.Tenant, error) {
-	if validUUID(idOrName) {
+	if domain.IsUUID(idOrName) {
 		return s.store.GetTenantByID(ctx, idOrName)
 	}
 	return s.store.GetTenantByName(ctx, idOrName)
@@ -408,7 +400,7 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
 	}
 
-	if !validUUID(req.SchemaId) {
+	if !domain.IsUUID(req.SchemaId) {
 		return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 	}
 
@@ -461,7 +453,7 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 	var tenants []domain.Tenant
 
 	if req.SchemaId != nil && *req.SchemaId != "" {
-		if !validUUID(*req.SchemaId) {
+		if !domain.IsUUID(*req.SchemaId) {
 			return nil, status.Error(codes.InvalidArgument, "invalid schema id")
 		}
 		tenants, err = s.store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{

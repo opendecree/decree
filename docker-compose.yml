@@ -72,6 +72,11 @@ services:
       HTTP_PORT: "8080"
       USAGE_FLUSH_INTERVAL: "1s"
       INSECURE_LISTEN: "1"
+      # Tight ingest limits so the validation-limit e2e tests can trip
+      # them with small payloads. Existing fixtures use at most a few
+      # fields and small YAMLs (< 1 KiB), well under these caps.
+      SCHEMA_MAX_FIELDS: "100"
+      SCHEMA_MAX_DOC_BYTES: "4096"
     ports:
       - "9090:9090"
       - "8080:8080"
