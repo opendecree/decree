@@ -19,7 +19,7 @@ import (
 // Adding any authenticated method silently bypasses all auth and authz checks.
 // Every entry requires an explicit security review.
 //
-// TODO(security): Audit whether /centralconfig.v1.ServerService/ belongs here.
+// TODO(security): Audit whether /centralconfig.v1.ServerService/ belongs here (#355).
 // It was added alongside health checks but is not documented as a public endpoint.
 func skipAuth(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, "/grpc.health.v1.Health/") ||
