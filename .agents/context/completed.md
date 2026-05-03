@@ -135,3 +135,16 @@ Labels aligned across decree, decree-python, decree-typescript, decree-ui (14 co
 ## Seed Decoupling (#137, #140)
 
 `decree seed <file>` dispatches on which top-level sections are present (schema-only / tenant-only / schema+tenant / config-only / combined). Config-only files name the target schema via `tenant.schema`; `tenant.schema_version` omitted → latest published version resolved client-side via new `adminclient.GetLatestPublishedSchemaVersion` (walks backward past drafts). Re-seeding identical content is now a no-op on both axes — `ImportConfig` returning `AlreadyExists` is treated as a skip instead of erroring. Tenant-schema mismatches in config-only mode error out rather than silently re-binding. Combined envelope preserved byte-for-byte. Design brief: `.agents/context/seed-decoupling.md`.
+
+## v0.10.0-alpha.2 P0 Blockers (#275, #279–#284)
+
+Seven P0 issues cleared to unblock the alpha.2 milestone:
+
+- **#275 / #323** — `MIGRATION.md`: before/after for all 7 constructors that moved optional args to functional options (`server.New`, `server.NewGateway`, `audit.NewUsageRecorder`, `auth.NewInterceptor`, `config.NewService`, `adminclient.New`, `schema.NewService`).
+- **#279 / #326** — Removed local `validUUID` regex in `internal/schema/service.go`; all 4 call sites now use `domain.IsUUID`.
+- **#280 / #322** — `internal/ratelimit/interceptor_test.go`: `fakeStream` struct + `invokeStream` helper + 5 stream tests; coverage 81.9→84.5%.
+- **#281 / #324** — `internal/validation/json_schema_test.go`: `TestNewJSONSchemaValidator_CompileTimeoutFires` using 1 ns timeout (goroutine startup > 1 ns, so timer wins the select race deterministically).
+- **#282 / #327** — `e2e/ratelimit_test.go`: `burstUntilExhausted` helper + 3 e2e tests (ExhaustsAuthedBucket, PerTenantIsolation, PerMethodIsolation).
+- **#283 / #328** — `e2e/validation_limits_test.go`: 3 tests (MaxFieldsRejected, MaxFieldsAtLimitAccepted, MaxDocBytesRejected). Docker-compose caps lowered to `SCHEMA_MAX_FIELDS=100` / `SCHEMA_MAX_DOC_BYTES=4096`. Note: tests use `errors.Is(err, adminclient.ErrInvalidArgument)` — not `status.Code()` — because `grpctransport.mapAdminError` wraps gRPC status errors into Go sentinel errors.
+- **#284 / #325** — `cmd/server/options.go`: `buildServerOptions` / `buildGatewayOptions` return decision structs (`serverOptionsBuild`, `gatewayOptionsBuild`) with boolean flags (`UseTLS`, `UseInsecure`, `HasRateLimiter`) so option wiring can be unit-tested without inspecting opaque closures. 7 tests in `cmd/server/options_test.go`.
+- **Bonus / #329** — Pinned `manPageDate = time.Date(2026, 1, 1, ...)` in `cmd/decree/gendocs.go` to stop cobra/doc embedding the build-time month in man page `.TH` headers (was causing CI docs-check to fail on the 1st of each month).
