@@ -111,7 +111,7 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID string) (
 			constraints = &pb.FieldConstraints{}
 			_ = json.Unmarshal(field.Constraints, constraints)
 		}
-		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, constraints, WithLimits(f.limits))
+		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, field.Sensitive, constraints, WithLimits(f.limits))
 	}
 
 	f.cache.Set(tenantID, validators)

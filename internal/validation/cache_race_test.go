@@ -23,7 +23,7 @@ func TestValidatorCache_ConcurrentSetGet(t *testing.T) {
 			tenantID := fmt.Sprintf("tenant-%d", g%5)
 			for i := range iterations {
 				validators := map[string]*FieldValidator{
-					fmt.Sprintf("field-%d", i): NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, nil),
+					fmt.Sprintf("field-%d", i): NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, false, nil),
 				}
 				c.Set(tenantID, validators)
 				c.Get(tenantID)
@@ -49,7 +49,7 @@ func TestValidatorCache_ConcurrentSetInvalidate(t *testing.T) {
 			tenantID := fmt.Sprintf("tenant-%d", g%3)
 			for range iterations {
 				validators := map[string]*FieldValidator{
-					"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_INT, false, nil),
+					"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_INT, false, false, nil),
 				}
 				c.Set(tenantID, validators)
 				c.Invalidate(tenantID)

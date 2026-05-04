@@ -39,7 +39,7 @@ external deployment, not the alpha cluster.
 | 1 | Critical | Infra / Input | gRPC server has no `MaxRecvMsgSize` / `MaxSendMsgSize`; defaults apply | #212 |
 | 2 | Critical | Infra | gRPC + gateway-to-gRPC traffic is plaintext by default; no TLS option in `server.Config`; Helm chart has no cert wiring; DB/Redis TLS not validated | #213 |
 | 3 | High | Infra | No panic recovery interceptor — a panic in any handler crashes the server and may leak stack to client | #214 |
-| 4 | High | Data | `sensitive: true` flag is stored but NOT honoured in audit log, Subscribe stream, ExportConfig, Redis cache, or validation error messages | #215 |
+| 4 | High | Data | `sensitive: true` flag is stored but NOT honoured in audit log, Subscribe stream, ExportConfig, Redis cache, or validation error messages | #215 ✓ |
 | 5 | High | Infra | No rate limiting at all (no per-tenant, per-method, or global limiter) | #216 ✓ |
 | 6 | High | Input | Schema-complexity bounds missing — no max field count, no max schema-doc size, no JSON-Schema compilation timeout | #217 |
 | 7 | High | Data | Audit log is append-only by convention only — no hash-chain, no UPDATE/DELETE constraint; admin mutations (schema/tenant) not audited | #218 |

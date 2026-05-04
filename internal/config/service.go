@@ -238,19 +238,25 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		return nil, status.Error(codes.Internal, "failed to get config")
 	}
 
+	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
 	values := make([]*pb.ConfigValue, 0, len(rows))
 	cacheMap := make(map[string]string, len(rows))
 	for _, row := range rows {
+		displayValue := redactIfSensitive(sensitiveFields[row.FieldPath], derefString(row.Value))
 		cv := &pb.ConfigValue{
 			FieldPath: row.FieldPath,
-			Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
+			Value:     stringToTypedValue(&displayValue, lookupFieldType(types, row.FieldPath)),
 			Checksum:  derefString(row.Checksum),
 		}
 		if req.IncludeDescriptions && row.Description != nil {
 			cv.Description = row.Description
 		}
 		values = append(values, cv)
-		cacheMap[row.FieldPath] = derefString(row.Value)
+		cacheMap[row.FieldPath] = displayValue
 	}
 
 	// Populate cache (values only, no descriptions).
@@ -424,6 +430,11 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	}
 	oldValue := s.getCurrentValue(ctx, tenantID, req.FieldPath, latestVersion)
 
+	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
@@ -459,13 +470,15 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		}
 
 		newValueStr := typedValueToString(req.Value)
+		redactedOld := redactIfSensitive(sensitiveFields[req.FieldPath], oldValue)
+		redactedNew := redactIfSensitive(sensitiveFields[req.FieldPath], derefString(newValueStr))
 		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 			TenantID:      tenantID,
 			Actor:         actor,
 			Action:        "set_field",
 			FieldPath:     ptrString(req.FieldPath),
-			OldValue:      ptrString(oldValue),
-			NewValue:      newValueStr,
+			OldValue:      ptrString(redactedOld),
+			NewValue:      ptrString(redactedNew),
 			ConfigVersion: &newVersion.Version,
 		})
 	}); err != nil {
@@ -479,7 +492,10 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
-	s.publishChange(ctx, tenantID, newVersion.Version, req.FieldPath, oldValue, typedValueToDisplayString(req.Value), actor)
+	s.publishChange(ctx, tenantID, newVersion.Version, req.FieldPath,
+		redactIfSensitive(sensitiveFields[req.FieldPath], oldValue),
+		redactIfSensitive(sensitiveFields[req.FieldPath], typedValueToDisplayString(req.Value)),
+		actor)
 
 	s.metrics.RecordWrite(ctx, tenantID, "set_field")
 	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
@@ -534,6 +550,11 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		})
 	}
 
+	sensitiveFieldsMulti, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
@@ -566,13 +587,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 			}
 
 			newValueStr := typedValueToString(update.Value)
+			redactedNew := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], derefString(newValueStr))
+			redactedOld := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], changes[i].oldValue)
 			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "set_field",
 				FieldPath:     ptrString(update.FieldPath),
-				OldValue:      ptrString(changes[i].oldValue),
-				NewValue:      newValueStr,
+				OldValue:      ptrString(redactedOld),
+				NewValue:      ptrString(redactedNew),
 				ConfigVersion: &newVersion.Version,
 			}); txErr != nil {
 				return fmt.Errorf("insert audit log for %s: %w", update.FieldPath, txErr)
@@ -592,7 +615,10 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
 	for _, ch := range changes {
-		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
+		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath,
+			redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.oldValue),
+			redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.newValue),
+			actor)
 	}
 
 	s.metrics.RecordWrite(ctx, tenantID, "set_fields")
@@ -851,6 +877,14 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 		rows[i] = configRow{FieldPath: r.FieldPath, Value: derefString(r.Value), Description: r.Description}
 	}
 
+	sensitiveFieldsExport, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	for i, row := range rows {
+		rows[i].Value = redactIfSensitive(sensitiveFieldsExport[row.FieldPath], row.Value)
+	}
+
 	// Get version description.
 	var description string
 	cv, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{
@@ -1095,6 +1129,33 @@ func (s *Service) getFieldTypeMap(ctx context.Context, tenantID string) (map[str
 	result := make(map[string]domain.FieldType, len(fields))
 	for _, f := range fields {
 		result[f.Path] = f.FieldType
+	}
+	return result, nil
+}
+
+// getSensitiveFieldSet returns a set of field paths that are marked sensitive
+// for the tenant's current schema version.
+func (s *Service) getSensitiveFieldSet(ctx context.Context, tenantID string) (map[string]bool, error) {
+	tenant, err := s.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "tenant not found")
+	}
+	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
+		SchemaID: tenant.SchemaID,
+		Version:  tenant.SchemaVersion,
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get schema version")
+	}
+	fields, err := s.store.GetSchemaFields(ctx, sv.ID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get schema fields")
+	}
+	result := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		if f.Sensitive {
+			result[f.Path] = true
+		}
 	}
 	return result, nil
 }
