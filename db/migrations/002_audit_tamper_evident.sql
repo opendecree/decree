@@ -10,6 +10,7 @@ ALTER TABLE audit_write_log
 
 -- Reject UPDATE/DELETE on rows older than the configurable immutability window.
 -- A 60-second grace window allows test teardown; anything older is permanently immutable.
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION audit_write_log_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -20,6 +21,7 @@ BEGIN
     RETURN OLD;
 END;
 $$;
+-- +goose StatementEnd
 
 CREATE TRIGGER trg_audit_write_log_immutable
     BEFORE UPDATE OR DELETE ON audit_write_log
