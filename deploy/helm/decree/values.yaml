@@ -80,6 +80,14 @@ tls:
     # Secret containing tls.crt + tls.key for the gateway to present as a client cert (mTLS).
     clientCertSecret: ""
 
+# --- gRPC server options ---
+
+grpc:
+  # Enable gRPC server reflection. Off by default; enable for dev clusters or
+  # tooling environments (grpcurl, grpc-gateway introspection). Never enable
+  # in production — reflection exposes the full service schema to any caller.
+  enableReflection: false
+
 # --- Authentication ---
 
 auth:

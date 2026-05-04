@@ -281,11 +281,13 @@ prevents security-patch propagation. Fix: default to `Always` for
 non-pinned tags, or document that production deployments must pin by
 digest.
 
-### 18. CodeQL not a required check — Low
+### 18. CodeQL not a required check — Low ✅ RESOLVED (#223)
 
 CodeQL is configured (advanced setup, per memory `feedback_…`) and
 runs on PR, but is not in the branch-protection required-checks list.
 Fix: add `CodeQL / Analyze` to the required checks set.
+
+**Resolution:** Added `CodeQL / Analyze (actions)`, `CodeQL / Analyze (go)`, and `CodeQL / Analyze (python)` to the required checks set on the `main` branch.
 
 ### 19. Unknown role echoed — Low
 
@@ -299,13 +301,15 @@ Echoes whatever the JWT claim said. Mostly cosmetic, but fits the
 "don't echo input" rule. Fix: log full string, return
 `"unknown role"`.
 
-### 20. gRPC reflection always registered — Low
+### 20. gRPC reflection always registered — Low ✅ RESOLVED (#223)
 
 `internal/server/server.go:55` always calls
 `reflection.Register(grpcServer)`. Reflection is *not* in `skipAuth`
 (verified at `internal/auth/metadata.go:15-17` and corresponding JWT
 path), so a caller must authenticate before listing services. Still:
 in a hardened production deployment reflection should be off.
+
+**Resolution:** Added `WithReflection()` option; reflection is off by default. Enabled via `ENABLE_REFLECTION=1` (env) or `grpc.enableReflection: true` (Helm). Docker Compose enables it for local dev.
 
 Fix: gate behind a config flag, defaulting off in production builds /
 Helm values.

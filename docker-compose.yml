@@ -72,6 +72,7 @@ services:
       HTTP_PORT: "8080"
       USAGE_FLUSH_INTERVAL: "1s"
       INSECURE_LISTEN: "1"
+      ENABLE_REFLECTION: "1"
       # Tight ingest limits so the validation-limit e2e tests can trip
       # them with small payloads. Existing fixtures use at most a few
       # fields and small YAMLs (< 1 KiB), well under these caps.

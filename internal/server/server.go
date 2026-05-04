@@ -101,7 +101,9 @@ func New(grpcPort string, auth GRPCInterceptor, opts ...Option) (*Server, error)
 	grpcServer := grpc.NewServer(grpcOpts...)
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(grpcServer, healthServer)
-	reflection.Register(grpcServer)
+	if o.enableReflection {
+		reflection.Register(grpcServer)
+	}
 
 	return &Server{
 		grpcServer:     grpcServer,

@@ -239,6 +239,10 @@ func run() int {
 		)
 	}
 
+	if cfg.EnableReflection {
+		logger.WarnContext(ctx, "ENABLE_REFLECTION=1 set — gRPC server reflection enabled (not recommended for production)")
+	}
+
 	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rlInterceptor)
 	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvBuild.Opts...)
 	if err != nil {
@@ -415,6 +419,7 @@ type serverConfig struct {
 	RateLimitAuthedRPS       float64
 	RateLimitSuperAdminRPS   float64 // 0 = unlimited
 	RateLimitBurst           int
+	EnableReflection         bool
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -486,6 +491,7 @@ func loadConfig() serverConfig {
 		RateLimitAuthedRPS:       parseEnvFloat("RATE_LIMIT_AUTHED_RPS", 100),
 		RateLimitSuperAdminRPS:   parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
 		RateLimitBurst:           parseEnvInt("RATE_LIMIT_BURST", 10),
+		EnableReflection:         getEnv("ENABLE_REFLECTION", "") == "1",
 	}
 }
 

@@ -10,14 +10,15 @@ import (
 type Option func(*options)
 
 type options struct {
-	enableServices  []string
-	logger          *slog.Logger
-	extraOptions    []grpc.ServerOption
-	maxRecvMsgBytes int
-	maxSendMsgBytes int
-	tls             *TLSConfig
-	insecure        bool
-	rateLimiter     GRPCInterceptor // optional; runs after auth
+	enableServices   []string
+	logger           *slog.Logger
+	extraOptions     []grpc.ServerOption
+	maxRecvMsgBytes  int
+	maxSendMsgBytes  int
+	tls              *TLSConfig
+	insecure         bool
+	rateLimiter      GRPCInterceptor // optional; runs after auth
+	enableReflection bool
 }
 
 // WithLogger sets the server logger. Defaults to slog.Default() when unset.
@@ -65,4 +66,10 @@ func WithInsecure() Option {
 // Pass nil to disable rate limiting.
 func WithRateLimiter(rl GRPCInterceptor) Option {
 	return func(o *options) { o.rateLimiter = rl }
+}
+
+// WithReflection enables gRPC server reflection. Off by default; enable for
+// local dev or tooling environments (grpcurl, grpc-gateway introspection).
+func WithReflection() Option {
+	return func(o *options) { o.enableReflection = true }
 }
