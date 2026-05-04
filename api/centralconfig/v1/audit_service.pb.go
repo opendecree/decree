@@ -501,6 +501,195 @@ func (x *GetUnusedFieldsResponse) GetFieldPaths() []string {
 	return nil
 }
 
+type VerifyChainRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Tenant ID (UUID) whose chain to verify. Empty verifies the global (schema-level) chain.
+	TenantId      string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyChainRequest) Reset() {
+	*x = VerifyChainRequest{}
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyChainRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyChainRequest) ProtoMessage() {}
+
+func (x *VerifyChainRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyChainRequest.ProtoReflect.Descriptor instead.
+func (*VerifyChainRequest) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_audit_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *VerifyChainRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+type VerifyChainResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Tenant ID that was verified (mirrors the request).
+	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// Total number of entries in the chain.
+	Total int32 `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// Whether the chain is intact (no breaks found).
+	Ok bool `protobuf:"varint,3,opt,name=ok,proto3" json:"ok,omitempty"`
+	// Any breaks found. Empty when ok is true.
+	Breaks        []*AuditChainBreak `protobuf:"bytes,4,rep,name=breaks,proto3" json:"breaks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyChainResponse) Reset() {
+	*x = VerifyChainResponse{}
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyChainResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyChainResponse) ProtoMessage() {}
+
+func (x *VerifyChainResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyChainResponse.ProtoReflect.Descriptor instead.
+func (*VerifyChainResponse) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_audit_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *VerifyChainResponse) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *VerifyChainResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *VerifyChainResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *VerifyChainResponse) GetBreaks() []*AuditChainBreak {
+	if x != nil {
+		return x.Breaks
+	}
+	return nil
+}
+
+type AuditChainBreak struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ID of the entry where the break was detected.
+	EntryId string `protobuf:"bytes,1,opt,name=entry_id,json=entryId,proto3" json:"entry_id,omitempty"`
+	// 0-based position in the ordered chain.
+	Position int32 `protobuf:"varint,2,opt,name=position,proto3" json:"position,omitempty"`
+	// The entry_hash stored in the database.
+	Got string `protobuf:"bytes,3,opt,name=got,proto3" json:"got,omitempty"`
+	// The entry_hash we recomputed from the entry's fields.
+	Want          string `protobuf:"bytes,4,opt,name=want,proto3" json:"want,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditChainBreak) Reset() {
+	*x = AuditChainBreak{}
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditChainBreak) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditChainBreak) ProtoMessage() {}
+
+func (x *AuditChainBreak) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_audit_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditChainBreak.ProtoReflect.Descriptor instead.
+func (*AuditChainBreak) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_audit_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AuditChainBreak) GetEntryId() string {
+	if x != nil {
+		return x.EntryId
+	}
+	return ""
+}
+
+func (x *AuditChainBreak) GetPosition() int32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *AuditChainBreak) GetGot() string {
+	if x != nil {
+		return x.Got
+	}
+	return ""
+}
+
+func (x *AuditChainBreak) GetWant() string {
+	if x != nil {
+		return x.Want
+	}
+	return ""
+}
+
 var File_centralconfig_v1_audit_service_proto protoreflect.FileDescriptor
 
 const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
@@ -552,12 +741,25 @@ const file_centralconfig_v1_audit_service_proto_rawDesc = "" +
 	"\x05since\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\":\n" +
 	"\x17GetUnusedFieldsResponse\x12\x1f\n" +
 	"\vfield_paths\x18\x01 \x03(\tR\n" +
-	"fieldPaths2\xc4\x04\n" +
+	"fieldPaths\"1\n" +
+	"\x12VerifyChainRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"\x93\x01\n" +
+	"\x13VerifyChainResponse\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x0e\n" +
+	"\x02ok\x18\x03 \x01(\bR\x02ok\x129\n" +
+	"\x06breaks\x18\x04 \x03(\v2!.centralconfig.v1.AuditChainBreakR\x06breaks\"n\n" +
+	"\x0fAuditChainBreak\x12\x19\n" +
+	"\bentry_id\x18\x01 \x01(\tR\aentryId\x12\x1a\n" +
+	"\bposition\x18\x02 \x01(\x05R\bposition\x12\x10\n" +
+	"\x03got\x18\x03 \x01(\tR\x03got\x12\x12\n" +
+	"\x04want\x18\x04 \x01(\tR\x04want2\xba\x05\n" +
 	"\fAuditService\x12x\n" +
 	"\rQueryWriteLog\x12&.centralconfig.v1.QueryWriteLogRequest\x1a'.centralconfig.v1.QueryWriteLogResponse\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/v1/audit/logs\x12\x94\x01\n" +
 	"\rGetFieldUsage\x12&.centralconfig.v1.GetFieldUsageRequest\x1a'.centralconfig.v1.GetFieldUsageResponse\"2\x82\xd3\xe4\x93\x02,\x12*/v1/tenants/{tenant_id}/usage/{field_path}\x12\x8a\x01\n" +
 	"\x0eGetTenantUsage\x12'.centralconfig.v1.GetTenantUsageRequest\x1a(.centralconfig.v1.GetTenantUsageResponse\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/v1/tenants/{tenant_id}/usage\x12\x95\x01\n" +
-	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/unused-fieldsB\xcd\x01\n" +
+	"\x0fGetUnusedFields\x12(.centralconfig.v1.GetUnusedFieldsRequest\x1a).centralconfig.v1.GetUnusedFieldsResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/unused-fields\x12t\n" +
+	"\vVerifyChain\x12$.centralconfig.v1.VerifyChainRequest\x1a%.centralconfig.v1.VerifyChainResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/v1/audit/verifyB\xcd\x01\n" +
 	"\x14com.centralconfig.v1B\x11AuditServiceProtoP\x01ZAgithub.com/opendecree/decree/api/centralconfig/v1;centralconfigv1\xa2\x02\x03CXX\xaa\x02\x10Centralconfig.V1\xca\x02\x10Centralconfig\\V1\xe2\x02\x1cCentralconfig\\V1\\GPBMetadata\xea\x02\x11Centralconfig::V1b\x06proto3"
 
 var (
@@ -572,7 +774,7 @@ func file_centralconfig_v1_audit_service_proto_rawDescGZIP() []byte {
 	return file_centralconfig_v1_audit_service_proto_rawDescData
 }
 
-var file_centralconfig_v1_audit_service_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_centralconfig_v1_audit_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_centralconfig_v1_audit_service_proto_goTypes = []any{
 	(*QueryWriteLogRequest)(nil),    // 0: centralconfig.v1.QueryWriteLogRequest
 	(*QueryWriteLogResponse)(nil),   // 1: centralconfig.v1.QueryWriteLogResponse
@@ -582,34 +784,40 @@ var file_centralconfig_v1_audit_service_proto_goTypes = []any{
 	(*GetTenantUsageResponse)(nil),  // 5: centralconfig.v1.GetTenantUsageResponse
 	(*GetUnusedFieldsRequest)(nil),  // 6: centralconfig.v1.GetUnusedFieldsRequest
 	(*GetUnusedFieldsResponse)(nil), // 7: centralconfig.v1.GetUnusedFieldsResponse
-	(*timestamppb.Timestamp)(nil),   // 8: google.protobuf.Timestamp
-	(*AuditEntry)(nil),              // 9: centralconfig.v1.AuditEntry
-	(*UsageStats)(nil),              // 10: centralconfig.v1.UsageStats
+	(*VerifyChainRequest)(nil),      // 8: centralconfig.v1.VerifyChainRequest
+	(*VerifyChainResponse)(nil),     // 9: centralconfig.v1.VerifyChainResponse
+	(*AuditChainBreak)(nil),         // 10: centralconfig.v1.AuditChainBreak
+	(*timestamppb.Timestamp)(nil),   // 11: google.protobuf.Timestamp
+	(*AuditEntry)(nil),              // 12: centralconfig.v1.AuditEntry
+	(*UsageStats)(nil),              // 13: centralconfig.v1.UsageStats
 }
 var file_centralconfig_v1_audit_service_proto_depIdxs = []int32{
-	8,  // 0: centralconfig.v1.QueryWriteLogRequest.start_time:type_name -> google.protobuf.Timestamp
-	8,  // 1: centralconfig.v1.QueryWriteLogRequest.end_time:type_name -> google.protobuf.Timestamp
-	9,  // 2: centralconfig.v1.QueryWriteLogResponse.entries:type_name -> centralconfig.v1.AuditEntry
-	8,  // 3: centralconfig.v1.GetFieldUsageRequest.start_time:type_name -> google.protobuf.Timestamp
-	8,  // 4: centralconfig.v1.GetFieldUsageRequest.end_time:type_name -> google.protobuf.Timestamp
-	10, // 5: centralconfig.v1.GetFieldUsageResponse.stats:type_name -> centralconfig.v1.UsageStats
-	8,  // 6: centralconfig.v1.GetTenantUsageRequest.start_time:type_name -> google.protobuf.Timestamp
-	8,  // 7: centralconfig.v1.GetTenantUsageRequest.end_time:type_name -> google.protobuf.Timestamp
-	10, // 8: centralconfig.v1.GetTenantUsageResponse.field_stats:type_name -> centralconfig.v1.UsageStats
-	8,  // 9: centralconfig.v1.GetUnusedFieldsRequest.since:type_name -> google.protobuf.Timestamp
-	0,  // 10: centralconfig.v1.AuditService.QueryWriteLog:input_type -> centralconfig.v1.QueryWriteLogRequest
-	2,  // 11: centralconfig.v1.AuditService.GetFieldUsage:input_type -> centralconfig.v1.GetFieldUsageRequest
-	4,  // 12: centralconfig.v1.AuditService.GetTenantUsage:input_type -> centralconfig.v1.GetTenantUsageRequest
-	6,  // 13: centralconfig.v1.AuditService.GetUnusedFields:input_type -> centralconfig.v1.GetUnusedFieldsRequest
-	1,  // 14: centralconfig.v1.AuditService.QueryWriteLog:output_type -> centralconfig.v1.QueryWriteLogResponse
-	3,  // 15: centralconfig.v1.AuditService.GetFieldUsage:output_type -> centralconfig.v1.GetFieldUsageResponse
-	5,  // 16: centralconfig.v1.AuditService.GetTenantUsage:output_type -> centralconfig.v1.GetTenantUsageResponse
-	7,  // 17: centralconfig.v1.AuditService.GetUnusedFields:output_type -> centralconfig.v1.GetUnusedFieldsResponse
-	14, // [14:18] is the sub-list for method output_type
-	10, // [10:14] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 0: centralconfig.v1.QueryWriteLogRequest.start_time:type_name -> google.protobuf.Timestamp
+	11, // 1: centralconfig.v1.QueryWriteLogRequest.end_time:type_name -> google.protobuf.Timestamp
+	12, // 2: centralconfig.v1.QueryWriteLogResponse.entries:type_name -> centralconfig.v1.AuditEntry
+	11, // 3: centralconfig.v1.GetFieldUsageRequest.start_time:type_name -> google.protobuf.Timestamp
+	11, // 4: centralconfig.v1.GetFieldUsageRequest.end_time:type_name -> google.protobuf.Timestamp
+	13, // 5: centralconfig.v1.GetFieldUsageResponse.stats:type_name -> centralconfig.v1.UsageStats
+	11, // 6: centralconfig.v1.GetTenantUsageRequest.start_time:type_name -> google.protobuf.Timestamp
+	11, // 7: centralconfig.v1.GetTenantUsageRequest.end_time:type_name -> google.protobuf.Timestamp
+	13, // 8: centralconfig.v1.GetTenantUsageResponse.field_stats:type_name -> centralconfig.v1.UsageStats
+	11, // 9: centralconfig.v1.GetUnusedFieldsRequest.since:type_name -> google.protobuf.Timestamp
+	10, // 10: centralconfig.v1.VerifyChainResponse.breaks:type_name -> centralconfig.v1.AuditChainBreak
+	0,  // 11: centralconfig.v1.AuditService.QueryWriteLog:input_type -> centralconfig.v1.QueryWriteLogRequest
+	2,  // 12: centralconfig.v1.AuditService.GetFieldUsage:input_type -> centralconfig.v1.GetFieldUsageRequest
+	4,  // 13: centralconfig.v1.AuditService.GetTenantUsage:input_type -> centralconfig.v1.GetTenantUsageRequest
+	6,  // 14: centralconfig.v1.AuditService.GetUnusedFields:input_type -> centralconfig.v1.GetUnusedFieldsRequest
+	8,  // 15: centralconfig.v1.AuditService.VerifyChain:input_type -> centralconfig.v1.VerifyChainRequest
+	1,  // 16: centralconfig.v1.AuditService.QueryWriteLog:output_type -> centralconfig.v1.QueryWriteLogResponse
+	3,  // 17: centralconfig.v1.AuditService.GetFieldUsage:output_type -> centralconfig.v1.GetFieldUsageResponse
+	5,  // 18: centralconfig.v1.AuditService.GetTenantUsage:output_type -> centralconfig.v1.GetTenantUsageResponse
+	7,  // 19: centralconfig.v1.AuditService.GetUnusedFields:output_type -> centralconfig.v1.GetUnusedFieldsResponse
+	9,  // 20: centralconfig.v1.AuditService.VerifyChain:output_type -> centralconfig.v1.VerifyChainResponse
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_centralconfig_v1_audit_service_proto_init() }
@@ -627,7 +835,7 @@ func file_centralconfig_v1_audit_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_centralconfig_v1_audit_service_proto_rawDesc), len(file_centralconfig_v1_audit_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

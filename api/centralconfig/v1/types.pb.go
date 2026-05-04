@@ -2088,7 +2088,7 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"changed_by\x18\x06 \x01(\tR\tchangedBy\x129\n" +
 	"\n" +
-	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xf4\x02\n" +
+	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xd9\x03\n" +
 	"\n" +
 	"AuditEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
@@ -2101,7 +2101,13 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\tnew_value\x18\a \x01(\tH\x02R\bnewValue\x88\x01\x01\x12*\n" +
 	"\x0econfig_version\x18\b \x01(\x05H\x03R\rconfigVersion\x88\x01\x01\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\r\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n" +
+	"\vobject_kind\x18\n" +
+	" \x01(\tR\n" +
+	"objectKind\x12\x1d\n" +
+	"\n" +
+	"entry_hash\x18\v \x01(\tR\tentryHash\x12#\n" +
+	"\rprevious_hash\x18\f \x01(\tR\fpreviousHashB\r\n" +
 	"\v_field_pathB\f\n" +
 	"\n" +
 	"_old_valueB\f\n" +

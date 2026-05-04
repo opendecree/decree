@@ -109,9 +109,9 @@ LIMIT 1
 
 func (q *Queries) GetLastAuditHashForTenant(ctx context.Context, tenantID pgtype.UUID) (string, error) {
 	row := q.db.QueryRow(ctx, getLastAuditHashForTenant, tenantID)
-	var coalesce string
-	err := row.Scan(&coalesce)
-	return coalesce, err
+	var entry_hash string
+	err := row.Scan(&entry_hash)
+	return entry_hash, err
 }
 
 const getTenantUsage = `-- name: GetTenantUsage :many
