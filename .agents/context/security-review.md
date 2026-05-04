@@ -336,6 +336,11 @@ to be correctly protected at the audit date:
 - **Auth interceptor coverage** — every non-`skipAuth` RPC method
   passes through the interceptor (`internal/server/server.go:48-49`).
   Disabled services (`ENABLE_SERVICES`) are not registered at all.
+- **skipAuth scope** — `internal/auth/metadata.go` matches exact method
+  paths, not service prefixes. Audited in #355: only
+  `/grpc.health.v1.Health/*` (probes) and
+  `/centralconfig.v1.ServerService/GetServerInfo` (read-only capability
+  discovery, documented as unauthenticated in the proto) are exempt.
 - **Field-path grammar** —
   `internal/schema/yaml.go:20-28` enforces
   `^[a-zA-Z_][a-zA-Z0-9_.-]*$`. No traversal possible by grammar.
