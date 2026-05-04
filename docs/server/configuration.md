@@ -23,6 +23,12 @@ OpenDecree is configured entirely through environment variables. No config files
 | `SCHEMA_COMPILE_TIMEOUT` | Wall-clock cap on a single JSON-Schema compile (per-field constraint). Format: Go duration (e.g., `5s`, `2s`). Set to `0` to disable the timeout. | `5s` | No |
 | `SCHEMA_MAX_REF_DEPTH` | Maximum structural nesting depth of a JSON-Schema constraint document. Schemas deeper than this are rejected before compilation. Set to `0` to disable. | `64` | No |
 
+## gRPC Server Options
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `ENABLE_REFLECTION` | Set to `1` to enable gRPC server reflection. Allows tools like `grpcurl` to introspect the server's service schema. **Never enable in production** — reflection exposes the full API to any caller regardless of auth. | disabled | No |
+
 ## Transport Security (TLS)
 
 TLS is **required by default** for the gRPC server and the gateway-to-gRPC dial. Set `INSECURE_LISTEN=1` to opt out for local dev only.

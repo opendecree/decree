@@ -149,6 +149,10 @@ spec:
             - name: INSECURE_LISTEN
               value: "1"
             {{- end }}
+            {{- if .Values.grpc.enableReflection }}
+            - name: ENABLE_REFLECTION
+              value: "1"
+            {{- end }}
             {{- if .Values.tls.certSecret }}
             - name: TLS_CERT_FILE
               value: /etc/decree/tls/server/tls.crt

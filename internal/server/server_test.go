@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	reflpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -350,4 +351,67 @@ func TestServe_AndGracefulStop(t *testing.T) {
 
 	srv.GracefulStop(context.Background())
 	assert.NoError(t, <-errCh)
+}
+
+func startReflectionTestServer(t *testing.T, enableReflection bool) (*grpc.ClientConn, func()) {
+	t.Helper()
+	opts := []Option{
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	}
+	if enableReflection {
+		opts = append(opts, WithReflection())
+	}
+	srv, err := New("0", &noopInterceptor{}, opts...)
+	require.NoError(t, err)
+
+	addr := srv.listener.Addr().String()
+	go func() { _ = srv.Serve(context.Background()) }()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	cleanup := func() {
+		_ = conn.Close()
+		srv.GracefulStop(context.Background())
+	}
+	return conn, cleanup
+}
+
+func callReflection(ctx context.Context, conn *grpc.ClientConn) error {
+	client := reflpb.NewServerReflectionClient(conn)
+	stream, err := client.ServerReflectionInfo(ctx)
+	if err != nil {
+		return err
+	}
+	if err := stream.Send(&reflpb.ServerReflectionRequest{
+		MessageRequest: &reflpb.ServerReflectionRequest_ListServices{ListServices: ""},
+	}); err != nil {
+		return err
+	}
+	_, err = stream.Recv()
+	return err
+}
+
+func TestReflection_DisabledByDefault_ReturnsUnimplemented(t *testing.T) {
+	conn, cleanup := startReflectionTestServer(t, false)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := callReflection(ctx, conn)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
+}
+
+func TestReflection_Enabled_ListServicesSucceeds(t *testing.T) {
+	conn, cleanup := startReflectionTestServer(t, true)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := callReflection(ctx, conn)
+	require.NoError(t, err)
 }

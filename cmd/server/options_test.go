@@ -74,6 +74,28 @@ func TestBuildServerOptions_RateLimiterAbsent(t *testing.T) {
 	assert.Len(t, got.Opts, 6)
 }
 
+func TestBuildServerOptions_ReflectionWired(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+	cfg.EnableReflection = true
+
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+
+	assert.True(t, got.HasReflection, "EnableReflection=true must wire WithReflection option")
+	assert.Len(t, got.Opts, 7, "5 base options + Insecure + Reflection")
+}
+
+func TestBuildServerOptions_ReflectionAbsent(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+	cfg.EnableReflection = false
+
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+
+	assert.False(t, got.HasReflection, "EnableReflection=false must not wire WithReflection option")
+	assert.Len(t, got.Opts, 6)
+}
+
 func TestBuildServerOptions_ExtraGRPCOpts(t *testing.T) {
 	cfg := baseServerCfg()
 	cfg.InsecureListen = true

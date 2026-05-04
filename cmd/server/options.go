@@ -17,6 +17,7 @@ type serverOptionsBuild struct {
 	UseTLS         bool
 	UseInsecure    bool
 	HasRateLimiter bool
+	HasReflection  bool
 }
 
 func buildServerOptions(
@@ -45,6 +46,10 @@ func buildServerOptions(
 	if rl != nil {
 		out.Opts = append(out.Opts, server.WithRateLimiter(rl))
 		out.HasRateLimiter = true
+	}
+	if cfg.EnableReflection {
+		out.Opts = append(out.Opts, server.WithReflection())
+		out.HasReflection = true
 	}
 	return out
 }
