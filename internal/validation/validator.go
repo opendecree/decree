@@ -18,6 +18,7 @@ type FieldValidator struct {
 	fieldType       pb.FieldType
 	domainFieldType domain.FieldType
 	nullable        bool
+	sensitive       bool
 	checks          []checkFunc
 }
 
@@ -31,6 +32,11 @@ func (v *FieldValidator) FieldType() pb.FieldType {
 // DomainFieldType returns the domain field type for this validator.
 func (v *FieldValidator) DomainFieldType() domain.FieldType {
 	return v.domainFieldType
+}
+
+// Sensitive reports whether this field is marked sensitive.
+func (v *FieldValidator) Sensitive() bool {
+	return v.sensitive
 }
 
 // Validate checks a TypedValue against this field's constraints.
@@ -62,13 +68,14 @@ func (v *FieldValidator) Validate(tv *pb.TypedValue) error {
 // NewFieldValidator creates a validator for a schema field. Pass
 // [WithLimits] to override the JSON-Schema compile defaults; without it,
 // [DefaultLimits] is used.
-func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, constraints *pb.FieldConstraints, opts ...Option) *FieldValidator {
+func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, sensitive bool, constraints *pb.FieldConstraints, opts ...Option) *FieldValidator {
 	o := resolveOptions(opts)
 	v := &FieldValidator{
 		fieldPath:       fieldPath,
 		fieldType:       fieldType,
 		domainFieldType: domain.FieldTypeFromProto(fieldType),
 		nullable:        nullable,
+		sensitive:       sensitive,
 	}
 
 	// URL validity check is always applied (not constraint-dependent).
@@ -77,6 +84,9 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			val := tv.Kind.(*pb.TypedValue_UrlValue).UrlValue
 			u, err := url.Parse(val)
 			if err != nil || !u.IsAbs() {
+				if v.sensitive {
+					return fmt.Errorf("value is not a valid absolute URL")
+				}
 				return fmt.Errorf("value %q is not a valid absolute URL", val)
 			}
 			return nil
@@ -128,6 +138,9 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 				val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
 				if !re.MatchString(val) {
+					if v.sensitive {
+						return fmt.Errorf("value does not match pattern %s", re.String())
+					}
 					return fmt.Errorf("value %q does not match pattern %s", val, re.String())
 				}
 				return nil
@@ -163,6 +176,9 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 		v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 			s := typedValueToString(tv)
 			if _, ok := allowed[s]; !ok {
+				if v.sensitive {
+					return fmt.Errorf("value is not in allowed values")
+				}
 				return fmt.Errorf("value %q is not in allowed values %v", s, constraints.EnumValues)
 			}
 			return nil

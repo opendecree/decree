@@ -109,6 +109,23 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	require.NoError(t, err)
 	tenantID := tenantResp.Tenant.Id
 
+	// Seed memConfig with tenant and schema data so getSensitiveFieldSet can
+	// resolve tenant→schema info. In production a single Postgres DB serves
+	// both; separate in-memory stores require explicit bridging.
+	{
+		tenant2, err2 := memSchema.GetTenantByID(ctx, tenantID)
+		require.NoError(t, err2)
+		memConfig.SetTenant(tenant2)
+
+		sv2, err2 := memSchema.GetSchemaVersion(ctx, schema.GetSchemaVersionParams{SchemaID: schemaID, Version: 1})
+		require.NoError(t, err2)
+		memConfig.SetSchemaVersion(sv2)
+
+		fields2, err2 := memSchema.GetSchemaFields(ctx, sv2.ID)
+		require.NoError(t, err2)
+		memConfig.SetSchemaFields(sv2.ID, fields2)
+	}
+
 	// 4. Set config value.
 	_, err = configClient.SetField(authCtx, &pb.SetFieldRequest{
 		TenantId:  tenantID,

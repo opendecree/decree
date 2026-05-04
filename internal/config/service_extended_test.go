@@ -211,6 +211,7 @@ func TestSetFields_Success(t *testing.T) {
 	store.On("InsertAuditWriteLog", ctx, mock.Anything).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
 		TenantId: tenantID1,

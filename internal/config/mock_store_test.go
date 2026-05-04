@@ -85,3 +85,15 @@ func (m *mockStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWrit
 	args := m.Called(ctx, arg)
 	return args.Error(0)
 }
+
+// setupNoSensitiveFields configures the mock store to return an empty
+// sensitive field set for tenantID1. Use in tests that exercise code paths
+// that call getSensitiveFieldSet but don't care about redaction.
+func setupNoSensitiveFields(store *mockStore) {
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil).Maybe()
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil).Maybe()
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField{}, nil).Maybe()
+}

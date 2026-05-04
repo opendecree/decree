@@ -196,7 +196,7 @@ func TestCache_ReturnsUnderlyingCache(t *testing.T) {
 
 	// Should be able to manually set/get.
 	v := map[string]*FieldValidator{
-		"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, nil),
+		"x": NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, false, false, nil),
 	}
 	c.Set("manual-tenant", v)
 

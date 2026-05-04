@@ -17,6 +17,7 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/validation"
 )
@@ -96,6 +97,7 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 		}, nil)
 	cache.On("Set", ctx, tenantID1, int32(3), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
 
@@ -116,6 +118,7 @@ func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "fee", Value: strPtr("0.5"), Description: &desc},
 		}, nil)
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{
 		TenantId:            tenantID1,
@@ -146,6 +149,7 @@ func TestSetField_Success(t *testing.T) {
 	cache.On("Invalidate", ctx, tenantID1).Return(nil)
 	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
 	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:  tenantID1,
@@ -598,6 +602,7 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 		}, nil)
 	c.On("Set", ctx, tenantID1, int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
+	setupNoSensitiveFields(store)
 
 	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
 	require.NoError(t, err)
@@ -752,4 +757,162 @@ func TestSetField_ValidatorLookupError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// --- Sensitive field redaction ---
+
+func sensitiveSchemaSetup(store *mockStore, ctx context.Context) {
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.secret", FieldType: domain.FieldTypeString, Sensitive: true},
+			{Path: "app.name", FieldType: domain.FieldTypeString, Sensitive: false},
+		}, nil)
+}
+
+func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	cache.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
+		Return([]GetFullConfigAtVersionRow{
+			{FieldPath: "app.secret", Value: strPtr("s3cr3t")},
+			{FieldPath: "app.name", Value: strPtr("myapp")},
+		}, nil)
+
+	var capturedCacheMap map[string]string
+	cache.On("Set", ctx, tenantID1, int32(1), mock.MatchedBy(func(m map[string]string) bool {
+		capturedCacheMap = m
+		return true
+	}), mock.Anything).Return(nil)
+
+	sensitiveSchemaSetup(store, ctx)
+
+	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+
+	require.NoError(t, err)
+	vals := make(map[string]string, len(resp.Config.Values))
+	for _, v := range resp.Config.Values {
+		vals[v.FieldPath] = typedValueToDisplayString(v.Value)
+	}
+	assert.Equal(t, redactedSentinel, vals["app.secret"])
+	assert.Equal(t, "myapp", vals["app.name"])
+
+	// Cache must also store the sentinel, not the raw value.
+	require.NotNil(t, capturedCacheMap)
+	assert.Equal(t, redactedSentinel, capturedCacheMap["app.secret"])
+	assert.Equal(t, "myapp", capturedCacheMap["app.name"])
+}
+
+func TestSetField_AuditRedactsSensitiveField(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "app.secret", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{Value: strPtr("old-secret")}, nil)
+
+	sensitiveSchemaSetup(store, ctx)
+
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	cache.On("Invalidate", ctx, tenantID1).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	var capturedAudit InsertAuditWriteLogParams
+	store.On("InsertAuditWriteLog", ctx, mock.MatchedBy(func(p InsertAuditWriteLogParams) bool {
+		capturedAudit = p
+		return true
+	})).Return(nil)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.secret",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "new-secret"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, redactedSentinel, derefString(capturedAudit.OldValue))
+	assert.Equal(t, redactedSentinel, derefString(capturedAudit.NewValue))
+}
+
+func TestSetField_PublishRedactsSensitiveField(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
+		TenantID: tenantID1, FieldPath: "app.secret", Version: 1,
+	}).Return(GetConfigValueAtVersionRow{Value: strPtr("old-secret")}, nil)
+
+	sensitiveSchemaSetup(store, ctx)
+
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", ctx, tenantID1).Return(nil)
+
+	var capturedEvent pubsub.ConfigChangeEvent
+	pub.On("Publish", ctx, mock.MatchedBy(func(e pubsub.ConfigChangeEvent) bool {
+		capturedEvent = e
+		return true
+	})).Return(nil)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.secret",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "new-secret"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, redactedSentinel, capturedEvent.OldValue)
+	assert.Equal(t, redactedSentinel, capturedEvent.NewValue)
+}
+
+func TestExportConfig_RedactsSensitiveFields(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := context.Background()
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
+		Return([]GetFullConfigAtVersionRow{
+			{FieldPath: "app.secret", Value: strPtr("s3cr3t")},
+			{FieldPath: "app.name", Value: strPtr("myapp")},
+		}, nil)
+	desc := "v1"
+	store.On("GetConfigVersion", ctx, GetConfigVersionParams{TenantID: tenantID1, Version: 1}).
+		Return(domain.ConfigVersion{Version: 1, Description: &desc}, nil)
+
+	// getFieldTypeMap call
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.secret", FieldType: domain.FieldTypeString, Sensitive: true},
+			{Path: "app.name", FieldType: domain.FieldTypeString, Sensitive: false},
+		}, nil)
+
+	resp, err := svc.ExportConfig(ctx, &pb.ExportConfigRequest{TenantId: tenantID1})
+
+	require.NoError(t, err)
+	yaml := string(resp.YamlContent)
+	assert.NotContains(t, yaml, "s3cr3t")
+	assert.Contains(t, yaml, redactedSentinel)
+	assert.Contains(t, yaml, "myapp")
 }
