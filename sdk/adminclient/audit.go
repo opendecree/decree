@@ -2,6 +2,10 @@ package adminclient
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
 	"time"
 )
 
@@ -87,4 +91,54 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 		return nil, ErrServiceNotConfigured
 	}
 	return c.audit.GetUnusedFields(ctx, tenantID, since)
+}
+
+// VerifyChain fetches all audit entries for tenantID (oldest-first) and
+// recomputes each entry_hash, reporting any tampered positions.
+// An empty tenantID verifies the global (schema-level) chain.
+//
+// Note: entry_hash and previous_hash fields require the server to be running
+// with migration 002_audit_tamper_evident applied.
+func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainResult, error) {
+	if c.audit == nil {
+		return VerifyChainResult{}, ErrServiceNotConfigured
+	}
+
+	var filters []AuditFilter
+	if tenantID != "" {
+		filters = append(filters, WithAuditTenant(tenantID))
+	}
+	entries, err := c.QueryWriteLog(ctx, filters...)
+	if err != nil {
+		return VerifyChainResult{}, fmt.Errorf("fetch entries: %w", err)
+	}
+
+	// QueryWriteLog returns newest-first; sort oldest-first for chain walk.
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].CreatedAt.Before(entries[j].CreatedAt)
+	})
+
+	result := VerifyChainResult{TenantID: tenantID, Total: len(entries)}
+	prev := ""
+	for i, e := range entries {
+		want := computeClientHash(prev, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt)
+		if e.EntryHash != want {
+			result.Breaks = append(result.Breaks, VerifyChainBreak{
+				EntryID:  e.ID,
+				Position: i,
+				Got:      e.EntryHash,
+				Want:     want,
+			})
+		}
+		prev = e.EntryHash
+	}
+	result.OK = len(result.Breaks) == 0
+	return result, nil
+}
+
+func computeClientHash(previousHash, id, tenantID, actor, action, objectKind string, createdAt time.Time) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
+		previousHash, id, tenantID, actor, action, objectKind, createdAt.UnixNano())
+	return hex.EncodeToString(h.Sum(nil))
 }

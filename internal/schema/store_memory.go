@@ -21,6 +21,7 @@ type MemoryStore struct {
 	schemaFields   map[string][]domain.SchemaField     // schemaVersionID → []SchemaField
 	tenants        map[string]domain.Tenant            // id → Tenant
 	fieldLocks     map[string][]domain.TenantFieldLock // tenantID → []TenantFieldLock
+	auditLog       []domain.AuditWriteLog
 }
 
 // NewMemoryStore creates a new in-memory schema store.
@@ -32,6 +33,29 @@ func NewMemoryStore() *MemoryStore {
 		tenants:        make(map[string]domain.Tenant),
 		fieldLocks:     make(map[string][]domain.TenantFieldLock),
 	}
+}
+
+func (m *MemoryStore) RunInTx(_ context.Context, fn func(Store) error) error {
+	return fn(m)
+}
+
+func (m *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWriteLogParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	m.auditLog = append(m.auditLog, domain.AuditWriteLog{
+		TenantID:   arg.TenantID,
+		Actor:      arg.Actor,
+		Action:     arg.Action,
+		ObjectKind: arg.ObjectKind,
+		FieldPath:  arg.FieldPath,
+		OldValue:   arg.OldValue,
+		NewValue:   arg.NewValue,
+		Metadata:   arg.Metadata,
+		CreatedAt:  now,
+	})
+	return nil
 }
 
 func (m *MemoryStore) nextID() string {

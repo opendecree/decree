@@ -1718,7 +1718,13 @@ type AuditEntry struct {
 	// The config version number created by this action.
 	ConfigVersion *int32 `protobuf:"varint,8,opt,name=config_version,json=configVersion,proto3,oneof" json:"config_version,omitempty"`
 	// When the audit entry was created.
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// The kind of object affected ("field", "schema", "tenant", or "lock").
+	ObjectKind string `protobuf:"bytes,10,opt,name=object_kind,json=objectKind,proto3" json:"object_kind,omitempty"`
+	// SHA-256 hash of this entry's immutable fields, chained to previous_hash.
+	EntryHash string `protobuf:"bytes,11,opt,name=entry_hash,json=entryHash,proto3" json:"entry_hash,omitempty"`
+	// entry_hash of the previous entry in this tenant's chain ("" for the first).
+	PreviousHash  string `protobuf:"bytes,12,opt,name=previous_hash,json=previousHash,proto3" json:"previous_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1814,6 +1820,27 @@ func (x *AuditEntry) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *AuditEntry) GetObjectKind() string {
+	if x != nil {
+		return x.ObjectKind
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetEntryHash() string {
+	if x != nil {
+		return x.EntryHash
+	}
+	return ""
+}
+
+func (x *AuditEntry) GetPreviousHash() string {
+	if x != nil {
+		return x.PreviousHash
+	}
+	return ""
 }
 
 // UsageStats represents aggregated read usage statistics for a config field.

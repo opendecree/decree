@@ -462,6 +462,15 @@ message AuditEntry {
 
   // When the audit entry was created.
   google.protobuf.Timestamp created_at = 9;
+
+  // The kind of object affected ("field", "schema", "tenant", or "lock").
+  string object_kind = 10;
+
+  // SHA-256 hash of this entry's immutable fields, chained to previous_hash.
+  string entry_hash = 11;
+
+  // entry_hash of the previous entry in this tenant's chain ("" for the first).
+  string previous_hash = 12;
 }
 
 // UsageStats represents aggregated read usage statistics for a config field.

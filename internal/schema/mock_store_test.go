@@ -12,6 +12,15 @@ type mockStore struct {
 	mock.Mock
 }
 
+func (m *mockStore) RunInTx(ctx context.Context, fn func(Store) error) error {
+	return fn(m)
+}
+
+func (m *mockStore) InsertAuditWriteLog(_ context.Context, _ InsertAuditWriteLogParams) error {
+	// No-op by default; override in audit-specific tests via On(...).
+	return nil
+}
+
 func (m *mockStore) CreateSchema(ctx context.Context, arg CreateSchemaParams) (domain.Schema, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(domain.Schema), args.Error(1)

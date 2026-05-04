@@ -10,6 +10,71 @@ import (
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
+func (s *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWriteLogParams) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.idCounter++
+	id := fmt.Sprintf("00000000-0000-0000-0000-%012d", s.idCounter)
+
+	// Find previous hash for this tenant.
+	prevHash := ""
+	for i := len(s.writeLogs) - 1; i >= 0; i-- {
+		if s.writeLogs[i].TenantID == arg.TenantID {
+			prevHash = s.writeLogs[i].EntryHash
+			break
+		}
+	}
+
+	kind := arg.ObjectKind
+	if kind == "" {
+		kind = "field"
+	}
+	now := time.Now()
+	hash := ComputeEntryHash(ChainInput{
+		PreviousHash: prevHash,
+		ID:           id,
+		TenantID:     arg.TenantID,
+		Actor:        arg.Actor,
+		Action:       arg.Action,
+		ObjectKind:   kind,
+		CreatedAt:    now,
+	})
+
+	s.writeLogs = append(s.writeLogs, domain.AuditWriteLog{
+		ID:            id,
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
+		PreviousHash:  prevHash,
+		EntryHash:     hash,
+		CreatedAt:     now,
+	})
+	return nil
+}
+
+func (s *MemoryStore) GetAuditWriteLogOrdered(_ context.Context, tenantID string) ([]domain.AuditWriteLog, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []domain.AuditWriteLog
+	for _, e := range s.writeLogs {
+		if e.TenantID == tenantID {
+			result = append(result, e)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].CreatedAt.Before(result[j].CreatedAt)
+	})
+	return result, nil
+}
+
 // MemoryStore implements Store using in-memory slices.
 // Suitable for testing and single-process deployments.
 type MemoryStore struct {

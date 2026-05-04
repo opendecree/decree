@@ -361,6 +361,9 @@ func auditEntryFromProto(e *pb.AuditEntry) *adminclient.AuditEntry {
 	if e.GetCreatedAt() != nil {
 		result.CreatedAt = e.GetCreatedAt().AsTime()
 	}
+	result.ObjectKind = e.GetObjectKind()
+	result.EntryHash = e.GetEntryHash()
+	result.PreviousHash = e.GetPreviousHash()
 	return result
 }
 

@@ -1,6 +1,13 @@
 -- name: InsertAuditWriteLog :exec
-INSERT INTO audit_write_log (tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+
+-- name: GetLastAuditHashForTenant :one
+SELECT COALESCE(entry_hash, '')
+FROM audit_write_log
+WHERE tenant_id IS NOT DISTINCT FROM $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1;
 
 -- name: QueryAuditWriteLog :many
 SELECT * FROM audit_write_log
@@ -11,6 +18,11 @@ WHERE ($1::UUID IS NULL OR tenant_id = $1)
   AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5)
 ORDER BY created_at DESC
 LIMIT $6 OFFSET $7;
+
+-- name: GetAuditWriteLogOrdered :many
+SELECT * FROM audit_write_log
+WHERE tenant_id IS NOT DISTINCT FROM $1
+ORDER BY created_at ASC, id ASC;
 
 -- name: UpsertUsageStats :exec
 INSERT INTO usage_stats (tenant_id, field_path, period_start, read_count, last_read_by, last_read_at)

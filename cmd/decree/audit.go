@@ -81,6 +81,53 @@ var auditUsageCmd = &cobra.Command{
 	},
 }
 
+var auditVerifyCmd = &cobra.Command{
+	Use:   "verify",
+	Short: "Verify the tamper-evident audit chain for a tenant",
+	Long: `Fetches all audit entries for the tenant (or the global chain if --tenant is
+omitted), recomputes each entry_hash, and reports any breaks.
+
+Requires migration 002_audit_tamper_evident to be applied.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		conn, err := dialServer()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close() }()
+
+		tenantID, _ := cmd.Flags().GetString("tenant")
+		result, err := newAdminClient(conn).VerifyChain(cmd.Context(), tenantID)
+		if err != nil {
+			return err
+		}
+
+		if result.OK {
+			fmt.Printf("OK — %d entries, chain intact\n", result.Total)
+			return nil
+		}
+
+		fmt.Printf("FAIL — %d breaks in %d entries\n", len(result.Breaks), result.Total)
+		rows := tableRows([]string{"POSITION", "ENTRY_ID", "GOT", "WANT"})
+		for _, b := range result.Breaks {
+			got := b.Got
+			want := b.Want
+			if len(got) > 12 {
+				got = got[:12] + "…"
+			}
+			if len(want) > 12 {
+				want = want[:12] + "…"
+			}
+			rows = append(rows, []string{
+				fmt.Sprintf("%d", b.Position),
+				b.EntryID,
+				got,
+				want,
+			})
+		}
+		return printOutput(rows)
+	},
+}
+
 var auditUnusedCmd = &cobra.Command{
 	Use:   "unused <tenant-id> <since-duration>",
 	Short: "Find fields not read since the given duration (e.g. 7d, 24h)",
@@ -131,7 +178,10 @@ func init() {
 	auditQueryCmd.Flags().String("field", "", "filter by field path")
 	auditQueryCmd.Flags().String("since", "", "show entries from the last duration (e.g. 24h, 7d)")
 
+	auditVerifyCmd.Flags().String("tenant", "", "tenant ID to verify (empty = global chain)")
+
 	auditCmd.AddCommand(auditQueryCmd)
 	auditCmd.AddCommand(auditUsageCmd)
 	auditCmd.AddCommand(auditUnusedCmd)
+	auditCmd.AddCommand(auditVerifyCmd)
 }

@@ -70,6 +70,9 @@ type AuditWriteLog struct {
 	ConfigVersion *int32             `json:"config_version"`
 	Metadata      []byte             `json:"metadata"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ObjectKind    string             `json:"object_kind"`
+	PreviousHash  string             `json:"previous_hash"`
+	EntryHash     string             `json:"entry_hash"`
 }
 
 type ConfigValue struct {

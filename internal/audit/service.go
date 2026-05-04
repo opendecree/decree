@@ -252,11 +252,14 @@ func isValidUUID(s string) bool {
 
 func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 	entry := &pb.AuditEntry{
-		Id:        e.ID,
-		TenantId:  e.TenantID,
-		Actor:     e.Actor,
-		Action:    e.Action,
-		CreatedAt: timestamppb.New(e.CreatedAt),
+		Id:           e.ID,
+		TenantId:     e.TenantID,
+		Actor:        e.Actor,
+		Action:       e.Action,
+		ObjectKind:   e.ObjectKind,
+		EntryHash:    e.EntryHash,
+		PreviousHash: e.PreviousHash,
+		CreatedAt:    timestamppb.New(e.CreatedAt),
 	}
 	entry.FieldPath = e.FieldPath
 	entry.OldValue = e.OldValue

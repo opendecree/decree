@@ -42,6 +42,14 @@ service AuditService {
       get: "/v1/tenants/{tenant_id}/unused-fields"
     };
   }
+
+  // VerifyChain walks a tenant's audit chain and reports any tampered entries.
+  // An empty tenant_id verifies the global (schema-level) chain.
+  rpc VerifyChain(VerifyChainRequest) returns (VerifyChainResponse) {
+    option (google.api.http) = {
+      get: "/v1/audit/verify"
+    };
+  }
 }
 
 // --- Write log queries ---
@@ -126,4 +134,39 @@ message GetUnusedFieldsRequest {
 message GetUnusedFieldsResponse {
   // Dot-separated paths of fields with no reads since the specified time.
   repeated string field_paths = 1;
+}
+
+// --- Chain verification ---
+
+message VerifyChainRequest {
+  // Tenant ID (UUID) whose chain to verify. Empty verifies the global (schema-level) chain.
+  string tenant_id = 1;
+}
+
+message VerifyChainResponse {
+  // Tenant ID that was verified (mirrors the request).
+  string tenant_id = 1;
+
+  // Total number of entries in the chain.
+  int32 total = 2;
+
+  // Whether the chain is intact (no breaks found).
+  bool ok = 3;
+
+  // Any breaks found. Empty when ok is true.
+  repeated AuditChainBreak breaks = 4;
+}
+
+message AuditChainBreak {
+  // ID of the entry where the break was detected.
+  string entry_id = 1;
+
+  // 0-based position in the ordered chain.
+  int32 position = 2;
+
+  // The entry_hash stored in the database.
+  string got = 3;
+
+  // The entry_hash we recomputed from the entry's fields.
+  string want = 4;
 }

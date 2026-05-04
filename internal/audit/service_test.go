@@ -39,6 +39,16 @@ func superadminCtx() context.Context {
 
 type mockStore struct{ mock.Mock }
 
+func (m *mockStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *mockStore) GetAuditWriteLogOrdered(ctx context.Context, tenantID string) ([]domain.AuditWriteLog, error) {
+	args := m.Called(ctx, tenantID)
+	return args.Get(0).([]domain.AuditWriteLog), args.Error(1)
+}
+
 func (m *mockStore) QueryAuditWriteLog(ctx context.Context, arg QueryWriteLogParams) ([]domain.AuditWriteLog, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]domain.AuditWriteLog), args.Error(1)
