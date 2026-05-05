@@ -101,11 +101,30 @@ type AuditEntry struct {
 	TenantID      string
 	Actor         string
 	Action        string
+	ObjectKind    string
 	FieldPath     string
 	OldValue      string
 	NewValue      string
 	ConfigVersion *int32
+	PreviousHash  string
+	EntryHash     string
 	CreatedAt     time.Time
+}
+
+// VerifyChainResult is the outcome of a local audit chain verification.
+type VerifyChainResult struct {
+	TenantID string
+	Total    int
+	OK       bool
+	Breaks   []VerifyChainBreak
+}
+
+// VerifyChainBreak describes a single tampered or missing link in the audit chain.
+type VerifyChainBreak struct {
+	EntryID  string
+	Position int
+	Got      string // stored entry_hash
+	Want     string // recomputed entry_hash
 }
 
 // UsageStats represents aggregated read usage statistics for a field.

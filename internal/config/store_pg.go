@@ -2,10 +2,16 @@ package config
 
 import (
 	"context"
+	"crypto/rand"
+	"errors"
 	"fmt"
+	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/storage/dbstore"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/storage/pgconv"
@@ -269,12 +275,50 @@ func (s *PGStore) GetFieldLocks(ctx context.Context, tenantID string) ([]domain.
 
 // Audit.
 
+func configGenUUID() (pgtype.UUID, error) {
+	var id pgtype.UUID
+	if _, err := rand.Read(id.Bytes[:]); err != nil {
+		return pgtype.UUID{}, fmt.Errorf("generate uuid: %w", err)
+	}
+	id.Bytes[6] = (id.Bytes[6] & 0x0f) | 0x40 // version 4
+	id.Bytes[8] = (id.Bytes[8] & 0x3f) | 0x80 // variant 2
+	id.Valid = true
+	return id, nil
+}
+
 func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
 	tenantUUID, err := pgconv.StringToUUID(arg.TenantID)
 	if err != nil {
 		return err
 	}
+
+	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("get last audit hash: %w", err)
+	}
+
+	id, err := configGenUUID()
+	if err != nil {
+		return err
+	}
+
+	kind := arg.ObjectKind
+	if kind == "" {
+		kind = "field"
+	}
+	now := time.Now()
+	hash := audit.ComputeEntryHash(audit.ChainInput{
+		PreviousHash: prevHash,
+		ID:           pgconv.UUIDToString(id),
+		TenantID:     arg.TenantID,
+		Actor:        arg.Actor,
+		Action:       arg.Action,
+		ObjectKind:   kind,
+		CreatedAt:    now,
+	})
+
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+		ID:            id,
 		TenantID:      tenantUUID,
 		Actor:         arg.Actor,
 		Action:        arg.Action,
@@ -283,6 +327,9 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		NewValue:      arg.NewValue,
 		ConfigVersion: arg.ConfigVersion,
 		Metadata:      arg.Metadata,
+		ObjectKind:    kind,
+		PreviousHash:  prevHash,
+		EntryHash:     hash,
 	})
 }
 

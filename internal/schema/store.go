@@ -121,9 +121,29 @@ type DeleteFieldLockParams struct {
 	FieldPath string
 }
 
+// InsertAuditWriteLogParams contains parameters for inserting a schema/tenant/lock audit entry.
+type InsertAuditWriteLogParams struct {
+	TenantID   string // empty for global (schema-level) entries
+	Actor      string
+	Action     string
+	ObjectKind string // "schema", "tenant", or "lock"
+	FieldPath  *string
+	OldValue   *string
+	NewValue   *string
+	Metadata   []byte
+}
+
 // Store defines the data access interface for schema operations.
 // Implementations must return [domain.ErrNotFound] when an entity is not found.
 type Store interface {
+	// RunInTx executes fn within a database transaction.
+	// The Store passed to fn is bound to the transaction.
+	// If fn returns nil the transaction is committed; otherwise it is rolled back.
+	RunInTx(ctx context.Context, fn func(Store) error) error
+
+	// InsertAuditWriteLog writes an admin audit entry transactionally.
+	InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error
+
 	// Schema CRUD.
 	CreateSchema(ctx context.Context, arg CreateSchemaParams) (domain.Schema, error)
 	GetSchemaByID(ctx context.Context, id string) (domain.Schema, error)

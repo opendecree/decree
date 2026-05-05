@@ -23,6 +23,7 @@ const (
 	AuditService_GetFieldUsage_FullMethodName   = "/centralconfig.v1.AuditService/GetFieldUsage"
 	AuditService_GetTenantUsage_FullMethodName  = "/centralconfig.v1.AuditService/GetTenantUsage"
 	AuditService_GetUnusedFields_FullMethodName = "/centralconfig.v1.AuditService/GetUnusedFields"
+	AuditService_VerifyChain_FullMethodName     = "/centralconfig.v1.AuditService/VerifyChain"
 )
 
 // AuditServiceClient is the client API for AuditService service.
@@ -46,6 +47,9 @@ type AuditServiceClient interface {
 	// GetUnusedFields returns field paths that have not been read since the given time.
 	// Useful for identifying configuration fields that may be safe to deprecate.
 	GetUnusedFields(ctx context.Context, in *GetUnusedFieldsRequest, opts ...grpc.CallOption) (*GetUnusedFieldsResponse, error)
+	// VerifyChain walks a tenant's audit chain and reports any tampered entries.
+	// An empty tenant_id verifies the global (schema-level) chain.
+	VerifyChain(ctx context.Context, in *VerifyChainRequest, opts ...grpc.CallOption) (*VerifyChainResponse, error)
 }
 
 type auditServiceClient struct {
@@ -96,6 +100,16 @@ func (c *auditServiceClient) GetUnusedFields(ctx context.Context, in *GetUnusedF
 	return out, nil
 }
 
+func (c *auditServiceClient) VerifyChain(ctx context.Context, in *VerifyChainRequest, opts ...grpc.CallOption) (*VerifyChainResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyChainResponse)
+	err := c.cc.Invoke(ctx, AuditService_VerifyChain_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuditServiceServer is the server API for AuditService service.
 // All implementations must embed UnimplementedAuditServiceServer
 // for forward compatibility.
@@ -117,6 +131,9 @@ type AuditServiceServer interface {
 	// GetUnusedFields returns field paths that have not been read since the given time.
 	// Useful for identifying configuration fields that may be safe to deprecate.
 	GetUnusedFields(context.Context, *GetUnusedFieldsRequest) (*GetUnusedFieldsResponse, error)
+	// VerifyChain walks a tenant's audit chain and reports any tampered entries.
+	// An empty tenant_id verifies the global (schema-level) chain.
+	VerifyChain(context.Context, *VerifyChainRequest) (*VerifyChainResponse, error)
 	mustEmbedUnimplementedAuditServiceServer()
 }
 
@@ -138,6 +155,9 @@ func (UnimplementedAuditServiceServer) GetTenantUsage(context.Context, *GetTenan
 }
 func (UnimplementedAuditServiceServer) GetUnusedFields(context.Context, *GetUnusedFieldsRequest) (*GetUnusedFieldsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUnusedFields not implemented")
+}
+func (UnimplementedAuditServiceServer) VerifyChain(context.Context, *VerifyChainRequest) (*VerifyChainResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyChain not implemented")
 }
 func (UnimplementedAuditServiceServer) mustEmbedUnimplementedAuditServiceServer() {}
 func (UnimplementedAuditServiceServer) testEmbeddedByValue()                      {}
@@ -232,6 +252,24 @@ func _AuditService_GetUnusedFields_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuditService_VerifyChain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyChainRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuditServiceServer).VerifyChain(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuditService_VerifyChain_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuditServiceServer).VerifyChain(ctx, req.(*VerifyChainRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuditService_ServiceDesc is the grpc.ServiceDesc for AuditService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +292,10 @@ var AuditService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUnusedFields",
 			Handler:    _AuditService_GetUnusedFields_Handler,
+		},
+		{
+			MethodName: "VerifyChain",
+			Handler:    _AuditService_VerifyChain_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

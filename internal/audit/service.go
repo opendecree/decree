@@ -222,6 +222,47 @@ func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequ
 	return &pb.GetTenantUsageResponse{FieldStats: fieldStats}, nil
 }
 
+func (s *Service) VerifyChain(ctx context.Context, req *pb.VerifyChainRequest) (*pb.VerifyChainResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
+
+	tenantID := req.TenantId
+	if tenantID != "" {
+		// Per-tenant chain: resolve and check access.
+		resolved, err := s.resolveTenantWithAccess(ctx, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		tenantID = resolved
+	} else if !auth.IsSuperAdmin(ctx) {
+		// Global chain: superadmin only.
+		return nil, status.Error(codes.PermissionDenied, "global chain verification requires superadmin")
+	}
+
+	result, err := VerifyChain(ctx, s.store, tenantID)
+	if err != nil {
+		s.logger.ErrorContext(ctx, "verify audit chain", "tenant_id", tenantID, "error", err)
+		return nil, status.Error(codes.Internal, "failed to verify audit chain")
+	}
+
+	breaks := make([]*pb.AuditChainBreak, len(result.Breaks))
+	for i, b := range result.Breaks {
+		breaks[i] = &pb.AuditChainBreak{
+			EntryId:  b.EntryID,
+			Position: int32(b.Position),
+			Got:      b.Got,
+			Want:     b.Want,
+		}
+	}
+	return &pb.VerifyChainResponse{
+		TenantId: result.TenantID,
+		Total:    int32(result.Total),
+		Ok:       result.OK,
+		Breaks:   breaks,
+	}, nil
+}
+
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
@@ -252,11 +293,14 @@ func isValidUUID(s string) bool {
 
 func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 	entry := &pb.AuditEntry{
-		Id:        e.ID,
-		TenantId:  e.TenantID,
-		Actor:     e.Actor,
-		Action:    e.Action,
-		CreatedAt: timestamppb.New(e.CreatedAt),
+		Id:           e.ID,
+		TenantId:     e.TenantID,
+		Actor:        e.Actor,
+		Action:       e.Action,
+		ObjectKind:   e.ObjectKind,
+		EntryHash:    e.EntryHash,
+		PreviousHash: e.PreviousHash,
+		CreatedAt:    timestamppb.New(e.CreatedAt),
 	}
 	entry.FieldPath = e.FieldPath
 	entry.OldValue = e.OldValue

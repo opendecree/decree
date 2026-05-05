@@ -164,35 +164,55 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "schema has %d fields, exceeds limit of %d", len(req.Fields), s.limits.MaxFields)
 	}
 
-	schema, err := s.store.CreateSchema(ctx, CreateSchemaParams{
-		Name:        req.Name,
-		Description: ptrString(req.GetDescription()),
-	})
-	if err != nil {
-		s.logger.ErrorContext(ctx, "create schema", "error", err)
+	actor := s.getActor(ctx)
+	checksum := computeChecksum(req.Fields)
+
+	var sc domain.Schema
+	var version domain.SchemaVersion
+	var fields []domain.SchemaField
+
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		var err error
+		sc, err = tx.CreateSchema(ctx, CreateSchemaParams{
+			Name:        req.Name,
+			Description: ptrString(req.GetDescription()),
+		})
+		if err != nil {
+			return err
+		}
+
+		version, err = tx.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+			SchemaID: sc.ID,
+			Version:  1,
+			Checksum: checksum,
+		})
+		if err != nil {
+			return err
+		}
+
+		fields, err = createFieldsOn(ctx, s.logger, tx, version.ID, req.Fields)
+		if err != nil {
+			return err
+		}
+
+		meta, _ := json.Marshal(map[string]string{"name": req.Name})
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			Actor:      actor,
+			Action:     "create_schema",
+			ObjectKind: "schema",
+			NewValue:   ptrString(sc.ID),
+			Metadata:   meta,
+		})
+	}); err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "create schema transaction failed", "error", err)
 		return nil, status.Error(codes.Internal, "failed to create schema")
 	}
 
-	// Create initial version (v1).
-	checksum := computeChecksum(req.Fields)
-	version, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
-		SchemaID: schema.ID,
-		Version:  1,
-		Checksum: checksum,
-	})
-	if err != nil {
-		s.logger.ErrorContext(ctx, "create schema version", "error", err)
-		return nil, status.Error(codes.Internal, "failed to create schema version")
-	}
-
-	// Create fields.
-	fields, err := s.createFields(ctx, version.ID, req.Fields)
-	if err != nil {
-		return nil, err
-	}
-
 	return &pb.CreateSchemaResponse{
-		Schema: schemaToProto(schema, version, fields),
+		Schema: schemaToProto(sc, version, fields),
 	}, nil
 }
 
@@ -291,7 +311,6 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get latest version")
 	}
-	// Published versions are immutable — always create a new version regardless.
 
 	// Get existing fields.
 	existingFields, err := s.store.GetSchemaFields(ctx, latestVersion.ID)
@@ -311,28 +330,49 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 		fieldMap[f.Path] = f
 	}
 
-	// Collect merged fields.
 	mergedFields := make([]*pb.SchemaField, 0, len(fieldMap))
 	for _, f := range fieldMap {
 		mergedFields = append(mergedFields, f)
 	}
 
+	actor := s.getActor(ctx)
 	checksum := computeChecksum(mergedFields)
-	newVersion, err := s.store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
-		SchemaID:      schema.ID,
-		Version:       latestVersion.Version + 1,
-		ParentVersion: &latestVersion.Version,
-		Description:   ptrString(req.GetVersionDescription()),
-		Checksum:      checksum,
-	})
-	if err != nil {
-		s.logger.ErrorContext(ctx, "create schema version", "error", err)
-		return nil, status.Error(codes.Internal, "failed to create schema version")
-	}
 
-	fields, err := s.createFields(ctx, newVersion.ID, mergedFields)
-	if err != nil {
-		return nil, err
+	var newVersion domain.SchemaVersion
+	var fields []domain.SchemaField
+
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		var err error
+		newVersion, err = tx.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+			SchemaID:      schema.ID,
+			Version:       latestVersion.Version + 1,
+			ParentVersion: &latestVersion.Version,
+			Description:   ptrString(req.GetVersionDescription()),
+			Checksum:      checksum,
+		})
+		if err != nil {
+			return err
+		}
+
+		fields, err = createFieldsOn(ctx, s.logger, tx, newVersion.ID, mergedFields)
+		if err != nil {
+			return err
+		}
+
+		meta, _ := json.Marshal(map[string]any{"schema_id": schema.ID, "version": newVersion.Version})
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			Actor:      actor,
+			Action:     "update_schema",
+			ObjectKind: "schema",
+			NewValue:   ptrString(schema.ID),
+			Metadata:   meta,
+		})
+	}); err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, err
+		}
+		s.logger.ErrorContext(ctx, "update schema transaction failed", "error", err)
+		return nil, status.Error(codes.Internal, "failed to update schema")
 	}
 
 	return &pb.UpdateSchemaResponse{
@@ -355,7 +395,18 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 		return nil, errToStatus(err, "schema not found", "failed to resolve schema")
 	}
 
-	if err := s.store.DeleteSchema(ctx, schema.ID); err != nil {
+	actor := s.getActor(ctx)
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		if err := tx.DeleteSchema(ctx, schema.ID); err != nil {
+			return err
+		}
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			Actor:      actor,
+			Action:     "delete_schema",
+			ObjectKind: "schema",
+			OldValue:   ptrString(schema.ID),
+		})
+	}); err != nil {
 		s.logger.ErrorContext(ctx, "delete schema", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete schema")
 	}
@@ -379,17 +430,33 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 		return nil, errToStatus(err, "schema not found", "failed to get schema")
 	}
 
-	version, err := s.store.PublishSchemaVersion(ctx, PublishSchemaVersionParams{
-		SchemaID: schema.ID,
-		Version:  req.Version,
-	})
-	if err != nil {
-		return nil, errToStatus(err, "schema version not found", "failed to publish schema version")
-	}
+	actor := s.getActor(ctx)
+	var version domain.SchemaVersion
+	var fields []domain.SchemaField
 
-	fields, err := s.store.GetSchemaFields(ctx, version.ID)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to get fields")
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		var err error
+		version, err = tx.PublishSchemaVersion(ctx, PublishSchemaVersionParams{
+			SchemaID: schema.ID,
+			Version:  req.Version,
+		})
+		if err != nil {
+			return err
+		}
+		fields, err = tx.GetSchemaFields(ctx, version.ID)
+		if err != nil {
+			return err
+		}
+		meta, _ := json.Marshal(map[string]any{"schema_id": schema.ID, "version": req.Version})
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			Actor:      actor,
+			Action:     "publish_schema",
+			ObjectKind: "schema",
+			NewValue:   ptrString(schema.ID),
+			Metadata:   meta,
+		})
+	}); err != nil {
+		return nil, errToStatus(err, "schema version not found", "failed to publish schema version")
 	}
 
 	s.metrics.RecordPublish(ctx)
@@ -431,12 +498,29 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		return nil, status.Error(codes.FailedPrecondition, "schema version must be published before assigning to a tenant")
 	}
 
-	tenant, err := s.store.CreateTenant(ctx, CreateTenantParams{
-		Name:          req.Name,
-		SchemaID:      req.SchemaId,
-		SchemaVersion: req.SchemaVersion,
-	})
-	if err != nil {
+	actor := s.getActor(ctx)
+	var tenant domain.Tenant
+
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		var err error
+		tenant, err = tx.CreateTenant(ctx, CreateTenantParams{
+			Name:          req.Name,
+			SchemaID:      req.SchemaId,
+			SchemaVersion: req.SchemaVersion,
+		})
+		if err != nil {
+			return err
+		}
+		meta, _ := json.Marshal(map[string]any{"name": req.Name, "schema_id": req.SchemaId, "schema_version": req.SchemaVersion})
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenant.ID,
+			Actor:      actor,
+			Action:     "create_tenant",
+			ObjectKind: "tenant",
+			NewValue:   ptrString(tenant.ID),
+			Metadata:   meta,
+		})
+	}); err != nil {
 		s.logger.ErrorContext(ctx, "create tenant", "error", err)
 		return nil, status.Error(codes.Internal, "failed to create tenant")
 	}
@@ -517,47 +601,58 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	}
 	tenantID := resolved.ID
 
+	actor := s.getActor(ctx)
 	var tenant domain.Tenant
 
-	if req.Name != nil && *req.Name != "" {
-		if !isValidSlug(*req.Name) {
-			return nil, status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
-		}
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var err error
-		tenant, err = s.store.UpdateTenantName(ctx, UpdateTenantNameParams{
-			ID:   tenantID,
-			Name: *req.Name,
-		})
-		if err != nil {
-			return nil, errToStatus(err, "tenant not found", "failed to update tenant name")
+		if req.Name != nil && *req.Name != "" {
+			if !isValidSlug(*req.Name) {
+				return status.Error(codes.InvalidArgument, "name must be a slug: lowercase alphanumeric and hyphens, 1-63 chars")
+			}
+			tenant, err = tx.UpdateTenantName(ctx, UpdateTenantNameParams{
+				ID:   tenantID,
+				Name: *req.Name,
+			})
+			if err != nil {
+				return errToStatus(err, "tenant not found", "failed to update tenant name")
+			}
 		}
+
+		if req.SchemaVersion != nil {
+			tenant, err = tx.UpdateTenantSchemaVersion(ctx, UpdateTenantSchemaVersionParams{
+				ID:            tenantID,
+				SchemaVersion: *req.SchemaVersion,
+			})
+			if err != nil {
+				return errToStatus(err, "tenant not found", "failed to update tenant schema version")
+			}
+		}
+
+		if req.Name == nil && req.SchemaVersion == nil {
+			tenant, err = tx.GetTenantByID(ctx, tenantID)
+			if err != nil {
+				return errToStatus(err, "tenant not found", "failed to get tenant")
+			}
+		}
+
+		meta, _ := json.Marshal(map[string]any{"name": req.Name, "schema_version": req.SchemaVersion})
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenantID,
+			Actor:      actor,
+			Action:     "update_tenant",
+			ObjectKind: "tenant",
+			NewValue:   ptrString(tenantID),
+			Metadata:   meta,
+		})
+	}); err != nil {
+		return nil, err
 	}
 
-	if req.SchemaVersion != nil {
-		var err error
-		tenant, err = s.store.UpdateTenantSchemaVersion(ctx, UpdateTenantSchemaVersionParams{
-			ID:            tenantID,
-			SchemaVersion: *req.SchemaVersion,
-		})
-		if err != nil {
-			return nil, errToStatus(err, "tenant not found", "failed to update tenant schema version")
-		}
-		// Invalidate cached validators and dependentRequired rules — the tenant
-		// now binds a different schema version, so both per-field validators
-		// and the cross-field rule list must be refetched on next use.
-		if s.validator != nil {
-			s.validator.Cache().Invalidate(tenantID)
-			s.validator.InvalidateRules(tenantID)
-		}
-	}
-
-	// If neither field was updated, just fetch current state.
-	if req.Name == nil && req.SchemaVersion == nil {
-		var err error
-		tenant, err = s.store.GetTenantByID(ctx, tenantID)
-		if err != nil {
-			return nil, errToStatus(err, "tenant not found", "failed to get tenant")
-		}
+	// Invalidate cached validators if schema version changed.
+	if req.SchemaVersion != nil && s.validator != nil {
+		s.validator.Cache().Invalidate(tenantID)
+		s.validator.InvalidateRules(tenantID)
 	}
 
 	return &pb.UpdateTenantResponse{
@@ -577,7 +672,19 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 		return nil, err
 	}
 
-	if err := s.store.DeleteTenant(ctx, tenant.ID); err != nil {
+	actor := s.getActor(ctx)
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		if err := tx.DeleteTenant(ctx, tenant.ID); err != nil {
+			return err
+		}
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenant.ID,
+			Actor:      actor,
+			Action:     "delete_tenant",
+			ObjectKind: "tenant",
+			OldValue:   ptrString(tenant.ID),
+		})
+	}); err != nil {
 		s.logger.ErrorContext(ctx, "delete tenant", "error", err)
 		return nil, status.Error(codes.Internal, "failed to delete tenant")
 	}
@@ -604,10 +711,22 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 		lockedValues, _ = json.Marshal(req.LockedValues)
 	}
 
-	if err := s.store.CreateFieldLock(ctx, CreateFieldLockParams{
-		TenantID:     tenant.ID,
-		FieldPath:    req.FieldPath,
-		LockedValues: lockedValues,
+	actor := s.getActor(ctx)
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		if err := tx.CreateFieldLock(ctx, CreateFieldLockParams{
+			TenantID:     tenant.ID,
+			FieldPath:    req.FieldPath,
+			LockedValues: lockedValues,
+		}); err != nil {
+			return err
+		}
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenant.ID,
+			Actor:      actor,
+			Action:     "lock_field",
+			ObjectKind: "lock",
+			FieldPath:  ptrString(req.FieldPath),
+		})
 	}); err != nil {
 		s.logger.ErrorContext(ctx, "lock field", "error", err)
 		return nil, status.Error(codes.Internal, "failed to lock field")
@@ -628,9 +747,21 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 		return nil, err
 	}
 
-	if err := s.store.DeleteFieldLock(ctx, DeleteFieldLockParams{
-		TenantID:  tenant.ID,
-		FieldPath: req.FieldPath,
+	actor := s.getActor(ctx)
+	if err := s.store.RunInTx(ctx, func(tx Store) error {
+		if err := tx.DeleteFieldLock(ctx, DeleteFieldLockParams{
+			TenantID:  tenant.ID,
+			FieldPath: req.FieldPath,
+		}); err != nil {
+			return err
+		}
+		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenant.ID,
+			Actor:      actor,
+			Action:     "unlock_field",
+			ObjectKind: "lock",
+			FieldPath:  ptrString(req.FieldPath),
+		})
 	}); err != nil {
 		s.logger.ErrorContext(ctx, "unlock field", "error", err)
 		return nil, status.Error(codes.Internal, "failed to unlock field")
@@ -837,7 +968,19 @@ func (s *Service) autoPublish(ctx context.Context, resp *pb.ImportSchemaResponse
 	return &pb.ImportSchemaResponse{Schema: pubResp.Schema}, nil
 }
 
+func (s *Service) getActor(ctx context.Context) string {
+	claims, ok := auth.ClaimsFromContext(ctx)
+	if !ok {
+		return "unknown"
+	}
+	return claims.Subject
+}
+
 func (s *Service) createFields(ctx context.Context, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
+	return createFieldsOn(ctx, s.logger, s.store, versionID, fields)
+}
+
+func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
 	if err := validateNoPrefixOverlap(fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -860,7 +1003,7 @@ func (s *Service) createFields(ctx context.Context, versionID string, fields []*
 			externalDocs, _ = json.Marshal(f.ExternalDocs)
 		}
 
-		dbField, err := s.store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		dbField, err := store.CreateSchemaField(ctx, CreateSchemaFieldParams{
 			SchemaVersionID: versionID,
 			Path:            f.Path,
 			FieldType:       domain.FieldTypeFromProto(f.Type),
@@ -881,7 +1024,7 @@ func (s *Service) createFields(ctx context.Context, versionID string, fields []*
 			Sensitive:       f.Sensitive,
 		})
 		if err != nil {
-			s.logger.ErrorContext(ctx, "create schema field", "path", f.Path, "error", err)
+			logger.ErrorContext(ctx, "create schema field", "path", f.Path, "error", err)
 			return nil, status.Errorf(codes.Internal, "failed to create field %s", f.Path)
 		}
 		result = append(result, dbField)

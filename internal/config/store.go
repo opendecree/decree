@@ -72,6 +72,7 @@ type InsertAuditWriteLogParams struct {
 	TenantID      string
 	Actor         string
 	Action        string
+	ObjectKind    string // "field", "schema", "tenant", or "lock"; defaults to "field"
 	FieldPath     *string
 	OldValue      *string
 	NewValue      *string

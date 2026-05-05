@@ -45,6 +45,16 @@ gh attestation verify oci://ghcr.io/opendecree/decree-cli:VERSION --owner opende
 
 Replace `VERSION` with the release version (e.g. `0.10.0-alpha.1`).
 
+## Tamper-Evident Audit Log
+
+OpenDecree maintains a tamper-evident audit chain for all configuration and admin mutations.
+
+- Each audit row stores a SHA-256 hash chaining it to the previous entry for the same tenant.
+- A database trigger rejects UPDATE/DELETE on rows older than 60 seconds, preventing silent history rewrites.
+- Operators can verify chain integrity with `decree audit verify --tenant <id>`.
+
+The chain relies on hash chaining, not HMAC-keyed authentication. It is a deterrent against casual tampering; a compromised application credential can insert false entries that appear valid in the chain. See `docs/development/threat-model.md` for the full trust model.
+
 ## Scope
 
 This policy covers the OpenDecree server, CLI, and SDK packages in this repository.

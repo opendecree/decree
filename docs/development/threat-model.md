@@ -26,6 +26,30 @@
 - **Audit completeness** — can changes bypass audit?
 - **Config export** — unauthorized value exposure
 
+## 5. Audit Chain Trust Model
+
+The tamper-evident audit chain (migration 002) provides the following guarantees:
+
+### What it protects against
+- **Post-write row mutation**: The DB trigger (`trg_audit_write_log_immutable`) rejects any UPDATE or DELETE on `audit_write_log` rows older than 60 seconds. A 60-second grace window allows test teardown.
+- **Silent history rewriting**: Each row stores a SHA-256 hash chaining it to the previous entry for the same tenant. Tampering with any row's content will break the chain, detectable by `decree audit verify`.
+
+### What it does NOT protect against
+- **DB superuser access without trigger**: A `SECURITY DEFINER` function or `pg_dumpall + restore` can bypass the trigger. The trigger is a deterrent, not a cryptographic guarantee.
+- **Hash chain collision**: SHA-256 is used; collision attacks are not a practical concern but the chain is not post-quantum.
+- **Log loss before insert**: If the app crashes after committing a config change but before the audit insert, the change is unlogged. Config changes use a single transaction that includes the audit insert, so this window is narrow.
+- **Audit chain verification key management**: The chain uses no HMAC key — it relies on hash chaining alone. A compromised app credential can insert plausible-looking fake entries (correct chain, wrong content). A HMAC-keyed chain would address this but is out of scope for alpha.
+
+### Coverage
+- **Config mutations** (`set_field`, `rollback`, `import`): audited transactionally via `config.Store.InsertAuditWriteLog`.
+- **Schema mutations** (`create_schema`, `update_schema`, `delete_schema`, `publish_schema`): audited in the global (tenant_id=NULL) chain transactionally.
+- **Tenant mutations** (`create_tenant`, `update_tenant`, `delete_tenant`): audited in the per-tenant chain transactionally.
+- **Field lock mutations** (`lock_field`, `unlock_field`): audited in the per-tenant chain transactionally.
+
+### Verification
+Run `decree audit verify --tenant <id>` to walk a tenant's chain and report any breaks.
+The global schema-level chain is verified with `decree audit verify` (no --tenant flag).
+
 ## 5. Infrastructure
 - **gRPC reflection** — enabled in production?
 - **Rate limiting** — none exists

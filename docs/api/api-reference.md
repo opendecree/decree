@@ -28,6 +28,7 @@
     - [FieldType](#centralconfig-v1-FieldType)
   
 - [centralconfig/v1/audit_service.proto](#centralconfig_v1_audit_service-proto)
+    - [AuditChainBreak](#centralconfig-v1-AuditChainBreak)
     - [GetFieldUsageRequest](#centralconfig-v1-GetFieldUsageRequest)
     - [GetFieldUsageResponse](#centralconfig-v1-GetFieldUsageResponse)
     - [GetTenantUsageRequest](#centralconfig-v1-GetTenantUsageRequest)
@@ -36,6 +37,8 @@
     - [GetUnusedFieldsResponse](#centralconfig-v1-GetUnusedFieldsResponse)
     - [QueryWriteLogRequest](#centralconfig-v1-QueryWriteLogRequest)
     - [QueryWriteLogResponse](#centralconfig-v1-QueryWriteLogResponse)
+    - [VerifyChainRequest](#centralconfig-v1-VerifyChainRequest)
+    - [VerifyChainResponse](#centralconfig-v1-VerifyChainResponse)
   
     - [AuditService](#centralconfig-v1-AuditService)
   
@@ -141,6 +144,9 @@ one or more audit entries atomically with the config change.
 | new_value | [string](#string) | optional | The new value. Present for set_field actions. For rollback actions, contains the target version (e.g. &#34;v2&#34;). |
 | config_version | [int32](#int32) | optional | The config version number created by this action. |
 | created_at | [google.protobuf.Timestamp](#google-protobuf-Timestamp) |  | When the audit entry was created. |
+| object_kind | [string](#string) |  | The kind of object affected (&#34;field&#34;, &#34;schema&#34;, &#34;tenant&#34;, or &#34;lock&#34;). |
+| entry_hash | [string](#string) |  | SHA-256 hash of this entry&#39;s immutable fields, chained to previous_hash. |
+| previous_hash | [string](#string) |  | entry_hash of the previous entry in this tenant&#39;s chain (&#34;&#34; for the first). |
 
 
 
@@ -581,6 +587,24 @@ Each type maps to a specific field in the TypedValue oneof.
 
 
 
+<a name="centralconfig-v1-AuditChainBreak"></a>
+
+### AuditChainBreak
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| entry_id | [string](#string) |  | ID of the entry where the break was detected. |
+| position | [int32](#int32) |  | 0-based position in the ordered chain. |
+| got | [string](#string) |  | The entry_hash stored in the database. |
+| want | [string](#string) |  | The entry_hash we recomputed from the entry&#39;s fields. |
+
+
+
+
+
+
 <a name="centralconfig-v1-GetFieldUsageRequest"></a>
 
 ### GetFieldUsageRequest
@@ -713,6 +737,39 @@ Each type maps to a specific field in the TypedValue oneof.
 
 
 
+
+<a name="centralconfig-v1-VerifyChainRequest"></a>
+
+### VerifyChainRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tenant_id | [string](#string) |  | Tenant ID (UUID) whose chain to verify. Empty verifies the global (schema-level) chain. |
+
+
+
+
+
+
+<a name="centralconfig-v1-VerifyChainResponse"></a>
+
+### VerifyChainResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tenant_id | [string](#string) |  | Tenant ID that was verified (mirrors the request). |
+| total | [int32](#int32) |  | Total number of entries in the chain. |
+| ok | [bool](#bool) |  | Whether the chain is intact (no breaks found). |
+| breaks | [AuditChainBreak](#centralconfig-v1-AuditChainBreak) | repeated | Any breaks found. Empty when ok is true. |
+
+
+
+
+
  
 
  
@@ -736,6 +793,7 @@ Usage statistics are tracked asynchronously via batched read counters.
 | GetFieldUsage | [GetFieldUsageRequest](#centralconfig-v1-GetFieldUsageRequest) | [GetFieldUsageResponse](#centralconfig-v1-GetFieldUsageResponse) | GetFieldUsage returns aggregated read statistics for a specific field. |
 | GetTenantUsage | [GetTenantUsageRequest](#centralconfig-v1-GetTenantUsageRequest) | [GetTenantUsageResponse](#centralconfig-v1-GetTenantUsageResponse) | GetTenantUsage returns aggregated read statistics for all fields of a tenant. |
 | GetUnusedFields | [GetUnusedFieldsRequest](#centralconfig-v1-GetUnusedFieldsRequest) | [GetUnusedFieldsResponse](#centralconfig-v1-GetUnusedFieldsResponse) | GetUnusedFields returns field paths that have not been read since the given time. Useful for identifying configuration fields that may be safe to deprecate. |
+| VerifyChain | [VerifyChainRequest](#centralconfig-v1-VerifyChainRequest) | [VerifyChainResponse](#centralconfig-v1-VerifyChainResponse) | VerifyChain walks a tenant&#39;s audit chain and reports any tampered entries. An empty tenant_id verifies the global (schema-level) chain. |
 
  
 

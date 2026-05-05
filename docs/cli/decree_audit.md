@@ -36,4 +36,5 @@ Query the configuration change history and field read usage statistics. Useful f
 * [decree audit query](decree_audit_query.md)	 - Query the config change audit log
 * [decree audit unused](decree_audit_unused.md)	 - Find fields not read since the given duration (e.g. 7d, 24h)
 * [decree audit usage](decree_audit_usage.md)	 - Show read usage statistics for a field
+* [decree audit verify](decree_audit_verify.md)	 - Verify the tamper-evident audit chain for a tenant
 

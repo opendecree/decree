@@ -2,10 +2,16 @@ package schema
 
 import (
 	"context"
+	"crypto/rand"
+	"errors"
+	"fmt"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/opendecree/decree/internal/audit"
 	"github.com/opendecree/decree/internal/storage/dbstore"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/storage/pgconv"
@@ -13,16 +19,98 @@ import (
 
 // PGStore implements Store using PostgreSQL via sqlc-generated queries.
 type PGStore struct {
-	write *dbstore.Queries
-	read  *dbstore.Queries
+	writePool *pgxpool.Pool
+	write     *dbstore.Queries
+	read      *dbstore.Queries
 }
 
 // NewPGStore creates a new PostgreSQL-backed schema store.
 func NewPGStore(writePool, readPool *pgxpool.Pool) *PGStore {
 	return &PGStore{
-		write: dbstore.New(writePool),
-		read:  dbstore.New(readPool),
+		writePool: writePool,
+		write:     dbstore.New(writePool),
+		read:      dbstore.New(readPool),
 	}
+}
+
+// RunInTx executes fn within a database transaction.
+func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
+	tx, err := s.writePool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	txQueries := s.write.WithTx(tx)
+	txStore := &PGStore{
+		writePool: s.writePool,
+		write:     txQueries,
+		read:      txQueries,
+	}
+
+	if err := fn(txStore); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func schemaGenUUID() (pgtype.UUID, error) {
+	var id pgtype.UUID
+	if _, err := rand.Read(id.Bytes[:]); err != nil {
+		return pgtype.UUID{}, fmt.Errorf("generate uuid: %w", err)
+	}
+	id.Bytes[6] = (id.Bytes[6] & 0x0f) | 0x40 // version 4
+	id.Bytes[8] = (id.Bytes[8] & 0x3f) | 0x80 // variant 2
+	id.Valid = true
+	return id, nil
+}
+
+// InsertAuditWriteLog writes an admin audit entry, computing the hash chain
+// relative to the last entry for the same tenant (or global chain if tenantID is empty).
+func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
+	var tenantUUID pgtype.UUID
+	if arg.TenantID != "" {
+		var err error
+		tenantUUID, err = pgconv.StringToUUID(arg.TenantID)
+		if err != nil {
+			return err
+		}
+	}
+
+	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("get last audit hash: %w", err)
+	}
+
+	id, err := schemaGenUUID()
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	hash := audit.ComputeEntryHash(audit.ChainInput{
+		PreviousHash: prevHash,
+		ID:           pgconv.UUIDToString(id),
+		TenantID:     arg.TenantID,
+		Actor:        arg.Actor,
+		Action:       arg.Action,
+		ObjectKind:   arg.ObjectKind,
+		CreatedAt:    now,
+	})
+
+	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+		ID:           id,
+		TenantID:     tenantUUID,
+		Actor:        arg.Actor,
+		Action:       arg.Action,
+		FieldPath:    arg.FieldPath,
+		OldValue:     arg.OldValue,
+		NewValue:     arg.NewValue,
+		Metadata:     arg.Metadata,
+		ObjectKind:   arg.ObjectKind,
+		PreviousHash: prevHash,
+		EntryHash:    hash,
+	})
 }
 
 // --- Schema CRUD ---

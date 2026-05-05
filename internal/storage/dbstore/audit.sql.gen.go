@@ -11,6 +11,46 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getAuditWriteLogOrdered = `-- name: GetAuditWriteLogOrdered :many
+SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash FROM audit_write_log
+WHERE tenant_id IS NOT DISTINCT FROM $1
+ORDER BY created_at ASC, id ASC
+`
+
+func (q *Queries) GetAuditWriteLogOrdered(ctx context.Context, tenantID pgtype.UUID) ([]AuditWriteLog, error) {
+	rows, err := q.db.Query(ctx, getAuditWriteLogOrdered, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditWriteLog{}
+	for rows.Next() {
+		var i AuditWriteLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Actor,
+			&i.Action,
+			&i.FieldPath,
+			&i.OldValue,
+			&i.NewValue,
+			&i.ConfigVersion,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.ObjectKind,
+			&i.PreviousHash,
+			&i.EntryHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFieldUsage = `-- name: GetFieldUsage :many
 SELECT tenant_id, field_path, period_start, read_count, last_read_by, last_read_at FROM usage_stats
 WHERE tenant_id = $1
@@ -57,6 +97,21 @@ func (q *Queries) GetFieldUsage(ctx context.Context, arg GetFieldUsageParams) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const getLastAuditHashForTenant = `-- name: GetLastAuditHashForTenant :one
+SELECT COALESCE(entry_hash, '')
+FROM audit_write_log
+WHERE tenant_id IS NOT DISTINCT FROM $1
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLastAuditHashForTenant(ctx context.Context, tenantID pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getLastAuditHashForTenant, tenantID)
+	var entry_hash string
+	err := row.Scan(&entry_hash)
+	return entry_hash, err
 }
 
 const getTenantUsage = `-- name: GetTenantUsage :many
@@ -141,11 +196,12 @@ func (q *Queries) GetUnusedFields(ctx context.Context, arg GetUnusedFieldsParams
 }
 
 const insertAuditWriteLog = `-- name: InsertAuditWriteLog :exec
-INSERT INTO audit_write_log (tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 `
 
 type InsertAuditWriteLogParams struct {
+	ID            pgtype.UUID `json:"id"`
 	TenantID      pgtype.UUID `json:"tenant_id"`
 	Actor         string      `json:"actor"`
 	Action        string      `json:"action"`
@@ -154,10 +210,14 @@ type InsertAuditWriteLogParams struct {
 	NewValue      *string     `json:"new_value"`
 	ConfigVersion *int32      `json:"config_version"`
 	Metadata      []byte      `json:"metadata"`
+	ObjectKind    string      `json:"object_kind"`
+	PreviousHash  string      `json:"previous_hash"`
+	EntryHash     string      `json:"entry_hash"`
 }
 
 func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
 	_, err := q.db.Exec(ctx, insertAuditWriteLog,
+		arg.ID,
 		arg.TenantID,
 		arg.Actor,
 		arg.Action,
@@ -166,12 +226,15 @@ func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		arg.NewValue,
 		arg.ConfigVersion,
 		arg.Metadata,
+		arg.ObjectKind,
+		arg.PreviousHash,
+		arg.EntryHash,
 	)
 	return err
 }
 
 const queryAuditWriteLog = `-- name: QueryAuditWriteLog :many
-SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at FROM audit_write_log
+SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash FROM audit_write_log
 WHERE ($1::UUID IS NULL OR tenant_id = $1)
   AND (NULLIF($2::TEXT, '') IS NULL OR actor = $2)
   AND (NULLIF($3::TEXT, '') IS NULL OR field_path = $3)
@@ -219,6 +282,9 @@ func (q *Queries) QueryAuditWriteLog(ctx context.Context, arg QueryAuditWriteLog
 			&i.ConfigVersion,
 			&i.Metadata,
 			&i.CreatedAt,
+			&i.ObjectKind,
+			&i.PreviousHash,
+			&i.EntryHash,
 		); err != nil {
 			return nil, err
 		}

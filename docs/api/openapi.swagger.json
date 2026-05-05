@@ -107,6 +107,38 @@
         ]
       }
     },
+    "/v1/audit/verify": {
+      "get": {
+        "summary": "VerifyChain walks a tenant's audit chain and reports any tampered entries.\nAn empty tenant_id verifies the global (schema-level) chain.",
+        "operationId": "AuditService_VerifyChain",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1VerifyChainResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID) whose chain to verify. Empty verifies the global (schema-level) chain.",
+            "in": "query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "AuditService"
+        ]
+      }
+    },
     "/v1/schemas": {
       "get": {
         "summary": "ListSchemas returns all schemas, ordered by creation time (newest first).",
@@ -1536,6 +1568,28 @@
         }
       }
     },
+    "v1AuditChainBreak": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "description": "ID of the entry where the break was detected."
+        },
+        "position": {
+          "type": "integer",
+          "format": "int32",
+          "description": "0-based position in the ordered chain."
+        },
+        "got": {
+          "type": "string",
+          "description": "The entry_hash stored in the database."
+        },
+        "want": {
+          "type": "string",
+          "description": "The entry_hash we recomputed from the entry's fields."
+        }
+      }
+    },
     "v1AuditEntry": {
       "type": "object",
       "properties": {
@@ -1576,6 +1630,18 @@
           "type": "string",
           "format": "date-time",
           "description": "When the audit entry was created."
+        },
+        "objectKind": {
+          "type": "string",
+          "description": "The kind of object affected (\"field\", \"schema\", \"tenant\", or \"lock\")."
+        },
+        "entryHash": {
+          "type": "string",
+          "description": "SHA-256 hash of this entry's immutable fields, chained to previous_hash."
+        },
+        "previousHash": {
+          "type": "string",
+          "description": "entry_hash of the previous entry in this tenant's chain (\"\" for the first)."
         }
       },
       "description": "AuditEntry represents a write event recorded in the audit log.\nEvery config mutation (SetField, SetFields, RollbackToVersion) creates\none or more audit entries atomically with the config change."
@@ -2553,6 +2619,32 @@
         }
       },
       "description": "ValidationRule encodes one cross-field rule expressed in Common\nExpression Language (CEL). Reserved in v0.1.0 of the schema spec \u2014 the\nparser accepts and persists rules, but the engine that compiles and\nevaluates them ships separately (see issue #76 / .agents/context/cel-validation.md).\n\nRules are scoped to a path prefix: an empty path means a schema-wide\nrule; a non-empty path anchors the rule to a group for documentation\nand UI grouping (the binding namespace itself always exposes every\nfield via `self`, regardless of path)."
+    },
+    "v1VerifyChainResponse": {
+      "type": "object",
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "description": "Tenant ID that was verified (mirrors the request)."
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Total number of entries in the chain."
+        },
+        "ok": {
+          "type": "boolean",
+          "description": "Whether the chain is intact (no breaks found)."
+        },
+        "breaks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1AuditChainBreak"
+          },
+          "description": "Any breaks found. Empty when ok is true."
+        }
+      }
     }
   },
   "securityDefinitions": {

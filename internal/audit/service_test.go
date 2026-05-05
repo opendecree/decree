@@ -39,6 +39,16 @@ func superadminCtx() context.Context {
 
 type mockStore struct{ mock.Mock }
 
+func (m *mockStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *mockStore) GetAuditWriteLogOrdered(ctx context.Context, tenantID string) ([]domain.AuditWriteLog, error) {
+	args := m.Called(ctx, tenantID)
+	return args.Get(0).([]domain.AuditWriteLog), args.Error(1)
+}
+
 func (m *mockStore) QueryAuditWriteLog(ctx context.Context, arg QueryWriteLogParams) ([]domain.AuditWriteLog, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]domain.AuditWriteLog), args.Error(1)
@@ -267,6 +277,89 @@ func TestGetUnusedFields_DeniedForOutOfScopeAdmin(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+// --- VerifyChain ---
+
+func TestVerifyChain_NoClaims(t *testing.T) {
+	svc, _ := newTestService()
+	_, err := svc.VerifyChain(context.Background(), &pb.VerifyChainRequest{TenantId: testTenantID})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestVerifyChain_TenantOutOfScope(t *testing.T) {
+	svc, _ := newTestService()
+	_, err := svc.VerifyChain(outOfScopeAdminCtx(), &pb.VerifyChainRequest{TenantId: testTenantID})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestVerifyChain_TenantSuccess(t *testing.T) {
+	svc, store := newTestService()
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{testTenantID},
+	})
+
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	h := ComputeEntryHash(ChainInput{
+		PreviousHash: "",
+		ID:           "id-1",
+		TenantID:     testTenantID,
+		Actor:        "actor",
+		Action:       "set_field",
+		ObjectKind:   "field",
+		CreatedAt:    ts,
+	})
+	store.On("GetAuditWriteLogOrdered", ctx, testTenantID).Return([]domain.AuditWriteLog{
+		{ID: "id-1", TenantID: testTenantID, Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h, CreatedAt: ts},
+	}, nil)
+
+	resp, err := svc.VerifyChain(ctx, &pb.VerifyChainRequest{TenantId: testTenantID})
+	require.NoError(t, err)
+	assert.True(t, resp.Ok)
+	assert.Equal(t, int32(1), resp.Total)
+	assert.Empty(t, resp.Breaks)
+}
+
+func TestVerifyChain_GlobalChain_NonSuperAdmin(t *testing.T) {
+	svc, _ := newTestService()
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{testTenantID},
+	})
+	_, err := svc.VerifyChain(ctx, &pb.VerifyChainRequest{TenantId: ""})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestVerifyChain_GlobalChain_SuperAdmin(t *testing.T) {
+	svc, store := newTestService()
+	store.On("GetAuditWriteLogOrdered", superadminCtx(), "").Return([]domain.AuditWriteLog{}, nil)
+
+	resp, err := svc.VerifyChain(superadminCtx(), &pb.VerifyChainRequest{TenantId: ""})
+	require.NoError(t, err)
+	assert.True(t, resp.Ok)
+	assert.Equal(t, int32(0), resp.Total)
+}
+
+func TestVerifyChain_TenantTamperedEntry(t *testing.T) {
+	svc, store := newTestService()
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{testTenantID},
+	})
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	store.On("GetAuditWriteLogOrdered", ctx, testTenantID).Return([]domain.AuditWriteLog{
+		{ID: "id-1", TenantID: testTenantID, Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: "tampered", CreatedAt: ts},
+	}, nil)
+
+	resp, err := svc.VerifyChain(ctx, &pb.VerifyChainRequest{TenantId: testTenantID})
+	require.NoError(t, err)
+	assert.False(t, resp.Ok)
+	require.Len(t, resp.Breaks, 1)
+	assert.Equal(t, "tampered", resp.Breaks[0].Got)
 }
 
 // --- Helpers ---

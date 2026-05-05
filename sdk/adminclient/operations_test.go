@@ -823,4 +823,154 @@ func TestServiceNotConfigured_AllMethods(t *testing.T) {
 	if !errors.Is(err, ErrServiceNotConfigured) {
 		t.Errorf("CreateTenant: got error %v, want %v", err, ErrServiceNotConfigured)
 	}
+
+	_, err = client.VerifyChain(ctx, "t1")
+	if !errors.Is(err, ErrServiceNotConfigured) {
+		t.Errorf("VerifyChain: got error %v, want %v", err, ErrServiceNotConfigured)
+	}
+}
+
+func TestVerifyChain_EmptyChain(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return &QueryWriteLogResponse{}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.OK {
+		t.Error("expected OK for empty chain")
+	}
+	if result.Total != 0 {
+		t.Errorf("got Total %d, want 0", result.Total)
+	}
+}
+
+func TestVerifyChain_IntactChain(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Second)
+	t2 := t0.Add(2 * time.Second)
+
+	// Build three entries with correct hashes, newest-first (as server returns them).
+	h0 := computeClientHash("", "id-0", "t1", "actor", "set_field", "field", t0)
+	h1 := computeClientHash(h0, "id-1", "t1", "actor", "set_field", "field", t1)
+	h2 := computeClientHash(h1, "id-2", "t1", "actor", "set_field", "field", t2)
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return &QueryWriteLogResponse{
+			Entries: []*AuditEntry{
+				{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h2, CreatedAt: t2},
+				{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h1, CreatedAt: t1},
+				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h0, CreatedAt: t0},
+			},
+		}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.OK {
+		t.Errorf("expected OK chain, got breaks: %v", result.Breaks)
+	}
+	if result.Total != 3 {
+		t.Errorf("got Total %d, want 3", result.Total)
+	}
+}
+
+func TestVerifyChain_DetectsTampering(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return &QueryWriteLogResponse{
+			Entries: []*AuditEntry{
+				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: "tampered", CreatedAt: t0},
+			},
+		}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.OK {
+		t.Error("expected not OK for tampered chain")
+	}
+	if len(result.Breaks) != 1 {
+		t.Fatalf("got %d breaks, want 1", len(result.Breaks))
+	}
+	if got := result.Breaks[0].Got; got != "tampered" {
+		t.Errorf("got Got %v, want tampered", got)
+	}
+}
+
+func TestVerifyChain_FetchError(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return nil, errors.New("transport failure")
+	}
+
+	_, err := client.VerifyChain(context.Background(), "t1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestVerifyChain_GlobalChain(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	var capturedReq *QueryWriteLogRequest
+	ma.queryWriteLogFn = func(_ context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		capturedReq = req
+		return &QueryWriteLogResponse{}, nil
+	}
+
+	_, err := client.VerifyChain(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Empty tenantID means global chain — no tenant filter should be set.
+	if capturedReq.TenantID != nil {
+		t.Errorf("expected nil TenantID for global chain, got %v", *capturedReq.TenantID)
+	}
+}
+
+func TestComputeClientHash_Deterministic(t *testing.T) {
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	h1 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
+	h2 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
+	if h1 != h2 {
+		t.Errorf("hash not deterministic: %q != %q", h1, h2)
+	}
+	if len(h1) != 64 {
+		t.Errorf("expected 64-char SHA-256 hex, got len %d", len(h1))
+	}
+}
+
+func TestComputeClientHash_Sensitivity(t *testing.T) {
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	base := computeClientHash("", "id-1", "t1", "actor", "set_field", "field", ts)
+
+	if computeClientHash("x", "id-1", "t1", "actor", "set_field", "field", ts) == base {
+		t.Error("previousHash change did not change hash")
+	}
+	if computeClientHash("", "id-2", "t1", "actor", "set_field", "field", ts) == base {
+		t.Error("id change did not change hash")
+	}
+	if computeClientHash("", "id-1", "t2", "actor", "set_field", "field", ts) == base {
+		t.Error("tenantID change did not change hash")
+	}
 }

@@ -125,14 +125,17 @@ type ConfigValue struct {
 // AuditWriteLog represents a config change event in the audit log.
 type AuditWriteLog struct {
 	ID            string
-	TenantID      string
+	TenantID      string // empty string means global (schema-level) entry
 	Actor         string
 	Action        string
+	ObjectKind    string // "field", "schema", "tenant", or "lock"
 	FieldPath     *string
 	OldValue      *string
 	NewValue      *string
 	ConfigVersion *int32
 	Metadata      []byte
+	PreviousHash  string
+	EntryHash     string
 	CreatedAt     time.Time
 }
 
