@@ -204,6 +204,9 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 			Metadata:   meta,
 		})
 	}); err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, err
+		}
 		s.logger.ErrorContext(ctx, "create schema transaction failed", "error", err)
 		return nil, status.Error(codes.Internal, "failed to create schema")
 	}
@@ -365,6 +368,9 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 			Metadata:   meta,
 		})
 	}); err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, err
+		}
 		s.logger.ErrorContext(ctx, "update schema transaction failed", "error", err)
 		return nil, status.Error(codes.Internal, "failed to update schema")
 	}
