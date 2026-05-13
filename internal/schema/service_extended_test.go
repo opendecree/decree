@@ -812,6 +812,59 @@ func TestImportSchema_MissingSyntax(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestImportSchema_RejectsInvalidCELRule(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	yaml := []byte(`spec_version: v1
+name: cel-bad
+fields:
+  payments.min:
+    type: integer
+  payments.max:
+    type: integer
+validations:
+  - rule: "self.unknown.path > 0"
+    message: "unknown field"
+`)
+
+	_, err := svc.ImportSchema(ctx, &pb.ImportSchemaRequest{YamlContent: yaml})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, err.Error(), "self.unknown.path does not resolve")
+}
+
+func TestImportSchema_AcceptsValidCELRule(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	store.On("GetSchemaByName", ctx, "cel-good").Return(domain.Schema{}, domain.ErrNotFound)
+	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
+		Return(domain.Schema{ID: testSchemaID, Name: "cel-good"}, nil)
+	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
+		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
+	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
+		Return(domain.SchemaField{Path: "payments.min", FieldType: "integer"}, nil)
+
+	yaml := []byte(`spec_version: v1
+name: cel-good
+fields:
+  payments.min:
+    type: integer
+  payments.max:
+    type: integer
+validations:
+  - rule: "self.payments.min < self.payments.max"
+    message: "min must be less than max"
+`)
+
+	resp, err := svc.ImportSchema(ctx, &pb.ImportSchemaRequest{YamlContent: yaml})
+	require.NoError(t, err)
+	assert.Equal(t, "cel-good", resp.Schema.Name)
+}
+
 func TestImportSchema_LookupError(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
