@@ -72,3 +72,28 @@ func TestCache_ProgramFor_ReportsCompileFailure(t *testing.T) {
 	_, err = cache.ProgramFor(env, rule, "schema-1", 1, 0)
 	require.Error(t, err)
 }
+
+func TestCostLimit_ReadsFromEnv(t *testing.T) {
+	t.Setenv(envCostLimit, "12345")
+	assert.Equal(t, uint64(12345), costLimit())
+}
+
+func TestCostLimit_DefaultsWhenUnset(t *testing.T) {
+	t.Setenv(envCostLimit, "")
+	assert.Equal(t, defaultCostLimit, costLimit())
+}
+
+func TestCostLimit_DefaultsOnGarbageInput(t *testing.T) {
+	t.Setenv(envCostLimit, "not-a-number")
+	assert.Equal(t, defaultCostLimit, costLimit())
+}
+
+func TestInterruptFreq_ReadsFromEnv(t *testing.T) {
+	t.Setenv(envInterruptFreq, "50")
+	assert.Equal(t, uint(50), interruptFreq())
+}
+
+func TestInterruptFreq_DefaultsOnOverflow(t *testing.T) {
+	t.Setenv(envInterruptFreq, "9999999999999")
+	assert.Equal(t, defaultInterruptFreq, interruptFreq())
+}

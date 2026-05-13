@@ -163,3 +163,49 @@ func TestLintValidations_NoRulesIsNoOp(t *testing.T) {
 	require.NoError(t, LintValidations(nil, showcaseFields()))
 	require.NoError(t, LintValidations([]*pb.ValidationRule{}, showcaseFields()))
 }
+
+func TestLintValidations_Rule4_ComparisonLiteralOnLeft(t *testing.T) {
+	// Tests the flipped-operand path: `literal <op> self.x`.
+	rules := []*pb.ValidationRule{
+		{Rule: "0.0 < self.payments.min_amount", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use exclusiveMinimum: 0 on the field")
+}
+
+func TestLintValidations_Rule4_ComparisonLiteralOnLeft_LE(t *testing.T) {
+	rules := []*pb.ValidationRule{
+		{Rule: "0.0 <= self.payments.min_amount", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use minimum: 0 on the field")
+}
+
+func TestLintValidations_Rule4_LessThanComparisonLiteralOnRight(t *testing.T) {
+	rules := []*pb.ValidationRule{
+		{Rule: "self.payments.max_amount < 1000.0", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use exclusiveMaximum: 1000 on the field")
+}
+
+func TestLintValidations_Rule4_LessThanEqualComparisonLiteralOnRight(t *testing.T) {
+	rules := []*pb.ValidationRule{
+		{Rule: "self.payments.max_amount <= 1000.0", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use maximum: 1000 on the field")
+}
+
+func TestLintValidations_Rule4_EqualityLiteralOnLeft(t *testing.T) {
+	rules := []*pb.ValidationRule{
+		{Rule: `true == self.payments.refunds_enabled`, Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use enum: [true]")
+}
