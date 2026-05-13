@@ -1351,9 +1351,13 @@ func (s *Service) enforceCrossFieldInTx(
 		}
 		types := pbFieldTypeMap(celArtifacts.FieldTypes)
 		act := celpkg.BuildActivation(snapshot, types, tenantMeta)
-		failed, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules)
+		failed, softErrs, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules)
 		if evalErr != nil {
 			return fmt.Errorf("evaluate validations: %w", evalErr)
+		}
+		for _, soft := range softErrs {
+			s.logger.WarnContext(ctx, "CEL rule eval soft-error",
+				"tenant", tenantID, "version", version, "error", soft)
 		}
 		if len(failed) > 0 {
 			return &validationError{err: aggregatedFailureError(failed)}

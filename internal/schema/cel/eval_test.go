@@ -99,7 +99,7 @@ func TestEval_RuleHolds(t *testing.T) {
 		},
 		TenantBinding{},
 	)
-	failed, err := Eval(programs, act, rules)
+	failed, _, err := Eval(programs, act, rules)
 	require.NoError(t, err)
 	assert.Empty(t, failed)
 }
@@ -120,7 +120,7 @@ func TestEval_RuleFires(t *testing.T) {
 		},
 		TenantBinding{},
 	)
-	failed, err := Eval(programs, act, rules)
+	failed, _, err := Eval(programs, act, rules)
 	require.NoError(t, err)
 	require.Len(t, failed, 1)
 	assert.Equal(t, "min must be < max", failed[0].Message)
@@ -143,7 +143,7 @@ func TestEval_AggregatesMultipleFailures(t *testing.T) {
 		},
 		TenantBinding{},
 	)
-	failed, err := Eval(programs, act, rules)
+	failed, _, err := Eval(programs, act, rules)
 	require.NoError(t, err)
 	require.Len(t, failed, 2)
 	assert.Equal(t, "min < max", failed[0].Message)
@@ -154,7 +154,7 @@ func TestEval_LengthMismatchIsErr(t *testing.T) {
 	programs, rules := compileRunnable(t, []ruleSpec{
 		{rule: "self.payments.min_amount < self.payments.max_amount", message: "x"},
 	})
-	_, err := Eval(programs, map[string]any{}, append(rules, &pb.ValidationRule{Rule: "true"}))
+	_, _, err := Eval(programs, map[string]any{}, append(rules, &pb.ValidationRule{Rule: "true"}))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "length mismatch")
 }
@@ -173,7 +173,7 @@ func TestEval_CostLimitExceeded(t *testing.T) {
 		map[string]pb.FieldType{"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER},
 		TenantBinding{},
 	)
-	_, err := Eval(programs, act, rules)
+	_, _, err := Eval(programs, act, rules)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cost limit")
 }
@@ -189,7 +189,7 @@ type stringError string
 
 func (a stringError) Error() string { return string(a) }
 
-func TestEval_NonBoolResultErrors(t *testing.T) {
+func TestEval_NonBoolResultIsSoftError(t *testing.T) {
 	programs, rules := compileRunnable(t, []ruleSpec{
 		{rule: "self.payments.min_amount + 1.0", message: "not bool"},
 	})
@@ -198,9 +198,34 @@ func TestEval_NonBoolResultErrors(t *testing.T) {
 		map[string]pb.FieldType{"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER},
 		TenantBinding{},
 	)
-	_, err := Eval(programs, act, rules)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "did not evaluate to bool")
+	failed, softErrs, err := Eval(programs, act, rules)
+	require.NoError(t, err)
+	assert.Empty(t, failed, "non-bool rule must not count as a failure")
+	require.Len(t, softErrs, 1)
+	assert.Contains(t, softErrs[0].Error(), "did not evaluate to bool")
+}
+
+func TestEval_NullComparisonIsSoftError(t *testing.T) {
+	// Rule references a field that is null in the activation. cel-go raises
+	// a runtime error ("no such overload") that must surface as a soft
+	// error rather than failing the write — otherwise authors would have to
+	// wrap every field reference in has() to keep unrelated writes from
+	// being rejected.
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "min < max"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{{FieldPath: "payments.max_amount", Value: strPtr("100")}},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+	failed, softErrs, err := Eval(programs, act, rules)
+	require.NoError(t, err)
+	assert.Empty(t, failed, "null comparison must not fail the write")
+	require.Len(t, softErrs, 1)
 }
 
 func BenchmarkEval_TenRules(b *testing.B) {
@@ -233,7 +258,7 @@ func BenchmarkEval_TenRules(b *testing.B) {
 	)
 
 	for b.Loop() {
-		_, _ = Eval(programs, act, rules)
+		_, _, _ = Eval(programs, act, rules)
 	}
 }
 

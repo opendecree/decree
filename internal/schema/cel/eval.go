@@ -1,7 +1,6 @@
 package cel
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -26,38 +25,46 @@ type FailedRule struct {
 // rules that failed. Programs and rules must align by index — the caller
 // builds them together in factory.GetCelArtifacts.
 //
-// Runtime errors fall into two buckets:
+// Three outcome shapes:
 //
-//   - cost-limit exceedance — a contrived rule trips
-//     cel.CostLimit; surfaces as a separate error rather than
-//     a normal rule failure so operators can distinguish DoS attempts.
-//   - evaluation errors (type mismatch on a path lint should have caught,
-//     missing keys in `dyn` traversal, etc.) — joined and returned so the
-//     write path can decide between InvalidArgument and Internal.
+//   - rule returns false      → appended to the failed slice.
+//   - rule returns true       → dropped.
+//   - rule errors at runtime  → appended to the soft-error slice (returned
+//     separately so the caller can log without failing the write). The
+//     common runtime error is comparison against an unset (null) field;
+//     authors should not need to wrap every reference in `has()` to keep
+//     unrelated writes from being rejected.
 //
-// nil/nil means every rule held.
-func Eval(programs []cel.Program, activation map[string]any, rules []*pb.ValidationRule) ([]FailedRule, error) {
+// Two terminal errors:
+//
+//   - cost-limit exceedance — abort the whole evaluation; surfaces as the
+//     returned error so the caller can return InvalidArgument and
+//     telemetry can flag a potential DoS attempt.
+//   - length mismatch       — programmer bug; abort.
+//
+// nil/nil/nil means every rule held cleanly.
+func Eval(programs []cel.Program, activation map[string]any, rules []*pb.ValidationRule) ([]FailedRule, []error, error) {
 	if len(programs) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if len(programs) != len(rules) {
-		return nil, fmt.Errorf("cel: programs (%d) and rules (%d) length mismatch", len(programs), len(rules))
+		return nil, nil, fmt.Errorf("cel: programs (%d) and rules (%d) length mismatch", len(programs), len(rules))
 	}
 	var (
 		failed   []FailedRule
-		evalErrs []error
+		softErrs []error
 	)
 	for i, prog := range programs {
 		val, _, err := prog.Eval(activation)
 		if err != nil {
 			if isCostLimit(err) {
-				return nil, fmt.Errorf("cel: cost limit exceeded for validations[%d]: %w", i, err)
+				return nil, softErrs, fmt.Errorf("cel: cost limit exceeded for validations[%d]: %w", i, err)
 			}
-			evalErrs = append(evalErrs, fmt.Errorf("validations[%d]: %w", i, err))
+			softErrs = append(softErrs, fmt.Errorf("validations[%d]: %w", i, err))
 			continue
 		}
 		if val == nil || val.Type() != types.BoolType {
-			evalErrs = append(evalErrs, fmt.Errorf("validations[%d]: rule did not evaluate to bool (got %v)", i, valType(val)))
+			softErrs = append(softErrs, fmt.Errorf("validations[%d]: rule did not evaluate to bool (got %v)", i, valType(val)))
 			continue
 		}
 		if val.Value() == false {
@@ -69,10 +76,7 @@ func Eval(programs []cel.Program, activation map[string]any, rules []*pb.Validat
 			})
 		}
 	}
-	if len(evalErrs) > 0 {
-		return failed, errors.Join(evalErrs...)
-	}
-	return failed, nil
+	return failed, softErrs, nil
 }
 
 func valType(v ref.Val) string {
