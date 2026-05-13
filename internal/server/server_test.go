@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	reflpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/grpc/status"
@@ -371,11 +372,35 @@ func startReflectionTestServer(t *testing.T, enableReflection bool) (*grpc.Clien
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 
+	waitForReady(t, conn)
+
 	cleanup := func() {
 		_ = conn.Close()
 		srv.GracefulStop(context.Background())
 	}
 	return conn, cleanup
+}
+
+// waitForReady drives the lazy ClientConn to Ready before returning. Without
+// this, the test goroutine can race with the server's accept loop: grpc.NewClient
+// is non-blocking and the first RPC may resolve before the gRPC server has
+// registered handlers on the kernel-queued connection, surfacing as
+// codes.Unknown instead of codes.Unimplemented. Polling state instead of
+// blocking on grpc.WithBlock (deprecated) keeps the test on the supported API.
+func waitForReady(t *testing.T, conn *grpc.ClientConn) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	conn.Connect()
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			return
+		}
+		if !conn.WaitForStateChange(ctx, state) {
+			t.Fatalf("ClientConn did not reach Ready within deadline (last state %s)", state)
+		}
+	}
 }
 
 func callReflection(ctx context.Context, conn *grpc.ClientConn) error {
