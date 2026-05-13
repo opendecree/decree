@@ -2,6 +2,7 @@ package cel
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"sync"
@@ -96,7 +97,7 @@ func costLimit() uint64 {
 }
 
 func interruptFreq() uint {
-	if v, ok := readUint64(envInterruptFreq); ok {
+	if v, ok := readUint64(envInterruptFreq); ok && v <= math.MaxUint32 {
 		return uint(v)
 	}
 	return defaultInterruptFreq
