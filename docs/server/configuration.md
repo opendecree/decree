@@ -22,6 +22,8 @@ OpenDecree is configured entirely through environment variables. No config files
 | `SCHEMA_MAX_DOC_BYTES` | Maximum serialized YAML document size accepted by `ImportSchema`, in bytes. Requests above this return `InvalidArgument`. Set to `0` to disable. | `5242880` (5 MiB) | No |
 | `SCHEMA_COMPILE_TIMEOUT` | Wall-clock cap on a single JSON-Schema compile (per-field constraint). Format: Go duration (e.g., `5s`, `2s`). Set to `0` to disable the timeout. | `5s` | No |
 | `SCHEMA_MAX_REF_DEPTH` | Maximum structural nesting depth of a JSON-Schema constraint document. Schemas deeper than this are rejected before compilation. Set to `0` to disable. | `64` | No |
+| `DECREE_CEL_COST_LIMIT` | DoS guard for CEL `validations:` rules. `cel.CostLimit` value used when building each `cel.Program`; evaluation aborts when the rule's internal cost counter exceeds this limit. | `100000` | No |
+| `DECREE_CEL_INTERRUPT_FREQ` | How often the CEL cost counter is sampled while a rule's loops or comprehensions run. Lower values catch runaway evaluation sooner at small per-evaluation overhead. | `100` | No |
 
 ## gRPC Server Options
 
