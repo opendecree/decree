@@ -7,6 +7,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/exaring/otelpgx v0.10.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
+	github.com/google/cel-go v0.28.1
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/opendecree/decree/api v0.1.2
@@ -31,7 +32,9 @@ require (
 )
 
 require (
+	cel.dev/expr v0.25.1 // indirect
 	github.com/MicahParks/jwkset v0.11.0 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -47,6 +50,8 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
