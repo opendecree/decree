@@ -34,10 +34,15 @@ type TenantBinding struct {
 //     `has(self.x)` or `self.x == null` interchangeably.
 //   - tenant — flat `{id, name}` map of strings.
 //
-// types must cover every path that appears in rows; unknown paths fall back
-// to a raw-string value, mirroring stringToTypedValue's default branch.
+// types must cover every path declared on the schema. Every key in types is
+// pre-populated under self as nil so an unset field still resolves to CEL
+// null rather than raising a "no such key" runtime error. Rows then
+// overwrite the corresponding leaves with their typed value.
 func BuildActivation(rows []SnapshotRow, types map[string]pb.FieldType, tenant TenantBinding) map[string]any {
 	self := make(map[string]any)
+	for path := range types {
+		setNested(self, strings.Split(path, "."), nil)
+	}
 	for _, row := range rows {
 		ft := types[row.FieldPath]
 		val := stringToCelNative(row.Value, ft)
