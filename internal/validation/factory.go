@@ -3,9 +3,13 @@ package validation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
+	"github.com/google/cel-go/cel"
+
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	celpkg "github.com/opendecree/decree/internal/schema/cel"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -21,10 +25,14 @@ type Store interface {
 
 // ValidatorFactory builds and caches field validators per tenant.
 type ValidatorFactory struct {
-	store      Store
-	cache      *ValidatorCache
-	rulesCache sync.Map // tenantID → []byte (raw dependent_required JSON)
-	limits     Limits
+	store            Store
+	cache            *ValidatorCache
+	rulesCache       sync.Map // tenantID → []byte (raw dependent_required JSON)
+	validationsCache sync.Map // tenantID → []*pb.ValidationRule
+	celEnvCache      sync.Map // tenantID → *cel.Env
+	celProgramsCache sync.Map // tenantID → []cel.Program
+	celCache         *celpkg.Cache
+	limits           Limits
 }
 
 // NewValidatorFactory creates a new validator factory. Pass [WithLimits]
@@ -32,9 +40,10 @@ type ValidatorFactory struct {
 func NewValidatorFactory(store Store, opts ...Option) *ValidatorFactory {
 	o := resolveOptions(opts)
 	return &ValidatorFactory{
-		store:  store,
-		cache:  NewValidatorCache(0),
-		limits: o.limits,
+		store:    store,
+		cache:    NewValidatorCache(0),
+		celCache: celpkg.NewCache(),
+		limits:   o.limits,
 	}
 }
 
@@ -43,11 +52,17 @@ func (f *ValidatorFactory) Cache() *ValidatorCache {
 	return f.cache
 }
 
-// InvalidateRules drops the cached dependentRequired bytes for a tenant.
-// Call this alongside Cache().Invalidate() whenever a tenant's schema
-// version changes.
+// InvalidateRules drops every cached rule-derived artifact for a tenant:
+// dependentRequired bytes, validations slice, the cel.Env, and the
+// compiled cel.Program slice. Call this alongside Cache().Invalidate()
+// whenever a tenant's schema version changes. Compiled programs that
+// remain in the celCache are also dropped so a stale env reference cannot
+// be reached on the next compile.
 func (f *ValidatorFactory) InvalidateRules(tenantID string) {
 	f.rulesCache.Delete(tenantID)
+	f.validationsCache.Delete(tenantID)
+	f.celEnvCache.Delete(tenantID)
+	f.celProgramsCache.Delete(tenantID)
 }
 
 // GetDependentRequired returns the raw JSON-encoded dependentRequired rules
@@ -116,4 +131,112 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID string) (
 
 	f.cache.Set(tenantID, validators)
 	return validators, nil
+}
+
+// GetValidations returns the decoded list of CEL validation rules for a
+// tenant's bound schema version. The shape returned is the proto slice so
+// the runtime evaluator can index in parallel with the compiled program
+// slice from GetCelArtifacts. Returns nil for "no rules" — callers should
+// treat that as a no-op.
+//
+// Cached per tenant; invalidate via InvalidateRules when the tenant's
+// schema binding changes.
+func (f *ValidatorFactory) GetValidations(ctx context.Context, tenantID string) ([]*pb.ValidationRule, error) {
+	if v, ok := f.validationsCache.Load(tenantID); ok {
+		return v.([]*pb.ValidationRule), nil
+	}
+	tenant, err := f.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	sv, err := f.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
+		SchemaID: tenant.SchemaID,
+		Version:  tenant.SchemaVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	rules := decodeValidations(sv.Validations)
+	f.validationsCache.Store(tenantID, rules)
+	return rules, nil
+}
+
+// GetCelArtifacts returns the (env, programs) pair for a tenant's bound
+// schema version. The slices are aligned by index with the validation rules
+// returned by GetValidations; callers can pass them straight through to
+// celpkg.Eval. Returns (nil, nil, nil) when the schema has no rules — same
+// "treat as no-op" contract as GetValidations.
+//
+// Programs are compiled once and pinned to (schemaID, schemaVersion,
+// ruleIndex) in the shared celpkg.Cache. Invalidation drops them.
+func (f *ValidatorFactory) GetCelArtifacts(ctx context.Context, tenantID string) (*cel.Env, []cel.Program, error) {
+	rules, err := f.GetValidations(ctx, tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(rules) == 0 {
+		return nil, nil, nil
+	}
+
+	if env, ok := f.celEnvCache.Load(tenantID); ok {
+		if progs, pok := f.celProgramsCache.Load(tenantID); pok {
+			return env.(*cel.Env), progs.([]cel.Program), nil
+		}
+	}
+
+	tenant, err := f.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	sv, err := f.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
+		SchemaID: tenant.SchemaID,
+		Version:  tenant.SchemaVersion,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	domainFields, err := f.store.GetSchemaFields(ctx, sv.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pbFields := make([]*pb.SchemaField, len(domainFields))
+	for i, df := range domainFields {
+		pbFields[i] = &pb.SchemaField{
+			Path:     df.Path,
+			Type:     df.FieldType.ToProto(),
+			Nullable: df.Nullable,
+		}
+	}
+
+	env, err := celpkg.BuildEnv(pbFields)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build cel env: %w", err)
+	}
+	programs := make([]cel.Program, len(rules))
+	for i, r := range rules {
+		prog, err := f.celCache.ProgramFor(env, r, sv.SchemaID, sv.Version, i)
+		if err != nil {
+			return nil, nil, fmt.Errorf("compile validations[%d]: %w", i, err)
+		}
+		programs[i] = prog
+	}
+
+	f.celEnvCache.Store(tenantID, env)
+	f.celProgramsCache.Store(tenantID, programs)
+	return env, programs, nil
+}
+
+// decodeValidations is a private helper so the validation package does not
+// have to import internal/schema for the unmarshal — keeping the layering
+// clean. Empty/nil input returns nil.
+func decodeValidations(raw []byte) []*pb.ValidationRule {
+	if len(raw) == 0 {
+		return nil
+	}
+	var rules []*pb.ValidationRule
+	if err := json.Unmarshal(raw, &rules); err != nil {
+		return nil
+	}
+	return rules
 }
