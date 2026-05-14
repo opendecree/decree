@@ -20,6 +20,7 @@
 - **Unicode/encoding** — homoglyphs, null bytes, RTL override
 - **Regex DoS (ReDoS)** — user-supplied regex in pattern constraints
 - **JSON Schema DoS** — complex schemas causing validation hangs
+- **CEL DoS** — schema authors can declare CEL `validations:` rules with deep comprehensions or recursive list operations. cel-go's `cel.CostLimit` (default `100_000`, env `DECREE_CEL_COST_LIMIT`) and `cel.InterruptCheckFrequency` (default `100`, env `DECREE_CEL_INTERRUPT_FREQ`) bound per-evaluation cost. Cost-limit exceedance surfaces as a distinct error so operators can flag potential abuse; non-cost evaluation errors (null-comparison, missing fields) are logged as soft errors and do not fail the write. Lint rules 1–4 at `ImportSchema` time reject syntactically invalid rules, rules without a `self.*` reference, unresolved field paths, and rules expressible by a native constraint.
 
 ## 4. Data Security
 - **Sensitive fields** — `sensitive: true` behavior in logs, exports

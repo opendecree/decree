@@ -13,6 +13,7 @@ import (
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/pagination"
+	celpkg "github.com/opendecree/decree/internal/schema/cel"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
@@ -844,6 +845,9 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	}
 	depReqs := parsed.DependentRequired
 	if err := validateDependentRequiredAgainstFields(depReqs, fields); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := celpkg.LintValidations(parsed.Validations, fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	depReqJSON, err := marshalDependentRequired(depReqs)

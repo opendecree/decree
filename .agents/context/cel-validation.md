@@ -1,8 +1,24 @@
 # CEL Validation — Design Brief
 
-**Status:** Discovery in progress.
-**Related:** #76 (discovery), Schema Spec v0.1.0 milestone (#117)
-**Last updated:** 2026-04-27
+**Status:** Phase 2 shipped 2026-05-13. Phase 3 polish deferred.
+**Related:** #76 (umbrella, closed), Schema Spec v0.1.0 milestone (#117)
+**Last updated:** 2026-05-13
+
+## Open questions — resolutions
+
+The open questions at the bottom of this brief were closed as follows when Phase 2 shipped:
+
+- **Group `path:` semantics** — informational only in v0.1.0. The `self` binding is always rooted at the full schema. The `path:` field stays on the wire for future scoping.
+- **Multiple vs first error** — CEL rules **aggregate** every failing rule into a single `InvalidArgument` via `errors.Join`. `dependentRequired` still returns first-error (separate channel).
+- **Redirected field resolution** — `self.<old>` resolves to the redirected target transparently. The activation builder reads the same post-merge snapshot the runtime resolver produces, which is already de-redirected upstream.
+- **Optional-ext friction** — nullable fields surface as Go `nil` (CEL `null`); cel-go's `optional<T>` ext is **not** wired. Authors can use `has(self.x)` or `self.x == null` interchangeably.
+- **Runtime errors** — non-cost-limit eval errors (null-comparison, missing keys) are logged as soft errors and do NOT fail the write. Rule authors do not need to wrap every field reference in `has()` to keep unrelated writes from being rejected. Cost-limit exceedance still hard-fails so operators can flag DoS attempts.
+- **Lock interaction** — locked fields participate in the snapshot like any other field; rules evaluate against the locked value. No special handling needed.
+- **Contradiction detection** — deferred to Phase 3. AST pattern match and empty-set probe both feasible but not required for the engine to ship value.
+
+## Original brief follows.
+
+---
 
 ## Problem
 
