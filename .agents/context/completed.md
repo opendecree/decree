@@ -179,3 +179,15 @@ Seven P0 issues cleared to unblock the alpha.2 milestone:
 - **#283 / #328** — `e2e/validation_limits_test.go`: 3 tests (MaxFieldsRejected, MaxFieldsAtLimitAccepted, MaxDocBytesRejected). Docker-compose caps lowered to `SCHEMA_MAX_FIELDS=100` / `SCHEMA_MAX_DOC_BYTES=4096`. Note: tests use `errors.Is(err, adminclient.ErrInvalidArgument)` — not `status.Code()` — because `grpctransport.mapAdminError` wraps gRPC status errors into Go sentinel errors.
 - **#284 / #325** — `cmd/server/options.go`: `buildServerOptions` / `buildGatewayOptions` return decision structs (`serverOptionsBuild`, `gatewayOptionsBuild`) with boolean flags (`UseTLS`, `UseInsecure`, `HasRateLimiter`) so option wiring can be unit-tested without inspecting opaque closures. 7 tests in `cmd/server/options_test.go`.
 - **Bonus / #329** — Pinned `manPageDate = time.Date(2026, 1, 1, ...)` in `cmd/decree/gendocs.go` to stop cobra/doc embedding the build-time month in man page `.TH` headers (was causing CI docs-check to fail on the 1st of each month).
+
+## Tamper-Evident Audit Chain (#218)
+
+SHA-256 hash chain over `audit_write_log` closes the silently-rewritable history gap (P1 security finding).
+
+- **Chain fields** — `object_kind` (CHECK constraint: field/schema/tenant/lock), `previous_hash`, `entry_hash` added via migration 002. Each entry's hash covers `previous_hash|id|tenant_id|actor|action|object_kind|created_at`. NULL tenant_id allowed for schema-level (global) entries.
+- **Immutability trigger** — PL/pgSQL trigger rejects UPDATE/DELETE on rows older than 60 seconds. 60-second grace window allows test teardown. `-- +goose StatementBegin/End` required to prevent goose from splitting function body on semicolons.
+- **Hash computation** — `internal/audit/chain.go`: `ComputeEntryHash(ChainInput)` uses `sha256.New` + `fmt.Fprintf` (errcheck: `_, _ =`). `GetLastAuditHashForTenant` query fetches the latest `entry_hash` for chaining at write time.
+- **Chain propagation** — `config/store_pg.go` and `schema/store_pg.go` both call `GetLastAuditHashForTenant` inside their write transactions and pass `PreviousHash`/`EntryHash` to `InsertAuditWriteLog`.
+- **Audit coverage** — schema (create/update/delete/publish/import), tenant (create/update/delete), and lock (lock/unlock) mutations now all write audit entries with correct `object_kind`.
+- **VerifyChain RPC** — new gRPC method `VerifyChain` (proto + generated stubs). Server handler in `internal/audit/service.go`: per-tenant (resolve + access check) or global chain (superadmin only). `internal/audit/verify.go`: fetches ordered entries, recomputes each hash, reports breaks. CLI: `decree audit verify [--tenant <id>]`. Client-side: `adminclient.VerifyChain` + `computeClientHash`.
+- **Bug fixed** — `schema/service.go` `RunInTx` error handlers were converting all errors to `codes.Internal`, swallowing `codes.InvalidArgument` validation errors from `createFieldsOn`. Fixed by checking `status.FromError(err)` and propagating gRPC status errors directly.
