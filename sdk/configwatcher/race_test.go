@@ -142,4 +142,3 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 	cancel()
 	_ = w.Close()
 }
-
