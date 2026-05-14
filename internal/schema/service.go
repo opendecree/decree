@@ -27,14 +27,6 @@ func (s *Service) resolveSchema(ctx context.Context, idOrName string) (domain.Sc
 	return s.store.GetSchemaByName(ctx, idOrName)
 }
 
-// resolveTenant looks up a tenant by UUID or name slug.
-func (s *Service) resolveTenant(ctx context.Context, idOrName string) (domain.Tenant, error) {
-	if domain.IsUUID(idOrName) {
-		return s.store.GetTenantByID(ctx, idOrName)
-	}
-	return s.store.GetTenantByName(ctx, idOrName)
-}
-
 // resolveTenantWithAccess resolves a tenant by UUID or slug, then checks
 // that the caller has access to it. Returns the resolved tenant or a gRPC
 // status error. Use this at the top of any tenant-scoped RPC handler.
@@ -42,7 +34,15 @@ func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) 
 	if idOrName == "" {
 		return domain.Tenant{}, status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
-	tenant, err := s.resolveTenant(ctx, idOrName)
+	var (
+		tenant domain.Tenant
+		err    error
+	)
+	if domain.IsUUID(idOrName) {
+		tenant, err = s.store.GetTenantByID(ctx, idOrName)
+	} else {
+		tenant, err = s.store.GetTenantByName(ctx, idOrName)
+	}
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return domain.Tenant{}, status.Error(codes.NotFound, "tenant not found")
