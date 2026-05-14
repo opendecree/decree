@@ -63,15 +63,6 @@ func errToStatus(err error, notFoundMsg, failedMsg string) error {
 	return status.Error(codes.Internal, failedMsg)
 }
 
-func containsStr(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
 // Option configures a Service.
 type Option func(*serviceOptions)
 
