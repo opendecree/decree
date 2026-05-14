@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/cel-go/cel"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,6 +22,7 @@ import (
 	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/schema"
+	celpkg "github.com/opendecree/decree/internal/schema/cel"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
@@ -34,6 +36,14 @@ type dependentRequiredError struct{ err error }
 
 func (e *dependentRequiredError) Error() string { return e.err.Error() }
 func (e *dependentRequiredError) Unwrap() error { return e.err }
+
+// validationError wraps one-or-more CEL rule failures aggregated by
+// celpkg.Eval. Peer to dependentRequiredError — both map to
+// codes.InvalidArgument at the gRPC boundary via mapCrossFieldErr.
+type validationError struct{ err error }
+
+func (e *validationError) Error() string { return e.err.Error() }
+func (e *validationError) Unwrap() error { return e.err }
 
 const (
 	defaultCacheTTL = 5 * time.Minute
@@ -1289,19 +1299,27 @@ func (s *Service) fetchDependentRequiredRules(ctx context.Context, tenantID stri
 	return schema.UnmarshalDependentRequired(raw), nil
 }
 
-// enforceDependentRequiredInTx evaluates the post-merge state of a config
-// write against the schema's dependentRequired rules. Reads the full config
-// snapshot at `version` from the same transaction that staged the writes
-// (so the read sees the staged values via Postgres MVCC), builds the
-// presence set, and runs schema.CheckDependentRequired.
+// enforceCrossFieldInTx runs dependentRequired then CEL validations
+// against the post-merge snapshot at `version`. Both checks read the same
+// snapshot to avoid a second tx round-trip; the read is bound to `tx` so
+// MVCC sees the writes staged earlier in this transaction.
 //
-// Returns a *dependentRequiredError on rule failure so the outer
-// RunInTx caller can map to codes.InvalidArgument; returns the underlying
-// store error verbatim on snapshot-read failure.
+// Returns *dependentRequiredError or *validationError on rule failure so
+// the outer RunInTx caller can map to codes.InvalidArgument; returns a
+// wrapped store error verbatim on snapshot-read failure.
 //
-// No-op when `rules` is empty.
-func (s *Service) enforceDependentRequiredInTx(ctx context.Context, tx Store, tenantID string, version int32, rules []*pb.DependentRequiredEntry) error {
-	if len(rules) == 0 {
+// No-op when both depRules and the tenant's CEL programs are empty.
+func (s *Service) enforceCrossFieldInTx(
+	ctx context.Context,
+	tx Store,
+	tenantID string,
+	version int32,
+	depRules []*pb.DependentRequiredEntry,
+	celArtifacts *celArtifacts,
+) error {
+	hasDep := len(depRules) > 0
+	hasCEL := celArtifacts != nil && len(celArtifacts.Programs) > 0
+	if !hasDep && !hasCEL {
 		return nil
 	}
 	rows, err := tx.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
@@ -1309,29 +1327,148 @@ func (s *Service) enforceDependentRequiredInTx(ctx context.Context, tx Store, te
 		Version:  version,
 	})
 	if err != nil {
-		return fmt.Errorf("read snapshot for dependentRequired: %w", err)
+		return fmt.Errorf("read snapshot for cross-field validation: %w", err)
 	}
-	present := make(map[string]struct{}, len(rows))
-	for _, row := range rows {
-		if row.Value != nil {
-			present[row.FieldPath] = struct{}{}
+	if hasDep {
+		present := make(map[string]struct{}, len(rows))
+		for _, row := range rows {
+			if row.Value != nil {
+				present[row.FieldPath] = struct{}{}
+			}
+		}
+		if err := schema.CheckDependentRequired(depRules, present); err != nil {
+			return &dependentRequiredError{err: err}
 		}
 	}
-	if err := schema.CheckDependentRequired(rules, present); err != nil {
-		return &dependentRequiredError{err: err}
+	if hasCEL {
+		snapshot := make([]celpkg.SnapshotRow, len(rows))
+		for i, row := range rows {
+			snapshot[i] = celpkg.SnapshotRow{FieldPath: row.FieldPath, Value: row.Value}
+		}
+		tenantMeta, err := celArtifacts.tenantBinding(ctx, tx, tenantID)
+		if err != nil {
+			return fmt.Errorf("load tenant for CEL activation: %w", err)
+		}
+		types := pbFieldTypeMap(celArtifacts.FieldTypes)
+		act := celpkg.BuildActivation(snapshot, types, tenantMeta)
+		failed, softErrs, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules)
+		if evalErr != nil {
+			return fmt.Errorf("evaluate validations: %w", evalErr)
+		}
+		for _, soft := range softErrs {
+			s.logger.WarnContext(ctx, "CEL rule eval soft-error",
+				"tenant", tenantID, "version", version, "error", soft)
+		}
+		if len(failed) > 0 {
+			return &validationError{err: aggregatedFailureError(failed)}
+		}
 	}
 	return nil
 }
 
+// enforceDependentRequiredInTx preserves the original call-site signature
+// used by the four mutating RPCs. It just forwards to enforceCrossFieldInTx
+// with the CEL artifacts wired in transparently.
+func (s *Service) enforceDependentRequiredInTx(ctx context.Context, tx Store, tenantID string, version int32, rules []*pb.DependentRequiredEntry) error {
+	cel, err := s.fetchCelArtifactsForTenant(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	return s.enforceCrossFieldInTx(ctx, tx, tenantID, version, rules, cel)
+}
+
 // mapDependentRequiredErr converts a tx error into the right gRPC status:
-// InvalidArgument when the error wraps *dependentRequiredError, the
-// caller's fallback otherwise. Use after RunInTx returns.
+// InvalidArgument when the error wraps *dependentRequiredError or
+// *validationError, the caller's fallback otherwise. Use after RunInTx
+// returns.
 func mapDependentRequiredErr(err error, fallback func() error) error {
 	var dre *dependentRequiredError
 	if errors.As(err, &dre) {
 		return status.Errorf(codes.InvalidArgument, "%v", dre.err)
 	}
+	var ve *validationError
+	if errors.As(err, &ve) {
+		return status.Errorf(codes.InvalidArgument, "%v", ve.err)
+	}
 	return fallback()
+}
+
+// celArtifacts bundles the per-tenant artifacts needed for CEL evaluation.
+// Built once per write outside the tx and threaded through
+// enforceCrossFieldInTx.
+type celArtifacts struct {
+	Rules      []*pb.ValidationRule
+	Programs   []cel.Program
+	FieldTypes map[string]domain.FieldType
+	getTenant  func(ctx context.Context, tx Store, tenantID string) (celpkg.TenantBinding, error)
+}
+
+func (a *celArtifacts) tenantBinding(ctx context.Context, tx Store, tenantID string) (celpkg.TenantBinding, error) {
+	if a == nil || a.getTenant == nil {
+		return celpkg.TenantBinding{ID: tenantID}, nil
+	}
+	return a.getTenant(ctx, tx, tenantID)
+}
+
+// fetchCelArtifactsForTenant loads (rules, programs, fieldTypes) for a
+// tenant and packages them for enforceCrossFieldInTx. Returns nil when the
+// tenant has no CEL rules; callers treat nil as no-op.
+func (s *Service) fetchCelArtifactsForTenant(ctx context.Context, tenantID string) (*celArtifacts, error) {
+	if s.validators == nil {
+		return nil, nil
+	}
+	rules, err := s.validators.GetValidations(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load validations")
+	}
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	_, programs, err := s.validators.GetCelArtifacts(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to compile validations")
+	}
+	types, err := s.fieldTypeMap(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return &celArtifacts{
+		Rules:      rules,
+		Programs:   programs,
+		FieldTypes: types,
+		getTenant: func(ctx context.Context, tx Store, id string) (celpkg.TenantBinding, error) {
+			t, err := tx.GetTenantByID(ctx, id)
+			if err != nil {
+				return celpkg.TenantBinding{ID: id}, err
+			}
+			return celpkg.TenantBinding{ID: t.ID, Name: t.Name}, nil
+		},
+	}, nil
+}
+
+// pbFieldTypeMap converts a domain-typed map into the pb.FieldType map that
+// celpkg.BuildActivation expects. Keeping the conversion here means the cel
+// package does not need to import internal/storage/domain.
+func pbFieldTypeMap(in map[string]domain.FieldType) map[string]pb.FieldType {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]pb.FieldType, len(in))
+	for path, ft := range in {
+		out[path] = ft.ToProto()
+	}
+	return out
+}
+
+// aggregatedFailureError joins every failed-rule message into a single
+// error. The shape mirrors LintValidations' aggregation contract — one
+// multi-line message that gRPC surfaces as InvalidArgument.
+func aggregatedFailureError(failed []celpkg.FailedRule) error {
+	msgs := make([]error, 0, len(failed))
+	for _, f := range failed {
+		msgs = append(msgs, fmt.Errorf("validations[%d]: %s", f.Index, f.Message))
+	}
+	return errors.Join(msgs...)
 }
 
 // fieldTypeMap returns a map of field path -> domain field type for a tenant's schema.

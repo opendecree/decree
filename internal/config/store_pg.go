@@ -384,14 +384,16 @@ func schemaFieldFromDB(r dbstore.SchemaField) domain.SchemaField {
 
 func schemaVersionFromDB(r dbstore.SchemaVersion) domain.SchemaVersion {
 	return domain.SchemaVersion{
-		ID:            pgconv.UUIDToString(r.ID),
-		SchemaID:      pgconv.UUIDToString(r.SchemaID),
-		Version:       r.Version,
-		ParentVersion: r.ParentVersion,
-		Description:   r.Description,
-		Checksum:      r.Checksum,
-		Published:     r.Published,
-		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
+		ID:                pgconv.UUIDToString(r.ID),
+		SchemaID:          pgconv.UUIDToString(r.SchemaID),
+		Version:           r.Version,
+		ParentVersion:     r.ParentVersion,
+		Description:       r.Description,
+		Checksum:          r.Checksum,
+		Published:         r.Published,
+		DependentRequired: r.DependentRequired,
+		Validations:       r.Validations,
+		CreatedAt:         pgconv.TimestamptzToTime(r.CreatedAt),
 	}
 }
 
