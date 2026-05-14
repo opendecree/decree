@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
 )
 
 // Option configures a UsageRecorder.
@@ -13,6 +15,7 @@ type Option func(*recorderOptions)
 type recorderOptions struct {
 	flushInterval time.Duration
 	logger        *slog.Logger
+	dbErrCounter  metric.Int64Counter
 }
 
 // WithFlushInterval sets how often pending stats are flushed to the store.
@@ -24,6 +27,12 @@ func WithFlushInterval(d time.Duration) Option {
 // WithLogger sets the recorder logger. Defaults to slog.Default() when unset.
 func WithLogger(l *slog.Logger) Option {
 	return func(o *recorderOptions) { o.logger = l }
+}
+
+// WithDBErrorCounter sets the OTel counter incremented for each DB write error
+// during a usage-stats flush. Nil disables the metric.
+func WithDBErrorCounter(c metric.Int64Counter) Option {
+	return func(o *recorderOptions) { o.dbErrCounter = c }
 }
 
 // usageKey identifies a unique (tenant, field) pair for batching.
@@ -44,9 +53,10 @@ type usageBucket struct {
 // to the audit store periodically as batched usage statistics.
 // A nil *UsageRecorder is safe to call — all methods are no-ops.
 type UsageRecorder struct {
-	store    Store
-	logger   *slog.Logger
-	interval time.Duration
+	store        Store
+	logger       *slog.Logger
+	interval     time.Duration
+	dbErrCounter metric.Int64Counter // nil when metrics are disabled
 
 	mu      sync.Mutex
 	pending map[usageKey]*usageBucket
@@ -70,11 +80,12 @@ func NewUsageRecorder(store Store, opts ...Option) *UsageRecorder {
 		o.logger = slog.Default()
 	}
 	return &UsageRecorder{
-		store:    store,
-		logger:   o.logger,
-		interval: o.flushInterval,
-		pending:  make(map[usageKey]*usageBucket),
-		done:     make(chan struct{}),
+		store:        store,
+		logger:       o.logger,
+		interval:     o.flushInterval,
+		dbErrCounter: o.dbErrCounter,
+		pending:      make(map[usageKey]*usageBucket),
+		done:         make(chan struct{}),
 	}
 }
 
@@ -189,6 +200,9 @@ func (r *UsageRecorder) Flush(ctx context.Context) error {
 				"field_path", key.FieldPath,
 				"error", err,
 			)
+			if r.dbErrCounter != nil {
+				r.dbErrCounter.Add(ctx, 1)
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
