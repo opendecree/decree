@@ -418,6 +418,29 @@ func callReflection(ctx context.Context, conn *grpc.ClientConn) error {
 	return err
 }
 
+// pollReflection retries callReflection until the gRPC layer returns a
+// terminal status (anything other than Unknown) or the context expires.
+// Unknown indicates the connection broke before the server processed the
+// stream, which happens when the test goroutine races the server's
+// Serve() call: the TCP listener is open as soon as New() returns, but
+// the gRPC handler dispatch table is only wired once Serve() starts the
+// accept loop. waitForReady reaches the TCP layer, not the gRPC handler
+// layer — only an actual server round-trip proves both are ready.
+func pollReflection(ctx context.Context, conn *grpc.ClientConn) error {
+	var last error
+	for {
+		last = callReflection(ctx, conn)
+		if status.Code(last) != codes.Unknown {
+			return last
+		}
+		select {
+		case <-ctx.Done():
+			return last
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
 func TestReflection_DisabledByDefault_ReturnsUnimplemented(t *testing.T) {
 	conn, cleanup := startReflectionTestServer(t, false)
 	defer cleanup()
@@ -425,7 +448,7 @@ func TestReflection_DisabledByDefault_ReturnsUnimplemented(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := callReflection(ctx, conn)
+	err := pollReflection(ctx, conn)
 	require.Error(t, err)
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
 }
@@ -437,6 +460,6 @@ func TestReflection_Enabled_ListServicesSucceeds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := callReflection(ctx, conn)
+	err := pollReflection(ctx, conn)
 	require.NoError(t, err)
 }
