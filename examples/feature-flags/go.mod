@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/opendecree/decree/sdk/grpctransport v0.0.0-00010101000000-000000000000
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.81.0
 )
 
 require (
@@ -13,9 +13,7 @@ require (
 	github.com/opendecree/decree/sdk/adminclient v0.1.2 // indirect
 	github.com/opendecree/decree/sdk/configclient v0.3.1 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.3.1 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
-	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260414002931-afd174a4e478 // indirect
