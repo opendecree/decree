@@ -3,7 +3,6 @@ package configwatcher
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -142,15 +141,4 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 
 	cancel()
 	_ = w.Close()
-}
-
-// mockSubscriptionBlocking is a subscription that blocks until context is cancelled.
-// Used by race tests that don't need actual stream data.
-type mockSubscriptionBlocking struct {
-	ctx context.Context
-}
-
-func (s *mockSubscriptionBlocking) Recv() (*configclient.ConfigChange, error) {
-	<-s.ctx.Done()
-	return nil, io.EOF
 }
