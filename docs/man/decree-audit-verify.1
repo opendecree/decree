@@ -1,0 +1,67 @@
+.nh
+.TH "DECREE" "1" "Jan 2026" "OpenDecree" "OpenDecree CLI"
+
+.SH NAME
+decree-audit-verify - Verify the tamper-evident audit chain for a tenant
+
+
+.SH SYNOPSIS
+\fBdecree audit verify [flags]\fP
+
+
+.SH DESCRIPTION
+Fetches all audit entries for the tenant (or the global chain if --tenant is
+omitted), recomputes each entry_hash, and reports any breaks.
+
+.PP
+Requires migration 002_audit_tamper_evident to be applied.
+
+
+.SH OPTIONS
+\fB-h\fP, \fB--help\fP[=false]
+	help for verify
+
+.PP
+\fB--tenant\fP=""
+	tenant ID to verify (empty = global chain)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--insecure\fP[=true]
+	skip TLS verification
+
+.PP
+\fB-o\fP, \fB--output\fP="table"
+	output format: table, json, yaml
+
+.PP
+\fB--role\fP="superadmin"
+	actor role (x-role header)
+
+.PP
+\fB--server\fP="localhost:9090"
+	gRPC server address
+
+.PP
+\fB--subject\fP=""
+	actor identity (x-subject header)
+
+.PP
+\fB--tenant-id\fP=""
+	auth tenant ID (x-tenant-id header)
+
+.PP
+\fB--token\fP=""
+	JWT bearer token
+
+.PP
+\fB--wait\fP[=false]
+	wait for the server to be ready before executing the command
+
+.PP
+\fB--wait-timeout\fP="60s"
+	maximum time to wait for server readiness
+
+
+.SH SEE ALSO
+\fBdecree-audit(1)\fP
