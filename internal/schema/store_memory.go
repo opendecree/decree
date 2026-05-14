@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -345,7 +346,7 @@ func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]d
 
 	all := make([]domain.Tenant, 0, len(m.tenants))
 	for _, t := range m.tenants {
-		if arg.AllowedTenantIDs != nil && !containsStr(arg.AllowedTenantIDs, t.ID) {
+		if arg.AllowedTenantIDs != nil && !slices.Contains(arg.AllowedTenantIDs, t.ID) {
 			continue
 		}
 		all = append(all, t)
@@ -364,7 +365,7 @@ func (m *MemoryStore) ListTenantsBySchema(_ context.Context, arg ListTenantsBySc
 		if t.SchemaID != arg.SchemaID {
 			continue
 		}
-		if arg.AllowedTenantIDs != nil && !containsStr(arg.AllowedTenantIDs, t.ID) {
+		if arg.AllowedTenantIDs != nil && !slices.Contains(arg.AllowedTenantIDs, t.ID) {
 			continue
 		}
 		filtered = append(filtered, t)
