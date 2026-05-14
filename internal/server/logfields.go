@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/grpcutil"
 	"github.com/opendecree/decree/internal/telemetry"
 )
 
@@ -30,7 +31,7 @@ func logFieldsUnaryInterceptor() grpc.UnaryServerInterceptor {
 // logFieldsStreamInterceptor is the streaming counterpart to logFieldsUnaryInterceptor.
 func logFieldsStreamInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		return handler(srv, &logFieldsStream{ServerStream: ss, ctx: enrichLogFields(ss.Context())})
+		return handler(srv, grpcutil.NewWrappedStream(ss, enrichLogFields(ss.Context())))
 	}
 }
 
@@ -57,10 +58,3 @@ func newRequestID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
-
-type logFieldsStream struct {
-	grpc.ServerStream
-	ctx context.Context
-}
-
-func (s *logFieldsStream) Context() context.Context { return s.ctx }

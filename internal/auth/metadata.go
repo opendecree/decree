@@ -10,6 +10,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/opendecree/decree/internal/grpcutil"
 )
 
 // skipAuth returns true for gRPC methods that should bypass authentication.
@@ -96,7 +98,7 @@ func (m *MetadataInterceptor) StreamInterceptor() grpc.StreamServerInterceptor {
 		if err != nil {
 			return err
 		}
-		return handler(srv, &wrappedStream{ServerStream: ss, ctx: newCtx})
+		return handler(srv, grpcutil.NewWrappedStream(ss, newCtx))
 	}
 }
 

@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/opendecree/decree/internal/grpcutil"
 )
 
 // Role represents a user's role in the system.
@@ -139,7 +141,7 @@ func (i *Interceptor) StreamInterceptor() grpc.StreamServerInterceptor {
 		if err != nil {
 			return err
 		}
-		return handler(srv, &wrappedStream{ServerStream: ss, ctx: newCtx})
+		return handler(srv, grpcutil.NewWrappedStream(ss, newCtx))
 	}
 }
 
@@ -194,14 +196,4 @@ func extractBearerToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("invalid authorization format")
 	}
 	return strings.TrimPrefix(token, "Bearer "), nil
-}
-
-// wrappedStream wraps a grpc.ServerStream to override the context.
-type wrappedStream struct {
-	grpc.ServerStream
-	ctx context.Context
-}
-
-func (w *wrappedStream) Context() context.Context {
-	return w.ctx
 }
