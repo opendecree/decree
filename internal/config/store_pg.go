@@ -306,7 +306,10 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	if kind == "" {
 		kind = "field"
 	}
-	now := time.Now()
+	// Truncate to microseconds to match PostgreSQL timestamptz precision so
+	// that the hash computed here and the hash recomputed during chain
+	// verification both use the same CreatedAt value.
+	now := time.Now().Truncate(time.Microsecond)
 	hash := audit.ComputeEntryHash(audit.ChainInput{
 		PreviousHash: prevHash,
 		ID:           pgconv.UUIDToString(id),
@@ -330,6 +333,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		ObjectKind:    kind,
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
+		CreatedAt:     pgconv.TimeToTimestamptz(now),
 	})
 }
 
