@@ -73,11 +73,14 @@ services:
       USAGE_FLUSH_INTERVAL: "1s"
       INSECURE_LISTEN: "1"
       ENABLE_REFLECTION: "1"
-      # Tight ingest limits so the validation-limit e2e tests can trip
-      # them with small payloads. Existing fixtures use at most a few
-      # fields and small YAMLs (< 1 KiB), well under these caps.
+      # Tight ingest limits so the validation-limit and security e2e tests
+      # can trip them with small payloads. Existing fixtures use at most a
+      # few fields and small YAMLs (< 1 KiB), well under these caps.
       SCHEMA_MAX_FIELDS: "100"
       SCHEMA_MAX_DOC_BYTES: "4096"
+      # 64 KiB recv cap so TestSecurity_OversizeRequestRejected can trip it
+      # with a small payload. All legitimate test fixtures are well under 1 KiB.
+      GRPC_MAX_RECV_MSG_BYTES: "65536"
     ports:
       - "9090:9090"
       - "8080:8080"
