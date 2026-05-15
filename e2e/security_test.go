@@ -257,28 +257,33 @@ func buildDeepJSONSchema(depth int) string {
 	return fmt.Sprintf(`{"type":"object","properties":{"a":%s}}`, buildDeepJSONSchema(depth-1))
 }
 
-// TestSecurity_AuditChainIntegrity: after legitimate config writes, the local
-// audit-chain verifier must find no breaks. Regression for decree#218.
+// TestSecurity_AuditChainIntegrity: after legitimate config writes, the
+// server-side VerifyChain RPC must find no breaks. Regression for decree#218.
+//
+// Uses the AuditService.VerifyChain RPC (server-side ordering + hashing)
+// rather than the SDK client-side implementation to avoid sort instability
+// when entries share the same microsecond timestamp.
 //
 // SQL-level tamper detection (UPDATE/DELETE on audit rows breaks the chain)
 // is covered by the unit test in internal/audit/verify_test.go.
 func TestSecurity_AuditChainIntegrity(t *testing.T) {
 	fixture := bootstrapMatrixFixture(t, "sec-audit")
 	conn := dial(t)
-	admin := newAdminClient(conn)
 	cfg := newConfigClient(conn)
-	ctx := context.Background()
+	auditSvc := pb.NewAuditServiceClient(conn)
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit")
 
 	// Lay down several config writes to build up a multi-entry chain.
 	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "alpha"))
 	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "beta"))
 	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "gamma"))
 
-	result, err := admin.VerifyChain(ctx, fixture.tenantID)
+	resp, err := auditSvc.VerifyChain(ctx, &pb.VerifyChainRequest{TenantId: fixture.tenantID})
 	require.NoError(t, err)
-	assert.True(t, result.OK,
-		"audit chain must be intact after legitimate writes; unexpected breaks: %v", result.Breaks)
-	assert.Greater(t, result.Total, 0,
+	assert.True(t, resp.GetOk(),
+		"audit chain must be intact after legitimate writes; unexpected breaks: %v", resp.GetBreaks())
+	assert.Greater(t, int(resp.GetTotal()), 0,
 		"audit chain must contain at least one entry after config writes")
 }
 
@@ -312,6 +317,10 @@ func TestSecurity_ReflectionEnabled(t *testing.T) {
 	conn := dial(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	// Reflection is registered as a regular gRPC service and goes through the
+	// same auth interceptor, so x-subject is required.
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-subject", "e2e-security-reflection")
 
 	client := reflpb.NewServerReflectionClient(conn)
 	stream, err := client.ServerReflectionInfo(ctx)

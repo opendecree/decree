@@ -379,6 +379,9 @@ func schemaFieldFromDB(r dbstore.SchemaField) domain.SchemaField {
 		RedirectTo:      r.RedirectTo,
 		DefaultValue:    r.DefaultValue,
 		Description:     r.Description,
+		Sensitive:       r.Sensitive,
+		ReadOnly:        r.ReadOnly,
+		WriteOnce:       r.WriteOnce,
 	}
 }
 
