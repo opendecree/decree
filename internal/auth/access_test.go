@@ -84,3 +84,66 @@ func TestMustHaveClaims_WithClaims(t *testing.T) {
 	ctx := ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin})
 	assert.NoError(t, MustHaveClaims(ctx))
 }
+
+func TestRequireSuperAdmin(t *testing.T) {
+	tests := []struct {
+		name    string
+		claims  *Claims
+		wantErr codes.Code
+	}{
+		{"no claims — permissive", nil, codes.OK},
+		{"superadmin — allowed", &Claims{Role: RoleSuperAdmin}, codes.OK},
+		{"admin — denied", &Claims{Role: RoleAdmin}, codes.PermissionDenied},
+		{"user — denied", &Claims{Role: RoleUser}, codes.PermissionDenied},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.claims != nil {
+				ctx = ContextWithClaims(ctx, tc.claims)
+			}
+			err := RequireSuperAdmin(ctx)
+			if tc.wantErr == codes.OK {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tc.wantErr, status.Code(err))
+			}
+		})
+	}
+}
+
+func TestRequireAdminOrAbove(t *testing.T) {
+	tests := []struct {
+		name    string
+		claims  *Claims
+		wantErr codes.Code
+	}{
+		{"no claims — permissive", nil, codes.OK},
+		{"superadmin — allowed", &Claims{Role: RoleSuperAdmin}, codes.OK},
+		{"admin — allowed", &Claims{Role: RoleAdmin}, codes.OK},
+		{"user — denied", &Claims{Role: RoleUser}, codes.PermissionDenied},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tc.claims != nil {
+				ctx = ContextWithClaims(ctx, tc.claims)
+			}
+			err := RequireAdminOrAbove(ctx)
+			if tc.wantErr == codes.OK {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Equal(t, tc.wantErr, status.Code(err))
+			}
+		})
+	}
+}
+
+func TestIsSuperAdmin(t *testing.T) {
+	assert.True(t, IsSuperAdmin(context.Background()), "no claims — permissive")
+	assert.True(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin})))
+	assert.False(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleAdmin})))
+	assert.False(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleUser})))
+}
