@@ -1,6 +1,6 @@
 # Security Review — Audit Findings
 
-Status: in progress (audit-only pass; fixes tracked in spawned issues)
+Status: resolved — all findings closed as of v0.11.0-alpha.2
 Owner: zeevdr
 Issue: opendecree/decree#26
 Audit date: 2026-04-28
@@ -34,30 +34,28 @@ external deployment, not the alpha cluster.
 
 ## Summary
 
-| # | Severity | Threat | Finding | Issue |
-|---|----------|--------|---------|-------|
-| 1 | Critical | Infra / Input | gRPC server has no `MaxRecvMsgSize` / `MaxSendMsgSize`; defaults apply | #212 |
-| 2 | Critical | Infra | gRPC + gateway-to-gRPC traffic is plaintext by default; no TLS option in `server.Config`; Helm chart has no cert wiring; DB/Redis TLS not validated | #213 |
-| 3 | High | Infra | No panic recovery interceptor — a panic in any handler crashes the server and may leak stack to client | #214 |
-| 4 | High | Data | `sensitive: true` flag is stored but NOT honoured in audit log, Subscribe stream, ExportConfig, Redis cache, or validation error messages | #215 ✓ |
-| 5 | High | Infra | No rate limiting at all (no per-tenant, per-method, or global limiter) | #216 ✓ |
-| 6 | High | Input | Schema-complexity bounds missing — no max field count, no max schema-doc size, no JSON-Schema compilation timeout | #217 |
-| 7 | High | Data | Audit log is append-only by convention only — no hash-chain, no UPDATE/DELETE constraint; admin mutations (schema/tenant) not audited | #218 |
-| 9 | Medium | Auth | Metadata header values (`x-tenant-id`, `x-subject`, `x-role`) have no length / charset limits; tenant-resolve error leaks raw `%v` | #219 |
-| 11 | Medium | Infra | Helm `values.yaml` ships empty `resources: {}`, no NetworkPolicy template, `imagePullPolicy: IfNotPresent` | #220 |
-| 12+13 | Medium | Supply chain | Base images use floating tags; seven third-party GitHub actions use major/minor tags instead of commit SHAs | #221 |
-| 14 | Medium | Input | Invalid regex in schema constraints is silently dropped at validator construction (`validator.go:121`) — schema author gets no error at import time | #222 |
-| 18+20+19 | Low | Multi | CodeQL not required check; gRPC reflection unconditional; unknown-role error echoes claim | #223 |
-| — | Test | Multi | Cross-cutting e2e security regression suite tying #212–#223 fixes together | #224 |
-| — | Tracked | Supply chain | Release-artifact attestations (Docker + Go binaries) | #159 |
-| — | Tracked | Auth | Role-based RPC policy + pluggable PermissionGuard | #205, #206 |
-| — | By design | Auth | Metadata mode defaults to `superadmin` when no `x-role` header — see `memory/feedback_auth_defaults.md` | — |
-
-The "Issue" column is populated when fix issues are spawned (next step).
+| # | Severity | Threat | Finding | Issue | Status |
+|---|----------|--------|---------|-------|--------|
+| 1 | Critical | Infra / Input | gRPC server has no `MaxRecvMsgSize` / `MaxSendMsgSize`; defaults apply | #212 | ✅ resolved |
+| 2 | Critical | Infra | gRPC + gateway-to-gRPC traffic is plaintext by default; no TLS option in `server.Config`; Helm chart has no cert wiring; DB/Redis TLS not validated | #213 | ✅ resolved |
+| 3 | High | Infra | No panic recovery interceptor — a panic in any handler crashes the server and may leak stack to client | #214 | ✅ resolved |
+| 4 | High | Data | `sensitive: true` flag is stored but NOT honoured in audit log, Subscribe stream, ExportConfig, Redis cache, or validation error messages | #215 | ✅ resolved |
+| 5 | High | Infra | No rate limiting at all (no per-tenant, per-method, or global limiter) | #216 | ✅ resolved |
+| 6 | High | Input | Schema-complexity bounds missing — no max field count, no max schema-doc size, no JSON-Schema compilation timeout | #217 | ✅ resolved |
+| 7+8 | High | Data | Audit log is append-only by convention only — no hash-chain, no UPDATE/DELETE constraint; admin mutations (schema/tenant) not audited | #218 | ✅ resolved |
+| 9 | Medium | Auth | Metadata header values (`x-tenant-id`, `x-subject`, `x-role`) have no length / charset limits; tenant-resolve error leaks raw `%v` | #219 | ✅ resolved |
+| 11 | Medium | Infra | Helm `values.yaml` ships empty `resources: {}`, no NetworkPolicy template, `imagePullPolicy: IfNotPresent` | #220 | ✅ resolved |
+| 12+13 | Medium | Supply chain | Base images use floating tags; seven third-party GitHub actions use major/minor tags instead of commit SHAs | #221 | ✅ resolved |
+| 14 | Medium | Input | Invalid regex in schema constraints is silently dropped at validator construction (`validator.go:121`) — schema author gets no error at import time | #222 | ✅ resolved |
+| 18+20+19 | Low | Multi | CodeQL not required check; gRPC reflection unconditional; unknown-role error echoes claim | #223 | ✅ resolved |
+| — | Test | Multi | Cross-cutting e2e security regression suite tying #212–#223 fixes together | #224 | ✅ resolved |
+| — | Tracked | Supply chain | Release-artifact attestations (Docker + Go binaries) | #159 | ✅ resolved |
+| — | Tracked | Auth | Role-based RPC policy + pluggable PermissionGuard | #205, #206, #269, #270 | ✅ resolved |
+| — | By design | Auth | Metadata mode defaults to `superadmin` when no `x-role` header — see `memory/feedback_auth_defaults.md` | — | — |
 
 ## Findings detail
 
-### 1. No gRPC message size limits — Critical
+### 1. No gRPC message size limits — Critical ✅ RESOLVED (#212)
 
 `internal/server/server.go:39-62` constructs a `grpc.NewServer` without
 overriding `MaxRecvMsgSize` (4 MB default) or `MaxSendMsgSize`
@@ -71,7 +69,7 @@ overriding `MaxRecvMsgSize` (4 MB default) or `MaxSendMsgSize`
 Fix: set explicit, documented limits (e.g. 20 MB recv/send), and add
 schema-side bounds (see finding 6).
 
-### 2. TLS not enforced — Critical
+### 2. TLS not enforced — Critical ✅ RESOLVED (#213)
 
 - `internal/server/server.go:40` listens with `net.Listen("tcp", ...)`
   only; no `grpc.Creds(...)` option.
@@ -87,7 +85,7 @@ config payloads transit the cluster network unencrypted. Fix: TLS
 config (cert/key from secrets), enforced by default with explicit opt-out
 for local dev; mTLS support; Helm wiring.
 
-### 3. No panic recovery interceptor — High
+### 3. No panic recovery interceptor — High ✅ RESOLVED (#214)
 
 `internal/server/server.go` registers no `grpc_recovery` interceptor.
 Any panic in a handler propagates: gRPC will close the stream with
@@ -96,7 +94,7 @@ process state is left depending on what was holding locks/transactions
 at the moment of panic. Add a recovery interceptor that logs and
 returns a generic `codes.Internal` to the client.
 
-### 4. Sensitive flag is not honoured — High
+### 4. Sensitive flag is not honoured — High ✅ RESOLVED (#215)
 
 The `sensitive: true` schema field flag is stored at every layer
 (`proto/centralconfig/v1/types.proto`, `internal/storage/domain/types.go`,
@@ -133,7 +131,7 @@ for observability. Bucket map is LRU-capped (`defaultMaxBuckets=100_000`,
 configurable via `WithMaxBuckets`) — prevents unbounded growth from cycling
 subjects (#287).
 
-### 6. Schema-complexity bounds missing — High
+### 6. Schema-complexity bounds missing — High ✅ RESOLVED (#217)
 
 - No max field count per schema (`internal/schema/service.go` →
   `ImportSchema`).
@@ -162,7 +160,7 @@ All four bounds shipped:
   continue past the deadline, but the depth pre-scan and upstream doc-byte
   cap bound the worst-case work.
 
-### 7. Audit log not tamper-evident — High
+### 7. Audit log not tamper-evident — High ✅ RESOLVED (#218)
 
 `db/migrations/001_initial_schema.sql:106-118` defines
 `audit_write_log` with no triggers preventing UPDATE/DELETE, no
@@ -176,7 +174,7 @@ chronologically, and a database trigger rejecting UPDATE/DELETE on
 rows older than N seconds. (Alpha-stage acceptable approach: hash
 chain in Go before insert; trigger lockout in a follow-up.)
 
-### 8. Schema/tenant mutations not audited — Medium
+### 8. Schema/tenant mutations not audited — Medium ✅ RESOLVED (#218)
 
 `internal/schema/service.go` handlers for `CreateSchema`,
 `UpdateSchema`, `PublishSchema`, `DeleteSchema`, `CreateTenant`,
@@ -186,7 +184,7 @@ with high blast radius; their absence from the audit trail is a real
 gap, not a design choice. Fix: extend audit schema or add a parallel
 `audit_admin_log` table; write entries from the schema service.
 
-### 9. Metadata header values unbounded — Medium
+### 9. Metadata header values unbounded — Medium ✅ RESOLVED (#219)
 
 `internal/auth/metadata.go:90-104` reads
 `x-tenant-id` (comma-separated, no length cap), `x-subject` (no
@@ -198,7 +196,7 @@ Fix: cap each header at a small limit (e.g. 1 KB total per header,
 ≤32 tenant IDs, subject must match a sane charset). Memory mode is
 non-production but this is cheap to enforce.
 
-### 10. DB/Redis TLS not enforced — Medium
+### 10. DB/Redis TLS not enforced — Medium ✅ RESOLVED (#213)
 
 - `internal/storage/postgres.go:50-51` parses the DSN with
   `pgxpool.ParseConfig`; whether `sslmode=require` is set depends
@@ -213,7 +211,7 @@ Fix: at config-load time, fail fast if the DSN does not contain
 `ALLOW_INSECURE_DB=1` opt-out is set; same for Redis. Helm: document
 that production deployments must use `existingSecret`.
 
-### 11. Helm resource limits empty — Medium
+### 11. Helm resource limits empty — Medium ✅ RESOLVED (#220)
 
 `deploy/helm/decree/values.yaml:100-106` ships `resources: {}` with
 the limits commented out. A pod with no CPU/memory limit can starve
@@ -222,7 +220,7 @@ its node.
 Fix: ship sane defaults (e.g. `requests: {cpu: 100m, memory: 128Mi}`,
 `limits: {cpu: 1, memory: 512Mi}`) and document override.
 
-### 12. Base images not digest-pinned — Medium
+### 12. Base images not digest-pinned — Medium ✅ RESOLVED (#221)
 
 - `build/Dockerfile.decree:27` and `build/Dockerfile:20` use
   `gcr.io/distroless/static-debian12:nonroot` (floating tag).
@@ -230,7 +228,7 @@ Fix: ship sane defaults (e.g. `requests: {cpu: 100m, memory: 128Mi}`,
 
 Pin to a specific digest (`@sha256:...`) and let Dependabot bump it.
 
-### 13. Third-party actions not SHA-pinned — Medium
+### 13. Third-party actions not SHA-pinned — Medium ✅ RESOLVED (#221)
 
 `.github/workflows/*.yml` reference `dorny/paths-filter@v4`,
 `golangci/golangci-lint@v9`, `golang/govulncheck@v1`,
@@ -238,7 +236,7 @@ Pin to a specific digest (`@sha256:...`) and let Dependabot bump it.
 tag. CISA recommends commit-SHA pinning for any action outside a
 verified-creator org. Dependabot can manage SHAs the same way.
 
-### 14. Invalid regex silently dropped — Medium
+### 14. Invalid regex silently dropped — Medium ✅ RESOLVED (#222)
 
 `internal/validation/validator.go:121`:
 
@@ -254,7 +252,7 @@ the constraint silently does nothing. Fix: validate every regex at
 schema-import time (`internal/schema/validate_constraints.go`) and
 return `InvalidArgument` with the field path.
 
-### 15. Tenant-resolve error includes raw `%v` — Low
+### 15. Tenant-resolve error includes raw `%v` — Low ✅ RESOLVED (#219)
 
 `internal/auth/metadata.go:99`:
 
@@ -266,13 +264,13 @@ return nil, status.Errorf(codes.InvalidArgument,
 If the resolver wraps a database error, the client sees DB error text.
 Fix: log full error server-side, return generic message to client.
 
-### 16. No NetworkPolicy template — Low
+### 16. No NetworkPolicy template — Low ✅ RESOLVED (#220)
 
 `deploy/helm/decree/templates/` has no NetworkPolicy. In a multi-tenant
 cluster the pod can reach arbitrary endpoints. Fix: optional
 NetworkPolicy template gated by a values flag.
 
-### 17. `imagePullPolicy: IfNotPresent` — Low
+### 17. `imagePullPolicy: IfNotPresent` — Low ✅ RESOLVED (#220)
 
 `deploy/helm/decree/values.yaml:8`. Means a re-rolled image at the
 same tag is not picked up without an image SHA change. For floating
@@ -289,7 +287,7 @@ Fix: add `CodeQL / Analyze` to the required checks set.
 
 **Resolution:** Added `CodeQL / Analyze (actions)`, `CodeQL / Analyze (go)`, and `CodeQL / Analyze (python)` to the required checks set on the `main` branch.
 
-### 19. Unknown role echoed — Low
+### 19. Unknown role echoed — Low ✅ RESOLVED (#223)
 
 `internal/auth/jwt.go:147`:
 
@@ -392,12 +390,9 @@ to be correctly protected at the audit date:
 
 ## Out-of-scope / tracked elsewhere
 
-- **Release artifact attestations** — already tracked at #159 (P0).
-- **Role-based RPC policy + pluggable guard** — #205 + #206 implemented:
-  `RequireSuperAdmin`, `RequireAdminOrAbove`, `IsSuperAdmin` (bool, nil-safe) in `internal/auth/access.go`.
-  `internal/authz` package provides `Guard` interface, `ChainGuard`, `TenantScopeGuard`,
-  `RolePolicyGuard`, `FieldLockGuard`. All three services wire the chain via
-  `WithGuard`; `checkFieldLock` removed from config service.
+- **Release artifact attestations** ✅ resolved — #159 shipped (Docker + Go binary SLSA attestations via `goreleaser`).
+- **Role-based RPC policy + pluggable guard** ✅ resolved — #205 + #206 implemented; #269 (Guard chain, `ChainGuard`/`TenantScopeGuard`/`RolePolicyGuard`/`FieldLockGuard`) and #270 (helper extraction, `RequireSuperAdmin`/`RequireAdminOrAbove`/`IsSuperAdmin`) both merged.
+  `internal/authz` package provides the full Guard chain; all three services wire it via `WithGuard`.
 - **Audit cross-tenant visibility for superadmin** — verified correct
   per the #207 fix (commit `fa1bcb9`).
 - **CEL validation security** — engine not yet implemented; design
@@ -406,12 +401,8 @@ to be correctly protected at the audit date:
 
 ## Next steps
 
-1. Fix issues #212–#224 are open in the Security Review milestone,
-   each with its own Tests section. They land in their own PRs in
-   priority order (P0 → P1 → P2).
-2. Update `SECURITY.md` with the new "what is and is not enforced
-   today" matrix derived from the *Verified safe* and *Findings*
-   sections — best done as one of the last fixes lands so the
-   document reflects shipped state.
-3. Close #26 once all P0/P1 items are resolved or explicitly accepted
-   as residual risk.
+All findings from the 2026-04-28 audit are resolved as of v0.11.0-alpha.2. Remaining items:
+
+1. Update `SECURITY.md` with the "what is and is not enforced today" matrix.
+2. Close #26 (the parent audit issue) — all P0/P1 items are resolved.
+3. Re-audit when CEL validation Phase 2 lands (see `.agents/context/cel-validation.md`).
