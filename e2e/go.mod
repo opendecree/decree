@@ -8,7 +8,7 @@ require (
 	github.com/opendecree/decree/sdk/configclient v0.1.2
 	github.com/opendecree/decree/sdk/grpctransport v0.1.0
 	github.com/stretchr/testify v1.11.1
-	google.golang.org/grpc v1.81.0
+	google.golang.org/grpc v1.81.1
 )
 
 require (
