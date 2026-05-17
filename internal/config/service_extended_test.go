@@ -201,14 +201,17 @@ func TestSetFields_Success(t *testing.T) {
 	svc, store, cache, pub := newTestService()
 	ctx := superadminCtx()
 
-	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	// GetFieldLocks is called with the original ctx before context wrapping.
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	// Subsequent store calls use a context wrapped with the lock cache; use
+	// mock.Anything so the matcher is not sensitive to context wrapper identity.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
-	store.On("CreateConfigVersion", ctx, mock.Anything).Return(domain.ConfigVersion{
+	store.On("CreateConfigVersion", mock.Anything, mock.Anything).Return(domain.ConfigVersion{
 		ID: versionID2, Version: 2, CreatedAt: time.Now(),
 	}, nil)
-	store.On("SetConfigValue", ctx, mock.Anything).Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.Anything).Return(nil)
+	store.On("SetConfigValue", mock.Anything, mock.Anything).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
 	setupNoSensitiveFields(store)

@@ -526,6 +526,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 
 	actor := s.getActor(ctx)
 
+	// Fetch field locks once for the tenant and memoize in context so that each
+	// per-field Check call reads from context instead of issuing a DB round-trip.
+	if locks, err := s.store.GetFieldLocks(ctx, tenantID); err != nil {
+		s.logger.ErrorContext(ctx, "failed to fetch field locks", "error", err)
+		return nil, status.Error(codes.Internal, "failed to check field locks")
+	} else {
+		ctx = authz.WithFieldLockCache(ctx, locks)
+	}
+
 	// Pre-transaction validation (reads only).
 	for _, update := range req.Updates {
 		if update.ExpectedChecksum != nil {
