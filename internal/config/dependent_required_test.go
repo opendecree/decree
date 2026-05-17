@@ -205,25 +205,28 @@ func TestSetFields_DependentRequired_AggregateCheck(t *testing.T) {
 	svc, store := setupDependentRequiredService(t)
 	ctx := superadminCtx()
 
+	// GetFieldLocks is called with the original ctx before context wrapping.
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	// Subsequent store calls use a context wrapped with the lock cache; use
+	// mock.Anything so the matcher is not sensitive to context wrapper identity.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{}, domain.ErrNotFound)
-	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
 		Return(nil).Twice()
 	// Snapshot reflects both writes — trigger AND dependent set together.
-	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
 		Version:  1,
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 		{FieldPath: "payments.refund_window", Value: strPtr("30s")},
 	}, nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
 		Return(nil).Twice()
-	svc.cache.(*mockCache).On("Invalidate", ctx, tenantID1).Return(nil)
-	svc.publisher.(*mockPublisher).On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	svc.publisher.(*mockPublisher).On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
 		Return(nil)
 
 	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{

@@ -172,6 +172,25 @@ func TestFieldLockGuard_StoreError(t *testing.T) {
 	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
+func TestFieldLockGuard_ContextCacheHit_SkipsStore(t *testing.T) {
+	// The store always errors, but Check should read from context and never call it.
+	g := authz.NewFieldLockGuard(&stubLockStore{err: errors.New("should not be called")})
+	ctx := authz.WithFieldLockCache(adminCtx(), []domain.TenantFieldLock{})
+	err := g.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b"})
+	require.NoError(t, err)
+}
+
+func TestFieldLockGuard_ContextCacheHit_LockedField(t *testing.T) {
+	// Store is unused; locked field comes from context cache.
+	g := authz.NewFieldLockGuard(&stubLockStore{err: errors.New("should not be called")})
+	ctx := authz.WithFieldLockCache(adminCtx(), []domain.TenantFieldLock{
+		{TenantID: tenant1, FieldPath: "a.b"},
+	})
+	err := g.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b"})
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
 // --- ChainGuard ---
 
 func TestChainGuard_Empty(t *testing.T) {

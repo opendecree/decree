@@ -118,24 +118,27 @@ func TestSetFields_Validations_PostMergeStateChecked(t *testing.T) {
 	svc, store := setupValidationsService(t)
 	ctx := superadminCtx()
 
+	// GetFieldLocks is called with the original ctx before context wrapping.
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	// Subsequent store calls use a context wrapped with the lock cache; use
+	// mock.Anything so the matcher is not sensitive to context wrapper identity.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
 		Return(nil)
-	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
 		Version:  2,
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.min_amount", Value: strPtr("10")},
 		{FieldPath: "payments.max_amount", Value: strPtr("100")},
 	}, nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
 		Return(nil)
-	svc.cache.(*mockCache).On("Invalidate", ctx, tenantID1).Return(nil)
-	svc.publisher.(*mockPublisher).On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	svc.publisher.(*mockPublisher).On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
 		Return(nil).Maybe()
 
 	resp, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
