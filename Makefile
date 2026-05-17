@@ -73,8 +73,9 @@ lint-go:
 	golangci-lint run ./...
 
 ## lint-proto: Run buf lint + breaking change detection (Docker)
+## buf breaking is skipped in git worktrees (Docker cannot traverse worktree .git files).
 lint-proto: $(TOOLS_SENTINEL)
-	$(DOCKER_RUN_TOOLS) sh -c 'buf lint && buf breaking --against ".git#branch=main"'
+	$(DOCKER_RUN_TOOLS) sh -c 'buf lint && ([ -f .git ] || buf breaking --against ".git#branch=main")'
 
 ## test: Run unit tests across all modules
 test:
