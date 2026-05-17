@@ -196,23 +196,24 @@ func (q *Queries) GetUnusedFields(ctx context.Context, arg GetUnusedFieldsParams
 }
 
 const insertAuditWriteLog = `-- name: InsertAuditWriteLog :exec
-INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 `
 
 type InsertAuditWriteLogParams struct {
-	ID            pgtype.UUID `json:"id"`
-	TenantID      pgtype.UUID `json:"tenant_id"`
-	Actor         string      `json:"actor"`
-	Action        string      `json:"action"`
-	FieldPath     *string     `json:"field_path"`
-	OldValue      *string     `json:"old_value"`
-	NewValue      *string     `json:"new_value"`
-	ConfigVersion *int32      `json:"config_version"`
-	Metadata      []byte      `json:"metadata"`
-	ObjectKind    string      `json:"object_kind"`
-	PreviousHash  string      `json:"previous_hash"`
-	EntryHash     string      `json:"entry_hash"`
+	ID            pgtype.UUID        `json:"id"`
+	TenantID      pgtype.UUID        `json:"tenant_id"`
+	Actor         string             `json:"actor"`
+	Action        string             `json:"action"`
+	FieldPath     *string            `json:"field_path"`
+	OldValue      *string            `json:"old_value"`
+	NewValue      *string            `json:"new_value"`
+	ConfigVersion *int32             `json:"config_version"`
+	Metadata      []byte             `json:"metadata"`
+	ObjectKind    string             `json:"object_kind"`
+	PreviousHash  string             `json:"previous_hash"`
+	EntryHash     string             `json:"entry_hash"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
@@ -229,6 +230,7 @@ func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		arg.ObjectKind,
 		arg.PreviousHash,
 		arg.EntryHash,
+		arg.CreatedAt,
 	)
 	return err
 }
