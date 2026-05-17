@@ -188,7 +188,7 @@ func BenchmarkBulkTenants_List(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_, _ = admin.ListTenants(context.Background(), schemaID)
+		_, _ = admin.ListTenants(ctx, schemaID)
 	}
 }
 
