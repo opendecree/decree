@@ -1,6 +1,10 @@
 package validation
 
-import "time"
+import (
+	"time"
+
+	"go.opentelemetry.io/otel/metric"
+)
 
 // Limits caps JSON-Schema compilation cost. Zero values mean "no limit"
 // for that dimension. Use [DefaultLimits] for safe defaults.
@@ -34,17 +38,26 @@ func DefaultLimits() Limits {
 }
 
 // Option configures a [ValidatorFactory] or [FieldValidator]. See
-// [WithLimits].
+// [WithLimits] and [WithTimeoutCounter].
 type Option func(*options)
 
 type options struct {
-	limits Limits
+	limits         Limits
+	timeoutCounter metric.Int64Counter // nil when metrics are disabled
 }
 
 // WithLimits sets the JSON-Schema compile limits. Defaults to
 // [DefaultLimits] when unset.
 func WithLimits(l Limits) Option {
 	return func(o *options) { o.limits = l }
+}
+
+// WithTimeoutCounter sets the OTEL counter incremented when a JSON-Schema
+// compile goroutine exceeds its deadline. The counter name should be
+// "validation.json_schema_compile_timeouts_total". Pass nil to disable
+// (no-op — equivalent to omitting the option).
+func WithTimeoutCounter(c metric.Int64Counter) Option {
+	return func(o *options) { o.timeoutCounter = c }
 }
 
 func resolveOptions(opts []Option) options {

@@ -1,10 +1,13 @@
 package validation
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -17,13 +20,21 @@ type jsonSchemaValidator struct {
 // newJSONSchemaValidator compiles a JSON Schema document for validation.
 // limits.MaxDepth bounds structural nesting before compile;
 // limits.CompileTimeout caps the wall-clock duration of the compile call.
+// timeoutCounter, if non-nil, is incremented when the deadline fires.
 //
-// Note: jsonschema/v6 has no CompileContext, so a compile that exceeds the
-// deadline will continue running in its goroutine until it finishes (or
-// the process exits). The pre-compile depth check and upstream document-
-// size cap (schema.Limits.MaxDocBytes) bound the worst-case work; the
-// timeout is a defense-in-depth backstop against unanticipated pathologies.
-func newJSONSchemaValidator(schemaDoc string, limits Limits) (*jsonSchemaValidator, error) {
+// Goroutine leak: jsonschema/v6 has no CompileContext, so a compile that
+// exceeds the deadline will continue running until it finishes or the
+// process exits. This is acceptable because:
+//   - The pre-compile depth check (MaxDepth) rejects deeply-nested bombs
+//     before the goroutine is started.
+//   - The upstream document-size cap (schema.Limits.MaxDocBytes) bounds
+//     the total input the compiler can process.
+//
+// Together these make the worst-case work finite. The timeout is a
+// defence-in-depth backstop against unanticipated compiler pathologies.
+// When it fires, the counter "validation.json_schema_compile_timeouts_total"
+// is incremented so operators can alert on sustained activity.
+func newJSONSchemaValidator(schemaDoc string, limits Limits, timeoutCounter metric.Int64Counter) (*jsonSchemaValidator, error) {
 	if limits.MaxDepth > 0 {
 		if err := scanJSONDepth(schemaDoc, limits.MaxDepth); err != nil {
 			return nil, err
@@ -64,6 +75,9 @@ func newJSONSchemaValidator(schemaDoc string, limits Limits) (*jsonSchemaValidat
 	case r := <-ch:
 		return r.v, r.err
 	case <-timer.C:
+		if timeoutCounter != nil {
+			timeoutCounter.Add(context.Background(), 1)
+		}
 		return nil, fmt.Errorf("compile json schema: timeout after %s", limits.CompileTimeout)
 	}
 }
