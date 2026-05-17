@@ -341,6 +341,14 @@ func allRPCs() []rpcSpec {
 				return err
 			},
 		},
+		{
+			name:   "VerifyChain",
+			policy: allow,
+			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
+				_, err := c.admin.VerifyChain(ctx, fx.tenantID)
+				return err
+			},
+		},
 	}
 }
 
