@@ -254,14 +254,19 @@ func run() int {
 	cacheMetrics := telemetry.NewCacheMetrics(otelCfg)
 	configMetrics := telemetry.NewConfigMetrics(otelCfg)
 	schemaMetrics := telemetry.NewSchemaMetrics(otelCfg)
+	validationMetrics := telemetry.NewValidationMetrics(otelCfg)
 
 	// Validator factory (shared between schema + config services).
-	validatorFactory := validation.NewValidatorFactory(validatorStore,
+	validatorOpts := []validation.Option{
 		validation.WithLimits(validation.Limits{
 			CompileTimeout: cfg.SchemaCompileTimeout,
 			MaxDepth:       cfg.SchemaMaxRefDepth,
 		}),
-	)
+	}
+	if counter, ok := validationMetrics.TimeoutCounter(); ok {
+		validatorOpts = append(validatorOpts, validation.WithTimeoutCounter(counter))
+	}
+	validatorFactory := validation.NewValidatorFactory(validatorStore, validatorOpts...)
 
 	// Usage recorder — async batched read tracking for audit stats.
 	var recorder *audit.UsageRecorder

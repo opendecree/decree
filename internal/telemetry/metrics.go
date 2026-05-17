@@ -131,6 +131,31 @@ func (m *RateLimitMetrics) Counter() (metric.Int64Counter, bool) {
 	return m.rejected, true
 }
 
+// ValidationMetrics records validation-related counters.
+type ValidationMetrics struct {
+	compileTimeouts metric.Int64Counter
+}
+
+// NewValidationMetrics creates validation metrics. Returns nil if not enabled.
+func NewValidationMetrics(cfg Config) *ValidationMetrics {
+	if !cfg.Enabled || !cfg.MetricsValidation {
+		return nil
+	}
+	meter := otel.Meter(meterName)
+	timeouts, _ := meter.Int64Counter("validation.json_schema_compile_timeouts_total",
+		metric.WithDescription("Number of JSON-Schema compile goroutines that exceeded their deadline"))
+	return &ValidationMetrics{compileTimeouts: timeouts}
+}
+
+// TimeoutCounter returns the underlying Int64Counter and true when metrics are
+// enabled, or a nil interface and false when disabled.
+func (m *ValidationMetrics) TimeoutCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.compileTimeouts, true
+}
+
 // StartDBPoolMetrics starts a background goroutine that periodically records
 // DB connection pool statistics. Returns immediately if not enabled.
 func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pgxpool.Pool) {
