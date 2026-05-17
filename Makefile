@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e stress docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -148,6 +148,12 @@ bench:
 bench-e2e:
 	docker compose up -d --wait service
 	cd e2e && go test -tags=e2e -bench=. -benchmem -count=3 -run=^$$ -timeout=300s ./... || (cd .. && docker compose down -v && exit 1)
+	docker compose down -v
+
+## stress: Run stress tests (docker compose lifecycle). CI=true uses short mode.
+stress:
+	docker compose up -d --wait service
+	cd stress && go test -tags=stress -v $(if $(CI),-short,) -timeout=600s ./... || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
 # --- Documentation ---
