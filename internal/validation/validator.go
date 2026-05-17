@@ -157,7 +157,7 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 
 	case pb.FieldType_FIELD_TYPE_JSON:
 		if constraints.JsonSchema != nil {
-			jv, err := newJSONSchemaValidator(*constraints.JsonSchema, o.limits)
+			jv, err := newJSONSchemaValidator(*constraints.JsonSchema, o.limits, o.timeoutCounter)
 			if err == nil {
 				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 					val := tv.Kind.(*pb.TypedValue_JsonValue).JsonValue
