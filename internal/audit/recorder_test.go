@@ -7,8 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -281,4 +285,32 @@ type failingStore struct {
 
 func (s *failingStore) UpsertUsageStats(_ context.Context, _ UpsertUsageStatsParams) error {
 	return s.err
+}
+
+// countingCounter wraps noop.Int64Counter to capture Add increments.
+type countingCounter struct {
+	noop.Int64Counter
+	n atomic.Int64
+}
+
+func (c *countingCounter) Add(_ context.Context, incr int64, _ ...metric.AddOption) {
+	c.n.Add(incr)
+}
+
+func TestFlush_DBErrorCounter(t *testing.T) {
+	store := &failingStore{MemoryStore: NewMemoryStore(), err: errors.New("db down")}
+	counter := &countingCounter{}
+
+	r := NewUsageRecorder(store,
+		WithFlushInterval(time.Hour),
+		WithLogger(testRecorderLogger),
+		WithDBErrorCounter(counter),
+	)
+
+	r.RecordRead("t1", "app.fee", nil)
+	r.RecordRead("t1", "app.tax", nil)
+
+	err := r.Flush(context.Background())
+	require.Error(t, err)
+	assert.Equal(t, int64(2), counter.n.Load(), "one increment per failing DB write")
 }
