@@ -65,6 +65,34 @@ TLS_GATEWAY_CLIENT_CERT_FILE=/etc/decree/tls/gateway.crt
 TLS_GATEWAY_CLIENT_KEY_FILE=/etc/decree/tls/gateway.key
 ```
 
+### Gateway TLS and the localhost SAN requirement
+
+When the HTTP/JSON gateway is enabled (`HTTP_PORT`), it dials the gRPC server at `localhost:<GRPC_PORT>` over TLS. This means the server certificate must include `localhost` as a Subject Alternative Name (SAN). A certificate issued for only the public hostname (e.g. `decree.example.com`) will cause a TLS handshake failure at startup:
+
+```
+tls: certificate is valid for decree.example.com, not localhost
+```
+
+Two ways to satisfy this:
+
+1. **Include `localhost` in the certificate's SANs.** Most certificate-generation tools (cfssl, cert-manager, openssl) accept a SAN list:
+
+   ```bash
+   # openssl example
+   openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt \
+     -days 365 -nodes \
+     -subj "/CN=decree.example.com" \
+     -addext "subjectAltName=DNS:decree.example.com,DNS:localhost,IP:127.0.0.1"
+   ```
+
+2. **Override the verification hostname** with `TLS_GATEWAY_SERVER_NAME`. Use this when you cannot modify the certificate (e.g. a certificate managed by a third party):
+
+   ```bash
+   TLS_GATEWAY_SERVER_NAME=decree.example.com
+   ```
+
+   The gateway then verifies the server certificate against `decree.example.com` instead of `localhost`. This is safe as long as the gRPC server's identity is controlled by the same operator.
+
 ### Rate Limiting
 
 Rate limiting is **enabled by default** using an in-process token-bucket limiter (per-tenant + per-method). The health check endpoint (`/grpc.health.v1.Health/*`) is always exempt.
