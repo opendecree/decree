@@ -10,10 +10,10 @@
   <a href="https://pkg.go.dev/github.com/opendecree/decree"><img src="https://pkg.go.dev/badge/github.com/opendecree/decree.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
-  <a href="https://www.repostatus.org/#wip"><img src="https://www.repostatus.org/badges/latest/wip.svg" alt="Project Status: WIP"></a>
+  <a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Project Status: Active"></a>
 </p>
 
-<p align="center">Schema-driven business configuration management for multi-tenant services.</p>
+<p align="center"><strong>Define your config schema once. Get validation, APIs, type-safe SDKs, admin UI, and audit trail — automatically.</strong></p>
 
 > **Alpha Software** — OpenDecree is under active development. APIs, proto definitions, configuration formats, and behavior may change without notice between versions. Not recommended for production use yet.
 
@@ -21,11 +21,112 @@
   <img src="https://raw.githubusercontent.com/opendecree/decree/main/assets/demo.gif" alt="OpenDecree quickstart demo: schema → config → watch" width="800">
 </p>
 
+---
+
+## Schema → APIs → SDKs
+
+Write a schema once:
+
+```yaml
+# payments.decree.schema.yaml
+fields:
+  payments.fee:
+    type: number
+    constraints:
+      min: 0.0
+      max: 1.0
+  payments.retries:
+    type: integer
+    constraints:
+      min: 1
+      max: 10
+  payments.enabled:
+    type: bool
+```
+
+Get typed, validated reads in every language:
+
+```go
+// Go
+client := grpctransport.NewConfigClient(conn, grpctransport.WithSubject("myapp"))
+fee, _     := client.GetFloat(ctx, tenantID, "payments.fee")     // float64
+retries, _ := client.GetInt(ctx, tenantID, "payments.retries")   // int64
+enabled, _ := client.GetBool(ctx, tenantID, "payments.enabled")  // bool
+```
+
+```python
+# Python
+with ConfigClient("localhost:9090", subject="myapp") as client:
+    fee     = client.get(tenant_id, "payments.fee", float)
+    retries = client.get(tenant_id, "payments.retries", int)
+    enabled = client.get(tenant_id, "payments.enabled", bool)
+```
+
+```typescript
+// TypeScript
+const client = new ConfigClient("localhost:9090", { subject: "myapp" });
+const fee     = await client.get(tenantId, "payments.fee", Number);
+const retries = await client.get(tenantId, "payments.retries", Number);
+const enabled = await client.get(tenantId, "payments.enabled", Boolean);
+```
+
+<p align="center">
+  <img src="https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/-Python-3776AB?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white" alt="gRPC">
+  <img src="https://img.shields.io/badge/-REST%2FJSON-0a7ea4?logo=openapiinitiative&logoColor=white" alt="REST">
+</p>
+
+---
+
+## Quick Start
+
+### Try it instantly (no Docker needed)
+
+```bash
+go install github.com/opendecree/decree/cmd/server@latest
+go install github.com/opendecree/decree/cmd/decree@latest
+
+# Start with in-memory storage — zero dependencies
+INSECURE_LISTEN=1 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
+
+# Open http://localhost:8080/docs for Swagger UI
+curl -H "x-subject: admin" http://localhost:8080/v1/schemas
+```
+
+> **TLS required in production.** `INSECURE_LISTEN=1` disables TLS for local development only. See [Transport Security (TLS)](docs/server/configuration.md#transport-security-tls) for production setup.
+
+### Docker Compose (production-like)
+
+```bash
+git clone https://github.com/opendecree/decree.git
+cd decree
+
+# Start the full stack (PostgreSQL + Redis + migrations + service)
+docker compose up -d --wait service
+
+# gRPC at localhost:9090, REST/JSON at localhost:8080
+```
+
+### Install the CLI
+
+```bash
+# Go install
+go install github.com/opendecree/decree/cmd/decree@latest
+
+# Homebrew (macOS / Linux) — coming in beta
+brew install opendecree/tap/decree
+
+# Download binary
+# https://github.com/opendecree/decree/releases/latest
+```
+
+---
+
 ## What is this?
 
 OpenDecree manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
-
-### How is this different?
 
 OpenDecree sits between feature flags (release toggles) and infrastructure config (low-level key-value) — purpose-built for **typed business configuration**.
 
@@ -56,6 +157,8 @@ Examples by category: feature flags (LaunchDarkly, ConfigCat, Flagsmith), infras
 - **Import/Export** — portable schemas and configs in YAML format
 - **Optimistic concurrency** — safe read-modify-write with checksum validation
 - **Null support** — null and empty string are distinct values
+
+---
 
 ## SDKs
 
@@ -148,6 +251,8 @@ cd examples && make setup   # start server + seed data
 cd quickstart && go run .   # run any example
 ```
 
+---
+
 ## CLI
 
 ```bash
@@ -183,36 +288,6 @@ Use `--wait` in Docker/Kubernetes init containers to wait for the server to be r
 decree seed examples/seed.yaml --server decree:9090 --wait --wait-timeout 60s
 ```
 
-## Quick Start
-
-### Try it instantly (no Docker needed)
-
-```bash
-go install github.com/opendecree/decree/cmd/server@latest
-
-# Start with in-memory storage — zero dependencies
-INSECURE_LISTEN=1 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
-
-# Open http://localhost:8080/docs for Swagger UI
-# All requests need x-subject header:
-curl -H "x-subject: admin" http://localhost:8080/v1/schemas
-```
-
-> **TLS required in production.** `INSECURE_LISTEN=1` disables TLS for local development only. See [Transport Security (TLS)](docs/server/configuration.md#transport-security-tls) for production setup.
-
-### Docker Compose (production-like)
-
-```bash
-git clone https://github.com/opendecree/decree.git
-cd decree
-
-# Start the full stack (PostgreSQL + Redis + migrations + service)
-docker compose up -d --wait service
-
-# gRPC at localhost:9090, REST/JSON at localhost:8080
-# No JWT required — metadata auth is the default
-```
-
 ### REST API
 
 The entire gRPC API is also available as REST/JSON (via grpc-gateway). Set `HTTP_PORT` to enable:
@@ -236,20 +311,7 @@ curl -H "x-subject: admin" http://localhost:8080/v1/tenants/{id}/config
 
 OpenAPI spec: [`docs/api/openapi.swagger.json`](docs/api/openapi.swagger.json)
 
-### Using the CLI
-
-```bash
-# Set auth identity
-export DECREE_SUBJECT=admin@example.com
-
-# Create and publish a schema
-decree schema import --publish examples/config-validation/decree.schema.yaml
-
-# Create a tenant and set config
-decree tenant create --name acme --schema <schema-id> --schema-version 1
-decree config set <tenant-id> payments.fee "0.5%"
-decree config get-all <tenant-id>
-```
+---
 
 ## Architecture
 
@@ -288,6 +350,8 @@ flowchart LR
 ```
 
 Single binary exposing three gRPC services + REST/JSON gateway. All external dependencies (storage, cache, pub/sub) are behind Go interfaces — swap implementations via `STORAGE_BACKEND=memory` for zero-dependency evaluation or testing. Deploy with `ENABLE_SERVICES` to control which services run on each instance.
+
+---
 
 ## Configuration
 
@@ -343,6 +407,8 @@ Without JWT, pass identity via gRPC metadata headers:
 
 Standard OTel variables (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`) are respected by the SDK.
 
+---
+
 ## API
 
 The API is defined in Protocol Buffers under [`proto/`](proto/), published to BSR at [`buf.build/opendecree/decree`](https://buf.build/opendecree/decree). Three gRPC services:
@@ -358,7 +424,7 @@ The schema YAML format authors write to define their config shape is documented 
 - `https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json` — validates `*.decree.schema.yaml`
 - `https://schemas.opendecree.dev/schema/v0.1.0/decree-config.json` — validates `*.decree.config.yaml`
 
-All endpoints that accept a tenant or schema ID also accept the **name slug** — the server resolves automatically. Use UUIDs or human-readable names interchangeably:
+All endpoints that accept a tenant or schema ID also accept the **name slug** — the server resolves automatically. Use UUIDs or human-readable names interchangeably.
 
 Generate client stubs in any language from BSR, or use the official SDKs:
 
@@ -367,6 +433,8 @@ Generate client stubs in any language from BSR, or use the official SDKs:
 | Go | [this repo](sdk/) | `github.com/opendecree/decree/sdk/*` |
 | Python | [decree-python](https://github.com/opendecree/decree-python) | [`opendecree`](https://pypi.org/project/opendecree/) |
 | TypeScript | [decree-typescript](https://github.com/opendecree/decree-typescript) | [`@opendecree/sdk`](https://www.npmjs.com/package/@opendecree/sdk) |
+
+---
 
 ## Test Coverage
 
@@ -381,6 +449,8 @@ Coverage badges reflect **business logic only** — infrastructure wrappers that
 | `telemetry/` | OpenTelemetry provider wiring boilerplate |
 
 Run `./scripts/coverage.sh` to calculate the server coverage, or `./scripts/coverage.sh -v` for a per-function breakdown.
+
+---
 
 ## Demos
 
