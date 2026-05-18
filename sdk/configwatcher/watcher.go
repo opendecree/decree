@@ -54,9 +54,10 @@ type fieldEntry struct {
 }
 
 type options struct {
-	minBackoff time.Duration
-	maxBackoff time.Duration
-	logger     *slog.Logger
+	minBackoff      time.Duration
+	maxBackoff      time.Duration
+	snapshotTimeout time.Duration
+	logger          *slog.Logger
 }
 
 // New creates a new watcher for the given tenant's configuration.
@@ -66,9 +67,10 @@ type options struct {
 // Use grpctransport.NewConfigTransport to create a gRPC-backed transport.
 func New(transport configclient.Transport, tenantID string, opts ...Option) *Watcher {
 	o := options{
-		minBackoff: 500 * time.Millisecond,
-		maxBackoff: 30 * time.Second,
-		logger:     slog.Default(),
+		minBackoff:      500 * time.Millisecond,
+		maxBackoff:      30 * time.Second,
+		snapshotTimeout: 10 * time.Second,
+		logger:          slog.Default(),
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -98,6 +100,12 @@ func WithReconnectBackoff(min, max time.Duration) Option {
 // WithLogger sets a custom logger. Defaults to slog.Default().
 func WithLogger(logger *slog.Logger) Option {
 	return func(o *options) { o.logger = logger }
+}
+
+// WithSnapshotTimeout sets the deadline applied to each loadSnapshot call
+// inside the reconnect loop. Defaults to 10s.
+func WithSnapshotTimeout(d time.Duration) Option {
+	return func(o *options) { o.snapshotTimeout = d }
 }
 
 // --- Field registration ---
@@ -263,8 +271,12 @@ func (w *Watcher) subscriptionLoop(ctx context.Context) {
 		backoff = min(backoff*2, w.opts.maxBackoff)
 
 		// Re-load snapshot on reconnect to catch changes missed during disconnect.
-		if err := w.loadSnapshot(ctx); err != nil {
-			w.opts.logger.WarnContext(ctx, "failed to reload snapshot on reconnect", "error", err)
+		// Use an explicit timeout so a slow server cannot stall the reconnect loop.
+		snapCtx, snapCancel := context.WithTimeout(ctx, w.opts.snapshotTimeout)
+		snapErr := w.loadSnapshot(snapCtx)
+		snapCancel()
+		if snapErr != nil {
+			w.opts.logger.WarnContext(ctx, "failed to reload snapshot on reconnect", "error", snapErr)
 		} else {
 			backoff = w.opts.minBackoff // Reset backoff on successful snapshot.
 		}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -323,6 +325,68 @@ func TestWatcher_NullField(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	if got := name.Get(); got != "fallback" {
 		t.Errorf("got %v, want %v after null update", got, "fallback")
+	}
+
+	cancel()
+	_ = w.Close()
+}
+
+func TestWatcher_ReconnectSnapshotTimeout(t *testing.T) {
+	// Verify that a slow loadSnapshot during reconnect times out and does not
+	// stall the reconnect loop indefinitely.
+	var callCount atomic.Int32
+	blocked := make(chan struct{})
+	unblocked := make(chan struct{})
+
+	tr := &mockTransport{
+		getConfigFn: func(ctx context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			n := int(callCount.Add(1))
+			if n == 1 {
+				return &configclient.GetConfigResponse{TenantID: "t1"}, nil
+			}
+			if n == 2 {
+				close(blocked)
+				<-ctx.Done() // blocks until snapshotTimeout fires
+				close(unblocked)
+				return nil, ctx.Err()
+			}
+			return nil, fmt.Errorf("stream error")
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return nil, fmt.Errorf("stream error")
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts: options{
+			minBackoff:      5 * time.Millisecond,
+			maxBackoff:      10 * time.Millisecond,
+			snapshotTimeout: 30 * time.Millisecond,
+			logger:          slog.Default(),
+		},
+		fields: make(map[string]*fieldEntry),
+		done:   make(chan struct{}),
+	}
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	select {
+	case <-blocked:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("reconnect snapshot was not called")
+	}
+
+	select {
+	case <-unblocked:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("snapshot did not time out within snapshotTimeout + margin")
 	}
 
 	cancel()
