@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image migrate e2e examples bench bench-e2e stress docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e examples bench bench-e2e stress docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -62,6 +62,13 @@ build:
 ## image: Build the Docker image
 image:
 	docker build -t $(BINARY_NAME) -f build/Dockerfile .
+
+## ui: Copy admin UI dist from ../decree-ui into internal/ui/dist (local dev). Requires decree-ui checked out at ../decree-ui.
+ui:
+	npm --prefix ../decree-ui ci
+	npm --prefix ../decree-ui run build
+	rm -rf internal/ui/dist/assets
+	cp -r ../decree-ui/dist/. internal/ui/dist/
 
 # --- Quality ---
 

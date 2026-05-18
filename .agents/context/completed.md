@@ -191,3 +191,18 @@ SHA-256 hash chain over `audit_write_log` closes the silently-rewritable history
 - **Audit coverage** — schema (create/update/delete/publish/import), tenant (create/update/delete), and lock (lock/unlock) mutations now all write audit entries with correct `object_kind`.
 - **VerifyChain RPC** — new gRPC method `VerifyChain` (proto + generated stubs). Server handler in `internal/audit/service.go`: per-tenant (resolve + access check) or global chain (superadmin only). `internal/audit/verify.go`: fetches ordered entries, recomputes each hash, reports breaks. CLI: `decree audit verify [--tenant <id>]`. Client-side: `adminclient.VerifyChain` + `computeClientHash`.
 - **Bug fixed** — `schema/service.go` `RunInTx` error handlers were converting all errors to `codes.Internal`, swallowing `codes.InvalidArgument` validation errors from `createFieldsOn`. Fixed by checking `status.FromError(err)` and propagating gRPC status errors directly.
+
+## Stress Tests (#27–#29)
+
+Separate `stress/` Go module (`github.com/opendecree/decree/stress`, build tag `stress`) with three test files:
+- **cache_test.go** — `BenchmarkManyTenants_GetAll`, `BenchmarkManyFields_GetAll`, `BenchmarkRapidInvalidation`, `TestCacheEviction` (concurrent readers + writers, asserts zero errors and zero empty reads).
+- **connection_test.go** — `TestConnectionPool_ConcurrentLoad`, `TestConnectionPool_LeakDetection`, `BenchmarkConcurrentGetAll`, `BenchmarkLargePayload_GetAll`, `BenchmarkBulkTenants_List`, `TestLargeSchema_CreateAndFetch`, `TestLargePayload_SetAndGet`.
+- **memory_test.go** — `TestMemoryGrowth_BoundedUnderLoad`, `TestGoroutineLeak`, `TestConcurrentTenants_Isolation`, `BenchmarkMemoryGrowth_Sustained`. Heap snapshot via pprof.
+
+`testing.Short()` halves counts/durations for CI. `testing.TB` shared helpers. `CI=true make stress` injects `-short`. New `stress` CI job in `ci.yml` (20 min timeout, `needs: [tools, changes]`).
+
+## Admin GUI Embed (#24)
+
+`internal/ui/` package with `//go:embed dist` exposes `ui.FS`. Placeholder `dist/index.html` committed; real assets copied by `make ui` (runs `npm ci + npm run build` in `../decree-ui`, copies output into `dist/`). Built `assets/` directory excluded from git.
+
+`server.WithUI(fs.FS)` option adds SPA handler at `/admin/` with client-side routing fallback (`spaHandler`). `top` ServeMux created when either `openAPISpec` or `uiFS` is present. `ENABLE_UI=1` env var activates it; `fs.Sub(ui.FS, "dist")` resolves the subpath before passing to the option. `gatewayOptionsBuild.HasUI` bool for testability. Two new unit tests (`TestBuildGatewayOptions_UIWired`, `TestBuildGatewayOptions_UIAbsent`).

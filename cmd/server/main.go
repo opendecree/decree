@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -33,6 +34,7 @@ import (
 	"github.com/opendecree/decree/internal/storage"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
+	ui "github.com/opendecree/decree/internal/ui"
 	"github.com/opendecree/decree/internal/validation"
 	"github.com/opendecree/decree/internal/version"
 
@@ -341,7 +343,16 @@ func run() int {
 			}
 		}
 
-		gwBuild := buildGatewayOptions(cfg, logger, openAPISpec, gwTLS)
+		var uiFS fs.FS
+		if cfg.EnableUI {
+			sub, subErr := fs.Sub(ui.FS, "dist")
+			if subErr != nil {
+				logger.ErrorContext(ctx, "failed to prepare UI filesystem", "error", subErr)
+				return 1
+			}
+			uiFS = sub
+		}
+		gwBuild := buildGatewayOptions(cfg, logger, openAPISpec, gwTLS, uiFS)
 		gw, err = server.NewGateway(ctx, cfg.HTTPPort, fmt.Sprintf("localhost:%s", cfg.GRPCPort), gwBuild.Opts...)
 		if err != nil {
 			logger.ErrorContext(ctx, "failed to create HTTP gateway", "error", err)
@@ -425,6 +436,7 @@ type serverConfig struct {
 	RateLimitSuperAdminRPS   float64 // 0 = unlimited
 	RateLimitBurst           int
 	EnableReflection         bool
+	EnableUI                 bool
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -497,6 +509,7 @@ func loadConfig() serverConfig {
 		RateLimitSuperAdminRPS:   parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
 		RateLimitBurst:           parseEnvInt("RATE_LIMIT_BURST", 10),
 		EnableReflection:         getEnv("ENABLE_REFLECTION", "") == "1",
+		EnableUI:                 getEnv("ENABLE_UI", "") == "1",
 	}
 }
 

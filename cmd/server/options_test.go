@@ -2,8 +2,10 @@ package main
 
 import (
 	"io"
+	"io/fs"
 	"log/slog"
 	"testing"
+	"testing/fstest"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/time/rate"
@@ -111,10 +113,11 @@ func TestBuildGatewayOptions_TLS(t *testing.T) {
 	cfg.InsecureListen = false
 	gwTLS := &server.GatewayTLSConfig{CAFile: "ca.pem"}
 
-	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), gwTLS)
+	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), gwTLS, nil)
 
 	assert.True(t, got.UseTLS)
 	assert.False(t, got.UseInsecure)
+	assert.False(t, got.HasUI)
 	assert.Len(t, got.Opts, 5, "4 base options + TLS option")
 }
 
@@ -122,9 +125,31 @@ func TestBuildGatewayOptions_Insecure(t *testing.T) {
 	cfg := baseServerCfg()
 	cfg.InsecureListen = true
 
-	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil)
+	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil, nil)
 
 	assert.False(t, got.UseTLS)
 	assert.True(t, got.UseInsecure)
+	assert.False(t, got.HasUI)
 	assert.Len(t, got.Opts, 5, "4 base options + Insecure option")
+}
+
+func TestBuildGatewayOptions_UIWired(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+	testFS := fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("<html/>")}}
+
+	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil, fs.FS(testFS))
+
+	assert.True(t, got.HasUI, "non-nil uiFS must be wired into the option slice")
+	assert.Len(t, got.Opts, 6, "4 base options + Insecure + UI")
+}
+
+func TestBuildGatewayOptions_UIAbsent(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+
+	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil, nil)
+
+	assert.False(t, got.HasUI, "nil uiFS must not produce a WithUI option")
+	assert.Len(t, got.Opts, 5)
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"log/slog"
 
 	"google.golang.org/grpc"
@@ -59,6 +60,7 @@ type gatewayOptionsBuild struct {
 	Opts        []server.GatewayOption
 	UseTLS      bool
 	UseInsecure bool
+	HasUI       bool
 }
 
 func buildGatewayOptions(
@@ -66,6 +68,7 @@ func buildGatewayOptions(
 	logger *slog.Logger,
 	openAPISpec []byte,
 	gwTLS *server.GatewayTLSConfig,
+	uiFS fs.FS,
 ) gatewayOptionsBuild {
 	out := gatewayOptionsBuild{
 		Opts: []server.GatewayOption{
@@ -81,6 +84,10 @@ func buildGatewayOptions(
 	} else {
 		out.Opts = append(out.Opts, server.WithGatewayTLS(gwTLS))
 		out.UseTLS = true
+	}
+	if uiFS != nil {
+		out.Opts = append(out.Opts, server.WithUI(uiFS))
+		out.HasUI = true
 	}
 	return out
 }
