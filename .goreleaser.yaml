@@ -57,6 +57,95 @@ archives:
         formats:
           - zip
 
+# Linux packages for the decree CLI (deb, rpm, apk).
+nfpms:
+  - id: decree
+    package_name: decree
+    ids:
+      - decree
+    vendor: OpenDecree
+    homepage: https://github.com/opendecree/decree
+    maintainer: OpenDecree <noreply@opendecree.dev>
+    description: decree — the OpenDecree configuration CLI
+    license: Apache 2.0
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+    contents:
+      - src: ./LICENSE
+        dst: /usr/share/doc/decree/copyright
+
+# Homebrew tap — auto-updates opendecree/homebrew-tap on release.
+# Prerequisites: create opendecree/homebrew-tap (public, empty) and set
+# HOMEBREW_TAP_TOKEN repository secret (classic PAT with repo scope on tap repo).
+brews:
+  - name: decree
+    ids:
+      - decree
+    repository:
+      owner: opendecree
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/opendecree/decree
+    description: decree — the OpenDecree configuration CLI
+    license: Apache-2.0
+    install: |
+      bin.install "decree"
+    test: |
+      system "#{bin}/decree", "version"
+
+# Multi-arch Docker images for decree-server published to ghcr.io.
+dockers:
+  - id: decree-server-amd64
+    ids:
+      - decree-server
+    image_templates:
+      - "ghcr.io/opendecree/decree:{{ .Tag }}-amd64"
+      - "ghcr.io/opendecree/decree:latest-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/opendecree/decree"
+    dockerfile: build/Dockerfile
+    goarch: amd64
+    goos: linux
+
+  - id: decree-server-arm64
+    ids:
+      - decree-server
+    image_templates:
+      - "ghcr.io/opendecree/decree:{{ .Tag }}-arm64"
+      - "ghcr.io/opendecree/decree:latest-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/opendecree/decree"
+    dockerfile: build/Dockerfile
+    goarch: arm64
+    goos: linux
+
+docker_manifests:
+  - name_template: "ghcr.io/opendecree/decree:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/opendecree/decree:{{ .Tag }}-amd64"
+      - "ghcr.io/opendecree/decree:{{ .Tag }}-arm64"
+  - name_template: "ghcr.io/opendecree/decree:latest"
+    image_templates:
+      - "ghcr.io/opendecree/decree:latest-amd64"
+      - "ghcr.io/opendecree/decree:latest-arm64"
+
+# SBOM for all binaries.
+sboms:
+  - artifacts: binary
+
 checksum:
   name_template: "checksums.txt"
 
