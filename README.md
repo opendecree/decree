@@ -11,6 +11,7 @@
   <a href="https://goreportcard.com/report/github.com/opendecree/decree"><img src="https://goreportcard.com/badge/github.com/opendecree/decree" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
   <a href="https://www.repostatus.org/#active"><img src="https://www.repostatus.org/badges/latest/active.svg" alt="Project Status: Active"></a>
+  <a href="https://codecov.io/gh/opendecree/decree"><img src="https://codecov.io/gh/opendecree/decree/graph/badge.svg" alt="Coverage"></a>
 </p>
 
 <p align="center"><strong>Define your config schema once. Get validation, APIs, type-safe SDKs, admin UI, and audit trail — automatically.</strong></p>

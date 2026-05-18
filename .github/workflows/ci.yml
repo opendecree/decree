@@ -227,19 +227,33 @@ jobs:
           cd cmd/decree && go build -o ../../bin/decree .
 
       - name: Unit tests
-        run: go test ./internal/... -race -count=1
+        run: go test ./internal/... -race -count=1 -coverprofile=coverage-internal.out -covermode=atomic
 
       - name: SDK + CLI + tools tests
         run: |
-          cd sdk/configclient && go test ./... -count=1 &
-          cd sdk/adminclient && go test ./... -count=1 &
-          cd sdk/configwatcher && go test ./... -count=1 &
-          cd sdk/tools && go test ./... -count=1 &
-          cd cmd/decree && go test ./... -count=1 &
+          cd sdk/configclient && go test ./... -count=1 -coverprofile=../../cov-configclient.out -covermode=atomic &
+          cd sdk/adminclient && go test ./... -count=1 -coverprofile=../../cov-adminclient.out -covermode=atomic &
+          cd sdk/configwatcher && go test ./... -count=1 -coverprofile=../../cov-configwatcher.out -covermode=atomic &
+          cd sdk/tools && go test ./... -count=1 -coverprofile=../../cov-tools.out -covermode=atomic &
+          cd cmd/decree && go test ./... -count=1 -coverprofile=../../cov-decree.out -covermode=atomic &
           wait
 
       - name: Coverage ratchet
         run: ./scripts/check-coverage.sh
+
+      - name: Merge coverage profiles
+        run: |
+          echo "mode: atomic" > coverage.out
+          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-tools.out cov-decree.out; do
+            [ -f "$f" ] && grep -v "^mode:" "$f" >> coverage.out || true
+          done
+
+      - name: Upload coverage to Codecov
+        # codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2
+        with:
+          files: coverage.out
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Proves the SDK core modules still build and test against older Go versions
   # we advertise support for (1.22 is the lowest SDK-supported minor).
