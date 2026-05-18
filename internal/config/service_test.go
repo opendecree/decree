@@ -916,3 +916,30 @@ func TestExportConfig_RedactsSensitiveFields(t *testing.T) {
 	assert.Contains(t, yaml, redactedSentinel)
 	assert.Contains(t, yaml, "myapp")
 }
+
+func TestDependentRequiredError(t *testing.T) {
+	inner := errors.New("inner error")
+	e := &dependentRequiredError{err: inner}
+	assert.Equal(t, "inner error", e.Error())
+	assert.Equal(t, inner, e.Unwrap())
+}
+
+func TestValidationError_Error(t *testing.T) {
+	inner := errors.New("cel rule failed")
+	e := &validationError{err: inner}
+	assert.Equal(t, "cel rule failed", e.Error())
+}
+
+func TestWithCacheMetrics_Option(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, &mockCache{}, &mockPublisher{}, &mockSubscriber{},
+		WithCacheMetrics(nil))
+	assert.NotNil(t, svc)
+}
+
+func TestWithMetrics_Option(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, &mockCache{}, &mockPublisher{}, &mockSubscriber{},
+		WithMetrics(nil))
+	assert.NotNil(t, svc)
+}

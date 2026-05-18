@@ -22,3 +22,20 @@ func TestRedisCache_SetEmptyValuesIsNoOp(t *testing.T) {
 	err = c.Set(context.Background(), "t1", 1, nil, time.Minute)
 	require.NoError(t, err)
 }
+
+func TestNewRedisCache(t *testing.T) {
+	c := NewRedisCache(nil)
+	require.NotNil(t, c)
+	require.Equal(t, "config:", c.prefix)
+}
+
+func TestRedisCache_Key(t *testing.T) {
+	c := &RedisCache{prefix: "config:"}
+	require.Equal(t, "config:tenant-1:v7", c.key("tenant-1", 7))
+	require.Equal(t, "config:t:v0", c.key("t", 0))
+}
+
+func TestRedisCache_TenantPattern(t *testing.T) {
+	c := &RedisCache{prefix: "config:"}
+	require.Equal(t, "config:tenant-1:*", c.tenantPattern("tenant-1"))
+}
