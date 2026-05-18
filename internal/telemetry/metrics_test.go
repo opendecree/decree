@@ -76,3 +76,51 @@ func TestStartDBPoolMetrics_Disabled(t *testing.T) {
 	StartDBPoolMetrics(context.Background(), Config{}, nil, nil)
 	StartDBPoolMetrics(context.Background(), Config{Enabled: true, MetricsDBPool: false}, nil, nil)
 }
+
+func TestNewRateLimitMetrics_Disabled(t *testing.T) {
+	assert.Nil(t, NewRateLimitMetrics(Config{}))
+	assert.Nil(t, NewRateLimitMetrics(Config{Enabled: true, MetricsRateLimit: false}))
+}
+
+func TestNewRateLimitMetrics_Enabled(t *testing.T) {
+	m := NewRateLimitMetrics(Config{Enabled: true, MetricsRateLimit: true})
+	assert.NotNil(t, m)
+}
+
+func TestRateLimitMetrics_NilSafe(t *testing.T) {
+	var m *RateLimitMetrics
+	counter, ok := m.Counter()
+	assert.False(t, ok)
+	assert.Nil(t, counter)
+}
+
+func TestRateLimitMetrics_Counter(t *testing.T) {
+	m := NewRateLimitMetrics(Config{Enabled: true, MetricsRateLimit: true})
+	counter, ok := m.Counter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}
+
+func TestNewValidationMetrics_Disabled(t *testing.T) {
+	assert.Nil(t, NewValidationMetrics(Config{}))
+	assert.Nil(t, NewValidationMetrics(Config{Enabled: true, MetricsValidation: false}))
+}
+
+func TestNewValidationMetrics_Enabled(t *testing.T) {
+	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
+	assert.NotNil(t, m)
+}
+
+func TestValidationMetrics_NilSafe(t *testing.T) {
+	var m *ValidationMetrics
+	counter, ok := m.TimeoutCounter()
+	assert.False(t, ok)
+	assert.Nil(t, counter)
+}
+
+func TestValidationMetrics_TimeoutCounter(t *testing.T) {
+	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
+	counter, ok := m.TimeoutCounter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}

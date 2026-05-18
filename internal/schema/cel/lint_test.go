@@ -209,3 +209,40 @@ func TestLintValidations_Rule4_EqualityLiteralOnLeft(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "use enum: [true]")
 }
+
+// The following two tests exercise the flipOp branches for _>_ and _>=_ by
+// placing the literal on the left side of the comparison. Without the flip,
+// the operand order would map to the wrong bound direction.
+
+func TestLintValidations_Rule4_ComparisonLiteralOnLeft_GT(t *testing.T) {
+	// `100.0 > self.payments.max_amount` flips to `self.x < 100.0` → exclusiveMaximum
+	rules := []*pb.ValidationRule{
+		{Rule: "100.0 > self.payments.max_amount", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use exclusiveMaximum: 100 on the field")
+}
+
+func TestLintValidations_Rule4_ComparisonLiteralOnLeft_GTE(t *testing.T) {
+	// `100.0 >= self.payments.max_amount` flips to `self.x <= 100.0` → maximum
+	rules := []*pb.ValidationRule{
+		{Rule: "100.0 >= self.payments.max_amount", Message: "x"},
+	}
+	err := LintValidations(rules, showcaseFields())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "use maximum: 100 on the field")
+}
+
+func TestLintValidations_InOperatorTraversesListAndComprehensionNodes(t *testing.T) {
+	// The `in` macro compiles to a comprehension over a list literal. This
+	// exercises the ListKind and ComprehensionKind branches in the visit
+	// function, which collectSelfChains relies on to find all self.* references.
+	fields := []*pb.SchemaField{
+		{Path: "mode", Type: pb.FieldType_FIELD_TYPE_STRING},
+	}
+	rules := []*pb.ValidationRule{
+		{Rule: `self.mode in ["a", "b", "c"]`, Message: "valid modes"},
+	}
+	require.NoError(t, LintValidations(rules, fields))
+}
