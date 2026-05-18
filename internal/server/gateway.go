@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -93,18 +94,23 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 		}
 	}
 
-	// Wrap gateway mux with docs routes.
+	// Wrap gateway mux with docs and UI routes.
 	handler := http.Handler(mux)
-	if len(o.openAPISpec) > 0 {
+	if len(o.openAPISpec) > 0 || o.uiFS != nil {
 		top := http.NewServeMux()
-		top.HandleFunc("GET /docs/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(o.openAPISpec)
-		})
-		top.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write([]byte(swaggerUIPage))
-		})
+		if len(o.openAPISpec) > 0 {
+			top.HandleFunc("GET /docs/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write(o.openAPISpec)
+			})
+			top.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				_, _ = w.Write([]byte(swaggerUIPage))
+			})
+		}
+		if o.uiFS != nil {
+			top.Handle("/admin/", http.StripPrefix("/admin", spaHandler(o.uiFS)))
+		}
 		top.Handle("/", mux)
 		handler = top
 	}
@@ -147,6 +153,23 @@ func forwardAuthHeaders(ctx context.Context, req *http.Request) metadata.MD {
 		}
 	}
 	return md
+}
+
+// spaHandler serves an embedded filesystem for a single-page application.
+// Requests for files that exist are served directly; all other paths fall back
+// to index.html so client-side routing works correctly.
+func spaHandler(fsys fs.FS) http.Handler {
+	fileServer := http.FileServerFS(fsys)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+		if _, err := fsys.Open(path); err != nil {
+			r.URL.Path = "/"
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // swaggerUIPage is a self-contained HTML page that renders the OpenAPI spec

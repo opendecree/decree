@@ -9,7 +9,8 @@
 go.work
 go.work.sum
 bin/
-dist/
+/dist/
+internal/ui/dist/assets/
 *.exe
 *.exe~
 *.dll

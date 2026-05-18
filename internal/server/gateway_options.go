@@ -1,6 +1,9 @@
 package server
 
-import "log/slog"
+import (
+	"io/fs"
+	"log/slog"
+)
 
 // GatewayOption configures a Gateway.
 type GatewayOption func(*gatewayOptions)
@@ -8,6 +11,7 @@ type GatewayOption func(*gatewayOptions)
 type gatewayOptions struct {
 	logger          *slog.Logger
 	openAPISpec     []byte
+	uiFS            fs.FS
 	maxRecvMsgBytes int
 	maxSendMsgBytes int
 	tls             *GatewayTLSConfig
@@ -48,4 +52,11 @@ func WithGatewayTLS(cfg *GatewayTLSConfig) GatewayOption {
 // (INSECURE_LISTEN=1). Mutually exclusive with WithGatewayTLS.
 func WithGatewayInsecure() GatewayOption {
 	return func(o *gatewayOptions) { o.insecure = true }
+}
+
+// WithUI serves the given filesystem at /admin/ with SPA client-side routing
+// fallback. The FS must be rooted at the dist directory (index.html at its
+// root). When unset, the /admin/ route is not registered.
+func WithUI(fsys fs.FS) GatewayOption {
+	return func(o *gatewayOptions) { o.uiFS = fsys }
 }
