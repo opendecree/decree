@@ -18,6 +18,9 @@ func TestNew_Defaults(t *testing.T) {
 	if got := w.opts.maxBackoff; got != 30*time.Second {
 		t.Errorf("got %v, want %v", got, 30*time.Second)
 	}
+	if got := w.opts.snapshotTimeout; got != 10*time.Second {
+		t.Errorf("got %v, want %v", got, 10*time.Second)
+	}
 	if w.opts.logger == nil {
 		t.Fatal("expected non-nil logger")
 	}
@@ -33,6 +36,13 @@ func TestWithReconnectBackoff(t *testing.T) {
 	}
 	if got := w.opts.maxBackoff; got != 1*time.Minute {
 		t.Errorf("got %v, want %v", got, 1*time.Minute)
+	}
+}
+
+func TestWithSnapshotTimeout(t *testing.T) {
+	w := New(nil, "t1", WithSnapshotTimeout(5*time.Second))
+	if got := w.opts.snapshotTimeout; got != 5*time.Second {
+		t.Errorf("got %v, want %v", got, 5*time.Second)
 	}
 }
 
