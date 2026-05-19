@@ -35,66 +35,130 @@ type TypedValue struct {
 // Kind returns the value's type.
 func (tv *TypedValue) Kind() ValueKind { return tv.kind }
 
-// StringValue returns the string value. Panics if Kind is not KindString.
-func (tv *TypedValue) StringValue() string {
+// StringValue returns the string value and true if Kind is KindString, otherwise "", false.
+func (tv *TypedValue) StringValue() (string, bool) {
 	if tv.kind != KindString {
-		panic("TypedValue.StringValue called on non-string value")
+		return "", false
+	}
+	return tv.str, true
+}
+
+// MustStringValue returns the string value. Panics if Kind is not KindString.
+func (tv *TypedValue) MustStringValue() string {
+	if tv.kind != KindString {
+		panic("TypedValue.MustStringValue called on non-string value")
 	}
 	return tv.str
 }
 
-// IntValue returns the int64 value. Panics if Kind is not KindInteger.
-func (tv *TypedValue) IntValue() int64 {
+// IntValue returns the int64 value and true if Kind is KindInteger, otherwise 0, false.
+func (tv *TypedValue) IntValue() (int64, bool) {
 	if tv.kind != KindInteger {
-		panic("TypedValue.IntValue called on non-integer value")
+		return 0, false
+	}
+	return tv.i, true
+}
+
+// MustIntValue returns the int64 value. Panics if Kind is not KindInteger.
+func (tv *TypedValue) MustIntValue() int64 {
+	if tv.kind != KindInteger {
+		panic("TypedValue.MustIntValue called on non-integer value")
 	}
 	return tv.i
 }
 
-// FloatValue returns the float64 value. Panics if Kind is not KindNumber.
-func (tv *TypedValue) FloatValue() float64 {
+// FloatValue returns the float64 value and true if Kind is KindNumber, otherwise 0, false.
+func (tv *TypedValue) FloatValue() (float64, bool) {
 	if tv.kind != KindNumber {
-		panic("TypedValue.FloatValue called on non-number value")
+		return 0, false
+	}
+	return tv.num, true
+}
+
+// MustFloatValue returns the float64 value. Panics if Kind is not KindNumber.
+func (tv *TypedValue) MustFloatValue() float64 {
+	if tv.kind != KindNumber {
+		panic("TypedValue.MustFloatValue called on non-number value")
 	}
 	return tv.num
 }
 
-// BoolValue returns the bool value. Panics if Kind is not KindBool.
-func (tv *TypedValue) BoolValue() bool {
+// BoolValue returns the bool value and true if Kind is KindBool, otherwise false, false.
+func (tv *TypedValue) BoolValue() (bool, bool) {
 	if tv.kind != KindBool {
-		panic("TypedValue.BoolValue called on non-bool value")
+		return false, false
+	}
+	return tv.b, true
+}
+
+// MustBoolValue returns the bool value. Panics if Kind is not KindBool.
+func (tv *TypedValue) MustBoolValue() bool {
+	if tv.kind != KindBool {
+		panic("TypedValue.MustBoolValue called on non-bool value")
 	}
 	return tv.b
 }
 
-// TimeValue returns the time.Time value. Panics if Kind is not KindTime.
-func (tv *TypedValue) TimeValue() time.Time {
+// TimeValue returns the time.Time value and true if Kind is KindTime, otherwise zero time, false.
+func (tv *TypedValue) TimeValue() (time.Time, bool) {
 	if tv.kind != KindTime {
-		panic("TypedValue.TimeValue called on non-time value")
+		return time.Time{}, false
+	}
+	return tv.t, true
+}
+
+// MustTimeValue returns the time.Time value. Panics if Kind is not KindTime.
+func (tv *TypedValue) MustTimeValue() time.Time {
+	if tv.kind != KindTime {
+		panic("TypedValue.MustTimeValue called on non-time value")
 	}
 	return tv.t
 }
 
-// DurationValue returns the time.Duration value. Panics if Kind is not KindDuration.
-func (tv *TypedValue) DurationValue() time.Duration {
+// DurationValue returns the time.Duration value and true if Kind is KindDuration, otherwise 0, false.
+func (tv *TypedValue) DurationValue() (time.Duration, bool) {
 	if tv.kind != KindDuration {
-		panic("TypedValue.DurationValue called on non-duration value")
+		return 0, false
+	}
+	return tv.d, true
+}
+
+// MustDurationValue returns the time.Duration value. Panics if Kind is not KindDuration.
+func (tv *TypedValue) MustDurationValue() time.Duration {
+	if tv.kind != KindDuration {
+		panic("TypedValue.MustDurationValue called on non-duration value")
 	}
 	return tv.d
 }
 
-// URLValue returns the URL string value. Panics if Kind is not KindURL.
-func (tv *TypedValue) URLValue() string {
+// URLValue returns the URL string value and true if Kind is KindURL, otherwise "", false.
+func (tv *TypedValue) URLValue() (string, bool) {
 	if tv.kind != KindURL {
-		panic("TypedValue.URLValue called on non-url value")
+		return "", false
+	}
+	return tv.str, true
+}
+
+// MustURLValue returns the URL string value. Panics if Kind is not KindURL.
+func (tv *TypedValue) MustURLValue() string {
+	if tv.kind != KindURL {
+		panic("TypedValue.MustURLValue called on non-url value")
 	}
 	return tv.str
 }
 
-// JSONValue returns the JSON string value. Panics if Kind is not KindJSON.
-func (tv *TypedValue) JSONValue() string {
+// JSONValue returns the JSON string value and true if Kind is KindJSON, otherwise "", false.
+func (tv *TypedValue) JSONValue() (string, bool) {
 	if tv.kind != KindJSON {
-		panic("TypedValue.JSONValue called on non-json value")
+		return "", false
+	}
+	return tv.str, true
+}
+
+// MustJSONValue returns the JSON string value. Panics if Kind is not KindJSON.
+func (tv *TypedValue) MustJSONValue() string {
+	if tv.kind != KindJSON {
+		panic("TypedValue.MustJSONValue called on non-json value")
 	}
 	return tv.str
 }

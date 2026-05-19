@@ -221,8 +221,8 @@ func TestSetManyTyped_Success(t *testing.T) {
 		for _, u := range r.Updates {
 			byPath[u.FieldPath] = u.Value
 		}
-		return byPath["count"] != nil && byPath["count"].Kind() == KindInteger && byPath["count"].IntValue() == 42 &&
-			byPath["enabled"] != nil && byPath["enabled"].Kind() == KindBool && byPath["enabled"].BoolValue()
+		return byPath["count"] != nil && byPath["count"].Kind() == KindInteger && byPath["count"].MustIntValue() == 42 &&
+			byPath["enabled"] != nil && byPath["enabled"].Kind() == KindBool && byPath["enabled"].MustBoolValue()
 	}, &SetFieldsResponse{}, nil)
 
 	err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{
@@ -598,7 +598,7 @@ func TestSetInt_Success(t *testing.T) {
 
 	tr.on("SetField", func(args ...any) bool {
 		r := args[0].(*SetFieldRequest)
-		return r.Value != nil && r.Value.Kind() == KindInteger && r.Value.IntValue() == 42
+		return r.Value != nil && r.Value.Kind() == KindInteger && r.Value.MustIntValue() == 42
 	}, &SetFieldResponse{}, nil)
 
 	if err := client.SetInt(ctx, "t1", "retries", 42); err != nil {
@@ -613,7 +613,7 @@ func TestSetBool_Success(t *testing.T) {
 
 	tr.on("SetField", func(args ...any) bool {
 		r := args[0].(*SetFieldRequest)
-		return r.Value != nil && r.Value.Kind() == KindBool && r.Value.BoolValue()
+		return r.Value != nil && r.Value.Kind() == KindBool && r.Value.MustBoolValue()
 	}, &SetFieldResponse{}, nil)
 
 	if err := client.SetBool(ctx, "t1", "enabled", true); err != nil {
@@ -628,7 +628,7 @@ func TestSetFloat_Success(t *testing.T) {
 
 	tr.on("SetField", func(args ...any) bool {
 		r := args[0].(*SetFieldRequest)
-		return r.Value != nil && r.Value.Kind() == KindNumber && r.Value.FloatValue() == 3.14
+		return r.Value != nil && r.Value.Kind() == KindNumber && r.Value.MustFloatValue() == 3.14
 	}, &SetFieldResponse{}, nil)
 
 	if err := client.SetFloat(ctx, "t1", "rate", 3.14); err != nil {

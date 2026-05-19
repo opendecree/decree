@@ -51,21 +51,21 @@ func typedValueToProto(tv *configclient.TypedValue) *pb.TypedValue {
 	}
 	switch tv.Kind() {
 	case configclient.KindInteger:
-		return &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: tv.IntValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: tv.MustIntValue()}}
 	case configclient.KindNumber:
-		return &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: tv.FloatValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: tv.MustFloatValue()}}
 	case configclient.KindString:
-		return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: tv.StringValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: tv.MustStringValue()}}
 	case configclient.KindBool:
-		return &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: tv.BoolValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: tv.MustBoolValue()}}
 	case configclient.KindTime:
-		return &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(tv.TimeValue())}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(tv.MustTimeValue())}}
 	case configclient.KindDuration:
-		return &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(tv.DurationValue())}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(tv.MustDurationValue())}}
 	case configclient.KindURL:
-		return &pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: tv.URLValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: tv.MustURLValue()}}
 	case configclient.KindJSON:
-		return &pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: tv.JSONValue()}}
+		return &pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: tv.MustJSONValue()}}
 	default:
 		return nil
 	}
