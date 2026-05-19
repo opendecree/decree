@@ -19,12 +19,16 @@ type ConfigTransport struct {
 var _ configclient.Transport = (*ConfigTransport)(nil)
 
 // NewConfigTransport creates a new gRPC-backed config transport.
-func NewConfigTransport(conn grpc.ClientConnInterface, opts ...Option) *ConfigTransport {
-	cfg := buildConfig(opts)
+// WithRole (or WithBearerToken) is required; construction returns an error if omitted.
+func NewConfigTransport(conn grpc.ClientConnInterface, opts ...Option) (*ConfigTransport, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	return &ConfigTransport{
 		rpc:  pb.NewConfigServiceClient(conn),
 		auth: cfg.auth,
-	}
+	}, nil
 }
 
 func (t *ConfigTransport) GetField(ctx context.Context, req *configclient.GetFieldRequest) (*configclient.GetFieldResponse, error) {

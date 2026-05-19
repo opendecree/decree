@@ -23,7 +23,11 @@ var lockSetCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newAdminClient(conn).LockField(cmd.Context(), args[0], args[1]); err != nil {
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		if err := admin.LockField(cmd.Context(), args[0], args[1]); err != nil {
 			return err
 		}
 		fmt.Printf("Locked %s\n", args[1])
@@ -42,7 +46,11 @@ var lockRemoveCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newAdminClient(conn).UnlockField(cmd.Context(), args[0], args[1]); err != nil {
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		if err := admin.UnlockField(cmd.Context(), args[0], args[1]); err != nil {
 			return err
 		}
 		fmt.Printf("Unlocked %s\n", args[1])
@@ -61,7 +69,11 @@ var lockListCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		locks, err := newAdminClient(conn).ListFieldLocks(cmd.Context(), args[0])
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		locks, err := admin.ListFieldLocks(cmd.Context(), args[0])
 		if err != nil {
 			return err
 		}

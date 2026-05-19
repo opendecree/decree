@@ -48,9 +48,13 @@ func run() error {
 	tenantID := mustTenantID()
 
 	// Register fields that drive server behavior.
-	w := grpctransport.NewWatcher(conn, tenantID,
+	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("live-config-example"),
+		grpctransport.WithRole("user"),
 	)
+	if err != nil {
+		return fmt.Errorf("create watcher: %w", err)
+	}
 	rateLimit := w.Int("server.rate_limit", 100)
 	timeout := w.Duration("server.timeout", 30*time.Second)
 	maxConns := w.Int("server.max_connections", 50)

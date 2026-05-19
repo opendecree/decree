@@ -5,6 +5,7 @@ package grpctransport
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -72,16 +73,19 @@ func WithLogger(l *slog.Logger) Option {
 	}
 }
 
-func buildConfig(opts []Option) config {
-	cfg := config{
-		auth: authConfig{
-			role: "superadmin",
-		},
-	}
+// ErrRoleRequired is returned by transport constructors when neither
+// WithRole nor WithBearerToken is provided.
+var ErrRoleRequired = errors.New("grpctransport: WithRole is required when not using WithBearerToken")
+
+func buildConfig(opts []Option) (config, error) {
+	var cfg config
 	for _, o := range opts {
 		o(&cfg)
 	}
-	return cfg
+	if cfg.auth.bearerToken == "" && cfg.auth.role == "" {
+		return config{}, ErrRoleRequired
+	}
+	return cfg, nil
 }
 
 // applyAuth injects authentication metadata into the outgoing gRPC context.

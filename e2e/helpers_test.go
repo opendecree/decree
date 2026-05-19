@@ -38,11 +38,19 @@ func dial(t *testing.T) *grpc.ClientConn {
 }
 
 func newAdminClient(conn *grpc.ClientConn) *adminclient.Client {
-	return grpctransport.NewAdminClient(conn, grpctransport.WithSubject("e2e-test"))
+	c, err := grpctransport.NewAdminClient(conn, grpctransport.WithSubject("e2e-test"), grpctransport.WithRole("superadmin"))
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 func newConfigClient(conn *grpc.ClientConn) *configclient.Client {
-	return grpctransport.NewConfigClient(conn, grpctransport.WithSubject("e2e-test"))
+	c, err := grpctransport.NewConfigClient(conn, grpctransport.WithSubject("e2e-test"), grpctransport.WithRole("superadmin"))
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 func ptr[T any](v T) *T { return &v }

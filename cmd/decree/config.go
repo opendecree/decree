@@ -30,7 +30,11 @@ var configGetCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		val, err := newConfigClient(conn).Get(cmd.Context(), args[0], args[1])
+		cfg, err := newConfigClient(conn)
+		if err != nil {
+			return err
+		}
+		val, err := cfg.Get(cmd.Context(), args[0], args[1])
 		if err != nil {
 			return err
 		}
@@ -50,7 +54,11 @@ var configGetAllCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		vals, err := newConfigClient(conn).GetAll(cmd.Context(), args[0])
+		cfg, err := newConfigClient(conn)
+		if err != nil {
+			return err
+		}
+		vals, err := cfg.GetAll(cmd.Context(), args[0])
 		if err != nil {
 			return err
 		}
@@ -84,7 +92,15 @@ Values are parsed according to the schema's field type:
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := runConfigSet(cmd.Context(), newAdminClient(conn), newConfigClient(conn), args[0], args[1], args[2]); err != nil {
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		cfg, err := newConfigClient(conn)
+		if err != nil {
+			return err
+		}
+		if err := runConfigSet(cmd.Context(), admin, cfg, args[0], args[1], args[2]); err != nil {
 			return err
 		}
 		fmt.Println("Set.")
@@ -133,7 +149,15 @@ var configSetManyCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		n, err := runConfigSetMany(cmd.Context(), newAdminClient(conn), newConfigClient(conn), tenantID, rawValues, desc)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		cfg, err := newConfigClient(conn)
+		if err != nil {
+			return err
+		}
+		n, err := runConfigSetMany(cmd.Context(), admin, cfg, tenantID, rawValues, desc)
 		if err != nil {
 			return err
 		}
@@ -179,7 +203,11 @@ var configVersionsCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		versions, err := newAdminClient(conn).ListConfigVersions(cmd.Context(), args[0])
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		versions, err := admin.ListConfigVersions(cmd.Context(), args[0])
 		if err != nil {
 			return err
 		}
@@ -211,7 +239,11 @@ var configRollbackCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		v, err := newAdminClient(conn).RollbackConfig(cmd.Context(), args[0], int32(version), desc)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		v, err := admin.RollbackConfig(cmd.Context(), args[0], int32(version), desc)
 		if err != nil {
 			return err
 		}
@@ -235,7 +267,11 @@ var configExportCmd = &cobra.Command{
 		if v, _ := cmd.Flags().GetInt32("version"); v > 0 {
 			version = &v
 		}
-		data, err := newAdminClient(conn).ExportConfig(cmd.Context(), args[0], version)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		data, err := admin.ExportConfig(cmd.Context(), args[0], version)
 		if err != nil {
 			return err
 		}
@@ -274,7 +310,11 @@ var configImportCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		v, err := newAdminClient(conn).ImportConfig(cmd.Context(), args[0], data, desc, mode)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		v, err := admin.ImportConfig(cmd.Context(), args[0], data, desc, mode)
 		if err != nil {
 			return err
 		}

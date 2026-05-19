@@ -22,12 +22,16 @@ type AuditTransport struct {
 var _ adminclient.AuditTransport = (*AuditTransport)(nil)
 
 // NewAuditTransport creates a new gRPC-backed audit transport.
-func NewAuditTransport(conn grpc.ClientConnInterface, opts ...Option) *AuditTransport {
-	cfg := buildConfig(opts)
+// WithRole (or WithBearerToken) is required; construction returns an error if omitted.
+func NewAuditTransport(conn grpc.ClientConnInterface, opts ...Option) (*AuditTransport, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	return &AuditTransport{
 		rpc:  pb.NewAuditServiceClient(conn),
 		auth: cfg.auth,
-	}
+	}, nil
 }
 
 func (t *AuditTransport) QueryWriteLog(ctx context.Context, req *adminclient.QueryWriteLogRequest) (*adminclient.QueryWriteLogResponse, error) {

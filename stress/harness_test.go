@@ -33,11 +33,19 @@ func dial(tb testing.TB) *grpc.ClientConn {
 }
 
 func newAdmin(conn *grpc.ClientConn) *adminclient.Client {
-	return grpctransport.NewAdminClient(conn, grpctransport.WithSubject("stress-test"))
+	c, err := grpctransport.NewAdminClient(conn, grpctransport.WithSubject("stress-test"), grpctransport.WithRole("superadmin"))
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 func newConfig(conn *grpc.ClientConn) *configclient.Client {
-	return grpctransport.NewConfigClient(conn, grpctransport.WithSubject("stress-test"))
+	c, err := grpctransport.NewConfigClient(conn, grpctransport.WithSubject("stress-test"), grpctransport.WithRole("superadmin"))
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 // makeSchema creates and publishes a schema with fieldCount string fields.

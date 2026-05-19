@@ -63,15 +63,26 @@ func scopedClients(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs
 	if len(tenantIDs) > 0 {
 		opts = append(opts, grpctransport.WithTenantID(strings.Join(tenantIDs, ",")))
 	}
-	cfgTransport := grpctransport.NewConfigTransport(conn, opts...)
+	cfgTransport, err := grpctransport.NewConfigTransport(conn, opts...)
+	if err != nil {
+		t.Fatalf("NewConfigTransport: %v", err)
+	}
+	admin, err := grpctransport.NewAdminClient(conn, opts...)
+	if err != nil {
+		t.Fatalf("NewAdminClient: %v", err)
+	}
+	bootstrapAdmin, err := grpctransport.NewAdminClient(conn, grpctransport.WithSubject("e2e-bootstrap"), grpctransport.WithRole("superadmin"))
+	if err != nil {
+		t.Fatalf("NewAdminClient (bootstrap): %v", err)
+	}
 	return &clients{
 		conn:           conn,
-		admin:          grpctransport.NewAdminClient(conn, opts...),
+		admin:          admin,
 		cfg:            configclient.New(cfgTransport),
 		cfgTransport:   cfgTransport,
 		role:           role,
 		tenantIDs:      tenantIDs,
-		bootstrapAdmin: grpctransport.NewAdminClient(conn, grpctransport.WithSubject("e2e-bootstrap")),
+		bootstrapAdmin: bootstrapAdmin,
 	}
 }
 

@@ -40,9 +40,13 @@ func TestExample(t *testing.T) {
 		tenantID = strings.TrimSpace(string(data))
 	}
 
-	w := grpctransport.NewWatcher(conn, tenantID,
+	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("live-config-test"),
+		grpctransport.WithRole("user"),
 	)
+	if err != nil {
+		t.Fatalf("create watcher: %v", err)
+	}
 	rateLimit := w.Int("server.rate_limit", 100)
 	timeout := w.Duration("server.timeout", 30*time.Second)
 	maxConns := w.Int("server.max_connections", 50)

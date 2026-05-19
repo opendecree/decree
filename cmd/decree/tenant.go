@@ -29,7 +29,11 @@ var tenantCreateCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		t, err := newAdminClient(conn).CreateTenant(cmd.Context(), name, schemaID, version)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		t, err := admin.CreateTenant(cmd.Context(), name, schemaID, version)
 		if err != nil {
 			return err
 		}
@@ -51,7 +55,11 @@ var tenantGetCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		t, err := newAdminClient(conn).GetTenant(cmd.Context(), args[0])
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		t, err := admin.GetTenant(cmd.Context(), args[0])
 		if err != nil {
 			return err
 		}
@@ -73,7 +81,11 @@ var tenantListCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		schemaID, _ := cmd.Flags().GetString("schema")
-		tenants, err := newAdminClient(conn).ListTenants(cmd.Context(), schemaID)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		tenants, err := admin.ListTenants(cmd.Context(), schemaID)
 		if err != nil {
 			return err
 		}
@@ -96,7 +108,11 @@ var tenantDeleteCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newAdminClient(conn).DeleteTenant(cmd.Context(), args[0]); err != nil {
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		if err := admin.DeleteTenant(cmd.Context(), args[0]); err != nil {
 			return err
 		}
 		fmt.Println("Deleted.")

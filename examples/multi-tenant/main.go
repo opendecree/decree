@@ -38,12 +38,20 @@ func run() error {
 	}
 	defer conn.Close()
 
-	admin := grpctransport.NewAdminClient(conn,
+	admin, err := grpctransport.NewAdminClient(conn,
 		grpctransport.WithSubject("multi-tenant-example"),
+		grpctransport.WithRole("superadmin"),
 	)
-	cfg := grpctransport.NewConfigClient(conn,
+	if err != nil {
+		return fmt.Errorf("create admin client: %w", err)
+	}
+	cfg, err := grpctransport.NewConfigClient(conn,
 		grpctransport.WithSubject("multi-tenant-example"),
+		grpctransport.WithRole("user"),
 	)
+	if err != nil {
+		return fmt.Errorf("create config client: %w", err)
+	}
 
 	tenantA := mustTenantID() // "acme-corp" from seed
 

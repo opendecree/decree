@@ -302,6 +302,11 @@ func buildSingleFieldYAML(fieldPath, yamlLiteral string) string {
 // configclient.Client only exposes type-specific getters but the matrix
 // needs to compare TypedValue payloads regardless of kind.
 func newConfigTransportSuperadmin(conn *grpc.ClientConn) *grpctransport.ConfigTransport {
-	return grpctransport.NewConfigTransport(conn,
-		grpctransport.WithSubject("e2e-type-matrix"))
+	t, err := grpctransport.NewConfigTransport(conn,
+		grpctransport.WithSubject("e2e-type-matrix"),
+		grpctransport.WithRole("superadmin"))
+	if err != nil {
+		panic(err)
+	}
+	return t
 }

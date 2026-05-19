@@ -61,7 +61,10 @@ File mode (compare two local config YAML files):
 				return err
 			}
 			defer func() { _ = conn.Close() }()
-			admin := newAdminClient(conn)
+			admin, err := newAdminClient(conn)
+			if err != nil {
+				return err
+			}
 			ctx := cmd.Context()
 
 			va32 := int32(vA)

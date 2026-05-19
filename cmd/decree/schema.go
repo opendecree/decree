@@ -34,7 +34,11 @@ var schemaCreateCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		s, err := newAdminClient(conn).ImportSchema(cmd.Context(), data)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		s, err := admin.ImportSchema(cmd.Context(), data)
 		if err != nil {
 			return err
 		}
@@ -55,7 +59,10 @@ var schemaGetCmd = &cobra.Command{
 			return err
 		}
 		defer func() { _ = conn.Close() }()
-		admin := newAdminClient(conn)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
 
 		version, _ := cmd.Flags().GetInt32("version")
 		var s *adminclient.Schema
@@ -87,7 +94,11 @@ var schemaListCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		schemas, err := newAdminClient(conn).ListSchemas(cmd.Context())
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		schemas, err := admin.ListSchemas(cmd.Context())
 		if err != nil {
 			return err
 		}
@@ -114,7 +125,11 @@ var schemaPublishCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		s, err := newAdminClient(conn).PublishSchema(cmd.Context(), args[0], int32(version))
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		s, err := admin.PublishSchema(cmd.Context(), args[0], int32(version))
 		if err != nil {
 			return err
 		}
@@ -134,7 +149,11 @@ var schemaDeleteCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		if err := newAdminClient(conn).DeleteSchema(cmd.Context(), args[0]); err != nil {
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		if err := admin.DeleteSchema(cmd.Context(), args[0]); err != nil {
 			return err
 		}
 		fmt.Println("Deleted.")
@@ -157,7 +176,11 @@ var schemaExportCmd = &cobra.Command{
 		if v, _ := cmd.Flags().GetInt32("version"); v > 0 {
 			version = &v
 		}
-		data, err := newAdminClient(conn).ExportSchema(cmd.Context(), args[0], version)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		data, err := admin.ExportSchema(cmd.Context(), args[0], version)
 		if err != nil {
 			return err
 		}
@@ -182,7 +205,11 @@ var schemaImportCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		publish, _ := cmd.Flags().GetBool("publish")
-		s, err := newAdminClient(conn).ImportSchema(cmd.Context(), data, publish)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		s, err := admin.ImportSchema(cmd.Context(), data, publish)
 		if err != nil {
 			return err
 		}
