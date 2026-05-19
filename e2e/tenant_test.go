@@ -19,11 +19,15 @@ import (
 // x-tenant-id header restricted to the given tenant IDs (comma-joined).
 // This exercises the non-superadmin code paths in ListTenants.
 func newRestrictedAdminClient(conn *grpc.ClientConn, tenantIDs []string) *adminclient.Client {
-	return grpctransport.NewAdminClient(conn,
+	c, err := grpctransport.NewAdminClient(conn,
 		grpctransport.WithSubject("e2e-restricted"),
 		grpctransport.WithRole("admin"),
 		grpctransport.WithTenantID(strings.Join(tenantIDs, ",")),
 	)
+	if err != nil {
+		panic(err)
+	}
+	return c
 }
 
 // --- UpdateTenant: rename only ---

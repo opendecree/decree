@@ -43,7 +43,10 @@ var docgenCmd = &cobra.Command{
 				return err
 			}
 			defer func() { _ = conn.Close() }()
-			admin := newAdminClient(conn)
+			admin, err := newAdminClient(conn)
+			if err != nil {
+				return err
+			}
 
 			version, _ := cmd.Flags().GetInt32("version")
 			var s *adminclient.Schema

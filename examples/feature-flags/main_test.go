@@ -39,9 +39,13 @@ func TestExample(t *testing.T) {
 		tenantID = strings.TrimSpace(string(data))
 	}
 
-	w := grpctransport.NewWatcher(conn, tenantID,
+	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("feature-flags-test"),
+		grpctransport.WithRole("superadmin"),
 	)
+	if err != nil {
+		t.Fatalf("create watcher: %v", err)
+	}
 	darkMode := w.Bool("features.dark_mode", false)
 	betaAccess := w.Bool("features.beta_access", false)
 

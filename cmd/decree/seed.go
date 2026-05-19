@@ -47,7 +47,11 @@ The operation is idempotent: importing a schema with identical fields, or a conf
 			opts = append(opts, seed.AutoPublish())
 		}
 
-		result, err := seed.Run(cmd.Context(), newAdminClient(conn), file, opts...)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		result, err := seed.Run(cmd.Context(), admin, file, opts...)
 		if err != nil {
 			return err
 		}

@@ -45,9 +45,13 @@ func run() error {
 	tenantID := mustTenantID()
 
 	// Create a watcher and register boolean feature flags with defaults.
-	w := grpctransport.NewWatcher(conn, tenantID,
+	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("feature-flags-example"),
+		grpctransport.WithRole("superadmin"),
 	)
+	if err != nil {
+		return fmt.Errorf("create watcher: %w", err)
+	}
 	darkMode := w.Bool("features.dark_mode", false)
 	betaAccess := w.Bool("features.beta_access", false)
 

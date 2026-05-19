@@ -19,12 +19,16 @@ type AdminConfigTransport struct {
 var _ adminclient.ConfigTransport = (*AdminConfigTransport)(nil)
 
 // NewAdminConfigTransport creates a new gRPC-backed admin config transport.
-func NewAdminConfigTransport(conn grpc.ClientConnInterface, opts ...Option) *AdminConfigTransport {
-	cfg := buildConfig(opts)
+// WithRole (or WithBearerToken) is required; construction returns an error if omitted.
+func NewAdminConfigTransport(conn grpc.ClientConnInterface, opts ...Option) (*AdminConfigTransport, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	return &AdminConfigTransport{
 		rpc:  pb.NewConfigServiceClient(conn),
 		auth: cfg.auth,
-	}
+	}, nil
 }
 
 func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*adminclient.ListVersionsResponse, error) {

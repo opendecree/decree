@@ -39,9 +39,13 @@ func run() error {
 	}
 	defer conn.Close()
 
-	admin := grpctransport.NewAdminClient(conn,
+	admin, err := grpctransport.NewAdminClient(conn,
 		grpctransport.WithSubject("bootstrap-example"),
+		grpctransport.WithRole("superadmin"),
 	)
+	if err != nil {
+		return fmt.Errorf("create client: %w", err)
+	}
 
 	// Parse the seed file.
 	data, err := os.ReadFile("env.yaml")

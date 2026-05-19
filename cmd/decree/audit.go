@@ -44,7 +44,11 @@ var auditQueryCmd = &cobra.Command{
 			filters = append(filters, adminclient.WithAuditTimeRange(&t, nil))
 		}
 
-		entries, err := newAdminClient(conn).QueryWriteLog(cmd.Context(), filters...)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		entries, err := admin.QueryWriteLog(cmd.Context(), filters...)
 		if err != nil {
 			return err
 		}
@@ -70,7 +74,11 @@ var auditUsageCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		stats, err := newAdminClient(conn).GetFieldUsage(cmd.Context(), args[0], args[1], nil, nil)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		stats, err := admin.GetFieldUsage(cmd.Context(), args[0], args[1], nil, nil)
 		if err != nil {
 			return err
 		}
@@ -96,7 +104,11 @@ Requires migration 002_audit_tamper_evident to be applied.`,
 		defer func() { _ = conn.Close() }()
 
 		tenantID, _ := cmd.Flags().GetString("tenant")
-		result, err := newAdminClient(conn).VerifyChain(cmd.Context(), tenantID)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		result, err := admin.VerifyChain(cmd.Context(), tenantID)
 		if err != nil {
 			return err
 		}
@@ -145,7 +157,11 @@ var auditUnusedCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		fields, err := newAdminClient(conn).GetUnusedFields(cmd.Context(), args[0], since)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		fields, err := admin.GetUnusedFields(cmd.Context(), args[0], since)
 		if err != nil {
 			return err
 		}

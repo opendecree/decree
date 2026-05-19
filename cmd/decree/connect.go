@@ -40,10 +40,10 @@ func authOptions() []grpctransport.Option {
 	return opts
 }
 
-func newAdminClient(conn *grpc.ClientConn) *adminclient.Client {
+func newAdminClient(conn *grpc.ClientConn) (*adminclient.Client, error) {
 	return grpctransport.NewAdminClient(conn, authOptions()...)
 }
 
-func newConfigClient(conn *grpc.ClientConn) *configclient.Client {
+func newConfigClient(conn *grpc.ClientConn) (*configclient.Client, error) {
 	return grpctransport.NewConfigClient(conn, authOptions()...)
 }

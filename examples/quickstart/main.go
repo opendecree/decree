@@ -40,9 +40,13 @@ func run() error {
 	defer conn.Close()
 
 	// Create a config client.
-	client := grpctransport.NewConfigClient(conn,
+	client, err := grpctransport.NewConfigClient(conn,
 		grpctransport.WithSubject("quickstart-example"),
+		grpctransport.WithRole("superadmin"),
 	)
+	if err != nil {
+		return fmt.Errorf("create client: %w", err)
+	}
 
 	tenantID := mustTenantID()
 

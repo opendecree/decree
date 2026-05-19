@@ -22,7 +22,11 @@ var serverInfoCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		info, err := newAdminClient(conn).GetServerInfo(cmd.Context())
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		info, err := admin.GetServerInfo(cmd.Context())
 		if err != nil {
 			return err
 		}

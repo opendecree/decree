@@ -28,7 +28,11 @@ var dumpCmd = &cobra.Command{
 			opts = append(opts, dump.WithConfigVersion(v))
 		}
 
-		file, err := dump.Run(cmd.Context(), newAdminClient(conn), args[0], opts...)
+		admin, err := newAdminClient(conn)
+		if err != nil {
+			return err
+		}
+		file, err := dump.Run(cmd.Context(), admin, args[0], opts...)
 		if err != nil {
 			return err
 		}

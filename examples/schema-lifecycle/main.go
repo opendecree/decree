@@ -36,9 +36,13 @@ func run() error {
 	}
 	defer conn.Close()
 
-	admin := grpctransport.NewAdminClient(conn,
+	admin, err := grpctransport.NewAdminClient(conn,
 		grpctransport.WithSubject("schema-lifecycle-example"),
+		grpctransport.WithRole("superadmin"),
 	)
+	if err != nil {
+		return fmt.Errorf("create admin client: %w", err)
+	}
 
 	// 1. Create a schema with initial fields.
 	fmt.Println("Creating schema...")

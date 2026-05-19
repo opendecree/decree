@@ -19,12 +19,16 @@ type SchemaTransport struct {
 var _ adminclient.SchemaTransport = (*SchemaTransport)(nil)
 
 // NewSchemaTransport creates a new gRPC-backed schema transport.
-func NewSchemaTransport(conn grpc.ClientConnInterface, opts ...Option) *SchemaTransport {
-	cfg := buildConfig(opts)
+// WithRole (or WithBearerToken) is required; construction returns an error if omitted.
+func NewSchemaTransport(conn grpc.ClientConnInterface, opts ...Option) (*SchemaTransport, error) {
+	cfg, err := buildConfig(opts)
+	if err != nil {
+		return nil, err
+	}
 	return &SchemaTransport{
 		rpc:  pb.NewSchemaServiceClient(conn),
 		auth: cfg.auth,
-	}
+	}, nil
 }
 
 func (t *SchemaTransport) CreateSchema(ctx context.Context, req *adminclient.CreateSchemaRequest) (*adminclient.Schema, error) {
