@@ -1004,6 +1004,14 @@
               "type": "string"
             },
             "collectionFormat": "multi"
+          },
+          {
+            "name": "startVersion",
+            "description": "Resume the stream from this config version (inclusive). When set, the\nserver replays all changes at versions >= start_version before streaming\nlive events. Use snapshot_version + 1 to close the gap between a\nGetConfig snapshot and the live subscription.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
           }
         ],
         "tags": [

@@ -45,3 +45,11 @@ JOIN config_versions ver ON ver.id = cv.config_version_id
 WHERE ver.tenant_id = $1
   AND ver.version <= $2
 ORDER BY cv.field_path, ver.version DESC;
+
+-- name: GetConfigValuesSince :many
+SELECT cv.field_path, cv.value, ver.version, ver.created_by, ver.created_at
+FROM config_values cv
+JOIN config_versions ver ON ver.id = cv.config_version_id
+WHERE ver.tenant_id = $1
+  AND ver.version >= $2
+ORDER BY ver.version ASC, cv.field_path ASC;

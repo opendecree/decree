@@ -97,8 +97,9 @@ type SetFieldsResponse struct{}
 
 // SubscribeRequest is the input for [Transport.Subscribe].
 type SubscribeRequest struct {
-	TenantID   string
-	FieldPaths []string
+	TenantID     string
+	FieldPaths   []string
+	StartVersion *int32 // if set, server replays versions >= StartVersion before streaming live events
 }
 
 // ConfigChange represents a single field value change from a subscription stream.

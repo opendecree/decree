@@ -204,6 +204,31 @@ func (s *PGStore) GetFullConfigAtVersion(ctx context.Context, arg GetFullConfigA
 	return result, nil
 }
 
+func (s *PGStore) GetConfigValuesSince(ctx context.Context, arg GetConfigValuesSinceParams) ([]ConfigValueSince, error) {
+	tenantUUID, err := pgconv.StringToUUID(arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.GetConfigValuesSince(ctx, dbstore.GetConfigValuesSinceParams{
+		TenantID: tenantUUID,
+		Version:  arg.StartVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ConfigValueSince, len(rows))
+	for i, r := range rows {
+		result[i] = ConfigValueSince{
+			FieldPath: r.FieldPath,
+			Value:     r.Value,
+			Version:   r.Version,
+			CreatedBy: r.CreatedBy,
+			ChangedAt: r.CreatedAt.Time,
+		}
+	}
+	return result, nil
+}
+
 // Tenant/schema lookup.
 
 func (s *PGStore) GetTenantByID(ctx context.Context, id string) (domain.Tenant, error) {

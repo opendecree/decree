@@ -812,6 +812,7 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 		return err
 	}
 
+	// Subscribe to pubsub first so no live events are missed while we replay.
 	events, cancel, err := s.subscriber.Subscribe(ctx, tenantID)
 	if err != nil {
 		return status.Error(codes.Internal, "failed to subscribe")
@@ -827,6 +828,47 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 		filterPaths[p] = struct{}{}
 	}
 
+	// watermark is the highest version already sent during replay. Live events
+	// at or below this version are skipped to prevent duplicates.
+	var watermark int32
+
+	if req.StartVersion != nil {
+		// Determine the latest version at subscribe time so we know where replay ends.
+		latestCV, latestErr := s.store.GetLatestConfigVersion(ctx, tenantID)
+		if latestErr == nil {
+			watermark = latestCV.Version
+		}
+
+		rows, replayErr := s.store.GetConfigValuesSince(ctx, GetConfigValuesSinceParams{
+			TenantID:     tenantID,
+			StartVersion: *req.StartVersion,
+		})
+		if replayErr != nil {
+			return status.Error(codes.Internal, "failed to replay events")
+		}
+
+		for _, row := range rows {
+			if len(filterPaths) > 0 {
+				if _, ok := filterPaths[row.FieldPath]; !ok {
+					continue
+				}
+			}
+			ftype := lookupFieldType(types, row.FieldPath)
+			if err := stream.Send(&pb.SubscribeResponse{
+				Change: &pb.ConfigChange{
+					TenantId:  tenantID,
+					Version:   row.Version,
+					FieldPath: row.FieldPath,
+					NewValue:  stringToTypedValue(row.Value, ftype),
+					ChangedBy: row.CreatedBy,
+					ChangedAt: timestamppb.New(row.ChangedAt),
+				},
+			}); err != nil {
+				return err
+			}
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -834,6 +876,11 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 		case event, ok := <-events:
 			if !ok {
 				return nil
+			}
+
+			// Skip events already covered by the replay window.
+			if event.Version <= watermark {
+				continue
 			}
 
 			// Filter by field paths if specified.

@@ -134,8 +134,9 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 func (t *ConfigTransport) Subscribe(ctx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error) {
 	ctx = applyAuth(ctx, t.auth)
 	stream, err := t.rpc.Subscribe(ctx, &pb.SubscribeRequest{
-		TenantId:   req.TenantID,
-		FieldPaths: req.FieldPaths,
+		TenantId:     req.TenantID,
+		FieldPaths:   req.FieldPaths,
+		StartVersion: req.StartVersion,
 	})
 	if err != nil {
 		return nil, mapConfigError(err)

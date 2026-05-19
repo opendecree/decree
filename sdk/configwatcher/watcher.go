@@ -184,12 +184,13 @@ func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func
 //
 // Fields must be registered (via String, Int, Bool, etc.) before calling Start.
 func (w *Watcher) Start(ctx context.Context) error {
-	if err := w.loadSnapshot(ctx); err != nil {
+	version, err := w.loadSnapshot(ctx)
+	if err != nil {
 		return err
 	}
 
 	ctx, w.cancel = context.WithCancel(ctx)
-	go w.subscriptionLoop(ctx)
+	go w.subscriptionLoop(ctx, version)
 	return nil
 }
 
@@ -220,12 +221,13 @@ func (w *Watcher) Close() error {
 
 // --- Internal ---
 
-func (w *Watcher) loadSnapshot(ctx context.Context) error {
+// loadSnapshot fetches the full config snapshot and returns the snapshot version.
+func (w *Watcher) loadSnapshot(ctx context.Context) (int32, error) {
 	resp, err := w.transport.GetConfig(ctx, &configclient.GetConfigRequest{
 		TenantID: w.tenantID,
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Build a map of field path → string value.
@@ -243,17 +245,17 @@ func (w *Watcher) loadSnapshot(ctx context.Context) error {
 			entry.rawUpdate("", false)
 		}
 	}
-	return nil
+	return resp.Version, nil
 }
 
-func (w *Watcher) subscriptionLoop(ctx context.Context) {
+func (w *Watcher) subscriptionLoop(ctx context.Context, snapshotVersion int32) {
 	defer close(w.done)
 
 	backoff := w.opts.minBackoff
 	fieldPaths := w.registeredPaths()
 
 	for {
-		err := w.subscribe(ctx, fieldPaths)
+		err := w.subscribe(ctx, fieldPaths, snapshotVersion)
 		if ctx.Err() != nil {
 			return // Context cancelled — clean shutdown.
 		}
@@ -270,23 +272,26 @@ func (w *Watcher) subscriptionLoop(ctx context.Context) {
 		// Exponential backoff.
 		backoff = min(backoff*2, w.opts.maxBackoff)
 
-		// Re-load snapshot on reconnect to catch changes missed during disconnect.
-		// Use an explicit timeout so a slow server cannot stall the reconnect loop.
+		// Reload snapshot on reconnect; use the new version as the cursor so
+		// Subscribe replays any changes the server received while disconnected.
 		snapCtx, snapCancel := context.WithTimeout(ctx, w.opts.snapshotTimeout)
-		snapErr := w.loadSnapshot(snapCtx)
+		newVersion, snapErr := w.loadSnapshot(snapCtx)
 		snapCancel()
 		if snapErr != nil {
 			w.opts.logger.WarnContext(ctx, "failed to reload snapshot on reconnect", "error", snapErr)
 		} else {
+			snapshotVersion = newVersion
 			backoff = w.opts.minBackoff // Reset backoff on successful snapshot.
 		}
 	}
 }
 
-func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string) error {
+func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string, snapshotVersion int32) error {
+	startVersion := snapshotVersion + 1
 	sub, err := w.transport.Subscribe(ctx, &configclient.SubscribeRequest{
-		TenantID:   w.tenantID,
-		FieldPaths: fieldPaths,
+		TenantID:     w.tenantID,
+		FieldPaths:   fieldPaths,
+		StartVersion: &startVersion,
 	})
 	if err != nil {
 		return err
