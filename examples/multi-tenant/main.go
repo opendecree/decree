@@ -47,7 +47,7 @@ func run() error {
 	}
 	cfg, err := grpctransport.NewConfigClient(conn,
 		grpctransport.WithSubject("multi-tenant-example"),
-		grpctransport.WithRole("user"),
+		grpctransport.WithRole("superadmin"),
 	)
 	if err != nil {
 		return fmt.Errorf("create config client: %w", err)

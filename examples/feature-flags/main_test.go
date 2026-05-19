@@ -41,7 +41,7 @@ func TestExample(t *testing.T) {
 
 	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("feature-flags-test"),
-		grpctransport.WithRole("user"),
+		grpctransport.WithRole("superadmin"),
 	)
 	if err != nil {
 		t.Fatalf("create watcher: %v", err)

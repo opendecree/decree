@@ -50,7 +50,7 @@ func run() error {
 	// Register fields that drive server behavior.
 	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("live-config-example"),
-		grpctransport.WithRole("user"),
+		grpctransport.WithRole("superadmin"),
 	)
 	if err != nil {
 		return fmt.Errorf("create watcher: %w", err)

@@ -41,7 +41,7 @@ func run() error {
 
 	client, err := grpctransport.NewConfigClient(conn,
 		grpctransport.WithSubject("cas-example"),
-		grpctransport.WithRole("user"),
+		grpctransport.WithRole("superadmin"),
 	)
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)

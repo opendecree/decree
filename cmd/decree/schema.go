@@ -115,7 +115,7 @@ var schemaPublishCmd = &cobra.Command{
 	Short: "Publish a schema version (makes it immutable and assignable to tenants)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		version, err := strconv.Atoi(args[1])
+		parsedVersion, err := strconv.ParseInt(args[1], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid version: %s", args[1])
 		}
@@ -129,7 +129,7 @@ var schemaPublishCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		s, err := admin.PublishSchema(cmd.Context(), args[0], int32(version))
+		s, err := admin.PublishSchema(cmd.Context(), args[0], int32(parsedVersion))
 		if err != nil {
 			return err
 		}

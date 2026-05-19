@@ -227,10 +227,11 @@ var configRollbackCmd = &cobra.Command{
 	Short: "Rollback config to a previous version",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		version, err := strconv.Atoi(args[1])
+		parsedVersion, err := strconv.ParseInt(args[1], 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid version: %s", args[1])
 		}
+		version := int32(parsedVersion)
 		desc, _ := cmd.Flags().GetString("description")
 
 		conn, err := dialServer()
@@ -243,7 +244,7 @@ var configRollbackCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		v, err := admin.RollbackConfig(cmd.Context(), args[0], int32(version), desc)
+		v, err := admin.RollbackConfig(cmd.Context(), args[0], version, desc)
 		if err != nil {
 			return err
 		}

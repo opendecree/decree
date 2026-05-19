@@ -47,7 +47,7 @@ func run() error {
 	// Create a watcher and register boolean feature flags with defaults.
 	w, err := grpctransport.NewWatcher(conn, tenantID,
 		grpctransport.WithSubject("feature-flags-example"),
-		grpctransport.WithRole("user"),
+		grpctransport.WithRole("superadmin"),
 	)
 	if err != nil {
 		return fmt.Errorf("create watcher: %w", err)
