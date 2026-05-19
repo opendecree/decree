@@ -10,3 +10,7 @@ coverage:
 
 ignore:
   - "cmd/decree"
+  - "api/centralconfig/**"
+  - "internal/storage/dbstore/**"
+  - "cmd/server/openapi.json"
+  - "docs/**"
