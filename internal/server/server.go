@@ -115,6 +115,11 @@ func New(grpcPort string, auth GRPCInterceptor, opts ...Option) (*Server, error)
 	}, nil
 }
 
+// Addr returns the network address the server is listening on.
+func (s *Server) Addr() net.Addr {
+	return s.listener.Addr()
+}
+
 // GRPCServer returns the underlying grpc.Server for service registration.
 func (s *Server) GRPCServer() *grpc.Server {
 	return s.grpcServer
