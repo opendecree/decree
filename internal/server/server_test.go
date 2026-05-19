@@ -84,6 +84,20 @@ func TestIsServiceEnabled(t *testing.T) {
 	assert.False(t, srv.IsServiceEnabled("audit"))
 }
 
+func TestAddr(t *testing.T) {
+	srv, err := New("0", &noopInterceptor{},
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	)
+	require.NoError(t, err)
+	defer srv.GracefulStop(context.Background())
+
+	addr := srv.Addr()
+	require.NotNil(t, addr)
+	assert.Equal(t, "tcp", addr.Network())
+	assert.NotEmpty(t, addr.String())
+}
+
 func TestSetServiceHealthy(t *testing.T) {
 	srv, err := New("0", &noopInterceptor{},
 		WithEnableServices([]string{"schema"}),
