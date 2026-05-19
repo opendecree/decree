@@ -73,11 +73,11 @@ func TestRunConfigSet_PicksTypedValueKindFromSchema(t *testing.T) {
 		wantKind configclient.ValueKind
 		check    func(*configclient.TypedValue) bool
 	}{
-		{"bool", adminclient.Field{Path: "x", Type: "bool"}, "true", configclient.KindBool, func(v *configclient.TypedValue) bool { return v.BoolValue() }},
-		{"integer", adminclient.Field{Path: "x", Type: "integer"}, "42", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.IntValue() == 42 }},
-		{"number", adminclient.Field{Path: "x", Type: "number"}, "3.14", configclient.KindNumber, func(v *configclient.TypedValue) bool { return v.FloatValue() == 3.14 }},
-		{"duration", adminclient.Field{Path: "x", Type: "duration"}, "15s", configclient.KindDuration, func(v *configclient.TypedValue) bool { return v.DurationValue().Seconds() == 15 }},
-		{"string", adminclient.Field{Path: "x", Type: "string"}, "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.StringValue() == "hello" }},
+		{"bool", adminclient.Field{Path: "x", Type: "bool"}, "true", configclient.KindBool, func(v *configclient.TypedValue) bool { return v.MustBoolValue() }},
+		{"integer", adminclient.Field{Path: "x", Type: "integer"}, "42", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.MustIntValue() == 42 }},
+		{"number", adminclient.Field{Path: "x", Type: "number"}, "3.14", configclient.KindNumber, func(v *configclient.TypedValue) bool { return v.MustFloatValue() == 3.14 }},
+		{"duration", adminclient.Field{Path: "x", Type: "duration"}, "15s", configclient.KindDuration, func(v *configclient.TypedValue) bool { return v.MustDurationValue().Seconds() == 15 }},
+		{"string", adminclient.Field{Path: "x", Type: "string"}, "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.MustStringValue() == "hello" }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -150,14 +150,14 @@ func TestRunConfigSetMany_SendsTypedValuesMatchingSchema(t *testing.T) {
 	for _, u := range tr.setFields.Updates {
 		byPath[u.FieldPath] = u.Value
 	}
-	if byPath["a"].Kind() != configclient.KindInteger || byPath["a"].IntValue() != 100 {
-		t.Errorf("a: got kind=%v int=%d", byPath["a"].Kind(), byPath["a"].IntValue())
+	if byPath["a"].Kind() != configclient.KindInteger || byPath["a"].MustIntValue() != 100 {
+		t.Errorf("a: got kind=%v int=%d", byPath["a"].Kind(), byPath["a"].MustIntValue())
 	}
-	if byPath["b"].Kind() != configclient.KindBool || !byPath["b"].BoolValue() {
-		t.Errorf("b: got kind=%v bool=%v", byPath["b"].Kind(), byPath["b"].BoolValue())
+	if byPath["b"].Kind() != configclient.KindBool || !byPath["b"].MustBoolValue() {
+		t.Errorf("b: got kind=%v bool=%v", byPath["b"].Kind(), byPath["b"].MustBoolValue())
 	}
-	if byPath["c"].Kind() != configclient.KindDuration || byPath["c"].DurationValue().Minutes() != 2 {
-		t.Errorf("c: got kind=%v dur=%v", byPath["c"].Kind(), byPath["c"].DurationValue())
+	if byPath["c"].Kind() != configclient.KindDuration || byPath["c"].MustDurationValue().Minutes() != 2 {
+		t.Errorf("c: got kind=%v dur=%v", byPath["c"].Kind(), byPath["c"].MustDurationValue())
 	}
 }
 

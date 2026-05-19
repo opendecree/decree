@@ -15,20 +15,20 @@ func TestParseTypedValue_Success(t *testing.T) {
 		wantKind  configclient.ValueKind
 		check     func(*configclient.TypedValue) bool
 	}{
-		{"string", "string", "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.StringValue() == "hello" }},
-		{"empty field type defaults to string", "", "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.StringValue() == "hello" }},
-		{"integer", "integer", "42", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.IntValue() == 42 }},
-		{"integer negative", "integer", "-7", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.IntValue() == -7 }},
-		{"number", "number", "3.14", configclient.KindNumber, func(v *configclient.TypedValue) bool { return v.FloatValue() == 3.14 }},
-		{"bool true", "bool", "true", configclient.KindBool, func(v *configclient.TypedValue) bool { return v.BoolValue() }},
-		{"bool false", "bool", "false", configclient.KindBool, func(v *configclient.TypedValue) bool { return !v.BoolValue() }},
+		{"string", "string", "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.MustStringValue() == "hello" }},
+		{"empty field type defaults to string", "", "hello", configclient.KindString, func(v *configclient.TypedValue) bool { return v.MustStringValue() == "hello" }},
+		{"integer", "integer", "42", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.MustIntValue() == 42 }},
+		{"integer negative", "integer", "-7", configclient.KindInteger, func(v *configclient.TypedValue) bool { return v.MustIntValue() == -7 }},
+		{"number", "number", "3.14", configclient.KindNumber, func(v *configclient.TypedValue) bool { return v.MustFloatValue() == 3.14 }},
+		{"bool true", "bool", "true", configclient.KindBool, func(v *configclient.TypedValue) bool { return v.MustBoolValue() }},
+		{"bool false", "bool", "false", configclient.KindBool, func(v *configclient.TypedValue) bool { return !v.MustBoolValue() }},
 		{"time RFC3339", "time", "2026-03-30T12:00:00Z", configclient.KindTime, func(v *configclient.TypedValue) bool {
-			return v.TimeValue().Equal(time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC))
+			return v.MustTimeValue().Equal(time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC))
 		}},
-		{"duration", "duration", "15s", configclient.KindDuration, func(v *configclient.TypedValue) bool { return v.DurationValue() == 15*time.Second }},
-		{"url", "url", "https://example.com", configclient.KindURL, func(v *configclient.TypedValue) bool { return v.URLValue() == "https://example.com" }},
-		{"json object", "json", `{"a":1}`, configclient.KindJSON, func(v *configclient.TypedValue) bool { return v.JSONValue() == `{"a":1}` }},
-		{"json array", "json", `[1,2,3]`, configclient.KindJSON, func(v *configclient.TypedValue) bool { return v.JSONValue() == `[1,2,3]` }},
+		{"duration", "duration", "15s", configclient.KindDuration, func(v *configclient.TypedValue) bool { return v.MustDurationValue() == 15*time.Second }},
+		{"url", "url", "https://example.com", configclient.KindURL, func(v *configclient.TypedValue) bool { return v.MustURLValue() == "https://example.com" }},
+		{"json object", "json", `{"a":1}`, configclient.KindJSON, func(v *configclient.TypedValue) bool { return v.MustJSONValue() == `{"a":1}` }},
+		{"json array", "json", `[1,2,3]`, configclient.KindJSON, func(v *configclient.TypedValue) bool { return v.MustJSONValue() == `[1,2,3]` }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

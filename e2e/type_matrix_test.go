@@ -54,9 +54,9 @@ func typeCases() []typeCase {
 		{
 			name: "string", fieldType: "FIELD_TYPE_STRING",
 			sample:    func() *configclient.TypedValue { return configclient.StringVal("hello-" + randSuffix()) },
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.StringValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustStringValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.Equal(t, want.StringValue(), got.StringValue())
+				assert.Equal(t, want.MustStringValue(), got.MustStringValue())
 			},
 		},
 		{
@@ -64,9 +64,9 @@ func typeCases() []typeCase {
 			sample: func() *configclient.TypedValue {
 				return configclient.IntVal(atomic.AddInt64(&sampleSeq, 1))
 			},
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%d", tv.IntValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%d", tv.MustIntValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.Equal(t, want.IntValue(), got.IntValue())
+				assert.Equal(t, want.MustIntValue(), got.MustIntValue())
 			},
 		},
 		{
@@ -74,9 +74,9 @@ func typeCases() []typeCase {
 			sample: func() *configclient.TypedValue {
 				return configclient.FloatVal(float64(atomic.AddInt64(&sampleSeq, 1)) / 100)
 			},
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%g", tv.FloatValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%g", tv.MustFloatValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.InEpsilon(t, want.FloatValue(), got.FloatValue(), 1e-9)
+				assert.InEpsilon(t, want.MustFloatValue(), got.MustFloatValue(), 1e-9)
 			},
 		},
 		{
@@ -84,9 +84,9 @@ func typeCases() []typeCase {
 			sample: func() *configclient.TypedValue {
 				return configclient.BoolVal(atomic.AddInt64(&sampleSeq, 1)%2 == 0)
 			},
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%t", tv.BoolValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%t", tv.MustBoolValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.Equal(t, want.BoolValue(), got.BoolValue())
+				assert.Equal(t, want.MustBoolValue(), got.MustBoolValue())
 			},
 		},
 		{
@@ -95,11 +95,11 @@ func typeCases() []typeCase {
 				return configclient.TimeVal(time.Unix(atomic.AddInt64(&sampleSeq, 1), 0).UTC())
 			},
 			yamlValue: func(tv *configclient.TypedValue) string {
-				return fmt.Sprintf("%q", tv.TimeValue().Format(time.RFC3339Nano))
+				return fmt.Sprintf("%q", tv.MustTimeValue().Format(time.RFC3339Nano))
 			},
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.True(t, want.TimeValue().Equal(got.TimeValue()),
-					"time mismatch: want=%s got=%s", want.TimeValue(), got.TimeValue())
+				assert.True(t, want.MustTimeValue().Equal(got.MustTimeValue()),
+					"time mismatch: want=%s got=%s", want.MustTimeValue(), got.MustTimeValue())
 			},
 		},
 		{
@@ -107,17 +107,17 @@ func typeCases() []typeCase {
 			sample: func() *configclient.TypedValue {
 				return configclient.DurationVal(time.Duration(atomic.AddInt64(&sampleSeq, 1)) * time.Second)
 			},
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.DurationValue().String()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustDurationValue().String()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.Equal(t, want.DurationValue(), got.DurationValue())
+				assert.Equal(t, want.MustDurationValue(), got.MustDurationValue())
 			},
 		},
 		{
 			name: "url", fieldType: "FIELD_TYPE_URL",
 			sample:    func() *configclient.TypedValue { return configclient.URLVal("https://example.com/" + randSuffix()) },
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.URLValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustURLValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.Equal(t, want.URLValue(), got.URLValue())
+				assert.Equal(t, want.MustURLValue(), got.MustURLValue())
 			},
 		},
 		{
@@ -125,9 +125,9 @@ func typeCases() []typeCase {
 			sample: func() *configclient.TypedValue {
 				return configclient.JSONVal(fmt.Sprintf(`{"k":"v-%d"}`, atomic.AddInt64(&sampleSeq, 1)))
 			},
-			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.JSONValue()) },
+			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustJSONValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
-				assert.JSONEq(t, want.JSONValue(), got.JSONValue())
+				assert.JSONEq(t, want.MustJSONValue(), got.MustJSONValue())
 			},
 		},
 	}
