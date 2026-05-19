@@ -625,9 +625,9 @@ jobs:
       - name: Run chart render tests
         run: ./deploy/helm/decree/tests/template_test.sh
 
-  # Runs authz guard chain and server cold-start benchmarks and uploads results
-  # as a workflow artifact for tracking over time. Informational — does not gate
-  # the branch protection check.
+  # Runs hot-path and infrastructure benchmarks; uploads results as a workflow
+  # artifact for tracking over time. Informational — does not gate branch protection.
+  # Storage (dbstore) and Redis benchmarks are skipped: no DB/Redis services here.
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
@@ -635,7 +635,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -650,15 +650,21 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          go test -bench=. -benchmem -run='^$' -benchtime=5s \
-            ./internal/authz/ ./cmd/server/ \
+          go test -bench=. -benchmem -run='^$' -benchtime=5s -count=5 \
+            ./internal/authz/ ./internal/cache/ ./internal/pubsub/ ./cmd/server/ \
             | tee bench.txt
+
+      - name: Compute p50/p95 with benchstat
+        run: |
+          go run golang.org/x/perf/cmd/benchstat@latest bench.txt | tee bench-stats.txt
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:
           name: bench-${{ github.sha }}
-          path: bench.txt
+          path: |
+            bench.txt
+            bench-stats.txt
 
   # Aggregates all job results for branch protection. A single required check
   # that passes iff every listed job passed or was legitimately skipped.
