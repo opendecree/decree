@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e examples bench bench-e2e stress docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -161,6 +161,12 @@ bench-e2e:
 stress:
 	docker compose up -d --wait service
 	cd stress && go test -tags=stress -v $(if $(CI),-short,) -timeout=600s ./... || (cd .. && docker compose down -v && exit 1)
+	docker compose down -v
+
+## chaos: Run chaos/fault-injection tests (docker compose lifecycle). Kills containers — destructive.
+chaos:
+	docker compose up -d --wait service
+	cd chaos && go test -tags=chaos -v -timeout=300s ./... || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
 # --- Documentation ---
