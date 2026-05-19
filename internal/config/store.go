@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"time"
 
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -67,6 +68,21 @@ type GetFullConfigAtVersionRow struct {
 	Description *string
 }
 
+// GetConfigValuesSinceParams identifies config value deltas at or after a version.
+type GetConfigValuesSinceParams struct {
+	TenantID     string
+	StartVersion int32
+}
+
+// ConfigValueSince is a single row from GetConfigValuesSince.
+type ConfigValueSince struct {
+	FieldPath string
+	Value     *string
+	Version   int32
+	CreatedBy string
+	ChangedAt time.Time
+}
+
 // InsertAuditWriteLogParams contains parameters for inserting an audit log entry.
 type InsertAuditWriteLogParams struct {
 	TenantID      string
@@ -99,6 +115,7 @@ type Store interface {
 	GetConfigValues(ctx context.Context, configVersionID string) ([]domain.ConfigValue, error)
 	GetConfigValueAtVersion(ctx context.Context, arg GetConfigValueAtVersionParams) (GetConfigValueAtVersionRow, error)
 	GetFullConfigAtVersion(ctx context.Context, arg GetFullConfigAtVersionParams) ([]GetFullConfigAtVersionRow, error)
+	GetConfigValuesSince(ctx context.Context, arg GetConfigValuesSinceParams) ([]ConfigValueSince, error)
 
 	// Tenant lookup (needed for validation and slug resolution).
 	GetTenantByID(ctx context.Context, id string) (domain.Tenant, error)

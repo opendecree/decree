@@ -111,6 +111,54 @@ func (q *Queries) GetConfigValues(ctx context.Context, configVersionID pgtype.UU
 	return items, nil
 }
 
+const getConfigValuesSince = `-- name: GetConfigValuesSince :many
+SELECT cv.field_path, cv.value, ver.version, ver.created_by, ver.created_at
+FROM config_values cv
+JOIN config_versions ver ON ver.id = cv.config_version_id
+WHERE ver.tenant_id = $1
+  AND ver.version >= $2
+ORDER BY ver.version ASC, cv.field_path ASC
+`
+
+type GetConfigValuesSinceParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	Version  int32       `json:"version"`
+}
+
+type GetConfigValuesSinceRow struct {
+	FieldPath string             `json:"field_path"`
+	Value     *string            `json:"value"`
+	Version   int32              `json:"version"`
+	CreatedBy string             `json:"created_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetConfigValuesSince(ctx context.Context, arg GetConfigValuesSinceParams) ([]GetConfigValuesSinceRow, error) {
+	rows, err := q.db.Query(ctx, getConfigValuesSince, arg.TenantID, arg.Version)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetConfigValuesSinceRow{}
+	for rows.Next() {
+		var i GetConfigValuesSinceRow
+		if err := rows.Scan(
+			&i.FieldPath,
+			&i.Value,
+			&i.Version,
+			&i.CreatedBy,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getConfigVersion = `-- name: GetConfigVersion :one
 SELECT id, tenant_id, version, description, created_by, created_at FROM config_versions
 WHERE tenant_id = $1 AND version = $2

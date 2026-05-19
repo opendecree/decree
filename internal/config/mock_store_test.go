@@ -56,6 +56,11 @@ func (m *mockStore) GetFullConfigAtVersion(ctx context.Context, arg GetFullConfi
 	return args.Get(0).([]GetFullConfigAtVersionRow), args.Error(1)
 }
 
+func (m *mockStore) GetConfigValuesSince(ctx context.Context, arg GetConfigValuesSinceParams) ([]ConfigValueSince, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]ConfigValueSince), args.Error(1)
+}
+
 func (m *mockStore) GetTenantByID(ctx context.Context, id string) (domain.Tenant, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(domain.Tenant), args.Error(1)

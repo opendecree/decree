@@ -210,6 +210,50 @@ func (s *MemoryStore) GetFullConfigAtVersion(_ context.Context, arg GetFullConfi
 	return result, nil
 }
 
+func (s *MemoryStore) GetConfigValuesSince(_ context.Context, arg GetConfigValuesSinceParams) ([]ConfigValueSince, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	type versionedValue struct {
+		version   int32
+		value     *string
+		createdBy string
+		changedAt time.Time
+		fieldPath string
+	}
+	var deltas []versionedValue
+	for _, cv := range s.configVersions {
+		if cv.TenantID == arg.TenantID && cv.Version >= arg.StartVersion {
+			for _, val := range s.configValues[cv.ID] {
+				deltas = append(deltas, versionedValue{
+					version:   cv.Version,
+					value:     val.Value,
+					createdBy: cv.CreatedBy,
+					changedAt: cv.CreatedAt,
+					fieldPath: val.FieldPath,
+				})
+			}
+		}
+	}
+	sort.Slice(deltas, func(i, j int) bool {
+		if deltas[i].version != deltas[j].version {
+			return deltas[i].version < deltas[j].version
+		}
+		return deltas[i].fieldPath < deltas[j].fieldPath
+	})
+	result := make([]ConfigValueSince, len(deltas))
+	for i, d := range deltas {
+		result[i] = ConfigValueSince{
+			FieldPath: d.fieldPath,
+			Value:     d.value,
+			Version:   d.version,
+			CreatedBy: d.createdBy,
+			ChangedAt: d.changedAt,
+		}
+	}
+	return result, nil
+}
+
 // --- Tenant/schema lookups (for validation) ---
 
 func (s *MemoryStore) GetTenantByID(_ context.Context, id string) (domain.Tenant, error) {

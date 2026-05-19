@@ -1082,7 +1082,12 @@ type SubscribeRequest struct {
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Field paths to filter on. If empty, receives changes for all fields.
 	// Changes to fields not in this list are silently dropped.
-	FieldPaths    []string `protobuf:"bytes,2,rep,name=field_paths,json=fieldPaths,proto3" json:"field_paths,omitempty"`
+	FieldPaths []string `protobuf:"bytes,2,rep,name=field_paths,json=fieldPaths,proto3" json:"field_paths,omitempty"`
+	// Resume the stream from this config version (inclusive). When set, the
+	// server replays all changes at versions >= start_version before streaming
+	// live events. Use snapshot_version + 1 to close the gap between a
+	// GetConfig snapshot and the live subscription.
+	StartVersion  *int32 `protobuf:"varint,3,opt,name=start_version,json=startVersion,proto3,oneof" json:"start_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1129,6 +1134,13 @@ func (x *SubscribeRequest) GetFieldPaths() []string {
 		return x.FieldPaths
 	}
 	return nil
+}
+
+func (x *SubscribeRequest) GetStartVersion() int32 {
+	if x != nil && x.StartVersion != nil {
+		return *x.StartVersion
+	}
+	return 0
 }
 
 type SubscribeResponse struct {
@@ -1483,11 +1495,13 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\vdescription\x18\x03 \x01(\tH\x00R\vdescription\x88\x01\x01B\x0e\n" +
 	"\f_description\"c\n" +
 	"\x19RollbackToVersionResponse\x12F\n" +
-	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"P\n" +
+	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"\x8c\x01\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1f\n" +
 	"\vfield_paths\x18\x02 \x03(\tR\n" +
-	"fieldPaths\"K\n" +
+	"fieldPaths\x12(\n" +
+	"\rstart_version\x18\x03 \x01(\x05H\x00R\fstartVersion\x88\x01\x01B\x10\n" +
+	"\x0e_start_version\"K\n" +
 	"\x11SubscribeResponse\x126\n" +
 	"\x06change\x18\x01 \x01(\v2\x1e.centralconfig.v1.ConfigChangeR\x06change\"\x96\x01\n" +
 	"\x13ExportConfigRequest\x12\x1b\n" +
@@ -1630,6 +1644,7 @@ func file_centralconfig_v1_config_service_proto_init() {
 	file_centralconfig_v1_config_service_proto_msgTypes[8].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[10].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[15].OneofWrappers = []any{}
+	file_centralconfig_v1_config_service_proto_msgTypes[17].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[19].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}

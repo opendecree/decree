@@ -494,3 +494,130 @@ func (m *errServerStream) SendHeader(metadata.MD) error     { return nil }
 func (m *errServerStream) SetTrailer(metadata.MD)           {}
 func (m *errServerStream) SendMsg(any) error                { return nil }
 func (m *errServerStream) RecvMsg(any) error                { return nil }
+
+func ptr[T any](v T) *T { return &v }
+
+func TestSubscribe_ReplayStoreError(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent)
+	cancel := func() {}
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, nil)
+
+	store.On("GetConfigValuesSince", mock.Anything, mock.Anything).
+		Return([]ConfigValueSince(nil), errors.New("db error"))
+
+	setupNoSensitiveFields(store)
+
+	startVersion := int32(1)
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1, StartVersion: &startVersion}, stream)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestSubscribe_ReplaysMissedEvents(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent) // never sends — only replay matters
+	cancel := func() {}
+
+	ctx, ctxCancel := context.WithCancel(context.Background())
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	now := time.Now()
+
+	// GetLatestConfigVersion returns version 4.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 4}, nil)
+
+	// GetConfigValuesSince returns two deltas for versions 3 and 4.
+	store.On("GetConfigValuesSince", mock.Anything, GetConfigValuesSinceParams{
+		TenantID:     tenantID1,
+		StartVersion: 3,
+	}).Return([]ConfigValueSince{
+		{FieldPath: "app.name", Value: ptr("v3"), Version: 3, CreatedBy: "alice", ChangedAt: now},
+		{FieldPath: "app.name", Value: ptr("v4"), Version: 4, CreatedBy: "bob", ChangedAt: now},
+	}, nil)
+
+	setupNoSensitiveFields(store)
+
+	// Cancel after replay so Subscribe returns.
+	ctxCancel()
+
+	startVersion := int32(3)
+	err := svc.Subscribe(&pb.SubscribeRequest{
+		TenantId:     tenantID1,
+		StartVersion: &startVersion,
+	}, stream)
+	require.NoError(t, err)
+
+	// Both replay events should be sent before live streaming begins.
+	require.Len(t, stream.sent, 2)
+	assert.Equal(t, "app.name", stream.sent[0].Change.FieldPath)
+	assert.Equal(t, int32(3), stream.sent[0].Change.Version)
+	assert.Equal(t, "alice", stream.sent[0].Change.ChangedBy)
+	assert.Equal(t, "app.name", stream.sent[1].Change.FieldPath)
+	assert.Equal(t, int32(4), stream.sent[1].Change.Version)
+	assert.Equal(t, "bob", stream.sent[1].Change.ChangedBy)
+}
+
+func TestSubscribe_WatermarkDeduplicatesReplayedVersions(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	// Live channel delivers version 4 — same as the last replayed version.
+	ch := make(chan pubsub.ConfigChangeEvent, 2)
+	cancel := func() {}
+
+	ctx := context.Background()
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	now := time.Now()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 4}, nil)
+
+	store.On("GetConfigValuesSince", mock.Anything, GetConfigValuesSinceParams{
+		TenantID:     tenantID1,
+		StartVersion: 3,
+	}).Return([]ConfigValueSince{
+		{FieldPath: "app.name", Value: ptr("v4"), Version: 4, CreatedBy: "alice", ChangedAt: now},
+	}, nil)
+
+	setupNoSensitiveFields(store)
+
+	// Pubsub delivers version 4 (duplicate of replay) and version 5 (new).
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 4, FieldPath: "app.name", NewValue: "v4-dup", ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 5, FieldPath: "app.name", NewValue: "v5", ChangedAt: now}
+	close(ch)
+
+	startVersion := int32(3)
+	err := svc.Subscribe(&pb.SubscribeRequest{
+		TenantId:     tenantID1,
+		StartVersion: &startVersion,
+	}, stream)
+	require.NoError(t, err)
+
+	// 1 replay + 1 live (version 4 duplicate must be suppressed, version 5 forwarded).
+	require.Len(t, stream.sent, 2)
+	assert.Equal(t, int32(4), stream.sent[0].Change.Version) // replay
+	assert.Equal(t, int32(5), stream.sent[1].Change.Version) // live, new
+}

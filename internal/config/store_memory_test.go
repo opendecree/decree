@@ -187,6 +187,42 @@ func TestMemoryStore_AuditLog(t *testing.T) {
 	assert.Len(t, s.auditLog, 1)
 }
 
+func TestMemoryStore_GetConfigValuesSince(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	v1, _ := s.CreateConfigVersion(ctx, CreateConfigVersionParams{TenantID: "t1", Version: 1, CreatedBy: "alice"})
+	v2, _ := s.CreateConfigVersion(ctx, CreateConfigVersionParams{TenantID: "t1", Version: 2, CreatedBy: "bob"})
+	v3, _ := s.CreateConfigVersion(ctx, CreateConfigVersionParams{TenantID: "t1", Version: 3, CreatedBy: "carol"})
+
+	val1 := "v1"
+	val2 := "v2"
+	val3 := "v3"
+	_ = s.SetConfigValue(ctx, SetConfigValueParams{ConfigVersionID: v1.ID, FieldPath: "x", Value: &val1})
+	_ = s.SetConfigValue(ctx, SetConfigValueParams{ConfigVersionID: v2.ID, FieldPath: "x", Value: &val2})
+	_ = s.SetConfigValue(ctx, SetConfigValueParams{ConfigVersionID: v3.ID, FieldPath: "x", Value: &val3})
+
+	// StartVersion=2 should return versions 2 and 3 only.
+	rows, err := s.GetConfigValuesSince(ctx, GetConfigValuesSinceParams{TenantID: "t1", StartVersion: 2})
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	assert.Equal(t, int32(2), rows[0].Version)
+	assert.Equal(t, "v2", *rows[0].Value)
+	assert.Equal(t, "bob", rows[0].CreatedBy)
+	assert.Equal(t, int32(3), rows[1].Version)
+	assert.Equal(t, "v3", *rows[1].Value)
+
+	// StartVersion=1 returns all three.
+	all, err := s.GetConfigValuesSince(ctx, GetConfigValuesSinceParams{TenantID: "t1", StartVersion: 1})
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+
+	// Different tenant returns nothing.
+	other, err := s.GetConfigValuesSince(ctx, GetConfigValuesSinceParams{TenantID: "t2", StartVersion: 1})
+	require.NoError(t, err)
+	assert.Empty(t, other)
+}
+
 func TestMemoryStore_RunInTx(t *testing.T) {
 	s := NewMemoryStore()
 	ctx := context.Background()

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -388,6 +389,144 @@ func TestWatcher_ReconnectSnapshotTimeout(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("snapshot did not time out within snapshotTimeout + margin")
 	}
+
+	cancel()
+	_ = w.Close()
+}
+
+// TestWatcher_ReconnectVersionCursor verifies that on reconnect the watcher reloads
+// the snapshot and passes StartVersion = snapshotVersion+1 to Subscribe, so that
+// changes written between the disconnect and the new snapshot are not lost.
+func TestWatcher_ReconnectVersionCursor(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// snapshotCall tracks how many times GetConfig has been called.
+	var snapshotCall atomic.Int32
+
+	// subscribeCall tracks how many times Subscribe has been called.
+	var subscribeCall atomic.Int32
+
+	// recordedStartVersions records the StartVersion passed to each Subscribe call.
+	var startVersionsMu sync.Mutex
+	var recordedStartVersions []int32
+
+	// firstSub is the initial subscription; closing its channel simulates a disconnect.
+	firstSubCh := make(chan *configclient.ConfigChange, 16)
+	firstSubCtx, firstSubCancel := context.WithCancel(context.Background())
+
+	// secondSub is the reconnect subscription.
+	secondSubCh := make(chan *configclient.ConfigChange, 16)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			call := int(snapshotCall.Add(1))
+			switch call {
+			case 1:
+				// Initial snapshot: version 3.
+				return &configclient.GetConfigResponse{
+					TenantID: "t1",
+					Version:  3,
+					Values: []configclient.ConfigValue{
+						{FieldPath: "x", Value: configclient.StringVal("v3")},
+					},
+				}, nil
+			default:
+				// Reconnect snapshot: version 5 (two changes happened while disconnected).
+				return &configclient.GetConfigResponse{
+					TenantID: "t1",
+					Version:  5,
+					Values: []configclient.ConfigValue{
+						{FieldPath: "x", Value: configclient.StringVal("v5")},
+					},
+				}, nil
+			}
+		},
+		subscribeFn: func(subCtx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			call := int(subscribeCall.Add(1))
+			var sv int32
+			if req.StartVersion != nil {
+				sv = *req.StartVersion
+			}
+			startVersionsMu.Lock()
+			recordedStartVersions = append(recordedStartVersions, sv)
+			startVersionsMu.Unlock()
+
+			switch call {
+			case 1:
+				return &mockSubscription{ch: firstSubCh, ctx: firstSubCtx}, nil
+			default:
+				// Use the watcher's own context so Recv exits when watcher closes.
+				return &mockSubscription{ch: secondSubCh, ctx: subCtx}, nil
+			}
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts: options{
+			minBackoff:      5 * time.Millisecond,
+			maxBackoff:      20 * time.Millisecond,
+			snapshotTimeout: 100 * time.Millisecond,
+			logger:          slog.Default(),
+		},
+		fields: make(map[string]*fieldEntry),
+		done:   make(chan struct{}),
+	}
+
+	x := w.String("x", "default")
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Initial snapshot applied.
+	if got := x.Get(); got != "v3" {
+		t.Errorf("after initial snapshot: got %q, want %q", got, "v3")
+	}
+
+	// Wait for the first Subscribe call so we can inspect StartVersion.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for int(subscribeCall.Load()) < 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for first Subscribe call")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// First Subscribe should have StartVersion=4 (snapshot was v3).
+	startVersionsMu.Lock()
+	if len(recordedStartVersions) < 1 || recordedStartVersions[0] != 4 {
+		t.Errorf("first Subscribe StartVersion: got %v, want [4]", recordedStartVersions)
+	}
+	startVersionsMu.Unlock()
+
+	// Simulate disconnect by closing the first subscription channel.
+	firstSubCancel()
+	close(firstSubCh)
+
+	// Wait for reconnect: subscribe call 2 must happen.
+	reconnectDeadline := time.Now().Add(500 * time.Millisecond)
+	for int(subscribeCall.Load()) < 2 {
+		if time.Now().After(reconnectDeadline) {
+			t.Fatal("timed out waiting for reconnect")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Reconnect snapshot applied (version 5).
+	time.Sleep(10 * time.Millisecond)
+	if got := x.Get(); got != "v5" {
+		t.Errorf("after reconnect snapshot: got %q, want %q", got, "v5")
+	}
+
+	// Second Subscribe must carry StartVersion=6 (reconnect snapshot was v5).
+	startVersionsMu.Lock()
+	if len(recordedStartVersions) < 2 || recordedStartVersions[1] != 6 {
+		t.Errorf("second Subscribe StartVersion: got %v, want [4 6]", recordedStartVersions)
+	}
+	startVersionsMu.Unlock()
 
 	cancel()
 	_ = w.Close()
