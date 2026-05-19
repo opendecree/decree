@@ -1160,6 +1160,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID) to subscribe to. |
 | field_paths | [string](#string) | repeated | Field paths to filter on. If empty, receives changes for all fields. Changes to fields not in this list are silently dropped. |
+| start_version | [int32](#int32) | optional | Resume the stream from this config version (inclusive). When set, the server replays all changes at versions &gt;= start_version before streaming live events. Use snapshot_version &#43; 1 to close the gap between a GetConfig snapshot and the live subscription. |
 
 
 
