@@ -265,6 +265,28 @@ func TestSetFields_ChecksumMismatch(t *testing.T) {
 	assert.Equal(t, codes.Aborted, status.Code(err))
 }
 
+func TestSetFields_VersionConflictReturnsAborted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	setupNoSensitiveFields(store)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "app.name", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}}},
+		},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict must return Aborted, not Internal")
+}
+
 // --- ListVersions ---
 
 func TestListVersions_Success(t *testing.T) {

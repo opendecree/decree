@@ -422,6 +422,25 @@ func TestRollbackToVersion_Success(t *testing.T) {
 	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
 }
 
+func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
+		TenantId: tenantID1,
+		Version:  2,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during rollback must return Aborted, not Internal")
+}
+
 // --- ExportConfig ---
 
 func TestExportConfig_Success(t *testing.T) {
@@ -512,6 +531,39 @@ values:
 	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
 	store.AssertNumberOfCalls(t, "InsertAuditWriteLog", 2)
 	cache.AssertCalled(t, "Invalidate", ctx, tenantID1)
+}
+
+func TestImportConfig_VersionConflictReturnsAborted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`spec_version: "v1"
+values:
+  app.env:
+    value: "prod"
+`)
+
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField{{Path: "app.env", FieldType: domain.FieldTypeString}}, nil)
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_REPLACE,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during import must return Aborted, not Internal")
 }
 
 // --- ImportConfig with validation ---
