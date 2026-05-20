@@ -2,8 +2,13 @@
 # check-coverage.sh — Enforce per-module coverage thresholds (ratchet).
 #
 # Usage:
-#   ./scripts/check-coverage.sh           # Check coverage against thresholds
-#   ./scripts/check-coverage.sh --update  # Update thresholds to current values (ratchet up only)
+#   ./scripts/check-coverage.sh                            # Run tests + check thresholds
+#   ./scripts/check-coverage.sh --profile mod=path ...    # Check using pre-computed profiles
+#   ./scripts/check-coverage.sh --update                   # Update thresholds (always runs tests)
+#
+# --profile can be repeated once per module. Paths are relative to the
+# directory from which the script is invoked (typically the repo root).
+# Modules with no --profile arg fall back to running go test.
 set -euo pipefail
 
 THRESHOLDS_FILE="coverage-thresholds.json"
@@ -38,10 +43,32 @@ declare -A COVERAGES
 declare -A FAIL_REASONS
 declare -A FAIL_LOGS
 
+# Parse arguments.
+UPDATE=false
+declare -A PROFILES=()
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --update)
+      UPDATE=true
+      shift
+      ;;
+    --profile)
+      [[ $# -lt 2 ]] && { echo "--profile requires an argument (module=path)" >&2; exit 1; }
+      IFS='=' read -r _mod _path <<< "$2"
+      [[ -z "${_mod:-}" || -z "${_path:-}" ]] && { echo "--profile value must be module=path" >&2; exit 1; }
+      PROFILES[$_mod]=$_path
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
 # run_coverage MODULE DIR PATTERN
-# Populates COVERAGES[MODULE] with a percentage, or "FAIL" if tests failed or
-# no coverage was produced. On FAIL, records FAIL_REASONS[MODULE] and captures
-# the tail of the combined test output in FAIL_LOGS[MODULE].
+# Runs go test and populates COVERAGES[MODULE], or "FAIL" on error.
 run_coverage() {
   local module=$1
   local dir=$2
@@ -92,6 +119,49 @@ run_coverage() {
   rm -f "$log_file" "$log_file.cov" "$cov_file"
 }
 
+# read_coverage MODULE DIR PROFILE_PATH
+# Computes coverage from a pre-existing profile (no go test). Populates
+# COVERAGES[MODULE] the same way as run_coverage, but without FAIL_LOGS.
+read_coverage() {
+  local module=$1
+  local dir=$2
+  local profile_src=$3
+
+  # Resolve to absolute path before any cd.
+  local abs_profile
+  abs_profile=$(realpath "$profile_src" 2>/dev/null) || {
+    COVERAGES[$module]="FAIL"
+    FAIL_REASONS[$module]="profile not found: $profile_src"
+    return
+  }
+
+  if [ ! -s "$abs_profile" ]; then
+    COVERAGES[$module]="FAIL"
+    FAIL_REASONS[$module]="profile empty or missing: $profile_src"
+    return
+  fi
+
+  local cov_file
+  cov_file=$(mktemp)
+  grep -vE "$COVERAGE_EXCLUDES" "$abs_profile" > "$cov_file" || true
+  [ -s "$cov_file" ] || cp "$abs_profile" "$cov_file"
+
+  local cov
+  cov=$(
+    if [ "$dir" != "." ]; then cd "$dir"; fi
+    go tool cover -func="$cov_file" 2>/dev/null | awk '/^total:/ {gsub(/%/,""); print $NF}'
+  )
+
+  rm -f "$cov_file"
+
+  if [ -z "$cov" ]; then
+    COVERAGES[$module]="FAIL"
+    FAIL_REASONS[$module]="coverage total not parseable from profile $profile_src"
+  else
+    COVERAGES[$module]=$cov
+  fi
+}
+
 get_threshold() {
   local module=$1
   if [ ! -f "$THRESHOLDS_FILE" ]; then
@@ -122,10 +192,14 @@ print_fail_logs() {
 
 # Collect all coverage values.
 for module in "${!MODULES[@]}"; do
-  run_coverage "$module" "${MODULE_DIRS[$module]}" "${MODULES[$module]}"
+  if [ "$UPDATE" = false ] && [ -n "${PROFILES[$module]:-}" ]; then
+    read_coverage "$module" "${MODULE_DIRS[$module]}" "${PROFILES[$module]}"
+  else
+    run_coverage "$module" "${MODULE_DIRS[$module]}" "${MODULES[$module]}"
+  fi
 done
 
-if [ "${1:-}" = "--update" ]; then
+if [ "$UPDATE" = true ]; then
   # A failing module cannot be ratcheted — its coverage is unknown. Exit non-zero
   # rather than silently writing 0 or preserving a stale threshold.
   any_fail=0

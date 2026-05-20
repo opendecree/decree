@@ -238,7 +238,14 @@ jobs:
           wait
 
       - name: Coverage ratchet
-        run: ./scripts/check-coverage.sh
+        run: |
+          ./scripts/check-coverage.sh \
+            --profile internal=coverage-internal.out \
+            --profile sdk/configclient=cov-configclient.out \
+            --profile sdk/adminclient=cov-adminclient.out \
+            --profile sdk/configwatcher=cov-configwatcher.out \
+            --profile sdk/tools=cov-tools.out \
+            --profile cmd/decree=cov-decree.out
 
       - name: Merge coverage profiles
         run: |
