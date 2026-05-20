@@ -630,13 +630,14 @@ jobs:
         run: ./deploy/helm/decree/tests/template_test.sh
 
   # Runs hot-path and infrastructure benchmarks; uploads results as a workflow
-  # artifact for tracking over time. Informational — does not gate branch protection.
-  # Storage (dbstore) and Redis benchmarks are skipped: no DB/Redis services here.
+  # artifact for tracking over time. Informational — push-to-main only, never
+  # blocks PRs. Storage (dbstore) and Redis benchmarks are skipped: no DB/Redis
+  # services here.
   bench:
     name: Benchmarks
     runs-on: ubuntu-latest
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.code == 'true'
     permissions:
       contents: read
     timeout-minutes: 15
