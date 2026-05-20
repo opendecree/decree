@@ -333,3 +333,64 @@ func TestSecurity_ReflectionEnabled(t *testing.T) {
 	svcs := resp.GetListServicesResponse().GetService()
 	assert.NotEmpty(t, svcs, "reflection must list at least one registered service")
 }
+
+// TestSecurity_ImportConfigSensitiveFieldRedacted: ImportConfig on a schema
+// with sensitive fields must write [REDACTED] to the audit log and publish
+// [REDACTED] in Subscribe events — plaintext must never appear on any read path.
+// Regression for decree#416.
+func TestSecurity_ImportConfigSensitiveFieldRedacted(t *testing.T) {
+	conn := dial(t)
+	admin := newAdminClient(conn)
+	cfgSvc := pb.NewConfigServiceClient(conn)
+	ctx := context.Background()
+
+	const secretValue = "import-s3cr3t-abc123"
+
+	s, err := admin.CreateSchema(ctx, "sec-import-sensitive-"+randSuffix(), []adminclient.Field{
+		{Path: "auth.token", Type: "FIELD_TYPE_STRING", Sensitive: true},
+		{Path: "app.name", Type: "FIELD_TYPE_STRING"},
+	}, "")
+	require.NoError(t, err)
+	_, err = admin.PublishSchema(ctx, s.ID, 1)
+	require.NoError(t, err)
+	tenant, err := admin.CreateTenant(ctx, "sec-import-sensitive-tenant-"+randSuffix(), s.ID, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = admin.DeleteTenant(context.Background(), tenant.ID)
+		_ = admin.DeleteSchema(context.Background(), s.ID)
+	})
+
+	// Subscribe before the import so we capture the event.
+	subCtx, subCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer subCancel()
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-import-sensitive")
+	stream, err := cfgSvc.Subscribe(subCtx, &pb.SubscribeRequest{
+		TenantId:   tenant.ID,
+		FieldPaths: []string{"auth.token"},
+	})
+	require.NoError(t, err)
+	time.Sleep(200 * time.Millisecond)
+
+	// Import YAML containing a sensitive field.
+	yamlContent := []byte("spec_version: v1\nvalues:\n  - field_path: auth.token\n    value: " + secretValue + "\n  - field_path: app.name\n    value: myapp\n")
+	_, err = admin.ImportConfig(ctx, tenant.ID, yamlContent, "import sensitive test")
+	require.NoError(t, err)
+
+	// --- Subscribe event must not carry plaintext ---
+	event, err := stream.Recv()
+	require.NoError(t, err)
+	newVal := event.GetChange().GetNewValue().GetStringValue()
+	assert.Equal(t, "[REDACTED]", newVal, "subscribe event must not carry plaintext sensitive value after ImportConfig")
+	assert.NotEqual(t, secretValue, newVal)
+
+	// --- QueryWriteLog must not carry plaintext ---
+	entries, err := admin.QueryWriteLog(ctx, adminclient.WithAuditTenant(tenant.ID))
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+	for _, e := range entries {
+		assert.NotEqual(t, secretValue, e.NewValue,
+			"audit log new_value must not carry plaintext sensitive value after ImportConfig")
+		assert.NotEqual(t, secretValue, e.OldValue,
+			"audit log old_value must not carry plaintext sensitive value after ImportConfig")
+	}
+}
