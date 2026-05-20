@@ -169,10 +169,13 @@ func TestSetField_ChecksumMismatch(t *testing.T) {
 
 	wrongChecksum := "wrong"
 
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	// getOrCreateVersion (outside tx) + txLatestVersion (inside tx).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue (outside tx) + checkChecksumAtVersion (inside tx).
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{Value: strPtr("old-value")}, nil)
+	setupNoSensitiveFields(store)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:         tenantID1,

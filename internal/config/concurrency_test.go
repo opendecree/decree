@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/storage/domain"
@@ -262,4 +264,89 @@ values:
 	case <-time.After(testTimeout):
 		t.Fatal("timeout waiting for ImportConfig to complete after unblocking")
 	}
+}
+
+// TestChecksumGuardedWrites_ChecksumMismatchInTx verifies that a concurrent
+// write that changes the latest version before our tx commits causes an Aborted
+// error. It simulates the race with successive mock return values:
+//   - Outside-tx GetLatestConfigVersion returns v1 (pre-race state).
+//   - Inside-tx GetLatestConfigVersion returns v2 (post-concurrent-write state).
+//   - The checksum at v2 differs from the client's expectedChecksum.
+//
+// This proves the checksum check is bound to the tx and detects the race (fix for #417).
+func TestChecksumGuardedWrites_ChecksumMismatchInTx(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	sub := &mockSubscriber{}
+	svc := NewService(store, c, pub, sub, WithLogger(testLogger))
+
+	ctx := superadminCtx()
+	expectedChecksum := "checksum-at-v1"
+	differentChecksum := "checksum-at-v2"
+
+	// First call: getOrCreateVersion outside the tx sees v1.
+	// Second call: txLatestVersion inside the tx sees v2 (concurrent write committed).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil).Once()
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 2}, nil).Once()
+
+	// getCurrentValue (v1, outside tx) then checkChecksumAtVersion (v2, inside tx).
+	// Both return a row but with different checksums across calls.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{Value: strPtr("old"), Checksum: &expectedChecksum}, nil).Once()
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{Value: strPtr("newer"), Checksum: &differentChecksum}, nil).Once()
+
+	setupNoSensitiveFields(store)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:         tenantID1,
+		FieldPath:        "app.env",
+		Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "prod"}},
+		ExpectedChecksum: &expectedChecksum,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "checksum mismatch due to concurrent write must return Aborted")
+}
+
+// TestChecksumGuardedWrites_VersionConflictReturnsAborted verifies that when
+// CreateConfigVersion returns ErrVersionConflict (two writers racing to create
+// the same version slot), the service returns codes.Aborted rather than
+// codes.Internal. This proves the UNIQUE constraint collision is surfaced as a
+// retriable error, not an unexpected internal failure.
+func TestChecksumGuardedWrites_VersionConflictReturnsAborted(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	sub := &mockSubscriber{}
+	svc := NewService(store, c, pub, sub, WithLogger(testLogger))
+
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue outside tx: field not found.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	setupNoSensitiveFields(store)
+	// No ExpectedChecksum → checkChecksumAtVersion is skipped; CreateConfigVersion
+	// fails immediately with ErrVersionConflict (simulating the UNIQUE collision).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.env",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "prod"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict must return Aborted, not Internal")
 }

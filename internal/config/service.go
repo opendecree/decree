@@ -424,12 +424,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 
 	actor := s.getActor(ctx)
 
-	// Pre-transaction validation (reads only).
-	if req.ExpectedChecksum != nil {
-		if err := s.checkChecksum(ctx, tenantID, req.FieldPath, *req.ExpectedChecksum); err != nil {
-			return nil, err
-		}
-	}
+	// Pre-transaction validation (schema/lock checks only).
 	if err := s.validateField(ctx, tenantID, req.FieldPath, req.Value); err != nil {
 		return nil, err
 	}
@@ -451,12 +446,25 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	}
 
 	// Transaction: version + value + audit + dependentRequired check.
+	// Re-reading the latest version inside the tx and verifying the checksum
+	// there closes the TOCTOU window: concurrent writers must serialise through
+	// the UNIQUE(tenant_id, version) constraint on CreateConfigVersion, so at
+	// most one writer succeeds per version slot.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
+		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
+		if txErr != nil {
+			return txErr
+		}
+		if req.ExpectedChecksum != nil {
+			if txErr = checkChecksumAtVersion(ctx, tx, tenantID, req.FieldPath, *req.ExpectedChecksum, txLockedVersion); txErr != nil {
+				return txErr
+			}
+		}
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
-			Version:     latestVersion + 1,
+			Version:     txLockedVersion + 1,
 			Description: ptrString(req.GetDescription()),
 			CreatedBy:   actor,
 		})
@@ -493,6 +501,12 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 			ConfigVersion: &newVersion.Version,
 		})
 	}); err != nil {
+		if errors.Is(err, ErrVersionConflict) {
+			return nil, status.Error(codes.Aborted, "concurrent write conflict; retry with the latest checksum")
+		}
+		if st, ok := status.FromError(err); ok {
+			return nil, st.Err()
+		}
 		return nil, mapDependentRequiredErr(err, func() error {
 			s.logger.ErrorContext(ctx, "set field transaction failed", "error", err)
 			return status.Error(codes.Internal, "failed to set field")
@@ -535,13 +549,8 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		ctx = authz.WithFieldLockCache(ctx, locks)
 	}
 
-	// Pre-transaction validation (reads only).
+	// Pre-transaction validation (schema/lock checks only).
 	for _, update := range req.Updates {
-		if update.ExpectedChecksum != nil {
-			if err := s.checkChecksum(ctx, tenantID, update.FieldPath, *update.ExpectedChecksum); err != nil {
-				return nil, err
-			}
-		}
 		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: update.FieldPath}); err != nil {
 			return nil, err
 		}
@@ -581,12 +590,25 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	}
 
 	// Transaction: version + all values + all audit entries + dependentRequired check.
+	// Checksums are verified inside the tx after re-reading the latest version so
+	// concurrent writes cannot bypass the check (TOCTOU fix for #417).
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(ctx, func(tx Store) error {
 		var txErr error
+		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
+		if txErr != nil {
+			return txErr
+		}
+		for _, update := range req.Updates {
+			if update.ExpectedChecksum != nil {
+				if txErr = checkChecksumAtVersion(ctx, tx, tenantID, update.FieldPath, *update.ExpectedChecksum, txLockedVersion); txErr != nil {
+					return txErr
+				}
+			}
+		}
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
-			Version:     latestVersion + 1,
+			Version:     txLockedVersion + 1,
 			Description: ptrString(req.GetDescription()),
 			CreatedBy:   actor,
 		})
@@ -625,6 +647,12 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
 	}); err != nil {
+		if errors.Is(err, ErrVersionConflict) {
+			return nil, status.Error(codes.Aborted, "concurrent write conflict; retry with the latest checksum")
+		}
+		if st, ok := status.FromError(err); ok {
+			return nil, st.Err()
+		}
 		return nil, mapDependentRequiredErr(err, func() error {
 			s.logger.ErrorContext(ctx, "set fields transaction failed", "error", err)
 			return status.Error(codes.Internal, "failed to set fields")
@@ -785,6 +813,9 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 			ConfigVersion: &newVersion.Version,
 		})
 	}); err != nil {
+		if errors.Is(err, ErrVersionConflict) {
+			return nil, status.Error(codes.Aborted, "concurrent write conflict; retry the rollback")
+		}
 		return nil, mapDependentRequiredErr(err, func() error {
 			s.logger.ErrorContext(ctx, "rollback transaction failed", "error", err)
 			return status.Error(codes.Internal, "failed to rollback")
@@ -1117,6 +1148,9 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
 	}); err != nil {
+		if errors.Is(err, ErrVersionConflict) {
+			return nil, status.Error(codes.Aborted, "concurrent write conflict; retry the import")
+		}
 		return nil, mapDependentRequiredErr(err, func() error {
 			s.logger.ErrorContext(ctx, "import config transaction failed", "error", err)
 			return status.Error(codes.Internal, "failed to import config")
@@ -1297,22 +1331,36 @@ func (s *Service) getCurrentValue(ctx context.Context, tenantID string, fieldPat
 	return derefString(row.Value)
 }
 
-func (s *Service) checkChecksum(ctx context.Context, tenantID string, fieldPath, expected string) error {
-	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
+// txLatestVersion returns the latest config version number for tenantID using
+// the provided Store (intended to be a tx-bound store). Returns 0 when no
+// versions exist yet. Must be called inside RunInTx so that the subsequent
+// CreateConfigVersion is in the same serialisable scope.
+func txLatestVersion(ctx context.Context, tx Store, tenantID string) (int32, error) {
+	latest, err := tx.GetLatestConfigVersion(ctx, tenantID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			return nil // No existing value — checksum check passes.
+			return 0, nil
 		}
-		return status.Error(codes.Internal, "failed to get latest version")
+		return 0, status.Error(codes.Internal, "failed to get latest version")
 	}
-	row, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
+	return latest.Version, nil
+}
+
+// checkChecksumAtVersion verifies that the stored checksum for fieldPath at
+// version matches expected. Returns nil when version is 0 or the field does
+// not exist yet (first write is always allowed regardless of checksum).
+func checkChecksumAtVersion(ctx context.Context, tx Store, tenantID, fieldPath, expected string, version int32) error {
+	if version == 0 {
+		return nil
+	}
+	row, err := tx.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
 		TenantID:  tenantID,
 		FieldPath: fieldPath,
-		Version:   latest.Version,
+		Version:   version,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
-			return nil // Field doesn't exist yet.
+			return nil
 		}
 		return status.Error(codes.Internal, "failed to get current value for checksum")
 	}
