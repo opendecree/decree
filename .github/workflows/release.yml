@@ -392,3 +392,72 @@ jobs:
           subject-name: ${{ env.IMAGE_REF }}
           subject-digest: ${{ steps.manifest_digest.outputs.digest }}
           push-to-registry: true
+
+  # Runs e2e gRPC benchmarks against the just-released server image.
+  # Moved here from ci.yml — too slow for per-PR runs. Results are uploaded
+  # as release artifacts for latency tracking over versions.
+  bench-e2e:
+    name: E2E Benchmarks
+    runs-on: ubuntu-latest
+    needs: [images]
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull or build tools image
+        id: tools
+        run: |
+          TAG="ghcr.io/${{ github.repository_owner }}/decree-tools:sha-$(sha256sum build/Dockerfile.tools | cut -c1-12)"
+          if docker pull "$TAG" 2>/dev/null; then
+            docker tag "$TAG" decree-tools
+          else
+            docker build -f build/Dockerfile.tools -t decree-tools .
+          fi
+          echo "image=decree-tools" >> $GITHUB_OUTPUT
+
+      - name: Pull release server image
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          docker pull "ghcr.io/${{ github.repository_owner }}/decree:${VERSION}"
+          docker tag "ghcr.io/${{ github.repository_owner }}/decree:${VERSION}" decree-service
+
+      - name: Run e2e benchmarks
+        run: |
+          docker compose up -d --wait service
+          cd e2e && go test -tags=e2e -bench=. -benchmem -run='^$' -benchtime=3s -count=5 ./... \
+            | tee ../bench-e2e.txt || (cd .. && docker compose down -v && exit 1)
+          docker compose down -v
+        env:
+          TOOLS_IMAGE: decree-tools
+          SERVICE_IMAGE: decree-service
+
+      - name: Compute p50/p95/p99 with benchstat
+        run: |
+          go run golang.org/x/perf/cmd/benchstat@latest bench-e2e.txt | tee bench-e2e-stats.txt
+
+      - name: Upload e2e benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-e2e-${{ github.ref_name }}
+          path: |
+            bench-e2e.txt
+            bench-e2e-stats.txt
