@@ -139,6 +139,10 @@ e2e:
 e2e-coverage:
 	./scripts/e2e-coverage.sh
 
+## upgrade-test: Run upgrade safety test (old binary → goose up → new binary). Requires TOOLS_IMAGE and SERVICE_IMAGE.
+upgrade-test:
+	./scripts/run-upgrade-test.sh
+
 ## examples: Run SDK examples (docker compose lifecycle)
 examples:
 	docker compose up -d --wait service
