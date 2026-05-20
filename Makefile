@@ -129,6 +129,14 @@ migrate-down: $(TOOLS_SENTINEL)
 
 # --- Integration tests ---
 
+## integration-test: Run Postgres integration tests via testcontainers (requires Docker)
+integration-test:
+	go test -tags=integration -v -race -count=1 -timeout=300s \
+		./internal/storage/... \
+		./internal/audit/... \
+		./internal/config/... \
+		./internal/schema/...
+
 ## e2e: Run end-to-end tests (docker compose lifecycle)
 e2e:
 	docker compose up -d --wait service
