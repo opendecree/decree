@@ -1,6 +1,11 @@
 # CodeQL advanced setup. Replaces default-setup once disabled in repo settings.
 # Advanced unlocks paths-ignore (skip generated code) and Go module caching
 # across runs — projected ~1-2 min faster vs default-setup.
+#
+# Go analysis runs on push-to-main and weekly schedule only — not on PRs.
+# Per-PR vulnerability coverage is handled by govulncheck (ci.yml). This avoids
+# a ~5 min wall-clock hit from autobuild on every code PR.
+# Actions and Python analyzers still run on PRs (both are fast, < 1 min).
 name: CodeQL
 
 on:
@@ -27,6 +32,9 @@ jobs:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Go autobuild takes ~5 min; skip it on PRs — govulncheck covers per-PR vuln
+    # scanning. Actions and Python are fast (< 1 min) and still run on PRs.
+    if: matrix.language != 'go' || github.event_name != 'pull_request'
     permissions:
       security-events: write
       packages: read
