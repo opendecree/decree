@@ -1064,6 +1064,11 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		desc = parsed.Description
 	}
 
+	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
@@ -1095,14 +1100,15 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 				return fmt.Errorf("set config value %s: %w", v.FieldPath, txErr)
 			}
 
+			isSensitive := sensitiveFields[v.FieldPath]
 			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "import",
 				ObjectKind:    "field",
 				FieldPath:     ptrString(v.FieldPath),
-				OldValue:      ptrString(changes[i].oldValue),
-				NewValue:      strPtr(v.Value),
+				OldValue:      ptrString(redactIfSensitive(isSensitive, changes[i].oldValue)),
+				NewValue:      strPtr(redactIfSensitive(isSensitive, v.Value)),
 				ConfigVersion: &newVersion.Version,
 			}); txErr != nil {
 				return fmt.Errorf("insert audit log for %s: %w", v.FieldPath, txErr)
@@ -1122,7 +1128,10 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
 	for _, ch := range changes {
-		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath, ch.oldValue, ch.newValue, actor)
+		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath,
+			redactIfSensitive(sensitiveFields[ch.fieldPath], ch.oldValue),
+			redactIfSensitive(sensitiveFields[ch.fieldPath], ch.newValue),
+			actor)
 	}
 
 	s.metrics.RecordWrite(ctx, tenantID, "import")
