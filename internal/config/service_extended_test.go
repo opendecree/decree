@@ -232,6 +232,39 @@ func TestSetFields_InvalidTenantID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestSetFields_ChecksumMismatch(t *testing.T) {
+	// Exercises the per-field checksum loop inside the SetFields transaction.
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	storedChecksum := "actual-stored"
+	clientChecksum := "client-expected-different"
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	// getOrCreateVersion + txLatestVersion (two calls to the same mock).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue (outside tx) + checkChecksumAtVersion (inside tx): both
+	// return the stored checksum, which differs from the client's expectation.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{Value: strPtr("old"), Checksum: &storedChecksum}, nil)
+	setupNoSensitiveFields(store)
+
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{
+				FieldPath:        "app.name",
+				Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}},
+				ExpectedChecksum: &clientChecksum,
+			},
+		},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err))
+}
+
 // --- ListVersions ---
 
 func TestListVersions_Success(t *testing.T) {
