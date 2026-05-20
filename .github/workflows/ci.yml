@@ -1,15 +1,16 @@
 # CI pipeline for OpenDecree server, SDKs, and CLI.
 #
-# Jobs: changes ──┬── tools → lint, docs, e2e, examples, stress ──→ check (alls-green gate)
-#                 └── test, sdk-compat, govulncheck, deps-review ──┘
+# Jobs: changes ──┬── tools → docs, e2e, examples, stress ──→ check (alls-green gate)
+#                 ├── lint ──────────────────────────────────────────────────────┘
+#                 └── test, sdk-compat, govulncheck, deps-review ───────────────┘
 #
 # The changes job runs dorny/paths-filter; all downstream jobs (tools, lint,
 # test, sdk-compat, docs, e2e, examples, stress, govulncheck) skip on docs-only PRs —
 # zero-cost CI for top-level Markdown edits.
 #
-# The tools job builds/caches the Docker image used by lint, docs, e2e, examples,
-# with a registry-backed buildx cache (:buildcache tag) so unchanged layers are
-# pulled from ghcr and only modified layers rebuild.
+# The tools job builds/caches the Docker image used by docs, e2e, examples,
+# and stress, with a registry-backed buildx cache (:buildcache tag) so unchanged
+# layers are pulled from ghcr and only modified layers rebuild.
 #
 # Security posture (issue #8):
 #   - Workflow-level permissions default to `contents: read` — jobs opt into more.
@@ -150,15 +151,16 @@ jobs:
       image: ${{ env.TOOLS_IMAGE }}:${{ steps.hash.outputs.tag }}
 
   # Runs golangci-lint against Go code and buf lint/breaking against protos.
+  # buf is installed via go install (no Docker image needed), so this job runs
+  # parallel to tools instead of waiting for it.
   # buf breaking needs the tip of main, fetched explicitly in the next step.
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    needs: [tools, changes]
+    needs: [changes]
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
-      packages: read
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -188,21 +190,13 @@ jobs:
       - name: Go format check
         run: golangci-lint fmt --diff
 
-      - name: Log in to ghcr.io
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull tools image
-        run: |
-          docker pull "${{ needs.tools.outputs.image }}"
-          docker tag "${{ needs.tools.outputs.image }}" decree-tools
-          touch .tools-image-built
+      - name: Install buf
+        run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
+        env:
+          GOTOOLCHAIN: auto
 
       - name: Proto lint + breaking
-        run: make lint-proto
+        run: buf lint && buf breaking --against ".git#branch=main"
 
   # Builds the server + CLI, runs unit, SDK, and CLI tests in parallel, then
   # enforces the coverage ratchet defined in coverage-thresholds.json.
