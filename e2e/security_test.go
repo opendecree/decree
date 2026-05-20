@@ -372,7 +372,7 @@ func TestSecurity_ImportConfigSensitiveFieldRedacted(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Import YAML containing a sensitive field.
-	yamlContent := []byte("spec_version: v1\nvalues:\n  - field_path: auth.token\n    value: " + secretValue + "\n  - field_path: app.name\n    value: myapp\n")
+	yamlContent := []byte("spec_version: v1\nvalues:\n  auth.token:\n    value: " + secretValue + "\n  app.name:\n    value: myapp\n")
 	_, err = admin.ImportConfig(ctx, tenant.ID, yamlContent, "import sensitive test")
 	require.NoError(t, err)
 
