@@ -150,7 +150,7 @@ jobs:
       image: ${{ env.TOOLS_IMAGE }}:${{ steps.hash.outputs.tag }}
 
   # Runs golangci-lint against Go code and buf lint/breaking against protos.
-  # buf breaking needs main fetched so it can diff the current branch.
+  # buf breaking needs the tip of main, fetched explicitly in the next step.
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -165,11 +165,10 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-          fetch-depth: 0
 
       - name: Fetch main branch for buf breaking
         if: github.ref != 'refs/heads/main'
-        run: git fetch origin main:main
+        run: git fetch origin main:main --depth=1
 
       - name: Check supply-chain pins
         run: ./scripts/check-supply-chain-pins.sh
