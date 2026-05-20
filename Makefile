@@ -13,7 +13,7 @@ BUILD_DIR := bin
 TOOLS_IMAGE := decree-tools
 TOOLS_SENTINEL := .tools-image-built
 DOCKER_RUN_TOOLS := docker run --rm -u $(shell id -u):$(shell id -g) -e HOME=/tmp -v $(CURDIR):/workspace -w /workspace $(TOOLS_IMAGE)
-GOLANGCI_LINT_VERSION := v2.8.0
+GOLANGCI_LINT_VERSION := v2.11.4
 
 # Version injection for binaries.
 GIT_VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
