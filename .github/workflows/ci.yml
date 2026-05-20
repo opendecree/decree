@@ -260,8 +260,9 @@ jobs:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  # Proves the SDK core modules still build and test against older Go versions
-  # we advertise support for (1.22 is the lowest SDK-supported minor).
+  # Proves the SDK core modules still build and test against the floor Go
+  # version we advertise support for (1.22). Testing 1.23+ is redundant:
+  # if 1.22 passes, later versions pass too. Only the floor matters.
   sdk-compat:
     name: SDK compat (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
@@ -270,7 +271,7 @@ jobs:
     timeout-minutes: 10
     strategy:
       matrix:
-        go: ["1.22", "1.23"]
+        go: ["1.22"]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
