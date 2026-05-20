@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -75,6 +76,10 @@ func (s *PGStore) CreateConfigVersion(ctx context.Context, arg CreateConfigVersi
 		CreatedBy:   arg.CreatedBy,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.ConfigVersion{}, ErrVersionConflict
+		}
 		return domain.ConfigVersion{}, err
 	}
 	return configVersionFromDB(row), nil

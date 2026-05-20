@@ -2,10 +2,16 @@ package config
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/opendecree/decree/internal/storage/domain"
 )
+
+// ErrVersionConflict is returned by CreateConfigVersion when a concurrent
+// writer already committed the same version number (UNIQUE constraint violation).
+// Callers should surface this as codes.Aborted and advise a retry.
+var ErrVersionConflict = errors.New("version conflict")
 
 // --- Local param/result types ---
 

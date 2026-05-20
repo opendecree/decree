@@ -169,10 +169,13 @@ func TestSetField_ChecksumMismatch(t *testing.T) {
 
 	wrongChecksum := "wrong"
 
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	// getOrCreateVersion (outside tx) + txLatestVersion (inside tx).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue (outside tx) + checkChecksumAtVersion (inside tx).
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{Value: strPtr("old-value")}, nil)
+	setupNoSensitiveFields(store)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:         tenantID1,
@@ -183,6 +186,166 @@ func TestSetField_ChecksumMismatch(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, codes.Aborted, status.Code(err))
+}
+
+func TestSetField_ChecksumFirstWrite(t *testing.T) {
+	// When no versions exist yet (txLockedVersion == 0), an ExpectedChecksum
+	// is ignored and the write proceeds — there is nothing to mismatch against.
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	checksum := "any-value"
+
+	// Both outside-tx and inside-tx GetLatestConfigVersion return ErrNotFound.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
+		Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+		Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:         tenantID1,
+		FieldPath:        "app.name",
+		Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}},
+		ExpectedChecksum: &checksum,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), resp.ConfigVersion.Version)
+}
+
+func TestSetField_ChecksumDBError(t *testing.T) {
+	// When GetConfigValueAtVersion returns an unexpected error (not ErrNotFound),
+	// checkChecksumAtVersion surfaces it as codes.Internal.
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	checksum := "abc"
+	dbErr := errors.New("db exploded")
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// Outside-tx getCurrentValue: ErrNotFound (field doesn't exist for audit).
+	// Inside-tx checkChecksumAtVersion: real db error.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound).Once()
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, dbErr).Once()
+	setupNoSensitiveFields(store)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:         tenantID1,
+		FieldPath:        "app.name",
+		Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}},
+		ExpectedChecksum: &checksum,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestSetField_TxLatestVersionDBError(t *testing.T) {
+	// When GetLatestConfigVersion fails inside the tx with a non-ErrNotFound
+	// error, SetField returns codes.Internal.
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	dbErr := errors.New("db exploded")
+
+	// Outside-tx: getOrCreateVersion succeeds.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil).Once()
+	// Outside-tx: getCurrentValue.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	setupNoSensitiveFields(store)
+	// Inside-tx: txLatestVersion fails.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, dbErr).Once()
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.name",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestSetField_ChecksumFieldNotYetWritten(t *testing.T) {
+	// When a version exists but the field has never been written, ErrNotFound
+	// from GetConfigValueAtVersion inside the tx means there is nothing to
+	// mismatch — the write proceeds regardless of ExpectedChecksum.
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	checksum := "any"
+
+	// Outside-tx: version 1 exists.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue (outside tx): field not found.
+	// checkChecksumAtVersion (inside tx): field also not found → returns nil.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
+		Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+		Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:         tenantID1,
+		FieldPath:        "app.name",
+		Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}},
+		ExpectedChecksum: &checksum,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), resp.ConfigVersion.Version)
+}
+
+func TestSetField_ChecksumMatchSucceeds(t *testing.T) {
+	// When the expected checksum matches the stored checksum, the write proceeds.
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	storedChecksum := "correct-checksum"
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{Value: strPtr("old"), Checksum: &storedChecksum}, nil)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
+		Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+		Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:         tenantID1,
+		FieldPath:        "app.name",
+		Value:            &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "new"}},
+		ExpectedChecksum: &storedChecksum,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), resp.ConfigVersion.Version)
 }
 
 func TestSetField_LockedField(t *testing.T) {
@@ -257,6 +420,25 @@ func TestRollbackToVersion_Success(t *testing.T) {
 	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
 	// Should copy 2 values.
 	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
+}
+
+func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
+		TenantId: tenantID1,
+		Version:  2,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during rollback must return Aborted, not Internal")
 }
 
 // --- ExportConfig ---
@@ -349,6 +531,39 @@ values:
 	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
 	store.AssertNumberOfCalls(t, "InsertAuditWriteLog", 2)
 	cache.AssertCalled(t, "Invalidate", ctx, tenantID1)
+}
+
+func TestImportConfig_VersionConflictReturnsAborted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`spec_version: "v1"
+values:
+  app.env:
+    value: "prod"
+`)
+
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField{{Path: "app.env", FieldType: domain.FieldTypeString}}, nil)
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_REPLACE,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during import must return Aborted, not Internal")
 }
 
 // --- ImportConfig with validation ---
