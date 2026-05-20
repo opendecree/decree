@@ -225,11 +225,6 @@ jobs:
           go-version-file: go.mod
           cache-dependency-path: "**/go.sum"
 
-      - name: Build server + CLI
-        run: |
-          go build -o bin/decree-server ./cmd/server
-          cd cmd/decree && go build -o ../../bin/decree .
-
       - name: Unit tests
         run: go test ./internal/... -race -count=1 -coverprofile=coverage-internal.out -covermode=atomic
 
