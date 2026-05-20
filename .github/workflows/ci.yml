@@ -192,6 +192,8 @@ jobs:
 
       - name: Install buf
         run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
+        env:
+          GOTOOLCHAIN: auto
 
       - name: Proto lint + breaking
         run: buf lint && buf breaking --against ".git#branch=main"
