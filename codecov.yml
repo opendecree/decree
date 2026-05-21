@@ -12,6 +12,7 @@ ignore:
   - "cmd/decree"
   - "api/centralconfig/**"
   - "internal/storage/dbstore/**"
+  - "internal/audit/store_pg.go"
   - "internal/config/store_pg.go"
   - "sdk/grpctransport/**"
   - "cmd/server/openapi.json"
