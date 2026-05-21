@@ -16,6 +16,7 @@ type gatewayOptions struct {
 	maxSendMsgBytes int
 	tls             *GatewayTLSConfig
 	insecure        bool
+	trustedProxy    bool
 }
 
 // WithGatewayLogger sets the gateway logger. Defaults to slog.Default() when unset.
@@ -59,4 +60,13 @@ func WithGatewayInsecure() GatewayOption {
 // root). When unset, the /admin/ route is not registered.
 func WithUI(fsys fs.FS) GatewayOption {
 	return func(o *gatewayOptions) { o.uiFS = fsys }
+}
+
+// WithGatewayTrustedProxy declares that a trusted authentication proxy sits in
+// front of the gateway and is allowed to set x-subject, x-role, and
+// x-tenant-id headers. Without this option (the default), the gateway rejects
+// any request that carries those headers to prevent client impersonation.
+// Set DECREE_GATEWAY_TRUSTED_PROXY=1 to enable at runtime.
+func WithGatewayTrustedProxy() GatewayOption {
+	return func(o *gatewayOptions) { o.trustedProxy = true }
 }

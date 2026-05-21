@@ -352,6 +352,9 @@ func run() int {
 			}
 			uiFS = sub
 		}
+		if cfg.GatewayTrustedProxy {
+			logger.WarnContext(ctx, "DECREE_GATEWAY_TRUSTED_PROXY=1 set — gateway will forward client-supplied auth headers; ensure a trusted proxy enforces authentication upstream")
+		}
 		gwBuild := buildGatewayOptions(cfg, logger, openAPISpec, gwTLS, uiFS)
 		gw, err = server.NewGateway(ctx, cfg.HTTPPort, fmt.Sprintf("localhost:%s", cfg.GRPCPort), gwBuild.Opts...)
 		if err != nil {
@@ -437,6 +440,7 @@ type serverConfig struct {
 	RateLimitBurst           int
 	EnableReflection         bool
 	EnableUI                 bool
+	GatewayTrustedProxy      bool
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -510,6 +514,7 @@ func loadConfig() serverConfig {
 		RateLimitBurst:           parseEnvInt("RATE_LIMIT_BURST", 10),
 		EnableReflection:         getEnv("ENABLE_REFLECTION", "") == "1",
 		EnableUI:                 getEnv("ENABLE_UI", "") == "1",
+		GatewayTrustedProxy:      getEnv("DECREE_GATEWAY_TRUSTED_PROXY", "") == "1",
 	}
 }
 
