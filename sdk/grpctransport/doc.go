@@ -2,6 +2,9 @@
 // OpenDecree SDK clients (configclient, adminclient) and a gRPC-backed
 // [configwatcher.Watcher].
 //
+// [Dial] opens a connection with TLS and system roots by default.
+// Pass [WithInsecure] only for local development or testing.
+//
 // Convenience constructors [NewConfigClient], [NewAdminClient], and
 // [NewWatcher] wire a [grpc.ClientConnInterface] directly to the high-level
 // SDK types. Lower-level transport types (ConfigTransport, SchemaTransport,
