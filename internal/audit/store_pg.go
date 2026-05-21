@@ -70,13 +70,19 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	// verification both use the same CreatedAt value.
 	now := time.Now().Truncate(time.Microsecond)
 	hash := ComputeEntryHash(ChainInput{
-		PreviousHash: prevHash,
-		ID:           pgconv.UUIDToString(id),
-		TenantID:     arg.TenantID,
-		Actor:        arg.Actor,
-		Action:       arg.Action,
-		ObjectKind:   kind,
-		CreatedAt:    now,
+		PreviousHash:  prevHash,
+		ID:            pgconv.UUIDToString(id),
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		CreatedAt:     now,
+		Epoch:         1,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -93,6 +99,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
 		CreatedAt:     pgconv.TimeToTimestamptz(now),
+		ChainEpoch:    1,
 	})
 }
 
@@ -235,6 +242,7 @@ func auditWriteLogFromDB(r dbstore.AuditWriteLog) domain.AuditWriteLog {
 		Metadata:      r.Metadata,
 		PreviousHash:  r.PreviousHash,
 		EntryHash:     r.EntryHash,
+		ChainEpoch:    r.ChainEpoch,
 		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
 	}
 }

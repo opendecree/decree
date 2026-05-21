@@ -73,6 +73,7 @@ type AuditWriteLog struct {
 	ObjectKind    string             `json:"object_kind"`
 	PreviousHash  string             `json:"previous_hash"`
 	EntryHash     string             `json:"entry_hash"`
+	ChainEpoch    int32              `json:"chain_epoch"`
 }
 
 type ConfigValue struct {

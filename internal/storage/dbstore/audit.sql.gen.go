@@ -12,7 +12,7 @@ import (
 )
 
 const getAuditWriteLogOrdered = `-- name: GetAuditWriteLogOrdered :many
-SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash FROM audit_write_log
+SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash, chain_epoch FROM audit_write_log
 WHERE tenant_id IS NOT DISTINCT FROM $1
 ORDER BY created_at ASC, id ASC
 `
@@ -40,6 +40,7 @@ func (q *Queries) GetAuditWriteLogOrdered(ctx context.Context, tenantID pgtype.U
 			&i.ObjectKind,
 			&i.PreviousHash,
 			&i.EntryHash,
+			&i.ChainEpoch,
 		); err != nil {
 			return nil, err
 		}
@@ -196,8 +197,8 @@ func (q *Queries) GetUnusedFields(ctx context.Context, arg GetUnusedFieldsParams
 }
 
 const insertAuditWriteLog = `-- name: InsertAuditWriteLog :exec
-INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at, chain_epoch)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 `
 
 type InsertAuditWriteLogParams struct {
@@ -214,6 +215,7 @@ type InsertAuditWriteLogParams struct {
 	PreviousHash  string             `json:"previous_hash"`
 	EntryHash     string             `json:"entry_hash"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	ChainEpoch    int32              `json:"chain_epoch"`
 }
 
 func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
@@ -231,12 +233,13 @@ func (q *Queries) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		arg.PreviousHash,
 		arg.EntryHash,
 		arg.CreatedAt,
+		arg.ChainEpoch,
 	)
 	return err
 }
 
 const queryAuditWriteLog = `-- name: QueryAuditWriteLog :many
-SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash FROM audit_write_log
+SELECT id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, created_at, object_kind, previous_hash, entry_hash, chain_epoch FROM audit_write_log
 WHERE ($1::UUID IS NULL OR tenant_id = $1)
   AND (NULLIF($2::TEXT, '') IS NULL OR actor = $2)
   AND (NULLIF($3::TEXT, '') IS NULL OR field_path = $3)
@@ -287,6 +290,7 @@ func (q *Queries) QueryAuditWriteLog(ctx context.Context, arg QueryAuditWriteLog
 			&i.ObjectKind,
 			&i.PreviousHash,
 			&i.EntryHash,
+			&i.ChainEpoch,
 		); err != nil {
 			return nil, err
 		}

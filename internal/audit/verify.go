@@ -34,13 +34,19 @@ func VerifyChain(ctx context.Context, store Store, tenantID string) (VerifyResul
 	prev := ""
 	for i, e := range entries {
 		want := ComputeEntryHash(ChainInput{
-			PreviousHash: prev,
-			ID:           e.ID,
-			TenantID:     e.TenantID,
-			Actor:        e.Actor,
-			Action:       e.Action,
-			ObjectKind:   e.ObjectKind,
-			CreatedAt:    e.CreatedAt,
+			PreviousHash:  prev,
+			ID:            e.ID,
+			TenantID:      e.TenantID,
+			Actor:         e.Actor,
+			Action:        e.Action,
+			ObjectKind:    e.ObjectKind,
+			CreatedAt:     e.CreatedAt,
+			Epoch:         int(e.ChainEpoch),
+			FieldPath:     e.FieldPath,
+			OldValue:      e.OldValue,
+			NewValue:      e.NewValue,
+			ConfigVersion: e.ConfigVersion,
+			Metadata:      e.Metadata,
 		})
 		if e.EntryHash != want {
 			result.Breaks = append(result.Breaks, ChainBreak{

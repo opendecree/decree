@@ -138,6 +138,44 @@ func TestVerifyChain_TriggerRollbackOnOldRow(t *testing.T) {
 	t.Skip("trigger tests run against real DB — see store_pg_test.go")
 }
 
+// TestVerifyChain_DetectsPayloadTampering asserts that mutating a payload field
+// (NewValue) is detected by VerifyChain on epoch-1 entries.
+func TestVerifyChain_DetectsPayloadTampering(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	tenantID := "pay10000-0000-0000-0000-000000000001"
+
+	for i := range 3 {
+		fp := "app.name"
+		val := string(rune('a' + i))
+		err := store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenantID,
+			Actor:      "actor",
+			Action:     "set_field",
+			ObjectKind: "field",
+			FieldPath:  &fp,
+			NewValue:   &val,
+		})
+		require.NoError(t, err)
+	}
+
+	// Mutate the NewValue of the first entry — payload tampered, hash unchanged.
+	store.mu.Lock()
+	for i, e := range store.writeLogs {
+		if e.TenantID == tenantID {
+			tampered := "TAMPERED"
+			store.writeLogs[i].NewValue = &tampered
+			break
+		}
+	}
+	store.mu.Unlock()
+
+	result, err := VerifyChain(ctx, store, tenantID)
+	require.NoError(t, err)
+	assert.False(t, result.OK, "chain should be broken after payload mutation")
+	assert.NotEmpty(t, result.Breaks, "should report at least one break")
+}
+
 // Helper for verify_test — avoids collision with store_memory_test.go's ptr.
 func verifyPtr(s string) *string { return &s }
 
