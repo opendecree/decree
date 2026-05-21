@@ -112,7 +112,7 @@ func TestSecurity_SensitiveFieldRedacted(t *testing.T) {
 	// Subscribe before the write so the event is captured.
 	subCtx, subCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer subCancel()
-	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-sensitive")
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-sensitive", "x-role", "superadmin")
 	stream, err := cfgSvc.Subscribe(subCtx, &pb.SubscribeRequest{
 		TenantId:   tenant.ID,
 		FieldPaths: []string{"auth.token"},
@@ -272,7 +272,7 @@ func TestSecurity_AuditChainIntegrity(t *testing.T) {
 	cfg := newConfigClient(conn)
 	auditSvc := pb.NewAuditServiceClient(conn)
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit")
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit", "x-role", "superadmin")
 
 	// Lay down several config writes to build up a multi-entry chain.
 	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "alpha"))
@@ -320,7 +320,7 @@ func TestSecurity_ReflectionEnabled(t *testing.T) {
 
 	// Reflection is registered as a regular gRPC service and goes through the
 	// same auth interceptor, so x-subject is required.
-	ctx = metadata.AppendToOutgoingContext(ctx, "x-subject", "e2e-security-reflection")
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-subject", "e2e-security-reflection", "x-role", "superadmin")
 
 	client := reflpb.NewServerReflectionClient(conn)
 	stream, err := client.ServerReflectionInfo(ctx)
@@ -363,7 +363,7 @@ func TestSecurity_ImportConfigSensitiveFieldRedacted(t *testing.T) {
 	// Subscribe before the import so we capture the event.
 	subCtx, subCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer subCancel()
-	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-import-sensitive")
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-import-sensitive", "x-role", "superadmin")
 	stream, err := cfgSvc.Subscribe(subCtx, &pb.SubscribeRequest{
 		TenantId:   tenant.ID,
 		FieldPaths: []string{"auth.token"},

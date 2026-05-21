@@ -41,7 +41,7 @@ func TestConfigSubscription(t *testing.T) {
 	defer cancel()
 
 	// Add auth metadata (required by server).
-	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-test")
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-test", "x-role", "superadmin")
 
 	stream, err := configSvc.Subscribe(subCtx, &pb.SubscribeRequest{
 		TenantId:   tenant.ID,
