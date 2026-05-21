@@ -395,3 +395,17 @@ func TestAuditEntryToProto(t *testing.T) {
 	assert.Equal(t, "0.02", *pb.NewValue)
 	assert.Equal(t, int32(3), *pb.ConfigVersion)
 }
+
+func TestAuditService_RequiresAuth(t *testing.T) {
+	svc, _ := newTestService()
+	ctx := context.Background()
+
+	_, err := svc.GetFieldUsage(ctx, &pb.GetFieldUsageRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetTenantUsage(ctx, &pb.GetTenantUsageRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

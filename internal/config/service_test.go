@@ -1158,3 +1158,20 @@ func TestWithMetrics_Option(t *testing.T) {
 		WithMetrics(nil))
 	assert.NotNil(t, svc)
 }
+
+func TestConfigService_RequiresAuth(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	ctx := context.Background()
+
+	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetField(ctx, &pb.GetFieldRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetFields(ctx, &pb.GetFieldsRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ListVersions(ctx, &pb.ListVersionsRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
