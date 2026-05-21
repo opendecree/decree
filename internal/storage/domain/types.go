@@ -136,7 +136,9 @@ type AuditWriteLog struct {
 	Metadata      []byte
 	PreviousHash  string
 	EntryHash     string
-	CreatedAt     time.Time
+	// ChainEpoch indicates the hash scheme. 0 = legacy (no payload), 1 = full payload.
+	ChainEpoch int32
+	CreatedAt  time.Time
 }
 
 // UsageStat represents read usage statistics for a field.
