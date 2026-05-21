@@ -133,6 +133,9 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 }
 
 func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageRequest) (*pb.GetFieldUsageResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -183,6 +186,9 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 }
 
 func (s *Service) GetTenantUsage(ctx context.Context, req *pb.GetTenantUsageRequest) (*pb.GetTenantUsageResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -264,6 +270,9 @@ func (s *Service) VerifyChain(ctx context.Context, req *pb.VerifyChainRequest) (
 }
 
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err

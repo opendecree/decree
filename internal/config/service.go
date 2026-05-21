@@ -185,6 +185,9 @@ func errToStatus(err error, notFoundMsg, failedMsg string) error {
 // --- Read operations ---
 
 func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.GetConfigResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err
@@ -289,6 +292,9 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 }
 
 func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.GetFieldResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err
@@ -327,6 +333,9 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 }
 
 func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.GetFieldsResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err
@@ -679,6 +688,9 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 // --- Version operations ---
 
 func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest) (*pb.ListVersionsResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err
@@ -717,6 +729,9 @@ func (s *Service) ListVersions(ctx context.Context, req *pb.ListVersionsRequest)
 }
 
 func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*pb.GetVersionResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err
@@ -838,6 +853,9 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamingServer[pb.SubscribeResponse]) error {
 	ctx := stream.Context()
 
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return err
@@ -941,6 +959,9 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 // --- Import/export ---
 
 func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest) (*pb.ExportConfigResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
 		return nil, err

@@ -72,7 +72,7 @@ func TestCreateSchema_EmptyName(t *testing.T) {
 func TestGetSchema_LatestVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
@@ -91,7 +91,7 @@ func TestGetSchema_LatestVersion(t *testing.T) {
 func TestGetSchema_SpecificVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	v := int32(2)
 
@@ -112,7 +112,7 @@ func TestGetSchema_SpecificVersion(t *testing.T) {
 func TestGetSchema_NotFound(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{}, domain.ErrNotFound)
@@ -289,6 +289,33 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 	assert.Equal(t, []string{"billing", "critical"}, got.Tags, "tags lost in round-trip")
 	assert.True(t, got.ReadOnly, "read_only lost in round-trip")
 	assert.True(t, got.Sensitive, "sensitive lost in round-trip")
+}
+
+func TestSchemaService_RequiresAuth(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := context.Background()
+
+	_, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetSchema(ctx, &pb.GetSchemaRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.CreateTenant(ctx, &pb.CreateTenantRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetTenant(ctx, &pb.GetTenantRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.UnlockField(ctx, &pb.UnlockFieldRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ListSchemas(ctx, &pb.ListSchemasRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ListFieldLocks(ctx, &pb.ListFieldLocksRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- helpers ---

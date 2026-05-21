@@ -49,7 +49,7 @@ func TestListSchemas_Success(t *testing.T) {
 	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
 	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
 
-	resp, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageSize: 10})
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 10})
 	require.NoError(t, err)
 	assert.Len(t, resp.Schemas, 1)
 }
@@ -74,7 +74,7 @@ func TestListSchemas_Pagination(t *testing.T) {
 	store.On("GetLatestSchemaVersion", mock.Anything, s1.ID).Return(v1, nil)
 	store.On("GetSchemaFields", mock.Anything, v1.ID).Return([]domain.SchemaField{}, nil)
 
-	resp, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageSize: 1})
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 1})
 	require.NoError(t, err)
 	assert.Len(t, resp.Schemas, 1)
 	assert.NotEmpty(t, resp.NextPageToken, "expected next_page_token for full page")
@@ -86,7 +86,7 @@ func TestListSchemas_Pagination(t *testing.T) {
 	store.On("GetLatestSchemaVersion", mock.Anything, s2.ID).Return(v2, nil)
 	store.On("GetSchemaFields", mock.Anything, v2.ID).Return([]domain.SchemaField{}, nil)
 
-	resp, err = svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{
+	resp, err = svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{
 		PageSize:  1,
 		PageToken: resp.NextPageToken,
 	})
@@ -98,7 +98,7 @@ func TestListSchemas_Pagination(t *testing.T) {
 func TestListSchemas_InvalidPageToken(t *testing.T) {
 	svc := NewService(&mockStore{}, WithLogger(testLogger))
 
-	_, err := svc.ListSchemas(context.Background(), &pb.ListSchemasRequest{PageToken: "garbage"})
+	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageToken: "garbage"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -133,7 +133,7 @@ func TestGetTenant_Success(t *testing.T) {
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 
-	resp, err := svc.GetTenant(context.Background(), &pb.GetTenantRequest{Id: testTenantID})
+	resp, err := svc.GetTenant(auth.WithoutAuth(context.Background()), &pb.GetTenantRequest{Id: testTenantID})
 	require.NoError(t, err)
 	assert.Equal(t, "acme", resp.Tenant.Name)
 }
@@ -145,7 +145,7 @@ func TestGetTenant_NotFound(t *testing.T) {
 	missingID := "99999999-9999-9999-9999-999999999999"
 	store.On("GetTenantByID", mock.Anything, missingID).Return(domain.Tenant{}, domain.ErrNotFound)
 
-	_, err := svc.GetTenant(context.Background(), &pb.GetTenantRequest{Id: missingID})
+	_, err := svc.GetTenant(auth.WithoutAuth(context.Background()), &pb.GetTenantRequest{Id: missingID})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
@@ -158,7 +158,7 @@ func TestListTenants_BySchema(t *testing.T) {
 	schemaID := testSchemaID
 	store.On("ListTenantsBySchema", mock.Anything, mock.Anything).Return([]domain.Tenant{testTenant()}, nil)
 
-	resp, err := svc.ListTenants(context.Background(), &pb.ListTenantsRequest{SchemaId: &schemaID, PageSize: 10})
+	resp, err := svc.ListTenants(auth.WithoutAuth(context.Background()), &pb.ListTenantsRequest{SchemaId: &schemaID, PageSize: 10})
 	require.NoError(t, err)
 	assert.Len(t, resp.Tenants, 1)
 }
@@ -169,7 +169,7 @@ func TestListTenants_All(t *testing.T) {
 
 	store.On("ListTenants", mock.Anything, mock.Anything).Return([]domain.Tenant{testTenant()}, nil)
 
-	resp, err := svc.ListTenants(context.Background(), &pb.ListTenantsRequest{PageSize: 10})
+	resp, err := svc.ListTenants(auth.WithoutAuth(context.Background()), &pb.ListTenantsRequest{PageSize: 10})
 	require.NoError(t, err)
 	assert.Len(t, resp.Tenants, 1)
 }
@@ -239,7 +239,7 @@ func TestListFieldLocks_Success(t *testing.T) {
 		{TenantID: testTenantID, FieldPath: "app.fee"},
 	}, nil)
 
-	resp, err := svc.ListFieldLocks(context.Background(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
+	resp, err := svc.ListFieldLocks(auth.WithoutAuth(context.Background()), &pb.ListFieldLocksRequest{TenantId: testTenantID})
 	require.NoError(t, err)
 	assert.Len(t, resp.Locks, 1)
 	assert.Equal(t, "app.fee", resp.Locks[0].FieldPath)
@@ -502,7 +502,7 @@ func TestGetTenant_ByName(t *testing.T) {
 
 	store.On("GetTenantByName", mock.Anything, "acme").Return(testTenant(), nil)
 
-	resp, err := svc.GetTenant(context.Background(), &pb.GetTenantRequest{Id: "acme"})
+	resp, err := svc.GetTenant(auth.WithoutAuth(context.Background()), &pb.GetTenantRequest{Id: "acme"})
 	require.NoError(t, err)
 	assert.Equal(t, testTenantID, resp.Tenant.Id)
 }
@@ -515,7 +515,7 @@ func TestGetSchema_ByName(t *testing.T) {
 	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
 	store.On("GetSchemaFields", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
-	resp, err := svc.GetSchema(context.Background(), &pb.GetSchemaRequest{Id: "test-schema"})
+	resp, err := svc.GetSchema(auth.WithoutAuth(context.Background()), &pb.GetSchemaRequest{Id: "test-schema"})
 	require.NoError(t, err)
 	assert.Equal(t, "test-schema", resp.Schema.Name)
 }
@@ -585,10 +585,10 @@ func TestListTenants_BySchemaFiltered(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
-func TestListTenants_NoAuthContext_SeesAll(t *testing.T) {
+func TestListTenants_WithoutAuth_SeesAll(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background() // No auth claims — permissive.
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("ListTenants", ctx, ListTenantsParams{
 		Limit: 51, AllowedTenantIDs: nil,
@@ -598,6 +598,14 @@ func TestListTenants_NoAuthContext_SeesAll(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Tenants, 1)
 	store.AssertExpectations(t)
+}
+
+func TestListTenants_NoAuthContext_Denied(t *testing.T) {
+	svc := NewService(&mockStore{}, WithLogger(testLogger))
+
+	_, err := svc.ListTenants(context.Background(), &pb.ListTenantsRequest{})
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 func TestListTenants_InvalidPageToken(t *testing.T) {
@@ -613,7 +621,7 @@ func TestListTenants_InvalidPageToken(t *testing.T) {
 func TestExportSchema_LatestVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
@@ -636,7 +644,7 @@ func TestExportSchema_LatestVersion(t *testing.T) {
 func TestExportSchema_SpecificVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 	v := int32(2)
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
@@ -658,7 +666,7 @@ func TestExportSchema_SpecificVersion(t *testing.T) {
 func TestExportSchema_SchemaNotFound(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).Return(domain.Schema{}, domain.ErrNotFound)
 
@@ -671,7 +679,7 @@ func TestExportSchema_InvalidID(t *testing.T) {
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetSchemaByName", mock.Anything, "bad").Return(domain.Schema{}, domain.ErrNotFound)
-	_, err := svc.ExportSchema(context.Background(), &pb.ExportSchemaRequest{Id: "bad"})
+	_, err := svc.ExportSchema(auth.WithoutAuth(context.Background()), &pb.ExportSchemaRequest{Id: "bad"})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
