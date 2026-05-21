@@ -14,9 +14,6 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/opendecree/decree/sdk/grpctransport"
 	"github.com/opendecree/decree/sdk/tools/seed"
 )
@@ -31,9 +28,7 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	conn, err := grpc.NewClient(serverAddr(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	conn, err := grpctransport.Dial(serverAddr(), grpctransport.WithInsecure())
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}

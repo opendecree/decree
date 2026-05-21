@@ -13,9 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
@@ -23,9 +20,7 @@ func TestExample(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := grpc.NewClient(serverAddr(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	conn, err := grpctransport.Dial(serverAddr(), grpctransport.WithInsecure())
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
