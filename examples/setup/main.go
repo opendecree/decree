@@ -9,9 +9,6 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"github.com/opendecree/decree/sdk/grpctransport"
 	"github.com/opendecree/decree/sdk/tools/seed"
 )
@@ -25,9 +22,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	conn, err := grpc.NewClient(addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	conn, err := grpctransport.Dial(addr, grpctransport.WithInsecure())
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}

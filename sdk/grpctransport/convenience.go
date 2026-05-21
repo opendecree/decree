@@ -14,7 +14,7 @@ import (
 // Options configure both the transport (auth) and the client (retry).
 // WithRole (or WithBearerToken) is required; construction returns an error if omitted.
 //
-//	conn, _ := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+//	conn, _ := grpctransport.Dial("localhost:50051", grpctransport.WithInsecure())
 //	client, err := grpctransport.NewConfigClient(conn, grpctransport.WithSubject("myapp"), grpctransport.WithRole("user"))
 func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) (*configclient.Client, error) {
 	cfg, err := buildConfig(opts)
@@ -34,7 +34,7 @@ func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) (*configclie
 // are configured using the same connection.
 // WithRole (or WithBearerToken) is required; construction returns an error if omitted.
 //
-//	conn, _ := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+//	conn, _ := grpctransport.Dial("localhost:50051", grpctransport.WithInsecure())
 //	client, err := grpctransport.NewAdminClient(conn, grpctransport.WithSubject("admin"), grpctransport.WithRole("superadmin"))
 func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) (*adminclient.Client, error) {
 	cfg, err := buildConfig(opts)
@@ -54,7 +54,7 @@ func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) (*adminclient
 // Options configure both the transport (auth) and the watcher (reconnect backoff, logger).
 // WithRole (or WithBearerToken) is required; construction returns an error if omitted.
 //
-//	conn, _ := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+//	conn, _ := grpctransport.Dial("localhost:50051", grpctransport.WithInsecure())
 //	w, err := grpctransport.NewWatcher(conn, "tenant-uuid", grpctransport.WithSubject("myapp"), grpctransport.WithRole("user"))
 func NewWatcher(conn grpc.ClientConnInterface, tenantID string, opts ...Option) (*configwatcher.Watcher, error) {
 	cfg, err := buildConfig(opts)
