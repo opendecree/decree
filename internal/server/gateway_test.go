@@ -196,3 +196,40 @@ func TestServerService_GetServerInfo(t *testing.T) {
 
 // Verify that metadata.MD satisfies the grpc metadata interface.
 var _ metadata.MD = forwardAuthHeaders(context.Background(), &http.Request{Header: http.Header{}})
+
+func TestRejectAuthHeadersMiddleware_BlocksAuthHeaders(t *testing.T) {
+	blocked := []string{"x-subject", "x-role", "x-tenant-id"}
+	for _, h := range blocked {
+		t.Run(h, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/v1/config", nil)
+			req.Header.Set(h, "somevalue")
+			w := httptest.NewRecorder()
+			rejectAuthHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(w, req)
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+			assert.Contains(t, w.Body.String(), "DECREE_GATEWAY_TRUSTED_PROXY")
+		})
+	}
+}
+
+func TestRejectAuthHeadersMiddleware_AllowsOtherHeaders(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/config", nil)
+	req.Header.Set("authorization", "Bearer token")
+	req.Header.Set("content-type", "application/json")
+	w := httptest.NewRecorder()
+	rejectAuthHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestRejectAuthHeadersMiddleware_CaseInsensitive(t *testing.T) {
+	req := httptest.NewRequest("GET", "/v1/config", nil)
+	req.Header.Set("X-Subject", "admin") // capital letters
+	w := httptest.NewRecorder()
+	rejectAuthHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})).ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}

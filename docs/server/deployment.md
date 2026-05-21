@@ -211,6 +211,20 @@ spec:
 
 OpenDecree exposes the standard gRPC health checking protocol, so Kubernetes gRPC probes work out of the box.
 
+## HTTP Gateway — Auth Header Security
+
+By default, the HTTP gateway **rejects** any request that carries `x-subject`, `x-role`, or `x-tenant-id` headers. These are the metadata-auth identity headers; allowing clients to set them directly enables impersonation attacks.
+
+If you run a trusted authentication proxy (e.g. an Envoy sidecar, an Istio ingress, or a custom API gateway) in front of the HTTP gateway that sets these headers, you must declare it as trusted:
+
+```bash
+DECREE_GATEWAY_TRUSTED_PROXY=1 decree-server
+```
+
+A `WARN` is logged at startup when this flag is set. Only enable it if you can guarantee that the proxy strips or overwrites any client-supplied auth headers before they reach the gateway.
+
+> **Note**: The `authorization` header (JWT Bearer tokens) is always forwarded. The restriction only applies to the three metadata-auth headers listed above.
+
 ## Health Checks
 
 Each enabled service registers with the gRPC health checking protocol. Services report `SERVING` once fully initialized:

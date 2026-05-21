@@ -115,6 +115,10 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 		handler = top
 	}
 
+	if !o.trustedProxy {
+		handler = rejectAuthHeadersMiddleware(handler)
+	}
+
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", httpPort),
 		Handler: handler,
@@ -153,6 +157,27 @@ func forwardAuthHeaders(ctx context.Context, req *http.Request) metadata.MD {
 		}
 	}
 	return md
+}
+
+// rejectAuthHeadersMiddleware blocks requests that carry x-subject, x-role, or
+// x-tenant-id headers. In the default (no trusted proxy) mode these headers are
+// the sole source of identity, so allowing clients to set them directly enables
+// impersonation. Wrap the handler with this middleware unless
+// WithGatewayTrustedProxy is set.
+func rejectAuthHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, h := range []string{"x-subject", "x-role", "x-tenant-id"} {
+			if r.Header.Get(h) != "" {
+				http.Error(w,
+					"auth headers (x-subject, x-role, x-tenant-id) are not accepted from clients; "+
+						"set DECREE_GATEWAY_TRUSTED_PROXY=1 if a trusted proxy injects these headers",
+					http.StatusUnauthorized,
+				)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // spaHandler serves an embedded filesystem for a single-page application.
