@@ -112,7 +112,7 @@ func TestSecurity_SensitiveFieldRedacted(t *testing.T) {
 	// Subscribe before the write so the event is captured.
 	subCtx, subCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer subCancel()
-	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-sensitive")
+	subCtx = metadata.AppendToOutgoingContext(subCtx, "x-subject", "e2e-security-sensitive", "x-role", "superadmin")
 	stream, err := cfgSvc.Subscribe(subCtx, &pb.SubscribeRequest{
 		TenantId:   tenant.ID,
 		FieldPaths: []string{"auth.token"},
@@ -272,7 +272,7 @@ func TestSecurity_AuditChainIntegrity(t *testing.T) {
 	cfg := newConfigClient(conn)
 	auditSvc := pb.NewAuditServiceClient(conn)
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit")
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit", "x-role", "superadmin")
 
 	// Lay down several config writes to build up a multi-entry chain.
 	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "alpha"))
