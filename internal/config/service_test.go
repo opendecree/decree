@@ -1174,4 +1174,14 @@ func TestConfigService_RequiresAuth(t *testing.T) {
 
 	_, err = svc.ListVersions(ctx, &pb.ListVersionsRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetVersion(ctx, &pb.GetVersionRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ExportConfig(ctx, &pb.ExportConfigRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	stream := &mockServerStream{ctx: ctx}
+	err = svc.Subscribe(&pb.SubscribeRequest{}, stream)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }

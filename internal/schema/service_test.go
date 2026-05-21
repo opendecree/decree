@@ -291,6 +291,33 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 	assert.True(t, got.Sensitive, "sensitive lost in round-trip")
 }
 
+func TestSchemaService_RequiresAuth(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := context.Background()
+
+	_, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetSchema(ctx, &pb.GetSchemaRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.CreateTenant(ctx, &pb.CreateTenantRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetTenant(ctx, &pb.GetTenantRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.UnlockField(ctx, &pb.UnlockFieldRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ListSchemas(ctx, &pb.ListSchemasRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ListFieldLocks(ctx, &pb.ListFieldLocksRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
 // --- helpers ---
 
 func ptrInt32(v int32) *int32 {
