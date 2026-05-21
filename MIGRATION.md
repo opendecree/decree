@@ -1,5 +1,20 @@
 # Migration Guide
 
+## next — metadata auth default role changed to `user`
+
+The default role assigned when `x-role` is missing from a metadata-auth request has changed from `superadmin` to `user`. Any caller that omits `x-role` now needs an `x-tenant-id` header and will be treated as a read-only user instead of a superadmin.
+
+### What breaks
+
+Callers that sent only `x-subject` (relying on the implicit superadmin grant) will receive `codes.PermissionDenied` with message `x-tenant-id required for non-superadmin`.
+
+### How to migrate
+
+- **To keep superadmin access**: add `x-role: superadmin` to the request.
+- **To keep the old default temporarily** (migration window only): set `DECREE_INSECURE_DEFAULT_SUPERADMIN=1` on the server. A `WARN` is logged on every request that uses this fallback. Remove the flag before going to production.
+
+
+
 OpenDecree is **alpha** — the API is unstable and breaking changes ship without backward-compatibility shims. This document records the breaks so SDK consumers and embedders know what to update when bumping versions.
 
 ## v0.10.0-alpha.2 — functional options for service constructors

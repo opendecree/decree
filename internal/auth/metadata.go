@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -49,15 +50,17 @@ type TenantResolver func(ctx context.Context, idOrName string) (string, error)
 // MetadataInterceptor extracts identity from gRPC metadata headers
 // instead of JWT tokens. Used when JWT auth is disabled.
 type MetadataInterceptor struct {
-	resolveTenant TenantResolver
-	logger        *slog.Logger
+	resolveTenant             TenantResolver
+	logger                    *slog.Logger
+	insecureDefaultSuperadmin bool
 }
 
 // MetadataInterceptorOption configures a MetadataInterceptor.
 type MetadataInterceptorOption func(*metadataInterceptorOptions)
 
 type metadataInterceptorOptions struct {
-	logger *slog.Logger
+	logger                    *slog.Logger
+	insecureDefaultSuperadmin bool
 }
 
 // WithMetadataLogger sets the logger used for sanitised server-side errors.
@@ -66,15 +69,34 @@ func WithMetadataLogger(l *slog.Logger) MetadataInterceptorOption {
 	return func(o *metadataInterceptorOptions) { o.logger = l }
 }
 
+// WithInsecureDefaultSuperadmin restores the pre-v0.10 behaviour where a
+// missing x-role header defaults to superadmin. Only for migration windows;
+// never use in production. Set DECREE_INSECURE_DEFAULT_SUPERADMIN=1 to enable
+// at runtime without code changes.
+func WithInsecureDefaultSuperadmin() MetadataInterceptorOption {
+	return func(o *metadataInterceptorOptions) { o.insecureDefaultSuperadmin = true }
+}
+
 // NewMetadataInterceptor creates a new metadata-based auth interceptor.
 // If resolver is non-nil, tenant IDs in x-tenant-id headers are resolved
 // from name slugs to UUIDs before storing in the auth context.
 func NewMetadataInterceptor(resolver TenantResolver, opts ...MetadataInterceptorOption) *MetadataInterceptor {
 	o := metadataInterceptorOptions{logger: slog.Default()}
+	if os.Getenv("DECREE_INSECURE_DEFAULT_SUPERADMIN") == "1" {
+		o.insecureDefaultSuperadmin = true
+	}
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return &MetadataInterceptor{resolveTenant: resolver, logger: o.logger}
+	m := &MetadataInterceptor{
+		resolveTenant:             resolver,
+		logger:                    o.logger,
+		insecureDefaultSuperadmin: o.insecureDefaultSuperadmin,
+	}
+	if m.insecureDefaultSuperadmin {
+		m.logger.Warn("DECREE_INSECURE_DEFAULT_SUPERADMIN enabled — clients without x-role get superadmin; do not use in production")
+	}
+	return m
 }
 
 // UnaryInterceptor returns a gRPC unary server interceptor.
@@ -126,7 +148,12 @@ func (m *MetadataInterceptor) extractClaims(ctx context.Context) (context.Contex
 	}
 	role := Role(rawRole)
 	if role == "" {
-		role = RoleSuperAdmin
+		if m.insecureDefaultSuperadmin {
+			role = RoleSuperAdmin
+			m.logger.WarnContext(ctx, "insecure default superadmin role assigned", "subject", subject)
+		} else {
+			role = RoleUser
+		}
 	}
 	switch role {
 	case RoleSuperAdmin, RoleAdmin, RoleUser:
