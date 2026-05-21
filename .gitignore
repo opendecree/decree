@@ -53,5 +53,16 @@ site/
 /server
 cmd/decree/decree
 
+# Example binaries (compiled in-place by go build / go test -tags=example)
+examples/config-validation/config-validation
+examples/environment-bootstrap/environment-bootstrap
+examples/feature-flags/feature-flags
+examples/live-config/live-config
+examples/multi-tenant/multi-tenant
+examples/optimistic-concurrency/optimistic-concurrency
+examples/quickstart/quickstart
+examples/schema-lifecycle/schema-lifecycle
+examples/setup/setup
+
 # Coverage thresholds — only the root file is tracked
 sdk/**/coverage-thresholds.json
