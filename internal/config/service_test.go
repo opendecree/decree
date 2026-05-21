@@ -65,7 +65,7 @@ func newTestServiceWithValidation() (*Service, *mockStore) {
 
 func TestGetConfig_CacheHit(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
@@ -85,7 +85,7 @@ func TestGetConfig_CacheHit(t *testing.T) {
 
 func TestGetConfig_CacheMiss(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 3}, nil)
@@ -108,7 +108,7 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 
 func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	desc := "fee per transaction"
 
@@ -375,7 +375,7 @@ func TestSetField_LockedField(t *testing.T) {
 
 func TestGetField_NotFound(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -445,7 +445,7 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 
 func TestExportConfig_Success(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 3}, nil)
@@ -772,7 +772,7 @@ func TestGetField_RecordsUsage(t *testing.T) {
 		WithLogger(testLogger),
 		WithRecorder(recorder),
 	)
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -805,7 +805,7 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 		WithLogger(testLogger),
 		WithRecorder(recorder),
 	)
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -847,7 +847,7 @@ func TestGetFields_RecordsUsage(t *testing.T) {
 		WithLogger(testLogger),
 		WithRecorder(recorder),
 	)
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -884,7 +884,7 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 		WithLogger(testLogger),
 		WithRecorder(recorder),
 	)
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
@@ -906,7 +906,7 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 func TestGetField_NilRecorder_NoPanic(t *testing.T) {
 	// Default test service has nil recorder — verify reads don't panic.
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -924,7 +924,7 @@ func TestGetField_NilRecorder_NoPanic(t *testing.T) {
 // rather than silently skipping validation (fail-open).
 func TestValidateField_ValidatorLookupError(t *testing.T) {
 	svc, store := newTestServiceWithValidation()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	storeErr := errors.New("db connection lost")
 	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)
@@ -941,7 +941,7 @@ func TestValidateField_ValidatorLookupError(t *testing.T) {
 // coerce all response types to STRING).
 func TestFieldTypeMap_ValidatorLookupError(t *testing.T) {
 	svc, store := newTestServiceWithValidation()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	storeErr := errors.New("db connection lost")
 	store.On("GetTenantByID", ctx, tenantID1).Return(domain.Tenant{}, storeErr)
@@ -990,7 +990,7 @@ func sensitiveSchemaSetup(store *mockStore, ctx context.Context) {
 
 func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
@@ -1099,7 +1099,7 @@ func TestSetField_PublishRedactsSensitiveField(t *testing.T) {
 
 func TestExportConfig_RedactsSensitiveFields(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)

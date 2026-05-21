@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -22,7 +23,7 @@ import (
 
 func TestGetFields_Success(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
@@ -44,7 +45,7 @@ func TestGetFields_Success(t *testing.T) {
 
 func TestGetFields_SkipsMissing(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
@@ -60,7 +61,7 @@ func TestGetFields_SkipsMissing(t *testing.T) {
 
 func TestGetFields_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
-	_, err := svc.GetFields(context.Background(), &pb.GetFieldsRequest{TenantId: ""})
+	_, err := svc.GetFields(auth.WithoutAuth(context.Background()), &pb.GetFieldsRequest{TenantId: ""})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -69,7 +70,7 @@ func TestGetFields_InvalidTenantID(t *testing.T) {
 // assert each value lands in the right slot.
 func TestGetFields_PreservesOrder(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
@@ -97,7 +98,7 @@ func TestGetFields_PreservesOrder(t *testing.T) {
 // dropped while present rows retain their request order.
 func TestGetFields_MixedMissingAndPresent(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
@@ -127,7 +128,7 @@ func TestGetFields_MixedMissingAndPresent(t *testing.T) {
 // surfaces as Internal and aborts the group.
 func TestGetFields_PropagatesError(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
@@ -151,7 +152,7 @@ func TestGetFields_PropagatesError(t *testing.T) {
 
 func TestGetConfig_ByTenantName(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	// Resolve "acme" slug → tenant UUID
 	store.On("GetTenantByName", mock.Anything, "acme").Return(domain.Tenant{
@@ -172,7 +173,7 @@ func TestGetConfig_ByTenantName(t *testing.T) {
 
 func TestGetConfig_ByTenantUUID(t *testing.T) {
 	svc, store, cache, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	// UUID goes directly to version lookup — no name resolution
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{
@@ -191,7 +192,7 @@ func TestGetConfig_TenantNameNotFound(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	store.On("GetTenantByName", mock.Anything, "nonexistent").Return(domain.Tenant{}, domain.ErrNotFound)
 
-	_, err := svc.GetConfig(context.Background(), &pb.GetConfigRequest{TenantId: "nonexistent"})
+	_, err := svc.GetConfig(auth.WithoutAuth(context.Background()), &pb.GetConfigRequest{TenantId: "nonexistent"})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
@@ -291,7 +292,7 @@ func TestSetFields_VersionConflictReturnsAborted(t *testing.T) {
 
 func TestListVersions_Success(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("ListConfigVersions", ctx, mock.Anything).Return([]domain.ConfigVersion{
 		{ID: versionID2, Version: 2, CreatedAt: time.Now()},
@@ -305,7 +306,7 @@ func TestListVersions_Success(t *testing.T) {
 
 func TestListVersions_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
-	_, err := svc.ListVersions(context.Background(), &pb.ListVersionsRequest{TenantId: ""})
+	_, err := svc.ListVersions(auth.WithoutAuth(context.Background()), &pb.ListVersionsRequest{TenantId: ""})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -313,7 +314,7 @@ func TestListVersions_InvalidTenantID(t *testing.T) {
 
 func TestGetVersion_Success(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetConfigVersion", ctx, mock.Anything).Return(domain.ConfigVersion{
 		ID: versionID2, Version: 2, CreatedBy: "admin", CreatedAt: time.Now(),
@@ -326,7 +327,7 @@ func TestGetVersion_Success(t *testing.T) {
 
 func TestGetVersion_NotFound(t *testing.T) {
 	svc, store, _, _ := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetConfigVersion", ctx, mock.Anything).Return(domain.ConfigVersion{}, domain.ErrNotFound)
 
@@ -388,7 +389,7 @@ func (m *mockServerStream) RecvMsg(any) error            { return nil }
 func TestSubscribe_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
 
-	stream := &mockServerStream{ctx: context.Background()}
+	stream := &mockServerStream{ctx: auth.WithoutAuth(context.Background())}
 	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: ""}, stream)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -398,7 +399,7 @@ func TestSubscribe_SubscribeError(t *testing.T) {
 	sub := &mockSubscriber{}
 	svc.subscriber = sub
 
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", ctx, tenantID1).
@@ -416,7 +417,7 @@ func TestSubscribe_ForwardsEvents(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent, 2)
 	cancel := func() {}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctx, ctxCancel := context.WithCancel(auth.WithoutAuth(context.Background()))
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
@@ -467,7 +468,7 @@ func TestSubscribe_FiltersByFieldPaths(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent, 3)
 	cancel := func() {}
 
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
@@ -500,7 +501,7 @@ func TestSubscribe_ContextCancellation(t *testing.T) {
 	cancelCalled := false
 	cancel := func() { cancelCalled = true }
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctx, ctxCancel := context.WithCancel(auth.WithoutAuth(context.Background()))
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
@@ -523,7 +524,7 @@ func TestSubscribe_SendError(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent, 1)
 	cancel := func() {}
 
-	stream := &errServerStream{ctx: context.Background(), sendErr: errors.New("stream broken")}
+	stream := &errServerStream{ctx: auth.WithoutAuth(context.Background()), sendErr: errors.New("stream broken")}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
 		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
@@ -560,7 +561,7 @@ func TestSubscribe_ReplayStoreError(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent)
 	cancel := func() {}
 
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
@@ -587,7 +588,7 @@ func TestSubscribe_ReplaysMissedEvents(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent) // never sends — only replay matters
 	cancel := func() {}
 
-	ctx, ctxCancel := context.WithCancel(context.Background())
+	ctx, ctxCancel := context.WithCancel(auth.WithoutAuth(context.Background()))
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).
@@ -639,7 +640,7 @@ func TestSubscribe_WatermarkDeduplicatesReplayedVersions(t *testing.T) {
 	ch := make(chan pubsub.ConfigChangeEvent, 2)
 	cancel := func() {}
 
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 	stream := &mockServerStream{ctx: ctx}
 
 	sub.On("Subscribe", mock.Anything, tenantID1).

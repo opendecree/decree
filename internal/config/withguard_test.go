@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -37,7 +38,7 @@ func TestNewService_WithGuard_ReplacesDefaultGuard(t *testing.T) {
 	store.On("GetTenantByID", mock.Anything, tenantID1).
 		Return(domain.Tenant{ID: tenantID1}, nil)
 
-	_, err := svc.GetConfig(context.Background(), &pb.GetConfigRequest{TenantId: tenantID1})
+	_, err := svc.GetConfig(auth.WithoutAuth(context.Background()), &pb.GetConfigRequest{TenantId: tenantID1})
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
@@ -61,6 +62,6 @@ func TestNewService_WithGuard_AllowAll(t *testing.T) {
 		Return(map[string]string{}, nil)
 	setupNoSensitiveFields(store)
 
-	_, err := svc.GetConfig(context.Background(), &pb.GetConfigRequest{TenantId: tenantID1})
+	_, err := svc.GetConfig(auth.WithoutAuth(context.Background()), &pb.GetConfigRequest{TenantId: tenantID1})
 	require.NoError(t, err)
 }

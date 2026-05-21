@@ -72,7 +72,7 @@ func TestCreateSchema_EmptyName(t *testing.T) {
 func TestGetSchema_LatestVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{ID: testSchemaID, Name: "test"}, nil)
@@ -91,7 +91,7 @@ func TestGetSchema_LatestVersion(t *testing.T) {
 func TestGetSchema_SpecificVersion(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	v := int32(2)
 
@@ -112,7 +112,7 @@ func TestGetSchema_SpecificVersion(t *testing.T) {
 func TestGetSchema_NotFound(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{}, domain.ErrNotFound)

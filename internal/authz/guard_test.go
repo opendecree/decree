@@ -37,7 +37,7 @@ func userCtx() context.Context {
 	})
 }
 
-func noAuthCtx() context.Context { return context.Background() }
+func noAuthCtx() context.Context { return auth.WithoutAuth(context.Background()) }
 
 const (
 	tenant1 = "00000001-0000-0000-0000-000000000001"

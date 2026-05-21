@@ -209,6 +209,9 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 }
 
 func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.GetSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	if req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
@@ -242,6 +245,9 @@ func (s *Service) GetSchema(ctx context.Context, req *pb.GetSchemaRequest) (*pb.
 }
 
 func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (*pb.ListSchemasResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	pageSize := pagination.ClampPageSize(req.PageSize, 50, 100)
 
 	offset, err := pagination.DecodePageToken(req.PageToken)
@@ -523,6 +529,9 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 }
 
 func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.GetTenantResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
 		return nil, err
@@ -531,6 +540,9 @@ func (s *Service) GetTenant(ctx context.Context, req *pb.GetTenantRequest) (*pb.
 }
 
 func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (*pb.ListTenantsResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
 
 	offset, err := pagination.DecodePageToken(req.PageToken)
@@ -763,6 +775,9 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 }
 
 func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequest) (*pb.ListFieldLocksResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
