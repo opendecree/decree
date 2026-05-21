@@ -28,7 +28,7 @@ import (
 // and verifies the core schema→tenant→config flow works end-to-end.
 func TestMemoryBackend_Integration(t *testing.T) {
 	ctx := context.Background()
-	authCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("x-subject", "integration-test"))
+	authCtx := metadata.NewOutgoingContext(ctx, metadata.Pairs("x-subject", "integration-test", "x-role", "superadmin"))
 
 	// Create server.
 	srv, err := New("0", auth.NewMetadataInterceptor(nil),
