@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -87,7 +88,7 @@ func TestGetFieldsFanOut_RunsConcurrently(t *testing.T) {
 
 	// Wire up the mockStore embedded in gateStore for everything except
 	// GetConfigValueAtVersion (which gateStore overrides).
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	gs.mockStore.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)

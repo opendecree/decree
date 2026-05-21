@@ -155,7 +155,7 @@ func TestQueryWriteLog_InvalidPageToken(t *testing.T) {
 
 func TestGetFieldUsage_Success(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	lastReadBy := "reader"
 	now := time.Now()
@@ -175,7 +175,7 @@ func TestGetFieldUsage_Success(t *testing.T) {
 
 func TestGetFieldUsage_InvalidTenantID(t *testing.T) {
 	svc, _ := newTestService()
-	_, err := svc.GetFieldUsage(context.Background(), &pb.GetFieldUsageRequest{TenantId: "bad"})
+	_, err := svc.GetFieldUsage(auth.WithoutAuth(context.Background()), &pb.GetFieldUsageRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -183,7 +183,7 @@ func TestGetFieldUsage_InvalidTenantID(t *testing.T) {
 
 func TestGetTenantUsage_Success(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetTenantUsage", ctx, mock.Anything).Return([]domain.TenantUsageRow{
 		{FieldPath: "app.fee", ReadCount: 10},
@@ -199,7 +199,7 @@ func TestGetTenantUsage_Success(t *testing.T) {
 
 func TestGetTenantUsage_InvalidTenantID(t *testing.T) {
 	svc, _ := newTestService()
-	_, err := svc.GetTenantUsage(context.Background(), &pb.GetTenantUsageRequest{TenantId: "bad"})
+	_, err := svc.GetTenantUsage(auth.WithoutAuth(context.Background()), &pb.GetTenantUsageRequest{TenantId: "bad"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
@@ -207,7 +207,7 @@ func TestGetTenantUsage_InvalidTenantID(t *testing.T) {
 
 func TestGetUnusedFields_Success(t *testing.T) {
 	svc, store := newTestService()
-	ctx := context.Background()
+	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetUnusedFields", ctx, mock.Anything).Return([]string{"old.field", "unused.flag"}, nil)
 
@@ -221,7 +221,7 @@ func TestGetUnusedFields_Success(t *testing.T) {
 
 func TestGetUnusedFields_InvalidTenantID(t *testing.T) {
 	svc, _ := newTestService()
-	_, err := svc.GetUnusedFields(context.Background(), &pb.GetUnusedFieldsRequest{
+	_, err := svc.GetUnusedFields(auth.WithoutAuth(context.Background()), &pb.GetUnusedFieldsRequest{
 		TenantId: "bad",
 		Since:    timestamppb.Now(),
 	})
@@ -394,4 +394,18 @@ func TestAuditEntryToProto(t *testing.T) {
 	assert.Equal(t, "0.01", *pb.OldValue)
 	assert.Equal(t, "0.02", *pb.NewValue)
 	assert.Equal(t, int32(3), *pb.ConfigVersion)
+}
+
+func TestAuditService_RequiresAuth(t *testing.T) {
+	svc, _ := newTestService()
+	ctx := context.Background()
+
+	_, err := svc.GetFieldUsage(ctx, &pb.GetFieldUsageRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetTenantUsage(ctx, &pb.GetTenantUsageRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }

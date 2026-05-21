@@ -57,11 +57,15 @@ func buildServerOptions(
 
 // gatewayOptionsBuild mirrors serverOptionsBuild for the HTTP gateway.
 type gatewayOptionsBuild struct {
-	Opts        []server.GatewayOption
-	UseTLS      bool
-	UseInsecure bool
-	HasUI       bool
+	Opts            []server.GatewayOption
+	UseTLS          bool
+	UseInsecure     bool
+	HasUI           bool
+	HasTrustedProxy bool
 }
+
+// gatewayOptionsBuild mirrors serverOptionsBuild for the HTTP gateway.
+// HasTrustedProxy is exported so tests can assert the flag was wired.
 
 func buildGatewayOptions(
 	cfg serverConfig,
@@ -88,6 +92,10 @@ func buildGatewayOptions(
 	if uiFS != nil {
 		out.Opts = append(out.Opts, server.WithUI(uiFS))
 		out.HasUI = true
+	}
+	if cfg.GatewayTrustedProxy {
+		out.Opts = append(out.Opts, server.WithGatewayTrustedProxy())
+		out.HasTrustedProxy = true
 	}
 	return out
 }

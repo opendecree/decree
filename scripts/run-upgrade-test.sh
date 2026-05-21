@@ -67,7 +67,8 @@ mkdir -p "$OLD_MIGRATIONS_DIR"
 
 while IFS= read -r f; do
   [ -z "$f" ] && continue
-  git show "${PREV_TAG}:db/migrations/${f}" > "${OLD_MIGRATIONS_DIR}/${f}"
+  fname="${f##*/}"
+  git show "${PREV_TAG}:${f}" > "${OLD_MIGRATIONS_DIR}/${fname}"
 done < <(git ls-tree --name-only "$PREV_TAG" db/migrations/ 2>/dev/null || true)
 
 if [ -z "$(ls -A "$OLD_MIGRATIONS_DIR" 2>/dev/null)" ]; then

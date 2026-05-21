@@ -10,9 +10,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestCheckTenantAccess_NoClaims_Permissive(t *testing.T) {
-	// No claims in context — permissive (tests, internal calls).
-	assert.NoError(t, CheckTenantAccess(context.Background(), "t1"))
+func TestCheckTenantAccess_NoClaims_Denied(t *testing.T) {
+	err := CheckTenantAccess(context.Background(), "t1")
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestCheckTenantAccess_WithoutAuth_Allowed(t *testing.T) {
+	assert.NoError(t, CheckTenantAccess(WithoutAuth(context.Background()), "t1"))
 }
 
 func TestCheckTenantAccess_Superadmin_AllowsAny(t *testing.T) {
@@ -80,6 +85,10 @@ func TestMustHaveClaims_NoClaims(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
+func TestMustHaveClaims_WithoutAuth(t *testing.T) {
+	assert.NoError(t, MustHaveClaims(WithoutAuth(context.Background())))
+}
+
 func TestMustHaveClaims_WithClaims(t *testing.T) {
 	ctx := ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin})
 	assert.NoError(t, MustHaveClaims(ctx))
@@ -88,21 +97,18 @@ func TestMustHaveClaims_WithClaims(t *testing.T) {
 func TestRequireSuperAdmin(t *testing.T) {
 	tests := []struct {
 		name    string
-		claims  *Claims
+		ctx     context.Context
 		wantErr codes.Code
 	}{
-		{"no claims — permissive", nil, codes.OK},
-		{"superadmin — allowed", &Claims{Role: RoleSuperAdmin}, codes.OK},
-		{"admin — denied", &Claims{Role: RoleAdmin}, codes.PermissionDenied},
-		{"user — denied", &Claims{Role: RoleUser}, codes.PermissionDenied},
+		{"no claims — denied", context.Background(), codes.Unauthenticated},
+		{"WithoutAuth — allowed", WithoutAuth(context.Background()), codes.OK},
+		{"superadmin — allowed", ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin}), codes.OK},
+		{"admin — denied", ContextWithClaims(context.Background(), &Claims{Role: RoleAdmin}), codes.PermissionDenied},
+		{"user — denied", ContextWithClaims(context.Background(), &Claims{Role: RoleUser}), codes.PermissionDenied},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			if tc.claims != nil {
-				ctx = ContextWithClaims(ctx, tc.claims)
-			}
-			err := RequireSuperAdmin(ctx)
+			err := RequireSuperAdmin(tc.ctx)
 			if tc.wantErr == codes.OK {
 				assert.NoError(t, err)
 			} else {
@@ -116,21 +122,18 @@ func TestRequireSuperAdmin(t *testing.T) {
 func TestRequireAdminOrAbove(t *testing.T) {
 	tests := []struct {
 		name    string
-		claims  *Claims
+		ctx     context.Context
 		wantErr codes.Code
 	}{
-		{"no claims — permissive", nil, codes.OK},
-		{"superadmin — allowed", &Claims{Role: RoleSuperAdmin}, codes.OK},
-		{"admin — allowed", &Claims{Role: RoleAdmin}, codes.OK},
-		{"user — denied", &Claims{Role: RoleUser}, codes.PermissionDenied},
+		{"no claims — denied", context.Background(), codes.Unauthenticated},
+		{"WithoutAuth — allowed", WithoutAuth(context.Background()), codes.OK},
+		{"superadmin — allowed", ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin}), codes.OK},
+		{"admin — allowed", ContextWithClaims(context.Background(), &Claims{Role: RoleAdmin}), codes.OK},
+		{"user — denied", ContextWithClaims(context.Background(), &Claims{Role: RoleUser}), codes.PermissionDenied},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			if tc.claims != nil {
-				ctx = ContextWithClaims(ctx, tc.claims)
-			}
-			err := RequireAdminOrAbove(ctx)
+			err := RequireAdminOrAbove(tc.ctx)
 			if tc.wantErr == codes.OK {
 				assert.NoError(t, err)
 			} else {
@@ -142,7 +145,8 @@ func TestRequireAdminOrAbove(t *testing.T) {
 }
 
 func TestIsSuperAdmin(t *testing.T) {
-	assert.True(t, IsSuperAdmin(context.Background()), "no claims — permissive")
+	assert.False(t, IsSuperAdmin(context.Background()), "no claims — denied")
+	assert.True(t, IsSuperAdmin(WithoutAuth(context.Background())), "WithoutAuth — allowed")
 	assert.True(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleSuperAdmin})))
 	assert.False(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleAdmin})))
 	assert.False(t, IsSuperAdmin(ContextWithClaims(context.Background(), &Claims{Role: RoleUser})))

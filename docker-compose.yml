@@ -81,6 +81,9 @@ services:
       # 64 KiB recv cap so TestSecurity_OversizeRequestRejected can trip it
       # with a small payload. All legitimate test fixtures are well under 1 KiB.
       GRPC_MAX_RECV_MSG_BYTES: "65536"
+      # e2e tests pass auth headers directly over HTTP; trusted-proxy mode lets
+      # the gateway forward them instead of rejecting them with 401.
+      DECREE_GATEWAY_TRUSTED_PROXY: "1"
     ports:
       - "9090:9090"
       - "8080:8080"

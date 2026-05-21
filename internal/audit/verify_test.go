@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -136,6 +137,98 @@ func TestVerifyChain_TriggerRollbackOnOldRow(t *testing.T) {
 	// The trigger test is integration-only (requires a real DB).
 	// Verified in store_pg_test.go when running make e2e.
 	t.Skip("trigger tests run against real DB — see store_pg_test.go")
+}
+
+// TestVerifyChain_DetectsPayloadTampering asserts that mutating a payload field
+// (NewValue) is detected by VerifyChain on epoch-1 entries.
+func TestVerifyChain_DetectsPayloadTampering(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	tenantID := "pay10000-0000-0000-0000-000000000001"
+
+	for i := range 3 {
+		fp := "app.name"
+		val := string(rune('a' + i))
+		err := store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:   tenantID,
+			Actor:      "actor",
+			Action:     "set_field",
+			ObjectKind: "field",
+			FieldPath:  &fp,
+			NewValue:   &val,
+		})
+		require.NoError(t, err)
+	}
+
+	// Mutate the NewValue of the first entry — payload tampered, hash unchanged.
+	store.mu.Lock()
+	for i, e := range store.writeLogs {
+		if e.TenantID == tenantID {
+			tampered := "TAMPERED"
+			store.writeLogs[i].NewValue = &tampered
+			break
+		}
+	}
+	store.mu.Unlock()
+
+	result, err := VerifyChain(ctx, store, tenantID)
+	require.NoError(t, err)
+	assert.False(t, result.OK, "chain should be broken after payload mutation")
+	assert.NotEmpty(t, result.Breaks, "should report at least one break")
+}
+
+// TestConcurrentInserts_ChainIsLinear fires N concurrent writes and asserts the
+// resulting chain has no forks — every entry except the first has a unique
+// PreviousHash that matches exactly the preceding entry's EntryHash.
+// This exercises the MemoryStore's mutex-based serialisation; the PGStore
+// relies on pg_advisory_xact_lock for the same guarantee.
+func TestConcurrentInserts_ChainIsLinear(t *testing.T) {
+	const (
+		tenantID = "cccc0000-0000-0000-0000-000000000001"
+		workers  = 20
+	)
+
+	store := NewMemoryStore()
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	for i := range workers {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_ = store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+				TenantID:   tenantID,
+				Actor:      "worker",
+				Action:     "set_field",
+				ObjectKind: "field",
+				NewValue:   verifyPtr(string(rune('a' + i%26))),
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	entries, err := store.GetAuditWriteLogOrdered(ctx, tenantID)
+	require.NoError(t, err)
+	require.Len(t, entries, workers)
+
+	// Verify the chain is strictly linear: each entry's PreviousHash must
+	// equal the preceding entry's EntryHash (no two entries share a PreviousHash).
+	seen := make(map[string]bool, workers)
+	seen[""] = true // empty string is valid for the first entry only
+	for _, e := range entries {
+		assert.False(t, seen[e.EntryHash], "duplicate EntryHash detected — chain forked")
+		seen[e.EntryHash] = true
+	}
+
+	// Chain linkage: each entry must point to its predecessor.
+	for i := 1; i < len(entries); i++ {
+		assert.Equal(t, entries[i-1].EntryHash, entries[i].PreviousHash,
+			"entry %d PreviousHash must equal entry %d EntryHash", i, i-1)
+	}
+
+	result, err := VerifyChain(ctx, store, tenantID)
+	require.NoError(t, err)
+	assert.True(t, result.OK)
 }
 
 // Helper for verify_test — avoids collision with store_memory_test.go's ptr.

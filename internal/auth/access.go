@@ -7,22 +7,31 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// Access functions in this file are permissive when no auth claims are present in the
-// context. The interceptor layer (MetadataInterceptor or JWTInterceptor) is the gate
-// that requires authentication before claims are set.
-//
-// Consequence: any method accidentally added to skipAuth bypasses not just
-// authentication but all authz checks too. Handlers for RPCs that must never be
-// reachable without auth should call MustHaveClaims first as a defense-in-depth guard.
+type withoutAuthKey struct{}
+
+// WithoutAuth marks ctx as explicitly bypassing auth checks. Use only for
+// legitimate internal callers (server-internal goroutines, test setup helpers).
+// Every call site should be auditable — do not use to silence unexpected failures.
+func WithoutAuth(ctx context.Context) context.Context {
+	return context.WithValue(ctx, withoutAuthKey{}, true)
+}
+
+func isWithoutAuth(ctx context.Context) bool {
+	v, _ := ctx.Value(withoutAuthKey{}).(bool)
+	return v
+}
 
 // CheckTenantAccess verifies the caller has access to the given tenant.
 // Returns nil for superadmins. Returns PermissionDenied if the tenant is
-// not in the caller's tenant_ids list.
+// not in the caller's tenant_ids list. Returns Unauthenticated when no claims
+// are present unless WithoutAuth(ctx) is set.
 func CheckTenantAccess(ctx context.Context, tenantID string) error {
 	claims, ok := ClaimsFromContext(ctx)
 	if !ok {
-		// No auth context — permissive (tests, internal calls).
-		return nil
+		if isWithoutAuth(ctx) {
+			return nil
+		}
+		return status.Error(codes.Unauthenticated, "authentication required")
 	}
 	if claims.HasTenantAccess(tenantID) {
 		return nil
@@ -31,11 +40,14 @@ func CheckTenantAccess(ctx context.Context, tenantID string) error {
 }
 
 // RequireSuperAdmin returns PermissionDenied if the caller is not superadmin.
-// No-ops when no auth context is present (internal/test calls).
+// Returns Unauthenticated when no claims are present unless WithoutAuth(ctx) is set.
 func RequireSuperAdmin(ctx context.Context) error {
 	claims, ok := ClaimsFromContext(ctx)
 	if !ok {
-		return nil
+		if isWithoutAuth(ctx) {
+			return nil
+		}
+		return status.Error(codes.Unauthenticated, "authentication required")
 	}
 	if claims.IsSuperAdmin() {
 		return nil
@@ -44,11 +56,14 @@ func RequireSuperAdmin(ctx context.Context) error {
 }
 
 // RequireAdminOrAbove returns PermissionDenied for the user (read-only) role.
-// No-ops when no auth context is present (internal/test calls).
+// Returns Unauthenticated when no claims are present unless WithoutAuth(ctx) is set.
 func RequireAdminOrAbove(ctx context.Context) error {
 	claims, ok := ClaimsFromContext(ctx)
 	if !ok {
-		return nil
+		if isWithoutAuth(ctx) {
+			return nil
+		}
+		return status.Error(codes.Unauthenticated, "authentication required")
 	}
 	if claims.Role == RoleUser {
 		return status.Error(codes.PermissionDenied, "admin or superadmin required")
@@ -57,31 +72,36 @@ func RequireAdminOrAbove(ctx context.Context) error {
 }
 
 // AllowedTenantIDs returns the caller's allowed tenant IDs.
-// Returns nil for superadmins (meaning all tenants).
+// Returns nil for superadmins (meaning all tenants), and for internal callers
+// marked with WithoutAuth. Callers without auth are blocked by auth guards
+// before this function is typically reached.
 func AllowedTenantIDs(ctx context.Context) []string {
 	claims, ok := ClaimsFromContext(ctx)
 	if !ok {
 		return nil
 	}
 	if claims.IsSuperAdmin() {
-		return nil // nil = all tenants
+		return nil
 	}
 	return claims.TenantIDs
 }
 
 // IsSuperAdmin reports whether the caller has the superadmin role.
-// Returns true when no auth context is present (permissive, consistent with other access helpers).
+// Returns true for internal callers marked with WithoutAuth.
 func IsSuperAdmin(ctx context.Context) bool {
 	claims, ok := ClaimsFromContext(ctx)
-	return !ok || claims.IsSuperAdmin()
+	if !ok {
+		return isWithoutAuth(ctx)
+	}
+	return claims.IsSuperAdmin()
 }
 
-// MustHaveClaims returns codes.Unauthenticated if no auth claims are present in ctx.
-// Use in handler bodies as a defense-in-depth guard for RPCs that must never be
-// reachable without authentication, even if the method is accidentally added to skipAuth.
+// MustHaveClaims returns codes.Unauthenticated if no auth claims are present in ctx
+// and ctx is not marked with WithoutAuth. Use in handler bodies as a defense-in-depth
+// guard for RPCs that must never be reachable without authentication.
 func MustHaveClaims(ctx context.Context) error {
 	_, ok := ClaimsFromContext(ctx)
-	if !ok {
+	if !ok && !isWithoutAuth(ctx) {
 		return status.Error(codes.Unauthenticated, "authentication required")
 	}
 	return nil

@@ -18,15 +18,17 @@ import (
 
 // PGStore implements Store using PostgreSQL via sqlc-generated queries.
 type PGStore struct {
-	write *dbstore.Queries
-	read  *dbstore.Queries
+	writePool *pgxpool.Pool
+	write     *dbstore.Queries
+	read      *dbstore.Queries
 }
 
 // NewPGStore creates a new PostgreSQL-backed audit store.
 func NewPGStore(writePool, readPool *pgxpool.Pool) *PGStore {
 	return &PGStore{
-		write: dbstore.New(writePool),
-		read:  dbstore.New(readPool),
+		writePool: writePool,
+		write:     dbstore.New(writePool),
+		read:      dbstore.New(readPool),
 	}
 }
 
@@ -51,7 +53,25 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		}
 	}
 
-	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
+	tx, err := s.writePool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin audit tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Serialise all chain operations for this tenant. The advisory lock is
+	// released automatically when the transaction commits or rolls back, so
+	// concurrent writers for the same tenant queue up rather than forking.
+	lockKey := "audit_chain:" + arg.TenantID
+	if arg.TenantID == "" {
+		lockKey = "audit_chain:global"
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+		return fmt.Errorf("acquire audit chain lock: %w", err)
+	}
+
+	q := dbstore.New(tx)
+	prevHash, err := q.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
 	}
@@ -70,16 +90,22 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	// verification both use the same CreatedAt value.
 	now := time.Now().Truncate(time.Microsecond)
 	hash := ComputeEntryHash(ChainInput{
-		PreviousHash: prevHash,
-		ID:           pgconv.UUIDToString(id),
-		TenantID:     arg.TenantID,
-		Actor:        arg.Actor,
-		Action:       arg.Action,
-		ObjectKind:   kind,
-		CreatedAt:    now,
+		PreviousHash:  prevHash,
+		ID:            pgconv.UUIDToString(id),
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		CreatedAt:     now,
+		Epoch:         1,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
 	})
 
-	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+	if err := q.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
 		ID:            id,
 		TenantID:      tenantUUID,
 		Actor:         arg.Actor,
@@ -93,7 +119,12 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
 		CreatedAt:     pgconv.TimeToTimestamptz(now),
-	})
+		ChainEpoch:    1,
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *PGStore) GetAuditWriteLogOrdered(ctx context.Context, tenantID string) ([]domain.AuditWriteLog, error) {
@@ -235,6 +266,7 @@ func auditWriteLogFromDB(r dbstore.AuditWriteLog) domain.AuditWriteLog {
 		Metadata:      r.Metadata,
 		PreviousHash:  r.PreviousHash,
 		EntryHash:     r.EntryHash,
+		ChainEpoch:    r.ChainEpoch,
 		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
 	}
 }

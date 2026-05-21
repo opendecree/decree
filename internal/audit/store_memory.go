@@ -32,13 +32,19 @@ func (s *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWrit
 	}
 	now := time.Now()
 	hash := ComputeEntryHash(ChainInput{
-		PreviousHash: prevHash,
-		ID:           id,
-		TenantID:     arg.TenantID,
-		Actor:        arg.Actor,
-		Action:       arg.Action,
-		ObjectKind:   kind,
-		CreatedAt:    now,
+		PreviousHash:  prevHash,
+		ID:            id,
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		CreatedAt:     now,
+		Epoch:         1,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
 	})
 
 	s.writeLogs = append(s.writeLogs, domain.AuditWriteLog{
@@ -54,6 +60,7 @@ func (s *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWrit
 		Metadata:      arg.Metadata,
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
+		ChainEpoch:    1,
 		CreatedAt:     now,
 	})
 	return nil

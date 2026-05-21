@@ -26,15 +26,50 @@ func TestMetadata_ValidSuperadmin(t *testing.T) {
 	interceptor := NewMetadataInterceptor(nil)
 	unary := interceptor.UnaryInterceptor()
 
-	ctx := ctxWithMetadata(map[string]string{"x-subject": "admin@example.com"})
+	ctx := ctxWithMetadata(map[string]string{"x-subject": "admin@example.com", "x-role": "superadmin"})
 	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
 
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
 }
 
-func TestMetadata_DefaultsToSuperadmin(t *testing.T) {
+func TestMetadata_DefaultsToUser(t *testing.T) {
 	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "user@example.com",
+		"x-tenant-id": "tenant-123",
+	})
+
+	var captured *Claims
+	handler := func(ctx context.Context, _ any) (any, error) {
+		captured, _ = ClaimsFromContext(ctx)
+		return "ok", nil
+	}
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	assert.Equal(t, "user@example.com", captured.Subject)
+	assert.Equal(t, RoleUser, captured.Role)
+	assert.Equal(t, []string{"tenant-123"}, captured.TenantIDs)
+}
+
+func TestMetadata_DefaultRole_MissingTenant_Denied(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil)
+	unary := interceptor.UnaryInterceptor()
+
+	// No x-role and no x-tenant-id: defaults to RoleUser which requires a tenant.
+	ctx := ctxWithMetadata(map[string]string{"x-subject": "user@example.com"})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+}
+
+func TestMetadata_InsecureDefaultSuperadmin(t *testing.T) {
+	interceptor := NewMetadataInterceptor(nil, WithInsecureDefaultSuperadmin())
 	unary := interceptor.UnaryInterceptor()
 
 	ctx := ctxWithMetadata(map[string]string{"x-subject": "user@example.com"})
@@ -48,7 +83,6 @@ func TestMetadata_DefaultsToSuperadmin(t *testing.T) {
 	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
 	require.NoError(t, err)
 	require.NotNil(t, captured)
-	assert.Equal(t, "user@example.com", captured.Subject)
 	assert.Equal(t, RoleSuperAdmin, captured.Role)
 	assert.Empty(t, captured.TenantIDs)
 }
