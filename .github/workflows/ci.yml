@@ -232,6 +232,7 @@ jobs:
           cd sdk/configclient && go test ./... -count=1 -coverprofile=../../cov-configclient.out -covermode=atomic &
           cd sdk/adminclient && go test ./... -count=1 -coverprofile=../../cov-adminclient.out -covermode=atomic &
           cd sdk/configwatcher && go test ./... -count=1 -coverprofile=../../cov-configwatcher.out -covermode=atomic &
+          cd sdk/grpctransport && go test ./... -count=1 -coverprofile=../../cov-grpctransport.out -covermode=atomic &
           cd sdk/tools && go test ./... -count=1 -coverprofile=../../cov-tools.out -covermode=atomic &
           cd cmd/decree && go test ./... -count=1 -coverprofile=../../cov-decree.out -covermode=atomic &
           wait
@@ -243,13 +244,14 @@ jobs:
             --profile sdk/configclient=cov-configclient.out \
             --profile sdk/adminclient=cov-adminclient.out \
             --profile sdk/configwatcher=cov-configwatcher.out \
+            --profile sdk/grpctransport=cov-grpctransport.out \
             --profile sdk/tools=cov-tools.out \
             --profile cmd/decree=cov-decree.out
 
       - name: Merge coverage profiles
         run: |
           echo "mode: atomic" > coverage.out
-          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-tools.out cov-decree.out; do
+          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-grpctransport.out cov-tools.out cov-decree.out; do
             [ -f "$f" ] && grep -v "^mode:" "$f" >> coverage.out || true
           done
 
