@@ -221,6 +221,21 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_foo_bar;
 - Proto files are linted with `buf lint` and checked for breaking changes with `buf breaking`
 - All public SDK methods must have godoc comments (docs will be generated)
 
+### gRPC Handler Auth Convention
+
+Every non-public gRPC handler must call `auth.MustHaveClaims(ctx)` as its first statement. This is a defense-in-depth guard — it catches cases where the auth interceptor is bypassed (e.g., internal callers, future test helpers, new interceptor chains).
+
+```go
+func (s *Service) GetFoo(ctx context.Context, req *pb.GetFooRequest) (*pb.GetFooResponse, error) {
+    if err := auth.MustHaveClaims(ctx); err != nil {
+        return nil, err
+    }
+    // ... rest of handler
+}
+```
+
+The only exemptions are RPCs explicitly documented as unauthenticated in the proto (currently `GetServerInfo` and the standard gRPC `Health` service). Exemptions are maintained in the `allowlist` map in `internal/authcheck/authcheck_test.go`, which is a CI-enforced AST scan that will fail the build if a handler is missing the call.
+
 ## Submitting Changes
 
 1. Fork the repository
