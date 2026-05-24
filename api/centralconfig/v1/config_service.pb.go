@@ -313,7 +313,8 @@ type GetFieldsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Tenant ID (UUID).
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	// Dot-separated field paths to retrieve.
+	// Dot-separated field paths to retrieve. Maximum 1 000 entries (configurable
+	// via CONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument.
 	FieldPaths []string `protobuf:"bytes,2,rep,name=field_paths,json=fieldPaths,proto3" json:"field_paths,omitempty"`
 	// Config version to read from. If omitted, reads from the latest version.
 	Version *int32 `protobuf:"varint,3,opt,name=version,proto3,oneof" json:"version,omitempty"`
@@ -572,7 +573,8 @@ type SetFieldsRequest struct {
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Field updates to apply. All updates are applied atomically in a single
 	// config version. If any update fails validation (checksum, field lock),
-	// no changes are committed.
+	// no changes are committed. Maximum 1 000 entries (configurable via
+	// CONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument.
 	Updates []*FieldUpdate `protobuf:"bytes,2,rep,name=updates,proto3" json:"updates,omitempty"`
 	// Version-level description explaining why these changes were made.
 	Description   *string `protobuf:"bytes,3,opt,name=description,proto3,oneof" json:"description,omitempty"`
@@ -1081,7 +1083,9 @@ type SubscribeRequest struct {
 	// Tenant ID (UUID) to subscribe to.
 	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
 	// Field paths to filter on. If empty, receives changes for all fields.
-	// Changes to fields not in this list are silently dropped.
+	// Changes to fields not in this list are silently dropped. Maximum 1 000
+	// entries (configurable via CONFIG_MAX_LIST_LEN). Exceeds returns
+	// InvalidArgument.
 	FieldPaths []string `protobuf:"bytes,2,rep,name=field_paths,json=fieldPaths,proto3" json:"field_paths,omitempty"`
 	// Resume the stream from this config version (inclusive). When set, the
 	// server replays all changes at versions >= start_version before streaming

@@ -355,7 +355,9 @@ type UpdateSchemaRequest struct {
 	// Fields to add or modify. Existing fields not listed here are carried
 	// forward unchanged from the latest version.
 	Fields []*SchemaField `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
-	// Dot-separated paths of fields to remove from the new version.
+	// Dot-separated paths of fields to remove from the new version. Maximum
+	// 1 000 entries (configurable via SCHEMA_MAX_REMOVE_FIELDS). Exceeds
+	// returns InvalidArgument.
 	RemoveFields  []string `protobuf:"bytes,4,rep,name=remove_fields,json=removeFields,proto3" json:"remove_fields,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

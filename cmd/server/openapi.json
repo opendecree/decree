@@ -996,7 +996,7 @@
           },
           {
             "name": "fieldPaths",
-            "description": "Field paths to filter on. If empty, receives changes for all fields.\nChanges to fields not in this list are silently dropped.",
+            "description": "Field paths to filter on. If empty, receives changes for all fields.\nChanges to fields not in this list are silently dropped. Maximum 1 000\nentries (configurable via CONFIG_MAX_LIST_LEN). Exceeds returns\nInvalidArgument.",
             "in": "query",
             "required": false,
             "type": "array",
@@ -1415,7 +1415,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Dot-separated field paths to retrieve."
+          "description": "Dot-separated field paths to retrieve. Maximum 1 000 entries (configurable\nvia CONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument."
         },
         "version": {
           "type": "integer",
@@ -1476,7 +1476,7 @@
             "type": "object",
             "$ref": "#/definitions/v1FieldUpdate"
           },
-          "description": "Field updates to apply. All updates are applied atomically in a single\nconfig version. If any update fails validation (checksum, field lock),\nno changes are committed."
+          "description": "Field updates to apply. All updates are applied atomically in a single\nconfig version. If any update fails validation (checksum, field lock),\nno changes are committed. Maximum 1 000 entries (configurable via\nCONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument."
         },
         "description": {
           "type": "string",
@@ -1530,7 +1530,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Dot-separated paths of fields to remove from the new version."
+          "description": "Dot-separated paths of fields to remove from the new version. Maximum\n1 000 entries (configurable via SCHEMA_MAX_REMOVE_FIELDS). Exceeds\nreturns InvalidArgument."
         }
       }
     },
