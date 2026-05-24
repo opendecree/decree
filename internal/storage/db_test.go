@@ -9,7 +9,7 @@ import (
 	"github.com/opendecree/decree/internal/storage"
 )
 
-func TestNewDB_InvalidDSN(t *testing.T) {
+func TestNewDB_MalformedDSN(t *testing.T) {
 	_, err := storage.NewDB(context.Background(), "not-a-dsn", "")
 	require.Error(t, err)
 }
