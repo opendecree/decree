@@ -1,6 +1,8 @@
 package validation
 
 import (
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -315,4 +317,133 @@ func TestValidatorCache_UpdateExistingDoesNotGrow(t *testing.T) {
 
 	_, ok = c.Get("t2")
 	assert.True(t, ok, "t2 should not be evicted by update")
+}
+
+// --- Unicode / rune-based string length ---
+
+func TestValidate_StringLength_Unicode(t *testing.T) {
+	v := NewFieldValidator("label", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
+		MinLength: ptr(int32(2)),
+		MaxLength: ptr(int32(3)),
+	})
+
+	// Each emoji is 1 rune but 4 bytes — byte count would produce wrong results.
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "🎉🎉"}}))  // 2 runes, 8 bytes
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "🎉🎉🎉"}})) // 3 runes, 12 bytes
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "🎉"}}))      // 1 rune  — below min
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "🎉🎉🎉🎉"}}))   // 4 runes — above max
+
+	// Multi-byte Unicode: "日本語" = 3 runes, 9 bytes.
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "日本語"}}))
+
+	// Accented ASCII: "héllo" = 5 runes, 6 bytes — above max.
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "héllo"}}))
+}
+
+// --- String exactly at MaxLength boundary ---
+
+func TestValidate_StringLength_ExactBoundary(t *testing.T) {
+	v := NewFieldValidator("desc", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
+		MaxLength: ptr(int32(5)),
+	})
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "hello"}})) // exactly 5
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "helloo"}}))   // 6 — one over
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "hell"}}))  // 4 — one under
+}
+
+// --- math.MaxInt64 / MaxFloat64 / very small floats ---
+
+func TestValidate_Integer_MaxInt64(t *testing.T) {
+	v := NewFieldValidator("count", pb.FieldType_FIELD_TYPE_INT, false, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: math.MaxInt64}}))
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: math.MinInt64}}))
+}
+
+func TestValidate_Integer_MaxInt64_WithMax(t *testing.T) {
+	v := NewFieldValidator("count", pb.FieldType_FIELD_TYPE_INT, false, false, &pb.FieldConstraints{
+		Max: ptr(float64(math.MaxInt64)),
+	})
+	// MaxInt64 as float64 rounds up slightly, so the integer MaxInt64 satisfies the constraint.
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: math.MaxInt64}}))
+}
+
+func TestValidate_Number_MaxFloat64(t *testing.T) {
+	v := NewFieldValidator("big", pb.FieldType_FIELD_TYPE_NUMBER, false, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.MaxFloat64}}))
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: -math.MaxFloat64}}))
+}
+
+func TestValidate_Number_SmallFloat(t *testing.T) {
+	v := NewFieldValidator("tiny", pb.FieldType_FIELD_TYPE_NUMBER, false, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.SmallestNonzeroFloat64}}))
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: -math.SmallestNonzeroFloat64}}))
+}
+
+// --- NaN / Inf ---
+
+func TestValidate_Number_NaN_Rejected(t *testing.T) {
+	v := NewFieldValidator("rate", pb.FieldType_FIELD_TYPE_NUMBER, false, false, nil)
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.NaN()}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "finite")
+}
+
+func TestValidate_Number_PosInf_Rejected(t *testing.T) {
+	v := NewFieldValidator("rate", pb.FieldType_FIELD_TYPE_NUMBER, false, false, nil)
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.Inf(1)}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "finite")
+}
+
+func TestValidate_Number_NegInf_Rejected(t *testing.T) {
+	v := NewFieldValidator("rate", pb.FieldType_FIELD_TYPE_NUMBER, false, false, nil)
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.Inf(-1)}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "finite")
+}
+
+func TestValidate_Number_NaN_WithConstraints_Rejected(t *testing.T) {
+	// NaN must be rejected even when min/max constraints are present, because
+	// NaN comparisons are always false and would otherwise silently pass.
+	v := NewFieldValidator("rate", pb.FieldType_FIELD_TYPE_NUMBER, false, false, &pb.FieldConstraints{
+		Min: ptr(float64(0)),
+		Max: ptr(float64(1)),
+	})
+	require.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: math.NaN()}}))
+}
+
+// --- Nil TypedValue oneof ---
+
+func TestValidate_NilKindOnNullable(t *testing.T) {
+	// A TypedValue with no oneof set (Kind==nil) is treated as null for nullable fields.
+	v := NewFieldValidator("x", pb.FieldType_FIELD_TYPE_INT, true, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{}))
+}
+
+func TestValidate_NilKindOnNullable_Number(t *testing.T) {
+	v := NewFieldValidator("x", pb.FieldType_FIELD_TYPE_NUMBER, true, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{}))
+}
+
+func TestValidate_NilKindOnNullable_String(t *testing.T) {
+	v := NewFieldValidator("x", pb.FieldType_FIELD_TYPE_STRING, true, false, nil)
+	require.NoError(t, v.Validate(&pb.TypedValue{}))
+}
+
+// --- String at large boundary (doc-size scale) ---
+
+func TestValidate_StringLength_LargeBoundary(t *testing.T) {
+	// Verify boundary behaviour at a doc-size-scale length (5 MiB = 5242880 bytes).
+	// All ASCII, so rune count == byte count.
+	const limit = 5 * 1024 * 1024
+	v := NewFieldValidator("blob", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
+		MaxLength: ptr(int32(limit)),
+	})
+
+	atLimit := strings.Repeat("a", limit)
+	overLimit := atLimit + "a"
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: atLimit}}))
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: overLimit}}))
 }
