@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -98,6 +99,13 @@ func ctxWithBearer(token string) context.Context {
 		"authorization": "Bearer " + token,
 	})
 	return metadata.NewIncomingContext(context.Background(), md)
+}
+
+// ctxWithBearerAndExtra creates a bearer-token context with additional metadata headers.
+func ctxWithBearerAndExtra(token string, extra map[string]string) context.Context {
+	m := map[string]string{"authorization": "Bearer " + token}
+	maps.Copy(m, extra)
+	return metadata.NewIncomingContext(context.Background(), metadata.New(m))
 }
 
 func validClaims(role Role, tenantIDs ...string) Claims {
@@ -630,4 +638,69 @@ func TestUnaryInterceptor_MalformedToken_UnsupportedAlgorithm(t *testing.T) {
 	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
 	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- Authz bypass attempts ---
+
+// TestUnaryInterceptor_RoleEscalation_MetadataIgnored verifies that a spoofed
+// x-role=superadmin metadata header cannot elevate a JWT-issued role=user token.
+// The JWT claims are authoritative; metadata headers are not read by the JWT interceptor.
+func TestUnaryInterceptor_RoleEscalation_MetadataIgnored(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	token := signToken(t, validClaims(RoleUser, "t1"))
+	ctx := ctxWithBearerAndExtra(token, map[string]string{"x-role": "superadmin"})
+
+	var capturedClaims *Claims
+	handler := func(ctx context.Context, req any) (any, error) {
+		c, ok := ClaimsFromContext(ctx)
+		require.True(t, ok)
+		capturedClaims = c
+		return "ok", nil
+	}
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
+	require.NoError(t, err)
+	assert.Equal(t, RoleUser, capturedClaims.Role, "role must come from JWT, not x-role header")
+	assert.False(t, capturedClaims.IsSuperAdmin(), "spoofed x-role must not grant superadmin")
+}
+
+// TestUnaryInterceptor_TenantIDHeader_DoesNotOverrideJWT verifies that a spoofed
+// x-tenant-id=t2 metadata header cannot inject a tenant that is absent from the JWT's
+// tenant_ids claim. The JWT tenant list is authoritative.
+func TestUnaryInterceptor_TenantIDHeader_DoesNotOverrideJWT(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	token := signToken(t, validClaims(RoleAdmin, "t1"))
+	ctx := ctxWithBearerAndExtra(token, map[string]string{"x-tenant-id": "t2"})
+
+	var capturedClaims *Claims
+	handler := func(ctx context.Context, req any) (any, error) {
+		c, ok := ClaimsFromContext(ctx)
+		require.True(t, ok)
+		capturedClaims = c
+		return "ok", nil
+	}
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"t1"}, capturedClaims.TenantIDs, "tenant list must come from JWT, not x-tenant-id header")
+	assert.False(t, capturedClaims.HasTenantAccess("t2"), "header-injected tenant must not grant access")
+}
+
+// TestUnaryInterceptor_EmptyRoleInJWT verifies that a JWT with an empty role claim
+// is rejected with PermissionDenied — an empty string is not a valid role.
+func TestUnaryInterceptor_EmptyRoleInJWT(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims("", "t1")
+	ctx := ctxWithBearer(signToken(t, claims))
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, "unknown role", status.Convert(err).Message())
 }
