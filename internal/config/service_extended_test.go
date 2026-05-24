@@ -15,9 +15,12 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
+
+func encodeVersionOffset(offset int32) string { return pagination.EncodePageToken(offset) }
 
 // --- GetFields ---
 
@@ -308,6 +311,43 @@ func TestListVersions_InvalidTenantID(t *testing.T) {
 	svc, _, _, _ := newTestService()
 	_, err := svc.ListVersions(auth.WithoutAuth(context.Background()), &pb.ListVersionsRequest{TenantId: ""})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestListVersions_InvalidPageToken(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+	_, err := svc.ListVersions(ctx, &pb.ListVersionsRequest{TenantId: tenantID1, PageToken: "garbage"})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestListVersions_BeyondEnd(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("ListConfigVersions", ctx, mock.MatchedBy(func(p ListConfigVersionsParams) bool {
+		return p.TenantID == tenantID1 && p.Offset == 500
+	})).Return([]domain.ConfigVersion{}, nil)
+
+	token := encodeVersionOffset(500)
+	resp, err := svc.ListVersions(ctx, &pb.ListVersionsRequest{TenantId: tenantID1, PageToken: token})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Versions, "expected no versions past end")
+	assert.Empty(t, resp.NextPageToken, "expected nil token past end")
+}
+
+func TestListVersions_ZeroPageSize(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("ListConfigVersions", ctx, mock.MatchedBy(func(p ListConfigVersionsParams) bool {
+		return p.Limit > 0 // clamped from 0 to default
+	})).Return([]domain.ConfigVersion{
+		{ID: versionID2, Version: 1, CreatedAt: time.Now()},
+	}, nil)
+
+	resp, err := svc.ListVersions(ctx, &pb.ListVersionsRequest{TenantId: tenantID1, PageSize: 0})
+	require.NoError(t, err)
+	assert.Len(t, resp.Versions, 1)
 }
 
 // --- GetVersion ---
