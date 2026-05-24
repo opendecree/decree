@@ -117,8 +117,8 @@ CREATE TABLE audit_write_log (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_audit_write_log_tenant ON audit_write_log(tenant_id, created_at);
-CREATE INDEX idx_audit_write_log_actor ON audit_write_log(actor, created_at);
+CREATE INDEX idx_audit_write_log_tenant ON audit_write_log(tenant_id, created_at); -- decree:index-lock-ok initial schema runs on empty table
+CREATE INDEX idx_audit_write_log_actor ON audit_write_log(actor, created_at); -- decree:index-lock-ok initial schema runs on empty table
 
 -- Audit: read usage aggregation
 CREATE TABLE usage_stats (

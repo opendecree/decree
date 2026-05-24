@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -72,12 +72,16 @@ ui:
 
 # --- Quality ---
 
-## lint: Run all linters (Go + protobuf)
-lint: lint-go lint-proto
+## lint: Run all linters (Go + protobuf + migrations)
+lint: lint-go lint-proto lint-migrations
 
 ## lint-go: Run golangci-lint
 lint-go:
 	golangci-lint run ./...
+
+## lint-migrations: Check migrations for blocking CREATE INDEX (requires CONCURRENTLY or suppression annotation)
+lint-migrations:
+	./scripts/check-concurrent-indexes.sh
 
 ## lint-proto: Run buf lint + breaking change detection (Docker)
 ## buf breaking is skipped in git worktrees (Docker cannot traverse worktree .git files).
