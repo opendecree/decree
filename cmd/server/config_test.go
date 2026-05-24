@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/opendecree/decree/internal/storage"
 )
 
 func TestParseEnvDuration_Unset(t *testing.T) {
@@ -31,4 +33,22 @@ func TestLoadConfig_DBPoolEnvVars(t *testing.T) {
 	assert.Equal(t, time.Hour, cfg.DBMaxConnLifetime)
 	assert.Equal(t, 15*time.Minute, cfg.DBMaxConnIdleTime)
 	assert.Equal(t, 2*time.Minute, cfg.DBHealthCheckPeriod)
+}
+
+func TestPoolConfigFromServerCfg(t *testing.T) {
+	cfg := serverConfig{
+		DBMaxConns:          10,
+		DBMinConns:          3,
+		DBMaxConnLifetime:   20 * time.Minute,
+		DBMaxConnIdleTime:   5 * time.Minute,
+		DBHealthCheckPeriod: 2 * time.Minute,
+	}
+	got := poolConfigFromServerCfg(cfg)
+	assert.Equal(t, storage.PoolConfig{
+		MaxConns:          10,
+		MinConns:          3,
+		MaxConnLifetime:   20 * time.Minute,
+		MaxConnIdleTime:   5 * time.Minute,
+		HealthCheckPeriod: 2 * time.Minute,
+	}, got)
 }

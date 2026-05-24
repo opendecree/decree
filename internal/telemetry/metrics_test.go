@@ -72,9 +72,14 @@ func TestSchemaMetrics_RecordPublish(t *testing.T) {
 }
 
 func TestStartDBPoolMetrics_Disabled(t *testing.T) {
-	// Should return immediately without panic.
 	StartDBPoolMetrics(context.Background(), Config{}, nil, nil)
 	StartDBPoolMetrics(context.Background(), Config{Enabled: true, MetricsDBPool: false}, nil, nil)
+}
+
+func TestStartDBPoolMetrics_Enabled(t *testing.T) {
+	// nil pools: the registered callback is never invoked by the no-op global meter,
+	// so no nil dereference occurs. Exercises gauge registration and callback wiring.
+	StartDBPoolMetrics(context.Background(), Config{Enabled: true, MetricsDBPool: true}, nil, nil)
 }
 
 func TestNewRateLimitMetrics_Disabled(t *testing.T) {

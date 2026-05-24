@@ -127,13 +127,7 @@ func run() int {
 		initG, initCtx := errgroup.WithContext(ctx)
 		initG.Go(func() error {
 			var dbOpts []storage.Option
-			dbOpts = append(dbOpts, storage.WithPoolConfig(storage.PoolConfig{
-				MaxConns:          int32(cfg.DBMaxConns),
-				MinConns:          int32(cfg.DBMinConns),
-				MaxConnLifetime:   cfg.DBMaxConnLifetime,
-				MaxConnIdleTime:   cfg.DBMaxConnIdleTime,
-				HealthCheckPeriod: cfg.DBHealthCheckPeriod,
-			}))
+			dbOpts = append(dbOpts, storage.WithPoolConfig(poolConfigFromServerCfg(cfg)))
 			if otelCfg.TracesDB {
 				dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
 			}
@@ -467,6 +461,16 @@ func tenantResolver(store schema.Store) auth.TenantResolver {
 			return "", err
 		}
 		return tenant.ID, nil
+	}
+}
+
+func poolConfigFromServerCfg(cfg serverConfig) storage.PoolConfig {
+	return storage.PoolConfig{
+		MaxConns:          int32(cfg.DBMaxConns),
+		MinConns:          int32(cfg.DBMinConns),
+		MaxConnLifetime:   cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:   cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod: cfg.DBHealthCheckPeriod,
 	}
 }
 

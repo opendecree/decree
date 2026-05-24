@@ -17,6 +17,15 @@ func TestNewDB_MalformedDSN(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestNewDB_ConnectFailure(t *testing.T) {
+	// DSN parses successfully but 127.0.0.1:1 is immediately refused.
+	// This exercises the pool-defaults code path in newPool (between ParseConfig and connect).
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_, err := storage.NewDB(ctx, "postgres://127.0.0.1:1/test", "")
+	require.Error(t, err)
+}
+
 func TestWithPoolConfig_AppliesNonZeroFields(t *testing.T) {
 	cfg, err := pgxpool.ParseConfig("postgres://localhost/test")
 	require.NoError(t, err)
