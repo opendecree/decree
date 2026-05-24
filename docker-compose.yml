@@ -88,5 +88,59 @@ services:
       - "9090:9090"
       - "8080:8080"
 
+  # jwks-server: in-process JWKS issuer used by service-jwt for JWT e2e tests.
+  # Exposes /admin/sign and /admin/rotate so tests can mint tokens and rotate keys
+  # without any external JWT provider.
+  jwks-server:
+    image: ${JWKS_SERVER_IMAGE:-decree-jwks-server}
+    build:
+      context: fixtures/jwks-server
+      dockerfile: Dockerfile
+    environment:
+      PORT: "8090"
+      ISSUER: "decree-e2e"
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "/bin/jwks-server", "healthcheck"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # service-jwt: second service instance running with JWT auth enabled.
+  # Shares the same postgres + redis as `service`; uses jm-prefixed fixtures.
+  # The JWT e2e suite (make e2e-jwt) targets this service at localhost:9091.
+  service-jwt:
+    image: ${SERVICE_IMAGE:-decree-server}
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      jwks-server:
+        condition: service_healthy
+    environment:
+      GRPC_PORT: "9090"
+      DB_WRITE_URL: "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable"
+      DB_READ_URL: "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable"
+      REDIS_URL: "redis://redis:6379"
+      ENABLE_SERVICES: "schema,config,audit"
+      HTTP_PORT: "8080"
+      USAGE_FLUSH_INTERVAL: "1s"
+      INSECURE_LISTEN: "1"
+      ENABLE_REFLECTION: "1"
+      SCHEMA_MAX_FIELDS: "100"
+      SCHEMA_MAX_DOC_BYTES: "4096"
+      GRPC_MAX_RECV_MSG_BYTES: "65536"
+      DECREE_GATEWAY_TRUSTED_PROXY: "1"
+      JWT_JWKS_URL: "http://jwks-server:8090/.well-known/jwks.json"
+      JWT_ISSUER: "decree-e2e"
+    ports:
+      - "9091:9090"
+      - "8081:8080"
+
 volumes:
   pgdata:

@@ -333,6 +333,11 @@ to be correctly protected at the audit date:
 - **JWT algorithm allowlist** — `internal/auth/jwt.go:129` uses
   `jwt.WithValidMethods([]string{"RS256", "ES256"})`; `alg=none` and
   `alg=HS256` are rejected. Test coverage in `jwt_test.go`.
+- **JWT e2e test suite** — `e2e/jwt_auth_test.go` (decree#470) adds a
+  parallel e2e suite for JWT-mode: role matrix, tenant-access matrix, JWKS
+  rotation (graceful handoff), and expired-token rejection. Runs via
+  `make e2e-jwt` against `service-jwt` (docker-compose, port 9091) with a
+  local JWKS server (`fixtures/jwks-server/`).
 - **JWT vs metadata mutual exclusion** — `cmd/server/main.go:154-166`
   picks one interceptor at startup; the other path cannot be reached.
 - **Auth interceptor coverage** — every non-`skipAuth` RPC method
