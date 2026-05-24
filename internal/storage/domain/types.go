@@ -33,6 +33,7 @@ type Schema struct {
 	Description *string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	DeletedAt   *time.Time
 }
 
 // SchemaVersion represents a specific version of a schema.
@@ -87,6 +88,7 @@ type Tenant struct {
 	SchemaVersion int32
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	DeletedAt     *time.Time
 }
 
 // TenantFieldLock represents a locked field for a tenant.

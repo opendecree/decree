@@ -31,7 +31,7 @@ func (q *Queries) CreateFieldLock(ctx context.Context, arg CreateFieldLockParams
 const createTenant = `-- name: CreateTenant :one
 INSERT INTO tenants (name, schema_id, schema_version)
 VALUES ($1, $2, $3)
-RETURNING id, name, schema_id, schema_version, created_at, updated_at
+RETURNING id, name, schema_id, schema_version, created_at, updated_at, deleted_at
 `
 
 type CreateTenantParams struct {
@@ -50,6 +50,7 @@ func (q *Queries) CreateTenant(ctx context.Context, arg CreateTenantParams) (Ten
 		&i.SchemaVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -66,15 +67,6 @@ type DeleteFieldLockParams struct {
 
 func (q *Queries) DeleteFieldLock(ctx context.Context, arg DeleteFieldLockParams) error {
 	_, err := q.db.Exec(ctx, deleteFieldLock, arg.TenantID, arg.FieldPath)
-	return err
-}
-
-const deleteTenant = `-- name: DeleteTenant :exec
-DELETE FROM tenants WHERE id = $1
-`
-
-func (q *Queries) DeleteTenant(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteTenant, id)
 	return err
 }
 
@@ -105,7 +97,7 @@ func (q *Queries) GetFieldLocks(ctx context.Context, tenantID pgtype.UUID) ([]Te
 }
 
 const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants WHERE id = $1
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, error) {
@@ -118,12 +110,13 @@ func (q *Queries) GetTenantByID(ctx context.Context, id pgtype.UUID) (Tenant, er
 		&i.SchemaVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getTenantByName = `-- name: GetTenantByName :one
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants WHERE name = $1
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants WHERE name = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetTenantByName(ctx context.Context, name string) (Tenant, error) {
@@ -136,12 +129,14 @@ func (q *Queries) GetTenantByName(ctx context.Context, name string) (Tenant, err
 		&i.SchemaVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const listTenants = `-- name: ListTenants :many
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -167,6 +162,7 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 			&i.SchemaVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -179,8 +175,8 @@ func (q *Queries) ListTenants(ctx context.Context, arg ListTenantsParams) ([]Ten
 }
 
 const listTenantsByIDs = `-- name: ListTenantsByIDs :many
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
-WHERE id = ANY($3::uuid[])
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
+WHERE id = ANY($3::uuid[]) AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -207,6 +203,7 @@ func (q *Queries) ListTenantsByIDs(ctx context.Context, arg ListTenantsByIDsPara
 			&i.SchemaVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -219,8 +216,8 @@ func (q *Queries) ListTenantsByIDs(ctx context.Context, arg ListTenantsByIDsPara
 }
 
 const listTenantsBySchema = `-- name: ListTenantsBySchema :many
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
-WHERE schema_id = $1
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
+WHERE schema_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -247,6 +244,7 @@ func (q *Queries) ListTenantsBySchema(ctx context.Context, arg ListTenantsBySche
 			&i.SchemaVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -259,8 +257,8 @@ func (q *Queries) ListTenantsBySchema(ctx context.Context, arg ListTenantsBySche
 }
 
 const listTenantsBySchemaAndIDs = `-- name: ListTenantsBySchemaAndIDs :many
-SELECT id, name, schema_id, schema_version, created_at, updated_at FROM tenants
-WHERE schema_id = $1 AND id = ANY($4::uuid[])
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
+WHERE schema_id = $1 AND id = ANY($4::uuid[]) AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
@@ -293,6 +291,7 @@ func (q *Queries) ListTenantsBySchemaAndIDs(ctx context.Context, arg ListTenants
 			&i.SchemaVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -304,10 +303,19 @@ func (q *Queries) ListTenantsBySchemaAndIDs(ctx context.Context, arg ListTenants
 	return items, nil
 }
 
+const softDeleteTenant = `-- name: SoftDeleteTenant :exec
+UPDATE tenants SET deleted_at = now() WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteTenant(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteTenant, id)
+	return err
+}
+
 const updateTenantName = `-- name: UpdateTenantName :one
 UPDATE tenants SET name = $2, updated_at = now()
-WHERE id = $1
-RETURNING id, name, schema_id, schema_version, created_at, updated_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, name, schema_id, schema_version, created_at, updated_at, deleted_at
 `
 
 type UpdateTenantNameParams struct {
@@ -325,14 +333,15 @@ func (q *Queries) UpdateTenantName(ctx context.Context, arg UpdateTenantNamePara
 		&i.SchemaVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const updateTenantSchemaVersion = `-- name: UpdateTenantSchemaVersion :one
 UPDATE tenants SET schema_version = $2, updated_at = now()
-WHERE id = $1
-RETURNING id, name, schema_id, schema_version, created_at, updated_at
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, name, schema_id, schema_version, created_at, updated_at, deleted_at
 `
 
 type UpdateTenantSchemaVersionParams struct {
@@ -350,6 +359,7 @@ func (q *Queries) UpdateTenantSchemaVersion(ctx context.Context, arg UpdateTenan
 		&i.SchemaVersion,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

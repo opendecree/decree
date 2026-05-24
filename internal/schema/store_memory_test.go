@@ -378,11 +378,11 @@ func TestMemoryStore_Pagination(t *testing.T) {
 	assert.Len(t, bySchema, 1)
 }
 
-func TestMemoryStore_DeleteSchemaCascade(t *testing.T) {
+func TestMemoryStore_DeleteSchema_SoftDelete(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()
 
-	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "cascade"})
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "soft-delete-schema"})
 	require.NoError(t, err)
 
 	sv, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
@@ -396,7 +396,7 @@ func TestMemoryStore_DeleteSchemaCascade(t *testing.T) {
 	require.NoError(t, err)
 
 	tenant, err := store.CreateTenant(ctx, CreateTenantParams{
-		Name: "cascade-tenant", SchemaID: s.ID, SchemaVersion: 1,
+		Name: "soft-delete-tenant", SchemaID: s.ID, SchemaVersion: 1,
 	})
 	require.NoError(t, err)
 
@@ -405,27 +405,82 @@ func TestMemoryStore_DeleteSchemaCascade(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Delete schema cascades everything.
+	// Soft-delete schema.
 	err = store.DeleteSchema(ctx, s.ID)
 	require.NoError(t, err)
 
-	// Version gone.
-	_, err = store.GetSchemaVersion(ctx, GetSchemaVersionParams{SchemaID: s.ID, Version: 1})
+	// Schema inaccessible via normal lookups.
+	_, err = store.GetSchemaByID(ctx, s.ID)
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+	_, err = store.GetSchemaByName(ctx, "soft-delete-schema")
 	assert.True(t, errors.Is(err, domain.ErrNotFound))
 
-	// Fields gone.
-	fields, err := store.GetSchemaFields(ctx, sv.ID)
+	// Schema absent from list.
+	schemas, err := store.ListSchemas(ctx, ListSchemasParams{Limit: 10})
 	require.NoError(t, err)
-	assert.Empty(t, fields)
+	assert.Empty(t, schemas)
 
-	// Tenant gone.
+	// Double-delete returns ErrNotFound.
+	assert.True(t, errors.Is(store.DeleteSchema(ctx, s.ID), domain.ErrNotFound))
+
+	// Name can be reused after soft-delete.
+	_, err = store.CreateSchema(ctx, CreateSchemaParams{Name: "soft-delete-schema"})
+	require.NoError(t, err)
+
+	// Tenant remains accessible (has its own deleted_at lifecycle).
 	_, err = store.GetTenantByID(ctx, tenant.ID)
-	assert.True(t, errors.Is(err, domain.ErrNotFound))
+	require.NoError(t, err)
 
-	// Locks gone.
+	// Field locks remain.
 	locks, err := store.GetFieldLocks(ctx, tenant.ID)
 	require.NoError(t, err)
-	assert.Empty(t, locks)
+	assert.Len(t, locks, 1)
+}
+
+func TestMemoryStore_DeleteTenant_SoftDelete(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "sd-schema"})
+	require.NoError(t, err)
+
+	tenant, err := store.CreateTenant(ctx, CreateTenantParams{
+		Name: "sd-tenant", SchemaID: s.ID, SchemaVersion: 1,
+	})
+	require.NoError(t, err)
+
+	err = store.CreateFieldLock(ctx, CreateFieldLockParams{
+		TenantID: tenant.ID, FieldPath: "x", LockedValues: []byte(`["v"]`),
+	})
+	require.NoError(t, err)
+
+	// Soft-delete tenant.
+	require.NoError(t, store.DeleteTenant(ctx, tenant.ID))
+
+	// Tenant inaccessible via normal lookups.
+	_, err = store.GetTenantByID(ctx, tenant.ID)
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+	_, err = store.GetTenantByName(ctx, "sd-tenant")
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+
+	// Tenant absent from list.
+	list, err := store.ListTenants(ctx, ListTenantsParams{Limit: 10})
+	require.NoError(t, err)
+	assert.Empty(t, list)
+
+	// Double-delete returns ErrNotFound.
+	assert.True(t, errors.Is(store.DeleteTenant(ctx, tenant.ID), domain.ErrNotFound))
+
+	// Name can be reused after soft-delete.
+	_, err = store.CreateTenant(ctx, CreateTenantParams{
+		Name: "sd-tenant", SchemaID: s.ID, SchemaVersion: 1,
+	})
+	require.NoError(t, err)
+
+	// Field locks remain in storage (accessible by ID, not via normal tenant lookup).
+	locks, err := store.GetFieldLocks(ctx, tenant.ID)
+	require.NoError(t, err)
+	assert.Len(t, locks, 1)
 }
 
 func TestMemoryStore_ListTenants_FilteredByAllowedIDs(t *testing.T) {

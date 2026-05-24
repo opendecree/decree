@@ -14,7 +14,7 @@ import (
 const createSchema = `-- name: CreateSchema :one
 INSERT INTO schemas (name, description)
 VALUES ($1, $2)
-RETURNING id, name, description, created_at, updated_at
+RETURNING id, name, description, created_at, updated_at, deleted_at
 `
 
 type CreateSchemaParams struct {
@@ -31,6 +31,7 @@ func (q *Queries) CreateSchema(ctx context.Context, arg CreateSchemaParams) (Sch
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -154,15 +155,6 @@ func (q *Queries) CreateSchemaVersion(ctx context.Context, arg CreateSchemaVersi
 	return i, err
 }
 
-const deleteSchema = `-- name: DeleteSchema :exec
-DELETE FROM schemas WHERE id = $1
-`
-
-func (q *Queries) DeleteSchema(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteSchema, id)
-	return err
-}
-
 const deleteSchemaField = `-- name: DeleteSchemaField :exec
 DELETE FROM schema_fields
 WHERE schema_version_id = $1 AND path = $2
@@ -204,7 +196,7 @@ func (q *Queries) GetLatestSchemaVersion(ctx context.Context, schemaID pgtype.UU
 }
 
 const getSchemaByID = `-- name: GetSchemaByID :one
-SELECT id, name, description, created_at, updated_at FROM schemas WHERE id = $1
+SELECT id, name, description, created_at, updated_at, deleted_at FROM schemas WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetSchemaByID(ctx context.Context, id pgtype.UUID) (Schema, error) {
@@ -216,12 +208,13 @@ func (q *Queries) GetSchemaByID(ctx context.Context, id pgtype.UUID) (Schema, er
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getSchemaByName = `-- name: GetSchemaByName :one
-SELECT id, name, description, created_at, updated_at FROM schemas WHERE name = $1
+SELECT id, name, description, created_at, updated_at, deleted_at FROM schemas WHERE name = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetSchemaByName(ctx context.Context, name string) (Schema, error) {
@@ -233,6 +226,7 @@ func (q *Queries) GetSchemaByName(ctx context.Context, name string) (Schema, err
 		&i.Description,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -312,7 +306,8 @@ func (q *Queries) GetSchemaVersion(ctx context.Context, arg GetSchemaVersionPara
 }
 
 const listSchemas = `-- name: ListSchemas :many
-SELECT id, name, description, created_at, updated_at FROM schemas
+SELECT id, name, description, created_at, updated_at, deleted_at FROM schemas
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -337,6 +332,7 @@ func (q *Queries) ListSchemas(ctx context.Context, arg ListSchemasParams) ([]Sch
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -375,4 +371,13 @@ func (q *Queries) PublishSchemaVersion(ctx context.Context, arg PublishSchemaVer
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const softDeleteSchema = `-- name: SoftDeleteSchema :exec
+UPDATE schemas SET deleted_at = now() WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteSchema(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteSchema, id)
+	return err
 }
