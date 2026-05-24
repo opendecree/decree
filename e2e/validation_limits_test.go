@@ -150,7 +150,8 @@ func TestValidationLimits_GetFields_AtLimitAccepted(t *testing.T) {
 	s, err := admin.CreateSchema(ctx, fmt.Sprintf("limits-get-%s", randSuffix()), fields, "")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = admin.DeleteSchema(ctx, s.ID) })
-	require.NoError(t, admin.PublishSchema(ctx, s.ID))
+	_, err = admin.PublishSchema(ctx, s.ID, 1)
+	require.NoError(t, err)
 
 	tenant, err := admin.CreateTenant(ctx, fmt.Sprintf("limits-get-t-%s", randSuffix()), s.ID, 1)
 	require.NoError(t, err)
