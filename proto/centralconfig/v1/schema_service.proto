@@ -194,7 +194,9 @@ message UpdateSchemaRequest {
   // forward unchanged from the latest version.
   repeated SchemaField fields = 3;
 
-  // Dot-separated paths of fields to remove from the new version.
+  // Dot-separated paths of fields to remove from the new version. Maximum
+  // 1 000 entries (configurable via SCHEMA_MAX_REMOVE_FIELDS). Exceeds
+  // returns InvalidArgument.
   repeated string remove_fields = 4;
 }
 

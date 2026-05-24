@@ -78,6 +78,8 @@ services:
       # few fields and small YAMLs (< 1 KiB), well under these caps.
       SCHEMA_MAX_FIELDS: "100"
       SCHEMA_MAX_DOC_BYTES: "4096"
+      SCHEMA_MAX_REMOVE_FIELDS: "5"
+      CONFIG_MAX_LIST_LEN: "5"
       # 64 KiB recv cap so TestSecurity_OversizeRequestRejected can trip it
       # with a small payload. All legitimate test fixtures are well under 1 KiB.
       GRPC_MAX_RECV_MSG_BYTES: "65536"
@@ -134,6 +136,8 @@ services:
       ENABLE_REFLECTION: "1"
       SCHEMA_MAX_FIELDS: "100"
       SCHEMA_MAX_DOC_BYTES: "4096"
+      SCHEMA_MAX_REMOVE_FIELDS: "5"
+      CONFIG_MAX_LIST_LEN: "5"
       GRPC_MAX_RECV_MSG_BYTES: "65536"
       DECREE_GATEWAY_TRUSTED_PROXY: "1"
       JWT_JWKS_URL: "http://jwks-server:8090/.well-known/jwks.json"

@@ -18,6 +18,25 @@ func TestDefaultLimits(t *testing.T) {
 	l := DefaultLimits()
 	assert.Equal(t, 10_000, l.MaxFields)
 	assert.Equal(t, 5*1024*1024, l.MaxDocBytes)
+	assert.Equal(t, 1_000, l.MaxRemoveFields)
+}
+
+func TestUpdateSchema_ExceedsMaxRemoveFields(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store,
+		WithLogger(testLogger),
+		WithLimits(Limits{MaxRemoveFields: 2}),
+	)
+
+	_, err := svc.UpdateSchema(superadminCtx(), &pb.UpdateSchemaRequest{
+		Id:           testSchemaID,
+		RemoveFields: []string{"a", "b", "c"},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "exceeds limit of 2")
+	store.AssertNotCalled(t, "GetLatestSchemaVersion")
 }
 
 func TestCreateSchema_ExceedsMaxFields(t *testing.T) {

@@ -930,7 +930,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
-| field_paths | [string](#string) | repeated | Dot-separated field paths to retrieve. |
+| field_paths | [string](#string) | repeated | Dot-separated field paths to retrieve. Maximum 1 000 entries (configurable via `CONFIG_MAX_LIST_LEN`). Exceeding this limit returns `InvalidArgument`. |
 | version | [int32](#int32) | optional | Config version to read from. If omitted, reads from the latest version. |
 | include_descriptions | [bool](#bool) |  | When true, includes value-level descriptions. This bypasses the Redis cache and reads directly from the database. |
 
@@ -1127,7 +1127,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
-| updates | [FieldUpdate](#centralconfig-v1-FieldUpdate) | repeated | Field updates to apply. All updates are applied atomically in a single config version. If any update fails validation (checksum, field lock), no changes are committed. |
+| updates | [FieldUpdate](#centralconfig-v1-FieldUpdate) | repeated | Field updates to apply. All updates are applied atomically in a single config version. If any update fails validation (checksum, field lock), no changes are committed. Maximum 1 000 entries (configurable via `CONFIG_MAX_LIST_LEN`). Exceeding this limit returns `InvalidArgument`. |
 | description | [string](#string) | optional | Version-level description explaining why these changes were made. |
 
 
@@ -1159,7 +1159,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID) to subscribe to. |
-| field_paths | [string](#string) | repeated | Field paths to filter on. If empty, receives changes for all fields. Changes to fields not in this list are silently dropped. |
+| field_paths | [string](#string) | repeated | Field paths to filter on. If empty, receives changes for all fields. Changes to fields not in this list are silently dropped. Maximum 1 000 entries (configurable via `CONFIG_MAX_LIST_LEN`). Exceeding this limit returns `InvalidArgument`. |
 | start_version | [int32](#int32) | optional | Resume the stream from this config version (inclusive). When set, the server replays all changes at versions &gt;= start_version before streaming live events. Use snapshot_version &#43; 1 to close the gap between a GetConfig snapshot and the live subscription. |
 
 
@@ -1676,7 +1676,7 @@ Imported versions are created as drafts (unpublished) unless auto_publish is tru
 | id | [string](#string) |  | Schema ID (UUID). |
 | version_description | [string](#string) | optional | Description of what changed in this version. |
 | fields | [SchemaField](#centralconfig-v1-SchemaField) | repeated | Fields to add or modify. Existing fields not listed here are carried forward unchanged from the latest version. |
-| remove_fields | [string](#string) | repeated | Dot-separated paths of fields to remove from the new version. |
+| remove_fields | [string](#string) | repeated | Dot-separated paths of fields to remove from the new version. Maximum 1 000 entries (configurable via `SCHEMA_MAX_REMOVE_FIELDS`). Exceeding this limit returns `InvalidArgument`. |
 
 
 

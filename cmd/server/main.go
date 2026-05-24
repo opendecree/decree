@@ -305,8 +305,9 @@ func run() int {
 			schema.WithMetrics(schemaMetrics),
 			schema.WithValidators(validatorFactory),
 			schema.WithLimits(schema.Limits{
-				MaxFields:   cfg.SchemaMaxFields,
-				MaxDocBytes: cfg.SchemaMaxDocBytes,
+				MaxFields:       cfg.SchemaMaxFields,
+				MaxDocBytes:     cfg.SchemaMaxDocBytes,
+				MaxRemoveFields: cfg.SchemaMaxRemoveFields,
 			}),
 		)
 		pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
@@ -320,6 +321,9 @@ func run() int {
 			config.WithMetrics(configMetrics),
 			config.WithValidators(validatorFactory),
 			config.WithRecorder(recorder),
+			config.WithLimits(config.Limits{
+				MaxListLen: cfg.ConfigMaxListLen,
+			}),
 		)
 		pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
 		srv.SetServiceHealthy("centralconfig.v1.ConfigService")
@@ -432,8 +436,10 @@ type serverConfig struct {
 	GRPCMaxSendMsgBytes      int
 	SchemaMaxFields          int
 	SchemaMaxDocBytes        int
+	SchemaMaxRemoveFields    int
 	SchemaCompileTimeout     time.Duration
 	SchemaMaxRefDepth        int
+	ConfigMaxListLen         int
 	InsecureListen           bool
 	TLSCertFile              string
 	TLSKeyFile               string
@@ -524,8 +530,10 @@ func loadConfig() serverConfig {
 		GRPCMaxSendMsgBytes:      parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
 		SchemaMaxFields:          parseEnvInt("SCHEMA_MAX_FIELDS", 10_000),
 		SchemaMaxDocBytes:        parseEnvInt("SCHEMA_MAX_DOC_BYTES", 5*1024*1024),
+		SchemaMaxRemoveFields:    parseEnvInt("SCHEMA_MAX_REMOVE_FIELDS", 1_000),
 		SchemaCompileTimeout:     compileTimeout,
 		SchemaMaxRefDepth:        parseEnvInt("SCHEMA_MAX_REF_DEPTH", 64),
+		ConfigMaxListLen:         parseEnvInt("CONFIG_MAX_LIST_LEN", 1_000),
 		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
 		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),

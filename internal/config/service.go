@@ -63,6 +63,7 @@ type serviceOptions struct {
 	validators   *validation.ValidatorFactory
 	recorder     *audit.UsageRecorder
 	guard        authz.Guard
+	limits       Limits
 }
 
 // WithLogger sets the service logger. Defaults to slog.Default() when unset.
@@ -96,6 +97,12 @@ func WithGuard(g authz.Guard) Option {
 	return func(o *serviceOptions) { o.guard = g }
 }
 
+// WithLimits caps the number of entries in repeated request fields.
+// Defaults to [DefaultLimits] when unset.
+func WithLimits(l Limits) Option {
+	return func(o *serviceOptions) { o.limits = l }
+}
+
 // Service implements the ConfigService gRPC server.
 type Service struct {
 	pb.UnimplementedConfigServiceServer
@@ -109,13 +116,14 @@ type Service struct {
 	validators   *validation.ValidatorFactory
 	recorder     *audit.UsageRecorder
 	guard        authz.Guard
+	limits       Limits
 }
 
 // NewService creates a new ConfigService. The four required dependencies
 // (store, cache, publisher, subscriber) are positional; everything else is
 // optional and may be passed via With...() options.
 func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher, subscriber pubsub.Subscriber, opts ...Option) *Service {
-	o := serviceOptions{logger: slog.Default()}
+	o := serviceOptions{logger: slog.Default(), limits: DefaultLimits()}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -137,6 +145,7 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 		validators:   o.validators,
 		recorder:     o.recorder,
 		guard:        o.guard,
+		limits:       o.limits,
 	}
 }
 
@@ -335,6 +344,9 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.GetFieldsResponse, error) {
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
+	}
+	if s.limits.MaxListLen > 0 && len(req.FieldPaths) > s.limits.MaxListLen {
+		return nil, status.Errorf(codes.InvalidArgument, "request has %d field_paths, exceeds limit of %d", len(req.FieldPaths), s.limits.MaxListLen)
 	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
@@ -540,6 +552,9 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.SetFieldsResponse, error) {
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
+	}
+	if s.limits.MaxListLen > 0 && len(req.Updates) > s.limits.MaxListLen {
+		return nil, status.Errorf(codes.InvalidArgument, "request has %d updates, exceeds limit of %d", len(req.Updates), s.limits.MaxListLen)
 	}
 	// Upfront role + tenant check before the per-field loop (loop may be empty).
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
@@ -855,6 +870,9 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return err
+	}
+	if s.limits.MaxListLen > 0 && len(req.FieldPaths) > s.limits.MaxListLen {
+		return status.Errorf(codes.InvalidArgument, "request has %d field_paths, exceeds limit of %d", len(req.FieldPaths), s.limits.MaxListLen)
 	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
 	if err != nil {
