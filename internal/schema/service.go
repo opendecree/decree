@@ -801,6 +801,9 @@ func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequ
 // --- Import/export ---
 
 func (s *Service) ExportSchema(ctx context.Context, req *pb.ExportSchemaRequest) (*pb.ExportSchemaResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
 	// Load the schema via GetSchema to reuse version resolution.
 	getResp, err := s.GetSchema(ctx, &pb.GetSchemaRequest{
 		Id:      req.Id,
