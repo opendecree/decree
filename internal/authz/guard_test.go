@@ -211,3 +211,27 @@ func TestChainGuard_AllPass(t *testing.T) {
 	err := chain.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1})
 	require.NoError(t, err)
 }
+
+// spyGuard counts how many times Check is called and returns a fixed error.
+type spyGuard struct {
+	called int
+	err    error
+}
+
+func (s *spyGuard) Check(_ context.Context, _ authz.Action, _ authz.Resource) error {
+	s.called++
+	return s.err
+}
+
+func TestChainGuard_OrderingShortCircuit(t *testing.T) {
+	first := &spyGuard{err: status.Error(codes.PermissionDenied, "denied by first")}
+	second := &spyGuard{}
+
+	chain := authz.Chain(first, second)
+	err := chain.Check(context.Background(), authz.ActionWrite, authz.Resource{TenantID: tenant1})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, 1, first.called, "first guard must be called exactly once")
+	assert.Equal(t, 0, second.called, "second guard must not be called after first denies")
+}
