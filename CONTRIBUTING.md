@@ -190,6 +190,30 @@ make bench
 make bench-e2e
 ```
 
+## Database Migrations
+
+Migrations live in `db/migrations/` and are applied by [goose](https://github.com/pressly/goose).
+
+### Index convention
+
+`CREATE INDEX` (blocking) holds an `ACCESS EXCLUSIVE` lock for the full build duration, blocking all writes. Always use `CREATE INDEX CONCURRENTLY` for any index added against a table that may already contain data.
+
+Because `CREATE INDEX CONCURRENTLY` cannot run inside a transaction, every migration that creates an index must opt out of the goose transaction wrapper:
+
+```sql
+-- +goose NO TRANSACTION
+
+-- +goose Up
+CREATE INDEX CONCURRENTLY idx_foo_bar ON foo(bar);
+
+-- +goose Down
+DROP INDEX CONCURRENTLY IF EXISTS idx_foo_bar;
+```
+
+**Exception:** indexes created in the initial schema migration (on an empty table) may use plain `CREATE INDEX`. Annotate each such line with `-- decree:index-lock-ok <reason>` to suppress the lint check.
+
+`make lint` (via `make lint-migrations`) enforces this convention. The script `scripts/check-concurrent-indexes.sh` can also be run standalone.
+
 ## Code Style
 
 - Follow standard Go conventions
