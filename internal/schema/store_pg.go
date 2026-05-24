@@ -170,7 +170,7 @@ func (s *PGStore) DeleteSchema(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return s.write.DeleteSchema(ctx, pgID)
+	return s.write.SoftDeleteSchema(ctx, pgID)
 }
 
 // --- Schema versions ---
@@ -436,7 +436,7 @@ func (s *PGStore) DeleteTenant(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return s.write.DeleteTenant(ctx, pgID)
+	return s.write.SoftDeleteTenant(ctx, pgID)
 }
 
 // --- Field locks ---
@@ -493,6 +493,7 @@ func schemaFromDB(r dbstore.Schema) domain.Schema {
 		Description: r.Description,
 		CreatedAt:   pgconv.TimestamptzToTime(r.CreatedAt),
 		UpdatedAt:   pgconv.TimestamptzToTime(r.UpdatedAt),
+		DeletedAt:   pgconv.TimestamptzToOptionalTime(r.DeletedAt),
 	}
 }
 
@@ -543,6 +544,7 @@ func tenantFromDB(r dbstore.Tenant) domain.Tenant {
 		SchemaVersion: r.SchemaVersion,
 		CreatedAt:     pgconv.TimestamptzToTime(r.CreatedAt),
 		UpdatedAt:     pgconv.TimestamptzToTime(r.UpdatedAt),
+		DeletedAt:     pgconv.TimestamptzToOptionalTime(r.DeletedAt),
 	}
 }
 

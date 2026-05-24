@@ -73,9 +73,9 @@ func (m *MemoryStore) CreateSchema(_ context.Context, arg CreateSchemaParams) (d
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check name uniqueness.
+	// Check name uniqueness among non-deleted schemas.
 	for _, s := range m.schemas {
-		if s.Name == arg.Name {
+		if s.Name == arg.Name && s.DeletedAt == nil {
 			return domain.Schema{}, fmt.Errorf("schema with name %q already exists", arg.Name)
 		}
 	}
@@ -97,7 +97,7 @@ func (m *MemoryStore) GetSchemaByID(_ context.Context, id string) (domain.Schema
 	defer m.mu.RUnlock()
 
 	s, ok := m.schemas[id]
-	if !ok {
+	if !ok || s.DeletedAt != nil {
 		return domain.Schema{}, domain.ErrNotFound
 	}
 	return s, nil
@@ -108,7 +108,7 @@ func (m *MemoryStore) GetSchemaByName(_ context.Context, name string) (domain.Sc
 	defer m.mu.RUnlock()
 
 	for _, s := range m.schemas {
-		if s.Name == name {
+		if s.Name == name && s.DeletedAt == nil {
 			return s, nil
 		}
 	}
@@ -121,7 +121,9 @@ func (m *MemoryStore) ListSchemas(_ context.Context, arg ListSchemasParams) ([]d
 
 	all := make([]domain.Schema, 0, len(m.schemas))
 	for _, s := range m.schemas {
-		all = append(all, s)
+		if s.DeletedAt == nil {
+			all = append(all, s)
+		}
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
 
@@ -132,27 +134,13 @@ func (m *MemoryStore) DeleteSchema(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.schemas[id]; !ok {
+	s, ok := m.schemas[id]
+	if !ok || s.DeletedAt != nil {
 		return domain.ErrNotFound
 	}
-
-	// Cascade: delete versions + their fields.
-	for vid, sv := range m.schemaVersions {
-		if sv.SchemaID == id {
-			delete(m.schemaFields, vid)
-			delete(m.schemaVersions, vid)
-		}
-	}
-
-	// Cascade: delete tenants + their locks.
-	for tid, t := range m.tenants {
-		if t.SchemaID == id {
-			delete(m.fieldLocks, tid)
-			delete(m.tenants, tid)
-		}
-	}
-
-	delete(m.schemas, id)
+	now := time.Now()
+	s.DeletedAt = &now
+	m.schemas[id] = s
 	return nil
 }
 
@@ -322,7 +310,7 @@ func (m *MemoryStore) GetTenantByID(_ context.Context, id string) (domain.Tenant
 	defer m.mu.RUnlock()
 
 	t, ok := m.tenants[id]
-	if !ok {
+	if !ok || t.DeletedAt != nil {
 		return domain.Tenant{}, domain.ErrNotFound
 	}
 	return t, nil
@@ -333,7 +321,7 @@ func (m *MemoryStore) GetTenantByName(_ context.Context, name string) (domain.Te
 	defer m.mu.RUnlock()
 
 	for _, t := range m.tenants {
-		if t.Name == name {
+		if t.Name == name && t.DeletedAt == nil {
 			return t, nil
 		}
 	}
@@ -346,6 +334,9 @@ func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]d
 
 	all := make([]domain.Tenant, 0, len(m.tenants))
 	for _, t := range m.tenants {
+		if t.DeletedAt != nil {
+			continue
+		}
 		if arg.AllowedTenantIDs != nil && !slices.Contains(arg.AllowedTenantIDs, t.ID) {
 			continue
 		}
@@ -362,7 +353,7 @@ func (m *MemoryStore) ListTenantsBySchema(_ context.Context, arg ListTenantsBySc
 
 	var filtered []domain.Tenant
 	for _, t := range m.tenants {
-		if t.SchemaID != arg.SchemaID {
+		if t.DeletedAt != nil || t.SchemaID != arg.SchemaID {
 			continue
 		}
 		if arg.AllowedTenantIDs != nil && !slices.Contains(arg.AllowedTenantIDs, t.ID) {
@@ -380,7 +371,7 @@ func (m *MemoryStore) UpdateTenantName(_ context.Context, arg UpdateTenantNamePa
 	defer m.mu.Unlock()
 
 	t, ok := m.tenants[arg.ID]
-	if !ok {
+	if !ok || t.DeletedAt != nil {
 		return domain.Tenant{}, domain.ErrNotFound
 	}
 	t.Name = arg.Name
@@ -394,7 +385,7 @@ func (m *MemoryStore) UpdateTenantSchemaVersion(_ context.Context, arg UpdateTen
 	defer m.mu.Unlock()
 
 	t, ok := m.tenants[arg.ID]
-	if !ok {
+	if !ok || t.DeletedAt != nil {
 		return domain.Tenant{}, domain.ErrNotFound
 	}
 	t.SchemaVersion = arg.SchemaVersion
@@ -407,11 +398,13 @@ func (m *MemoryStore) DeleteTenant(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.tenants[id]; !ok {
+	t, ok := m.tenants[id]
+	if !ok || t.DeletedAt != nil {
 		return domain.ErrNotFound
 	}
-	delete(m.fieldLocks, id)
-	delete(m.tenants, id)
+	now := time.Now()
+	t.DeletedAt = &now
+	m.tenants[id] = t
 	return nil
 }
 
@@ -421,7 +414,8 @@ func (m *MemoryStore) CreateFieldLock(_ context.Context, arg CreateFieldLockPara
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.tenants[arg.TenantID]; !ok {
+	t, ok := m.tenants[arg.TenantID]
+	if !ok || t.DeletedAt != nil {
 		return domain.ErrNotFound
 	}
 

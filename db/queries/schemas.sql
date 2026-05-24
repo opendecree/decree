@@ -4,18 +4,19 @@ VALUES ($1, $2)
 RETURNING *;
 
 -- name: GetSchemaByID :one
-SELECT * FROM schemas WHERE id = $1;
+SELECT * FROM schemas WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetSchemaByName :one
-SELECT * FROM schemas WHERE name = $1;
+SELECT * FROM schemas WHERE name = $1 AND deleted_at IS NULL;
 
 -- name: ListSchemas :many
 SELECT * FROM schemas
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
--- name: DeleteSchema :exec
-DELETE FROM schemas WHERE id = $1;
+-- name: SoftDeleteSchema :exec
+UPDATE schemas SET deleted_at = now() WHERE id = $1;
 
 -- name: CreateSchemaVersion :one
 INSERT INTO schema_versions (schema_id, version, parent_version, description, checksum, dependent_required, validations)
