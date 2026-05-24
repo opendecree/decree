@@ -316,6 +316,9 @@ func TestSchemaService_RequiresAuth(t *testing.T) {
 
 	_, err = svc.ListFieldLocks(ctx, &pb.ListFieldLocksRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
+	_, err = svc.ExportSchema(ctx, &pb.ExportSchemaRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
 // --- helpers ---
