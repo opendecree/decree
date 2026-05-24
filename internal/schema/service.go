@@ -298,6 +298,9 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 	if req.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "schema id or name required")
 	}
+	if s.limits.MaxRemoveFields > 0 && len(req.RemoveFields) > s.limits.MaxRemoveFields {
+		return nil, status.Errorf(codes.InvalidArgument, "remove_fields has %d entries, exceeds limit of %d", len(req.RemoveFields), s.limits.MaxRemoveFields)
+	}
 
 	schema, err := s.resolveSchema(ctx, req.Id)
 	if err != nil {

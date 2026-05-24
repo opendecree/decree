@@ -13,13 +13,18 @@ type Limits struct {
 
 	// MaxDocBytes caps the serialized YAML document size at ImportSchema.
 	MaxDocBytes int
+
+	// MaxRemoveFields caps the number of entries in UpdateSchema.remove_fields.
+	MaxRemoveFields int
 }
 
-// DefaultLimits returns conservative defaults: 10 000 fields and 5 MiB
-// per document. Tune via env vars at the call site (cmd/server).
+// DefaultLimits returns conservative defaults: 10 000 fields, 5 MiB per
+// document, and 1 000 remove_fields entries per UpdateSchema request.
+// Tune via env vars at the call site (cmd/server).
 func DefaultLimits() Limits {
 	return Limits{
-		MaxFields:   10_000,
-		MaxDocBytes: 5 * 1024 * 1024,
+		MaxFields:       10_000,
+		MaxDocBytes:     5 * 1024 * 1024,
+		MaxRemoveFields: 1_000,
 	}
 }

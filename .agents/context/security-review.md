@@ -52,6 +52,7 @@ external deployment, not the alpha cluster.
 | — | Tracked | Supply chain | Release-artifact attestations (Docker + Go binaries) | #159 | ✅ resolved |
 | — | Tracked | Auth | Role-based RPC policy + pluggable PermissionGuard | #205, #206, #269, #270 | ✅ resolved |
 | — | By design | Auth | Metadata mode defaults to `superadmin` when no `x-role` header — see `memory/feedback_auth_defaults.md` | — | — |
+| — | Tracked | Input | Unbounded repeated request fields (SetFields.updates, GetFields.field_paths, Subscribe.field_paths, UpdateSchema.remove_fields) are a DoS amplifier | #434 | ✅ resolved |
 
 ## Findings detail
 
