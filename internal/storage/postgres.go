@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,10 +18,40 @@ type DB struct {
 // Option configures the database connection pools.
 type Option func(*pgxpool.Config)
 
+// PoolConfig holds connection pool sizing parameters.
+type PoolConfig struct {
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
+}
+
 // WithTracer adds a pgx query tracer to the connection pool.
 func WithTracer(tracer pgx.QueryTracer) Option {
 	return func(cfg *pgxpool.Config) {
 		cfg.ConnConfig.Tracer = tracer
+	}
+}
+
+// WithPoolConfig overrides connection pool sizing defaults.
+func WithPoolConfig(pc PoolConfig) Option {
+	return func(cfg *pgxpool.Config) {
+		if pc.MaxConns > 0 {
+			cfg.MaxConns = pc.MaxConns
+		}
+		if pc.MinConns > 0 {
+			cfg.MinConns = pc.MinConns
+		}
+		if pc.MaxConnLifetime > 0 {
+			cfg.MaxConnLifetime = pc.MaxConnLifetime
+		}
+		if pc.MaxConnIdleTime > 0 {
+			cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+		}
+		if pc.HealthCheckPeriod > 0 {
+			cfg.HealthCheckPeriod = pc.HealthCheckPeriod
+		}
 	}
 }
 
@@ -52,6 +83,11 @@ func newPool(ctx context.Context, dsn string, opts []Option) (*pgxpool.Pool, err
 	if err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
+	cfg.MaxConns = 25
+	cfg.MinConns = 2
+	cfg.MaxConnLifetime = 30 * time.Minute
+	cfg.MaxConnIdleTime = 10 * time.Minute
+	cfg.HealthCheckPeriod = 1 * time.Minute
 	for _, opt := range opts {
 		opt(cfg)
 	}

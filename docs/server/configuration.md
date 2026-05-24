@@ -11,6 +11,11 @@ OpenDecree is configured entirely through environment variables. No config files
 | `STORAGE_BACKEND` | Storage backend: `postgres` (default) or `memory` (no external deps, data not persisted). | `postgres` | No |
 | `DB_WRITE_URL` | PostgreSQL connection string for the primary (read-write) database. Format: `postgres://user:pass@host:5432/dbname?sslmode=disable` | -- | Yes (postgres mode) |
 | `DB_READ_URL` | PostgreSQL connection string for the read replica. Used for all read queries. Falls back to `DB_WRITE_URL` if not set. | `DB_WRITE_URL` | No |
+| `DB_MAX_CONNS` | Maximum number of connections in each pool. Raise if you see `connection pool exhausted` errors under load; lower if the database server connection limit is tight. | `25` | No |
+| `DB_MIN_CONNS` | Minimum number of idle connections the pool keeps open. Reduces cold-start latency for bursty traffic. | `2` | No |
+| `DB_MAX_CONN_LIFETIME` | Maximum wall-clock age of a connection before it is closed and replaced. Format: Go duration (e.g., `30m`, `1h`). Rotates connections away from a failover. | `30m` | No |
+| `DB_MAX_CONN_IDLE_TIME` | Maximum time a connection may sit idle before being closed. Format: Go duration (e.g., `10m`). Reduces idle load on the database server. | `10m` | No |
+| `DB_HEALTH_CHECK_PERIOD` | How often the pool pings idle connections to verify they are still alive. Format: Go duration (e.g., `1m`). | `1m` | No |
 | `REDIS_URL` | Redis connection string. Used for config caching and real-time change propagation (pub/sub). Format: `redis://host:6379` | -- | Yes (postgres mode) |
 | `ENABLE_SERVICES` | Comma-separated list of services to enable. Valid values: `schema`, `config`, `audit`. | `schema,config,audit` | No |
 | `LOG_LEVEL` | Log verbosity. One of: `debug`, `info`, `warn`, `error`. Logs are JSON-formatted to stdout. | `info` | No |

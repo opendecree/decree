@@ -127,6 +127,7 @@ func run() int {
 		initG, initCtx := errgroup.WithContext(ctx)
 		initG.Go(func() error {
 			var dbOpts []storage.Option
+			dbOpts = append(dbOpts, storage.WithPoolConfig(poolConfigFromServerCfg(cfg)))
 			if otelCfg.TracesDB {
 				dbOpts = append(dbOpts, storage.WithTracer(otelpgx.NewTracer()))
 			}
@@ -412,6 +413,11 @@ type serverConfig struct {
 	StorageBackend           string
 	DBWriteURL               string
 	DBReadURL                string
+	DBMaxConns               int
+	DBMinConns               int
+	DBMaxConnLifetime        time.Duration
+	DBMaxConnIdleTime        time.Duration
+	DBHealthCheckPeriod      time.Duration
 	RedisURL                 string
 	EnableServices           []string
 	JWTIssuer                string
@@ -458,10 +464,23 @@ func tenantResolver(store schema.Store) auth.TenantResolver {
 	}
 }
 
+func poolConfigFromServerCfg(cfg serverConfig) storage.PoolConfig {
+	return storage.PoolConfig{
+		MaxConns:          int32(cfg.DBMaxConns),
+		MinConns:          int32(cfg.DBMinConns),
+		MaxConnLifetime:   cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:   cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+	}
+}
+
 func loadConfig() serverConfig {
 	enableServices := getEnv("ENABLE_SERVICES", "schema,config,audit")
 	dbWriteURL := getEnv("DB_WRITE_URL", "")
 	dbReadURL := getEnv("DB_READ_URL", dbWriteURL)
+	dbMaxConnLifetime := parseEnvDuration("DB_MAX_CONN_LIFETIME", 0)
+	dbMaxConnIdleTime := parseEnvDuration("DB_MAX_CONN_IDLE_TIME", 0)
+	dbHealthCheckPeriod := parseEnvDuration("DB_HEALTH_CHECK_PERIOD", 0)
 
 	flushInterval := 30 * time.Second
 	if v := getEnv("USAGE_FLUSH_INTERVAL", ""); v != "" {
@@ -486,6 +505,11 @@ func loadConfig() serverConfig {
 		StorageBackend:           getEnv("STORAGE_BACKEND", "postgres"),
 		DBWriteURL:               dbWriteURL,
 		DBReadURL:                dbReadURL,
+		DBMaxConns:               parseEnvInt("DB_MAX_CONNS", 0),
+		DBMinConns:               parseEnvInt("DB_MIN_CONNS", 0),
+		DBMaxConnLifetime:        dbMaxConnLifetime,
+		DBMaxConnIdleTime:        dbMaxConnIdleTime,
+		DBHealthCheckPeriod:      dbHealthCheckPeriod,
 		RedisURL:                 getEnv("REDIS_URL", ""),
 		EnableServices:           parseServices(enableServices),
 		JWTIssuer:                getEnv("JWT_ISSUER", ""),
@@ -541,6 +565,21 @@ func parseEnvFloat(key string, fallback float64) float64 {
 	v, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		slog.Error("invalid float env var", "key", key, "value", raw, "error", err)
+		os.Exit(1)
+	}
+	return v
+}
+
+// parseEnvDuration parses a Go duration env var. Returns fallback (0 = use pool default) when unset;
+// exits on invalid so misconfiguration is loud.
+func parseEnvDuration(key string, fallback time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := time.ParseDuration(raw)
+	if err != nil {
+		slog.Error("invalid duration env var", "key", key, "value", raw, "error", err)
 		os.Exit(1)
 	}
 	return v
