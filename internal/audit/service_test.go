@@ -228,6 +228,52 @@ func TestGetUnusedFields_InvalidTenantID(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestGetUnusedFields_NilSince(t *testing.T) {
+	svc, _ := newTestService()
+	_, err := svc.GetUnusedFields(auth.WithoutAuth(context.Background()), &pb.GetUnusedFieldsRequest{
+		TenantId: testTenantID,
+		Since:    nil,
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestGetUnusedFields_SinceCappedForNonSuperadmin(t *testing.T) {
+	svc, store := newTestService()
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{testTenantID},
+	})
+
+	store.On("GetUnusedFields", ctx, mock.MatchedBy(func(p GetUnusedFieldsParams) bool {
+		earliest := time.Now().Add(-unusedFieldsMaxLookback)
+		return !p.Since.Before(earliest.Add(-2*time.Second)) && !p.Since.After(time.Now())
+	})).Return([]string{}, nil)
+
+	_, err := svc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{
+		TenantId: testTenantID,
+		Since:    timestamppb.New(time.Now().Add(-200 * 24 * time.Hour)),
+	})
+	require.NoError(t, err)
+	store.AssertExpectations(t)
+}
+
+func TestGetUnusedFields_SuperadminBypassesCap(t *testing.T) {
+	svc, store := newTestService()
+	ctx := superadminCtx()
+	farBack := time.Now().Add(-200 * 24 * time.Hour)
+
+	store.On("GetUnusedFields", ctx, mock.MatchedBy(func(p GetUnusedFieldsParams) bool {
+		return p.Since.Before(time.Now().Add(-unusedFieldsMaxLookback))
+	})).Return([]string{}, nil)
+
+	_, err := svc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{
+		TenantId: testTenantID,
+		Since:    timestamppb.New(farBack),
+	})
+	require.NoError(t, err)
+	store.AssertExpectations(t)
+}
+
 // --- Tenant access enforcement ---
 
 func TestQueryWriteLog_DeniedForOutOfScopeAdmin(t *testing.T) {

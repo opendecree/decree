@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -269,18 +270,30 @@ func (s *Service) VerifyChain(ctx context.Context, req *pb.VerifyChainRequest) (
 	}, nil
 }
 
+const unusedFieldsMaxLookback = 90 * 24 * time.Hour
+
 func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRequest) (*pb.GetUnusedFieldsResponse, error) {
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
+	}
+	if req.Since == nil {
+		return nil, status.Error(codes.InvalidArgument, "since is required")
 	}
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
 	}
 
+	since := req.Since.AsTime()
+	if !auth.IsSuperAdmin(ctx) {
+		if earliest := time.Now().Add(-unusedFieldsMaxLookback); since.Before(earliest) {
+			since = earliest
+		}
+	}
+
 	paths, err := s.store.GetUnusedFields(ctx, GetUnusedFieldsParams{
 		TenantID: tenantID,
-		Since:    req.Since.AsTime(),
+		Since:    since,
 	})
 	if err != nil {
 		s.logger.ErrorContext(ctx, "get unused fields", "error", err)
