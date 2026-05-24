@@ -121,11 +121,21 @@ func TestValidationMetrics_NilSafe(t *testing.T) {
 	counter, ok := m.TimeoutCounter()
 	assert.False(t, ok)
 	assert.Nil(t, counter)
+	counter, ok = m.RegexErrorCounter()
+	assert.False(t, ok)
+	assert.Nil(t, counter)
 }
 
 func TestValidationMetrics_TimeoutCounter(t *testing.T) {
 	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
 	counter, ok := m.TimeoutCounter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}
+
+func TestValidationMetrics_RegexErrorCounter(t *testing.T) {
+	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
+	counter, ok := m.RegexErrorCounter()
 	assert.True(t, ok)
 	assert.NotNil(t, counter)
 }

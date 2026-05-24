@@ -269,6 +269,9 @@ func run() int {
 	if counter, ok := validationMetrics.TimeoutCounter(); ok {
 		validatorOpts = append(validatorOpts, validation.WithTimeoutCounter(counter))
 	}
+	if counter, ok := validationMetrics.RegexErrorCounter(); ok {
+		validatorOpts = append(validatorOpts, validation.WithRegexErrorCounter(counter))
+	}
 	validatorFactory := validation.NewValidatorFactory(validatorStore, validatorOpts...)
 
 	// Usage recorder — async batched read tracking for audit stats.
