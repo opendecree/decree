@@ -593,7 +593,7 @@ jobs:
           go run golang.org/x/perf/cmd/benchstat@latest bench.txt | tee bench-stats.txt
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-${{ github.sha }}
           path: |
