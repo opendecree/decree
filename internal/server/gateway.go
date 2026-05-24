@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/server/swaggerui"
 )
 
 // Gateway is an HTTP reverse proxy that translates REST/JSON requests to gRPC.
@@ -99,14 +100,28 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 	if len(o.openAPISpec) > 0 || o.uiFS != nil {
 		top := http.NewServeMux()
 		if len(o.openAPISpec) > 0 {
-			top.HandleFunc("GET /docs/openapi.json", func(w http.ResponseWriter, _ *http.Request) {
+			// Serve vendored Swagger UI static assets from the embedded FS.
+			assetsFS, _ := fs.Sub(swaggerui.Assets, "assets")
+			top.Handle("GET /docs/swaggerui/", http.StripPrefix("/docs/swaggerui/", http.FileServerFS(assetsFS)))
+
+			specHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				_, _ = w.Write(o.openAPISpec)
 			})
-			top.HandleFunc("GET /docs", func(w http.ResponseWriter, _ *http.Request) {
+			docsHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Header().Set("Content-Security-Policy",
+					"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'")
 				_, _ = w.Write([]byte(swaggerUIPage))
 			})
+
+			if o.docsProtected {
+				top.Handle("GET /docs/openapi.json", requireAuth(specHandler))
+				top.Handle("GET /docs", requireAuth(docsHandler))
+			} else {
+				top.HandleFunc("GET /docs/openapi.json", specHandler.ServeHTTP)
+				top.HandleFunc("GET /docs", docsHandler.ServeHTTP)
+			}
 		}
 		if o.uiFS != nil {
 			top.Handle("/admin/", http.StripPrefix("/admin", spaHandler(o.uiFS)))
@@ -117,6 +132,10 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 
 	if !o.trustedProxy {
 		handler = rejectAuthHeadersMiddleware(handler)
+	}
+
+	if len(o.corsOrigins) > 0 {
+		handler = corsMiddleware(o.corsOrigins)(handler)
 	}
 
 	httpServer := &http.Server{
@@ -180,6 +199,44 @@ func rejectAuthHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// corsMiddleware sets Access-Control-Allow-Origin only for origins in the
+// allowlist. Wildcard * is never used so that credentials can be included
+// safely. Non-listed origins receive no CORS headers (browser blocks them).
+func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if _, ok := allowed[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Subject, X-Role, X-Tenant-ID")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// requireAuth rejects requests without an Authorization header with 401.
+func requireAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			http.Error(w, "authorization required", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // spaHandler serves an embedded filesystem for a single-page application.
 // Requests for files that exist are served directly; all other paths fall back
 // to index.html so client-side routing works correctly.
@@ -198,18 +255,19 @@ func spaHandler(fsys fs.FS) http.Handler {
 }
 
 // swaggerUIPage is a self-contained HTML page that renders the OpenAPI spec
-// using Swagger UI loaded from unpkg CDN.
+// using vendored Swagger UI assets (no CDN dependency).
 const swaggerUIPage = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>OpenDecree API</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <link rel="stylesheet" href="/docs/swaggerui/swagger-ui.css">
   <style>html{box-sizing:border-box;overflow-y:scroll}*,*:before,*:after{box-sizing:inherit}body{margin:0;background:#fafafa}</style>
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="/docs/swaggerui/swagger-ui-bundle.js"></script>
+  <script src="/docs/swaggerui/swagger-ui-standalone-preset.js"></script>
   <script>
     SwaggerUIBundle({
       url: "/docs/openapi.json",

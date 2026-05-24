@@ -161,6 +161,39 @@ func TestGateway_DocsEndpoints(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "swagger-ui")
 	})
 
+	t.Run("swagger UI has CSP header", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		csp := w.Header().Get("Content-Security-Policy")
+		assert.NotEmpty(t, csp, "CSP header must be set on /docs")
+		assert.Contains(t, csp, "script-src 'self'")
+	})
+
+	t.Run("swagger UI references local assets not CDN", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		body := w.Body.String()
+		assert.NotContains(t, body, "unpkg.com", "must not load from CDN")
+		assert.Contains(t, body, "/docs/swaggerui/", "must reference vendored assets")
+	})
+
+	t.Run("vendored swagger-ui bundle served", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs/swaggerui/swagger-ui-bundle.js", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+		assert.NotEmpty(t, w.Body.Bytes())
+	})
+
+	t.Run("vendored swagger-ui css served", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs/swaggerui/swagger-ui.css", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assert.Equal(t, 200, w.Code)
+	})
+
 	t.Run("openapi spec", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/docs/openapi.json", nil)
 		w := httptest.NewRecorder()
@@ -168,6 +201,91 @@ func TestGateway_DocsEndpoints(t *testing.T) {
 		assert.Equal(t, 200, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 		assert.Contains(t, w.Body.String(), `"swagger"`)
+	})
+}
+
+func TestGateway_DocsProtected(t *testing.T) {
+	spec := []byte(`{"swagger":"2.0","info":{"title":"test"}}`)
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithOpenAPISpec(spec),
+		WithGatewayInsecure(),
+		WithGatewayDocsProtected(),
+	)
+	require.NoError(t, err)
+	handler := gw.httpServer.Handler
+
+	t.Run("docs blocked without auth", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("spec blocked without auth", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs/openapi.json", nil)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("docs allowed with auth header", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/docs", nil)
+		req.Header.Set("Authorization", "Bearer tok")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
+func TestCORSMiddleware(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	t.Run("allowed origin gets CORS headers", func(t *testing.T) {
+		h := corsMiddleware([]string{"https://example.com"})(ok)
+		req := httptest.NewRequest("GET", "/v1/config", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+	})
+
+	t.Run("unlisted origin gets no CORS headers", func(t *testing.T) {
+		h := corsMiddleware([]string{"https://example.com"})(ok)
+		req := httptest.NewRequest("GET", "/v1/config", nil)
+		req.Header.Set("Origin", "https://evil.com")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("preflight OPTIONS returns 204", func(t *testing.T) {
+		h := corsMiddleware([]string{"https://example.com"})(ok)
+		req := httptest.NewRequest("OPTIONS", "/v1/config", nil)
+		req.Header.Set("Origin", "https://example.com")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("wildcard never set", func(t *testing.T) {
+		h := corsMiddleware([]string{"https://a.com", "https://b.com"})(ok)
+		req := httptest.NewRequest("GET", "/v1/config", nil)
+		req.Header.Set("Origin", "https://c.com")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		assert.NotEqual(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("no origin header passes through unchanged", func(t *testing.T) {
+		h := corsMiddleware([]string{"https://example.com"})(ok)
+		req := httptest.NewRequest("GET", "/v1/config", nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
 	})
 }
 

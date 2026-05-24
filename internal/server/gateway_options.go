@@ -17,6 +17,8 @@ type gatewayOptions struct {
 	tls             *GatewayTLSConfig
 	insecure        bool
 	trustedProxy    bool
+	corsOrigins     []string
+	docsProtected   bool
 }
 
 // WithGatewayLogger sets the gateway logger. Defaults to slog.Default() when unset.
@@ -60,6 +62,23 @@ func WithGatewayInsecure() GatewayOption {
 // root). When unset, the /admin/ route is not registered.
 func WithUI(fsys fs.FS) GatewayOption {
 	return func(o *gatewayOptions) { o.uiFS = fsys }
+}
+
+// WithGatewayCORSOrigins registers an explicit allowlist of Origins that the
+// gateway will echo back in Access-Control-Allow-Origin responses. Only listed
+// origins receive CORS headers; wildcard * is never used so that
+// Access-Control-Allow-Credentials can safely be set. An empty list disables
+// CORS headers entirely.
+func WithGatewayCORSOrigins(origins []string) GatewayOption {
+	return func(o *gatewayOptions) { o.corsOrigins = origins }
+}
+
+// WithGatewayDocsProtected gates the /docs and /docs/openapi.json endpoints
+// behind a simple presence check: requests without an Authorization header
+// receive 401. Combine with WithGatewayTrustedProxy when the proxy injects the
+// credential.
+func WithGatewayDocsProtected() GatewayOption {
+	return func(o *gatewayOptions) { o.docsProtected = true }
 }
 
 // WithGatewayTrustedProxy declares that a trusted authentication proxy sits in
