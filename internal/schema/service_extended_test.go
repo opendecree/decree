@@ -13,6 +13,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/validation"
 )
@@ -100,6 +101,77 @@ func TestListSchemas_InvalidPageToken(t *testing.T) {
 
 	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageToken: "garbage"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestListSchemas_BeyondEnd(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	// DB returns empty when offset is past all results.
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Offset == 100
+	})).Return([]domain.Schema{}, nil)
+
+	token := pagination.EncodePageToken(100)
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageToken: token})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Schemas, "expected no schemas past end")
+	assert.Empty(t, resp.NextPageToken, "expected nil token past end")
+}
+
+func TestListSchemas_BoundaryNextPageIsEmpty(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	s1 := testSchema()
+
+	// Page 1: DB returns pageSize+1 rows → service returns pageSize rows + next token.
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Offset == 0 && p.Limit == 2
+	})).Return([]domain.Schema{s1, s1}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
+	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
+
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 1})
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.NextPageToken, "expected next_page_token for full page")
+
+	// Page 2: DB returns 0 rows → empty result + no token.
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Offset == 1
+	})).Return([]domain.Schema{}, nil)
+
+	resp2, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{
+		PageSize:  1,
+		PageToken: resp.NextPageToken,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, resp2.Schemas, "boundary next page should be empty")
+	assert.Empty(t, resp2.NextPageToken, "boundary next page should return nil token")
+}
+
+func TestListSchemas_ZeroPageSize(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Limit > 0 // clamped to default, not zero
+	})).Return([]domain.Schema{testSchema()}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
+	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
+
+	// page_size=0 should fall back to default and succeed.
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 0})
+	require.NoError(t, err)
+	assert.Len(t, resp.Schemas, 1)
+
+	// page_size=-1 must behave identically.
+	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
+		return p.Limit > 0
+	})).Return([]domain.Schema{testSchema()}, nil)
+	resp, err = svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: -1})
+	require.NoError(t, err)
+	assert.Len(t, resp.Schemas, 1)
 }
 
 // --- DeleteSchema ---

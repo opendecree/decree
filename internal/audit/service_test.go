@@ -15,6 +15,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -149,6 +150,33 @@ func TestQueryWriteLog_InvalidPageToken(t *testing.T) {
 
 	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageToken: "garbage"})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestQueryWriteLog_BeyondEnd(t *testing.T) {
+	svc, store := newTestService()
+	ctx := superadminCtx()
+
+	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
+		return p.Offset == 500
+	})).Return([]domain.AuditWriteLog{}, nil)
+
+	token := pagination.EncodePageToken(500)
+	resp, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageToken: token})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Entries, "expected no entries past end")
+	assert.Empty(t, resp.NextPageToken, "expected nil token past end")
+}
+
+func TestQueryWriteLog_ZeroPageSize(t *testing.T) {
+	svc, store := newTestService()
+	ctx := superadminCtx()
+
+	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
+		return p.Limit > 0 // clamped from 0 to default
+	})).Return([]domain.AuditWriteLog{}, nil)
+
+	_, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageSize: 0})
+	require.NoError(t, err)
 }
 
 // --- GetFieldUsage ---

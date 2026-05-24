@@ -1,6 +1,9 @@
 package pagination
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
 
 func TestDecodePageToken_Empty(t *testing.T) {
 	offset, err := DecodePageToken("")
@@ -21,6 +24,35 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		}
 		if got != offset {
 			t.Errorf("round-trip offset %d: got %d", offset, got)
+		}
+	}
+}
+
+// TestDecodePageToken_Tampered verifies that modifying the base64 payload of a
+// valid token causes decoding to fail. Tokens are format-validated (version
+// prefix + numeric offset) but not HMAC-signed, so only structural corruption
+// is guaranteed to be detected.
+func TestDecodePageToken_Tampered(t *testing.T) {
+	token := EncodePageToken(42)
+
+	// Corrupt the version prefix inside the payload: decode → mangle → re-encode.
+	raw, _ := base64.StdEncoding.DecodeString(token)
+	raw[0] ^= 0xFF // flip all bits of the first byte — breaks the "v1:" prefix
+	tampered := base64.StdEncoding.EncodeToString(raw)
+	if _, err := DecodePageToken(tampered); err == nil {
+		t.Errorf("expected error for tampered token %q, got nil", tampered)
+	}
+
+	// Corrupt the version string by bumping the version digit.
+	corrupted := base64.StdEncoding.EncodeToString([]byte("v2:42"))
+	if _, err := DecodePageToken(corrupted); err == nil {
+		t.Errorf("expected error for wrong-version token %q, got nil", corrupted)
+	}
+
+	// Truncate the base64 to an incomplete token.
+	if len(token) > 2 {
+		if _, err := DecodePageToken(token[:len(token)-2]); err == nil {
+			t.Errorf("expected error for truncated token, got nil")
 		}
 	}
 }
