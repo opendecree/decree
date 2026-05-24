@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc test lint build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -141,6 +141,13 @@ integration-test:
 e2e:
 	docker compose up -d --wait service
 	cd e2e && go test -tags=e2e -v -race -count=1 ./... || (cd .. && docker compose down -v && exit 1)
+	docker compose down -v
+
+## e2e-jwt: Run JWT-auth e2e tests (docker compose lifecycle, service-jwt on :9091)
+e2e-jwt:
+	docker compose up -d --wait service-jwt
+	cd e2e && SERVICE_JWT_ADDR=localhost:9091 JWKS_SERVER_ADDR=localhost:8090 \
+	  go test -tags=e2e -run TestJWT -v -race -count=1 ./... || (cd .. && docker compose down -v && exit 1)
 	docker compose down -v
 
 ## e2e-coverage: Run e2e against a -cover instrumented server and report coverage on files excluded from unit-test total

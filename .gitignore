@@ -66,3 +66,4 @@ examples/setup/setup
 
 # Coverage thresholds — only the root file is tracked
 sdk/**/coverage-thresholds.json
+fixtures/jwks-server/jwks-server
