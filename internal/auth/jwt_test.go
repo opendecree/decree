@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,18 +41,17 @@ func init() {
 	}
 }
 
-// jwksJSON returns a JWKS JSON document for the test RSA public key.
-func jwksJSON() []byte {
-	n := testKey.N
-	e := big.NewInt(int64(testKey.E))
+// makeJWKS returns a JWKS JSON document for the given RSA private key and kid.
+func makeJWKS(key *rsa.PrivateKey, kid string) []byte {
+	e := big.NewInt(int64(key.E))
 	jwks := map[string]any{
 		"keys": []map[string]any{
 			{
 				"kty": "RSA",
 				"use": "sig",
-				"kid": testKID,
+				"kid": kid,
 				"alg": "RS256",
-				"n":   base64.RawURLEncoding.EncodeToString(n.Bytes()),
+				"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
 				"e":   base64.RawURLEncoding.EncodeToString(e.Bytes()),
 			},
 		},
@@ -59,8 +60,14 @@ func jwksJSON() []byte {
 	return b
 }
 
+// jwksJSON returns a JWKS JSON document for the test RSA public key.
+func jwksJSON() []byte {
+	return makeJWKS(testKey, testKID)
+}
+
 // newTestInterceptor starts an httptest JWKS server and returns an Interceptor.
-func newTestInterceptor(t *testing.T, issuer string) *Interceptor {
+// extraOpts are appended after WithIssuer and WithLogger.
+func newTestInterceptor(t *testing.T, issuer string, extraOpts ...InterceptorOption) *Interceptor {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -68,11 +75,9 @@ func newTestInterceptor(t *testing.T, issuer string) *Interceptor {
 	}))
 	t.Cleanup(srv.Close)
 
+	opts := append([]InterceptorOption{WithIssuer(issuer), WithLogger(testLogger)}, extraOpts...)
 	ctx := context.Background()
-	interceptor, err := NewInterceptor(ctx, srv.URL,
-		WithIssuer(issuer),
-		WithLogger(testLogger),
-	)
+	interceptor, err := NewInterceptor(ctx, srv.URL, opts...)
 	require.NoError(t, err)
 	t.Cleanup(interceptor.Close)
 	return interceptor
@@ -94,6 +99,13 @@ func ctxWithBearer(token string) context.Context {
 		"authorization": "Bearer " + token,
 	})
 	return metadata.NewIncomingContext(context.Background(), md)
+}
+
+// ctxWithBearerAndExtra creates a bearer-token context with additional metadata headers.
+func ctxWithBearerAndExtra(token string, extra map[string]string) context.Context {
+	m := map[string]string{"authorization": "Bearer " + token}
+	maps.Copy(m, extra)
+	return metadata.NewIncomingContext(context.Background(), metadata.New(m))
 }
 
 func validClaims(role Role, tenantIDs ...string) Claims {
@@ -423,4 +435,272 @@ func TestUnaryInterceptor_WrongSigningKey(t *testing.T) {
 	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
 	require.Error(t, err)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- Expiry boundary / leeway ---
+
+func TestUnaryInterceptor_ExpiryBoundaryRejected(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_ExpiryWithinLeeway(t *testing.T) {
+	interceptor := newTestInterceptor(t, "", WithLeeway(30*time.Second))
+	unary := interceptor.UnaryInterceptor()
+
+	// Expired 10s ago — within the 30s leeway window.
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-10 * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
+func TestUnaryInterceptor_ExpiryBeyondLeeway(t *testing.T) {
+	interceptor := newTestInterceptor(t, "", WithLeeway(5*time.Second))
+	unary := interceptor.UnaryInterceptor()
+
+	// Expired 60s ago — beyond the 5s leeway.
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-60 * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- JWKS rotation ---
+
+func TestUnaryInterceptor_JWKSRotation(t *testing.T) {
+	rotatedKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	const rotatedKID = "test-key-rotated"
+
+	var mu sync.Mutex
+	currentJWKS := jwksJSON()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		body := currentJWKS
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+
+	interceptor, err := NewInterceptor(context.Background(), srv.URL, WithLogger(testLogger))
+	require.NoError(t, err)
+	t.Cleanup(interceptor.Close)
+	unary := interceptor.UnaryInterceptor()
+
+	// Original key works before rotation.
+	ctx := ctxWithBearer(signToken(t, validClaims(RoleAdmin, "t1")))
+	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+
+	// Rotate: JWKS now serves only the new key.
+	mu.Lock()
+	currentJWKS = makeJWKS(rotatedKey, rotatedKID)
+	mu.Unlock()
+
+	// Token signed with rotated key — keyfunc refetches on unknown kid.
+	rotatedClaims := validClaims(RoleAdmin, "t1")
+	rotatedToken := jwt.NewWithClaims(jwt.SigningMethodRS256, rotatedClaims)
+	rotatedToken.Header["kid"] = rotatedKID
+	rotatedSigned, err := rotatedToken.SignedString(rotatedKey)
+	require.NoError(t, err)
+
+	ctx = ctxWithBearer(rotatedSigned)
+	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err, "new key after rotation should validate")
+
+	// Old token (original kid, no longer in JWKS) must be rejected.
+	ctx = ctxWithBearer(signToken(t, validClaims(RoleAdmin, "t1")))
+	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err, "old kid after rotation must be rejected")
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- Clock skew (nbf) ---
+
+func TestUnaryInterceptor_ClockSkew_NBF_Rejected(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	// nbf 10s in the future — no leeway configured.
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_ClockSkew_NBF_WithinLeeway(t *testing.T) {
+	interceptor := newTestInterceptor(t, "", WithLeeway(30*time.Second))
+	unary := interceptor.UnaryInterceptor()
+
+	// nbf 10s in the future — within 30s leeway.
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now().Add(10 * time.Second)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
+// --- Malformed tokens ---
+
+func TestUnaryInterceptor_MalformedToken_TruncatedHeader(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithBearer("eyJhbGci")
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_MalformedToken_NonBase64Segments(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithBearer("abc.!!!.xyz")
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_MalformedToken_AlgNone(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"role":"superadmin","exp":9999999999}`))
+	noneToken := header + "." + payload + "."
+
+	ctx := ctxWithBearer(noneToken)
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_MalformedToken_UnsupportedAlgorithm(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims(RoleAdmin, "t1")
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte("some-hmac-secret"))
+	require.NoError(t, err)
+
+	ctx := ctxWithBearer(signed)
+	_, err = unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- Authz bypass attempts ---
+
+// TestUnaryInterceptor_RoleEscalation_MetadataIgnored verifies that a spoofed
+// x-role=superadmin metadata header cannot elevate a JWT-issued role=user token.
+// The JWT claims are authoritative; metadata headers are not read by the JWT interceptor.
+func TestUnaryInterceptor_RoleEscalation_MetadataIgnored(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	token := signToken(t, validClaims(RoleUser, "t1"))
+	ctx := ctxWithBearerAndExtra(token, map[string]string{"x-role": "superadmin"})
+
+	var capturedClaims *Claims
+	handler := func(ctx context.Context, req any) (any, error) {
+		c, ok := ClaimsFromContext(ctx)
+		require.True(t, ok)
+		capturedClaims = c
+		return "ok", nil
+	}
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
+	require.NoError(t, err)
+	assert.Equal(t, RoleUser, capturedClaims.Role, "role must come from JWT, not x-role header")
+	assert.False(t, capturedClaims.IsSuperAdmin(), "spoofed x-role must not grant superadmin")
+}
+
+// TestUnaryInterceptor_TenantIDHeader_DoesNotOverrideJWT verifies that a spoofed
+// x-tenant-id=t2 metadata header cannot inject a tenant that is absent from the JWT's
+// tenant_ids claim. The JWT tenant list is authoritative.
+func TestUnaryInterceptor_TenantIDHeader_DoesNotOverrideJWT(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	token := signToken(t, validClaims(RoleAdmin, "t1"))
+	ctx := ctxWithBearerAndExtra(token, map[string]string{"x-tenant-id": "t2"})
+
+	var capturedClaims *Claims
+	handler := func(ctx context.Context, req any) (any, error) {
+		c, ok := ClaimsFromContext(ctx)
+		require.True(t, ok)
+		capturedClaims = c
+		return "ok", nil
+	}
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, handler)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"t1"}, capturedClaims.TenantIDs, "tenant list must come from JWT, not x-tenant-id header")
+	assert.False(t, capturedClaims.HasTenantAccess("t2"), "header-injected tenant must not grant access")
+}
+
+// TestUnaryInterceptor_EmptyRoleInJWT verifies that a JWT with an empty role claim
+// is rejected with PermissionDenied — an empty string is not a valid role.
+func TestUnaryInterceptor_EmptyRoleInJWT(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims("", "t1")
+	ctx := ctxWithBearer(signToken(t, claims))
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, "unknown role", status.Convert(err).Message())
 }
