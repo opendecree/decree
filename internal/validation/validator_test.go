@@ -120,6 +120,17 @@ func TestValidate_StringPattern(t *testing.T) {
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "not-an-email"}}))
 }
 
+func TestValidate_InvalidRegexInDB_DoesNotPanic(t *testing.T) {
+	// Simulates a bad pattern written directly to the DB bypassing schema validation.
+	// The validator must skip the regex check rather than panic.
+	v := NewFieldValidator("field", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
+		Regex: ptr(`[invalid`),
+	})
+
+	// No panic; regex check is silently skipped so every value passes.
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "any value"}}))
+}
+
 // --- Enum constraints ---
 
 func TestValidate_Enum(t *testing.T) {

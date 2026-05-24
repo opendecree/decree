@@ -4,7 +4,9 @@
 package validation
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/url"
 	"regexp"
@@ -146,20 +148,25 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			})
 		}
 		if constraints.Regex != nil {
-			// Regex constraints are validated at schema import time, so the
-			// pattern is guaranteed to compile here. MustCompile panics on
-			// invalid input, which would indicate a bug in the import path.
-			re := regexp.MustCompile(*constraints.Regex)
-			v.checks = append(v.checks, func(tv *pb.TypedValue) error {
-				val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
-				if !re.MatchString(val) {
-					if v.sensitive {
-						return fmt.Errorf("value does not match pattern %s", re.String())
-					}
-					return fmt.Errorf("value %q does not match pattern %s", val, re.String())
+			re, err := regexp.Compile(*constraints.Regex)
+			if err != nil {
+				slog.Default().Error("invalid regex constraint in schema; skipping check",
+					"field", fieldPath, "pattern", *constraints.Regex, "error", err)
+				if o.regexErrorCounter != nil {
+					o.regexErrorCounter.Add(context.Background(), 1)
 				}
-				return nil
-			})
+			} else {
+				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
+					val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
+					if !re.MatchString(val) {
+						if v.sensitive {
+							return fmt.Errorf("value does not match pattern %s", re.String())
+						}
+						return fmt.Errorf("value %q does not match pattern %s", val, re.String())
+					}
+					return nil
+				})
+			}
 		}
 
 	case pb.FieldType_FIELD_TYPE_DURATION:

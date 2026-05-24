@@ -133,7 +133,8 @@ func (m *RateLimitMetrics) Counter() (metric.Int64Counter, bool) {
 
 // ValidationMetrics records validation-related counters.
 type ValidationMetrics struct {
-	compileTimeouts metric.Int64Counter
+	compileTimeouts    metric.Int64Counter
+	regexCompileErrors metric.Int64Counter
 }
 
 // NewValidationMetrics creates validation metrics. Returns nil if not enabled.
@@ -144,7 +145,9 @@ func NewValidationMetrics(cfg Config) *ValidationMetrics {
 	meter := otel.Meter(meterName)
 	timeouts, _ := meter.Int64Counter("validation.json_schema_compile_timeouts_total",
 		metric.WithDescription("Number of JSON-Schema compile goroutines that exceeded their deadline"))
-	return &ValidationMetrics{compileTimeouts: timeouts}
+	regexErrors, _ := meter.Int64Counter("validator_regex_compile_errors_total",
+		metric.WithDescription("Number of regex constraint patterns that failed to compile"))
+	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors}
 }
 
 // TimeoutCounter returns the underlying Int64Counter and true when metrics are
@@ -154,6 +157,15 @@ func (m *ValidationMetrics) TimeoutCounter() (metric.Int64Counter, bool) {
 		return nil, false
 	}
 	return m.compileTimeouts, true
+}
+
+// RegexErrorCounter returns the underlying Int64Counter and true when metrics
+// are enabled, or a nil interface and false when disabled.
+func (m *ValidationMetrics) RegexErrorCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.regexCompileErrors, true
 }
 
 // StartDBPoolMetrics starts a background goroutine that periodically records

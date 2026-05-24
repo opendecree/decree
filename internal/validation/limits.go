@@ -38,12 +38,13 @@ func DefaultLimits() Limits {
 }
 
 // Option configures a [ValidatorFactory] or [FieldValidator]. See
-// [WithLimits] and [WithTimeoutCounter].
+// [WithLimits], [WithTimeoutCounter], and [WithRegexErrorCounter].
 type Option func(*options)
 
 type options struct {
-	limits         Limits
-	timeoutCounter metric.Int64Counter // nil when metrics are disabled
+	limits            Limits
+	timeoutCounter    metric.Int64Counter // nil when metrics are disabled
+	regexErrorCounter metric.Int64Counter // nil when metrics are disabled
 }
 
 // WithLimits sets the JSON-Schema compile limits. Defaults to
@@ -58,6 +59,13 @@ func WithLimits(l Limits) Option {
 // (no-op — equivalent to omitting the option).
 func WithTimeoutCounter(c metric.Int64Counter) Option {
 	return func(o *options) { o.timeoutCounter = c }
+}
+
+// WithRegexErrorCounter sets the OTEL counter incremented when a regex
+// constraint pattern stored in the DB fails to compile. The counter name
+// should be "validator_regex_compile_errors_total". Pass nil to disable.
+func WithRegexErrorCounter(c metric.Int64Counter) Option {
+	return func(o *options) { o.regexErrorCounter = c }
 }
 
 func resolveOptions(opts []Option) options {
