@@ -169,6 +169,8 @@ func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pg
 		metric.WithDescription("Number of currently acquired connections"))
 	idleConns, _ := meter.Int64ObservableGauge("db.pool.idle_connections",
 		metric.WithDescription("Number of idle connections in the pool"))
+	maxConns, _ := meter.Int64ObservableGauge("db.pool.max_connections",
+		metric.WithDescription("Maximum number of connections allowed in the pool"))
 
 	record := func(pool *pgxpool.Pool, poolName string) func(context.Context, metric.Observer) error {
 		return func(ctx context.Context, o metric.Observer) error {
@@ -177,11 +179,12 @@ func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pg
 			o.ObserveInt64(totalConns, int64(stat.TotalConns()), attrs)
 			o.ObserveInt64(acquiredConns, int64(stat.AcquiredConns()), attrs)
 			o.ObserveInt64(idleConns, int64(stat.IdleConns()), attrs)
+			o.ObserveInt64(maxConns, int64(stat.MaxConns()), attrs)
 			return nil
 		}
 	}
 
-	callbacks := []metric.Observable{totalConns, acquiredConns, idleConns}
+	callbacks := []metric.Observable{totalConns, acquiredConns, idleConns, maxConns}
 	if writePool == readPool {
 		_, _ = meter.RegisterCallback(record(writePool, "write"), callbacks...)
 	} else {
