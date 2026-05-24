@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -69,6 +70,7 @@ type Interceptor struct {
 	jwks       keyfunc.Keyfunc
 	jwksCancel context.CancelFunc
 	issuer     string
+	leeway     time.Duration
 	logger     *slog.Logger
 }
 
@@ -77,6 +79,7 @@ type InterceptorOption func(*interceptorOptions)
 
 type interceptorOptions struct {
 	issuer string
+	leeway time.Duration
 	logger *slog.Logger
 }
 
@@ -84,6 +87,11 @@ type interceptorOptions struct {
 // When unset, the issuer claim is not checked.
 func WithIssuer(issuer string) InterceptorOption {
 	return func(o *interceptorOptions) { o.issuer = issuer }
+}
+
+// WithLeeway sets the clock-skew tolerance applied to exp, nbf, and iat claims.
+func WithLeeway(d time.Duration) InterceptorOption {
+	return func(o *interceptorOptions) { o.leeway = d }
 }
 
 // WithLogger sets the interceptor logger. Defaults to slog.Default() when unset.
@@ -110,6 +118,7 @@ func NewInterceptor(ctx context.Context, jwksURL string, opts ...InterceptorOpti
 		jwks:       jwks,
 		jwksCancel: jwksCancel,
 		issuer:     o.issuer,
+		leeway:     o.leeway,
 		logger:     o.logger,
 	}, nil
 }
@@ -155,6 +164,9 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{"RS256", "ES256"})}
 	if i.issuer != "" {
 		opts = append(opts, jwt.WithIssuer(i.issuer))
+	}
+	if i.leeway > 0 {
+		opts = append(opts, jwt.WithLeeway(i.leeway))
 	}
 
 	parsed, err := jwt.ParseWithClaims(token, claims, i.jwks.KeyfuncCtx(ctx), opts...)

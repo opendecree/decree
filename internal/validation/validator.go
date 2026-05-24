@@ -5,8 +5,10 @@ package validation
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
+	"unicode/utf8"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/storage/domain"
@@ -78,6 +80,17 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 		sensitive:       sensitive,
 	}
 
+	// Number finiteness check is always applied (not constraint-dependent).
+	if fieldType == pb.FieldType_FIELD_TYPE_NUMBER {
+		v.checks = append(v.checks, func(tv *pb.TypedValue) error {
+			n := tv.Kind.(*pb.TypedValue_NumberValue).NumberValue
+			if math.IsNaN(n) || math.IsInf(n, 0) {
+				return fmt.Errorf("value is not a finite number")
+			}
+			return nil
+		})
+	}
+
 	// URL validity check is always applied (not constraint-dependent).
 	if fieldType == pb.FieldType_FIELD_TYPE_URL {
 		v.checks = append(v.checks, func(tv *pb.TypedValue) error {
@@ -114,8 +127,9 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			min := int(*constraints.MinLength)
 			v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 				val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
-				if len(val) < min {
-					return fmt.Errorf("string length %d is less than minimum %d", len(val), min)
+				n := utf8.RuneCountInString(val)
+				if n < min {
+					return fmt.Errorf("string length %d is less than minimum %d", n, min)
 				}
 				return nil
 			})
@@ -124,8 +138,9 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			max := int(*constraints.MaxLength)
 			v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 				val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
-				if len(val) > max {
-					return fmt.Errorf("string length %d is greater than maximum %d", len(val), max)
+				n := utf8.RuneCountInString(val)
+				if n > max {
+					return fmt.Errorf("string length %d is greater than maximum %d", n, max)
 				}
 				return nil
 			})
