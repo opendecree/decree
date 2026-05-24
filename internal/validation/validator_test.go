@@ -131,6 +131,14 @@ func TestValidate_InvalidRegexInDB_DoesNotPanic(t *testing.T) {
 	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "any value"}}))
 }
 
+func TestValidate_InvalidRegex_IncrementsCounter(t *testing.T) {
+	ctr := &countingCounter{}
+	NewFieldValidator("field", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
+		Regex: ptr(`[invalid`),
+	}, WithRegexErrorCounter(ctr))
+	assert.Equal(t, int64(1), ctr.n.Load())
+}
+
 // --- Enum constraints ---
 
 func TestValidate_Enum(t *testing.T) {
