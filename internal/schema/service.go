@@ -726,6 +726,9 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
+	if req.FieldPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "field_path must not be empty")
+	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -766,6 +769,9 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (*pb.UnlockFieldResponse, error) {
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
+	}
+	if req.FieldPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "field_path must not be empty")
 	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
