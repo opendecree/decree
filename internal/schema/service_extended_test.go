@@ -463,6 +463,10 @@ func TestUpdateTenant_UpdateSchemaVersion_Success(t *testing.T) {
 	updated.SchemaVersion = newVersion
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+	store.On("GetSchemaVersion", mock.Anything, GetSchemaVersionParams{
+		SchemaID: testSchemaID,
+		Version:  newVersion,
+	}).Return(domain.SchemaVersion{ID: testVersionID, Version: newVersion, Published: true}, nil)
 	store.On("UpdateTenantSchemaVersion", mock.Anything, UpdateTenantSchemaVersionParams{
 		ID:            testTenantID,
 		SchemaVersion: newVersion,
@@ -489,6 +493,10 @@ func TestUpdateTenant_UpdateBothNameAndVersion(t *testing.T) {
 	afterVersion.SchemaVersion = newVersion
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+	store.On("GetSchemaVersion", mock.Anything, GetSchemaVersionParams{
+		SchemaID: testSchemaID,
+		Version:  newVersion,
+	}).Return(domain.SchemaVersion{ID: testVersionID, Version: newVersion, Published: true}, nil)
 	store.On("UpdateTenantName", mock.Anything, UpdateTenantNameParams{
 		ID:   testTenantID,
 		Name: newName,
@@ -567,13 +575,36 @@ func TestUpdateTenant_SchemaVersionNotFound(t *testing.T) {
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
 	v := int32(99)
-	store.On("UpdateTenantSchemaVersion", mock.Anything, mock.Anything).Return(domain.Tenant{}, domain.ErrNotFound)
+	store.On("GetSchemaVersion", mock.Anything, GetSchemaVersionParams{
+		SchemaID: testSchemaID,
+		Version:  v,
+	}).Return(domain.SchemaVersion{}, domain.ErrNotFound)
 
 	_, err := svc.UpdateTenant(superadminCtx(), &pb.UpdateTenantRequest{
 		Id:            testTenantID,
 		SchemaVersion: &v,
 	})
 	assert.Equal(t, codes.NotFound, status.Code(err))
+	store.AssertExpectations(t)
+}
+
+func TestUpdateTenant_SchemaVersionDraft_FailedPrecondition(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+	v := int32(2)
+	store.On("GetSchemaVersion", mock.Anything, GetSchemaVersionParams{
+		SchemaID: testSchemaID,
+		Version:  v,
+	}).Return(domain.SchemaVersion{ID: testVersionID, Version: v, Published: false}, nil)
+
+	_, err := svc.UpdateTenant(superadminCtx(), &pb.UpdateTenantRequest{
+		Id:            testTenantID,
+		SchemaVersion: &v,
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	store.AssertExpectations(t)
 }
 
 func TestUpdateTenant_NoFieldsUpdated_NotFound(t *testing.T) {
@@ -617,6 +648,10 @@ func TestUpdateTenant_SchemaVersionInvalidatesCache(t *testing.T) {
 	updated.SchemaVersion = newVersion
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+	store.On("GetSchemaVersion", mock.Anything, GetSchemaVersionParams{
+		SchemaID: testSchemaID,
+		Version:  newVersion,
+	}).Return(domain.SchemaVersion{ID: testVersionID, Version: newVersion, Published: true}, nil)
 	store.On("UpdateTenantSchemaVersion", mock.Anything, mock.Anything).Return(updated, nil)
 
 	resp, err := svc.UpdateTenant(superadminCtx(), &pb.UpdateTenantRequest{

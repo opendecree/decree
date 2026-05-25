@@ -629,6 +629,20 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	}
 	tenantID := resolved.ID
 
+	// Verify schema version exists and is published before applying the update.
+	if req.SchemaVersion != nil {
+		sv, err := s.store.GetSchemaVersion(ctx, GetSchemaVersionParams{
+			SchemaID: resolved.SchemaID,
+			Version:  *req.SchemaVersion,
+		})
+		if err != nil {
+			return nil, errToStatus(err, "schema version not found", "failed to get schema version")
+		}
+		if !sv.Published {
+			return nil, status.Error(codes.FailedPrecondition, "schema version must be published before assigning to a tenant")
+		}
+	}
+
 	actor := s.getActor(ctx)
 	var tenant domain.Tenant
 
