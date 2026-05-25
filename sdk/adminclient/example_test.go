@@ -136,3 +136,129 @@ func ExampleClient_LockField() {
 	fmt.Println(len(locks), "lock(s)")
 	// Output: 1 lock(s)
 }
+
+// fakeConfigTransport implements ConfigTransport for documentation examples.
+type fakeConfigTransport struct{}
+
+func (f *fakeConfigTransport) ListVersions(_ context.Context, _ string, _ int32, _ string) (*adminclient.ListVersionsResponse, error) {
+	return &adminclient.ListVersionsResponse{
+		Versions: []*adminclient.Version{{Version: 2}, {Version: 1}},
+	}, nil
+}
+
+func (f *fakeConfigTransport) GetVersion(_ context.Context, _ string, version int32) (*adminclient.Version, error) {
+	return &adminclient.Version{Version: version}, nil
+}
+
+func (f *fakeConfigTransport) RollbackToVersion(_ context.Context, _ string, targetVersion int32, _ string) (*adminclient.Version, error) {
+	return &adminclient.Version{Version: targetVersion + 1}, nil
+}
+
+func (f *fakeConfigTransport) ExportConfig(_ context.Context, _ string, _ *int32) ([]byte, error) {
+	return []byte("fields: []"), nil
+}
+
+func (f *fakeConfigTransport) ImportConfig(_ context.Context, _ *adminclient.ImportConfigRequest) (*adminclient.Version, error) {
+	return &adminclient.Version{Version: 3}, nil
+}
+
+// fakeServerTransport implements ServerTransport for documentation examples.
+type fakeServerTransport struct{}
+
+func (f *fakeServerTransport) GetServerInfo(_ context.Context) (*adminclient.ServerInfo, error) {
+	return &adminclient.ServerInfo{Version: "v0.3.0"}, nil
+}
+
+func newFullClient() *adminclient.Client {
+	return adminclient.New(
+		adminclient.WithSchemaTransport(&fakeSchemaTransport{}),
+		adminclient.WithConfigTransport(&fakeConfigTransport{}),
+		adminclient.WithAuditTransport(&fakeAuditTransport{}),
+		adminclient.WithServerTransport(&fakeServerTransport{}),
+	)
+}
+
+func ExampleClient_CreateSchema() {
+	client := newClient()
+	ctx := context.Background()
+
+	schema, err := client.CreateSchema(ctx, "app-config", []adminclient.Field{
+		{Path: "app.env", Type: "FIELD_TYPE_STRING", Description: "Deployment environment"},
+	}, "initial schema")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(schema.Name)
+	// Output: app-config
+}
+
+func ExampleClient_CreateTenant() {
+	client := newClient()
+	ctx := context.Background()
+
+	tenant, err := client.CreateTenant(ctx, "acme-corp", "schema-1", 1)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(tenant.Name)
+	// Output: acme-corp
+}
+
+func ExampleWithAuditTenant() {
+	client := newClient()
+	ctx := context.Background()
+
+	// Filter the audit log to a single tenant.
+	entries, err := client.QueryWriteLog(ctx, adminclient.WithAuditTenant("tenant-1"))
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(len(entries) >= 0)
+	// Output: true
+}
+
+func ExampleClient_QueryWriteLog() {
+	client := newClient()
+	ctx := context.Background()
+
+	entries, err := client.QueryWriteLog(ctx,
+		adminclient.WithAuditTenant("tenant-1"),
+		adminclient.WithAuditField("app.env"),
+	)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(len(entries) >= 0)
+	// Output: true
+}
+
+func ExampleClient_VerifyChain() {
+	client := newClient()
+	ctx := context.Background()
+
+	result, err := client.VerifyChain(ctx, "tenant-1")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(result.OK)
+	// Output: true
+}
+
+func ExampleClient_RollbackConfig() {
+	client := newFullClient()
+	ctx := context.Background()
+
+	// Roll back to version 2; a new version is created with those values.
+	v, err := client.RollbackConfig(ctx, "tenant-1", 2, "revert bad deploy")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(v.Version > 0)
+	// Output: true
+}
