@@ -1514,6 +1514,9 @@ func (s *Service) enforceCrossFieldInTx(
 		if counter := s.validators.CelCapCounter(); counter != nil {
 			evalOpts = append(evalOpts, celpkg.WithCapCounter(counter, tenantID))
 		}
+		if counter := s.validators.CelSoftErrCounter(); counter != nil {
+			evalOpts = append(evalOpts, celpkg.WithSoftErrCounter(counter, tenantID))
+		}
 		failed, softErrs, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules, evalOpts...)
 		if evalErr != nil {
 			return fmt.Errorf("evaluate validations: %w", evalErr)
