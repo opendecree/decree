@@ -39,6 +39,22 @@ func TestErrToStatus(t *testing.T) {
 			wantMsgPart: "record not found",
 		},
 		{
+			name:        "ErrAlreadyExists maps to AlreadyExists",
+			err:         domain.ErrAlreadyExists,
+			notFoundMsg: "not found",
+			failedMsg:   "failed",
+			wantCode:    codes.AlreadyExists,
+			wantMsgPart: "already exists",
+		},
+		{
+			name:        "wrapped ErrAlreadyExists maps to AlreadyExists",
+			err:         fmt.Errorf("db: %w", domain.ErrAlreadyExists),
+			notFoundMsg: "not found",
+			failedMsg:   "failed",
+			wantCode:    codes.AlreadyExists,
+			wantMsgPart: "already exists",
+		},
+		{
 			name:        "other error maps to Internal",
 			err:         errors.New("connection reset"),
 			notFoundMsg: "not found",
