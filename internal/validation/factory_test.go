@@ -10,6 +10,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/storage/domain"
+	"github.com/opendecree/decree/internal/telemetry"
 )
 
 // mockValidationStore implements the validation.Store interface for testing.
@@ -66,6 +67,21 @@ func TestNewValidatorFactory(t *testing.T) {
 
 	require.NotNil(t, f)
 	require.NotNil(t, f.Cache())
+}
+
+func TestNewValidatorFactory_WithCelCapCounter(t *testing.T) {
+	store := newMockStore()
+	m := telemetry.NewValidationMetrics(telemetry.Config{Enabled: true, MetricsValidation: true})
+	counter, ok := m.CelCapExceededCounter()
+	require.True(t, ok)
+
+	f := NewValidatorFactory(store, WithCelCapCounter(counter))
+	assert.NotNil(t, f.CelCapCounter())
+}
+
+func TestValidatorFactory_CelCapCounter_NilWhenUnset(t *testing.T) {
+	f := NewValidatorFactory(newMockStore())
+	assert.Nil(t, f.CelCapCounter())
 }
 
 // --- GetValidators: cache miss → builds validators ---
