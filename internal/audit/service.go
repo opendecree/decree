@@ -56,7 +56,7 @@ func (s *Service) resolveTenantID(ctx context.Context, idOrName string) (string,
 	if idOrName == "" {
 		return "", status.Error(codes.InvalidArgument, "tenant id or name required")
 	}
-	if isValidUUID(idOrName) {
+	if domain.IsUUID(idOrName) {
 		return idOrName, nil
 	}
 	if s.resolveTenant != nil {
@@ -304,14 +304,6 @@ func (s *Service) GetUnusedFields(ctx context.Context, req *pb.GetUnusedFieldsRe
 }
 
 // --- Helpers ---
-
-func isValidUUID(s string) bool {
-	// Simple length + format check. Full validation happens in the store layer.
-	if len(s) != 36 {
-		return false
-	}
-	return s[8] == '-' && s[13] == '-' && s[18] == '-' && s[23] == '-'
-}
 
 func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 	entry := &pb.AuditEntry{

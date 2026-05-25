@@ -439,9 +439,9 @@ func TestVerifyChain_TenantTamperedEntry(t *testing.T) {
 // --- Helpers ---
 
 func TestIsValidUUID(t *testing.T) {
-	assert.True(t, isValidUUID("11111111-1111-1111-1111-111111111111"))
-	assert.False(t, isValidUUID("not-a-uuid"))
-	assert.False(t, isValidUUID(""))
+	assert.True(t, domain.IsUUID("11111111-1111-1111-1111-111111111111"))
+	assert.False(t, domain.IsUUID("not-a-uuid"))
+	assert.False(t, domain.IsUUID(""))
 }
 
 func TestAuditEntryToProto(t *testing.T) {
