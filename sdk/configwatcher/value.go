@@ -23,6 +23,7 @@ type Value[T any] struct {
 	mu         sync.RWMutex
 	current    T
 	isSet      bool
+	closed     bool // true after close(); guarded by mu
 	defaultVal T
 	parse      func(string) (T, error)
 	changesCh  chan Change[T]
@@ -87,14 +88,21 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 		}
 	}
 
-	// Send change notification (non-blocking).
-	select {
-	case v.changesCh <- Change[T]{
+	// Do not send on a closed channel.
+	if v.closed {
+		return
+	}
+
+	ch := Change[T]{
 		Old:     oldVal,
 		New:     v.current,
 		WasNull: wasNull,
 		IsNull:  !v.isSet,
-	}:
+	}
+
+	// Send change notification (non-blocking).
+	select {
+	case v.changesCh <- ch:
 	default:
 		// Channel full — drop oldest, send new.
 		select {
@@ -102,18 +110,20 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 		default:
 		}
 		select {
-		case v.changesCh <- Change[T]{
-			Old:     oldVal,
-			New:     v.current,
-			WasNull: wasNull,
-			IsNull:  !v.isSet,
-		}:
+		case v.changesCh <- ch:
 		default:
 		}
 	}
 }
 
-// close closes the changes channel.
+// close marks the value as closed and closes the changes channel.
+// It is safe to call concurrently with update.
 func (v *Value[T]) close() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.closed {
+		return
+	}
+	v.closed = true
 	close(v.changesCh)
 }
