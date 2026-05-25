@@ -4,10 +4,12 @@ package adminclient
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	schema SchemaTransport
-	config ConfigTransport
-	audit  AuditTransport
-	server ServerTransport
+	schema       SchemaTransport
+	config       ConfigTransport
+	audit        AuditTransport
+	server       ServerTransport
+	retryEnabled bool
+	retry        RetryConfig
 }
 
 // WithSchemaTransport wires the schema transport. Methods that need it return
@@ -32,4 +34,14 @@ func WithAuditTransport(t AuditTransport) Option {
 // return [ErrServiceNotConfigured] when unset.
 func WithServerTransport(t ServerTransport) Option {
 	return func(o *clientOptions) { o.server = t }
+}
+
+// WithRetry enables automatic retry with exponential backoff for transient errors.
+// Only idempotent read operations (List*, Get*) are retried by default.
+// By default, only errors wrapped in [RetryableError] by the transport are retried.
+func WithRetry(cfg RetryConfig) Option {
+	return func(o *clientOptions) {
+		o.retry = cfg.withDefaults()
+		o.retryEnabled = true
+	}
 }

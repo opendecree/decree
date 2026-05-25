@@ -23,7 +23,9 @@ func (c *Client) GetTenant(ctx context.Context, id string) (*Tenant, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.schema.GetTenant(ctx, id)
+	return retry(ctx, c, func(ctx context.Context) (*Tenant, error) {
+		return c.schema.GetTenant(ctx, id)
+	})
 }
 
 // ListTenants returns all tenants, optionally filtered by schema ID.
@@ -32,24 +34,26 @@ func (c *Client) ListTenants(ctx context.Context, schemaID string) ([]*Tenant, e
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	var schemaFilter *string
-	if schemaID != "" {
-		schemaFilter = &schemaID
-	}
-	var all []*Tenant
-	pageToken := ""
-	for {
-		resp, err := c.schema.ListTenants(ctx, schemaFilter, 100, pageToken)
-		if err != nil {
-			return nil, err
+	return retry(ctx, c, func(ctx context.Context) ([]*Tenant, error) {
+		var schemaFilter *string
+		if schemaID != "" {
+			schemaFilter = &schemaID
 		}
-		all = append(all, resp.Tenants...)
-		if resp.NextPageToken == "" {
-			break
+		var all []*Tenant
+		pageToken := ""
+		for {
+			resp, err := c.schema.ListTenants(ctx, schemaFilter, 100, pageToken)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, resp.Tenants...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
-		pageToken = resp.NextPageToken
-	}
-	return all, nil
+		return all, nil
+	})
 }
 
 // UpdateTenantName updates a tenant's name.
