@@ -209,7 +209,11 @@ var schemaImportCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		s, err := admin.ImportSchema(cmd.Context(), data, publish)
+		var importOpts []adminclient.ImportSchemaOption
+		if publish {
+			importOpts = append(importOpts, adminclient.WithAutoPublish())
+		}
+		s, err := admin.ImportSchema(cmd.Context(), data, importOpts...)
 		if err != nil {
 			return err
 		}

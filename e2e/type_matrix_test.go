@@ -265,7 +265,7 @@ func TestTypeMatrix(t *testing.T) {
 						sample := tc.sample()
 						yaml := buildSingleFieldYAML(path, tc.yamlValue(sample))
 						_, err := admin.ImportConfig(ctx, fx.tenantID, []byte(yaml),
-							"matrix3 import "+path, adminclient.ImportModeMerge)
+							"matrix3 import "+path, adminclient.WithImportMode(adminclient.ImportModeMerge))
 						require.NoError(t, err, "import yaml: %s", yaml)
 
 						// Round-trip read.

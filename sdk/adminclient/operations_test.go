@@ -163,7 +163,7 @@ func TestImportSchema_AutoPublish(t *testing.T) {
 		return &Schema{ID: "s1", Version: 1, Published: true, CreatedAt: time.Now()}, nil
 	}
 
-	s, err := client.ImportSchema(context.Background(), []byte("yaml"), true)
+	s, err := client.ImportSchema(context.Background(), []byte("yaml"), WithAutoPublish())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -368,9 +368,7 @@ func TestUpdateTenant_BothFields(t *testing.T) {
 		return &Tenant{ID: "t1", Name: "renamed", SchemaVersion: 2, CreatedAt: time.Now(), UpdatedAt: time.Now()}, nil
 	}
 
-	name := "renamed"
-	v := int32(2)
-	tenant, err := client.UpdateTenant(context.Background(), "t1", &name, &v)
+	tenant, err := client.UpdateTenant(context.Background(), "t1", WithTenantName("renamed"), WithTenantSchemaVersion(2))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -645,7 +643,7 @@ func TestImportConfig_WithMode(t *testing.T) {
 		return &Version{Version: 4, CreatedAt: time.Now()}, nil
 	}
 
-	v, err := client.ImportConfig(context.Background(), "t1", []byte("yaml"), "full replace", ImportModeReplace)
+	v, err := client.ImportConfig(context.Background(), "t1", []byte("yaml"), "full replace", WithImportMode(ImportModeReplace))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -749,7 +747,7 @@ func TestServiceNotConfigured_AllMethods(t *testing.T) {
 		t.Errorf("UpdateTenantSchema: got error %v, want %v", err, ErrServiceNotConfigured)
 	}
 
-	_, err = client.UpdateTenant(ctx, "t1", nil, nil)
+	_, err = client.UpdateTenant(ctx, "t1")
 	if !errors.Is(err, ErrServiceNotConfigured) {
 		t.Errorf("UpdateTenant: got error %v, want %v", err, ErrServiceNotConfigured)
 	}
