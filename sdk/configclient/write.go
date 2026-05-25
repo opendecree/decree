@@ -101,6 +101,7 @@ type LockedValue struct {
 	Checksum string
 
 	tenantID string
+	client   *Client
 }
 
 // GetForUpdate reads a field's current value along with its checksum.
@@ -121,6 +122,7 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 			Value:     resp.Value.String(),
 			Checksum:  resp.Checksum,
 			tenantID:  tenantID,
+			client:    c,
 		}, nil
 	})
 }
@@ -128,9 +130,9 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 // Set writes a new value for this field, but only if the value has not been
 // modified since the [LockedValue] was obtained via [Client.GetForUpdate].
 // Returns [ErrChecksumMismatch] if the value was changed by another writer.
-func (lv *LockedValue) Set(ctx context.Context, client *Client, newValue string) error {
-	return retryDo(ctx, client, func(ctx context.Context) error {
-		_, err := client.transport.SetField(ctx, &SetFieldRequest{
+func (lv *LockedValue) Set(ctx context.Context, newValue string) error {
+	return retryDo(ctx, lv.client, func(ctx context.Context) error {
+		_, err := lv.client.transport.SetField(ctx, &SetFieldRequest{
 			TenantID:         lv.tenantID,
 			FieldPath:        lv.FieldPath,
 			Value:            StringVal(newValue),
@@ -155,7 +157,7 @@ func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateF
 	if err != nil {
 		return err
 	}
-	return lv.Set(ctx, c, newValue)
+	return lv.Set(ctx, newValue)
 }
 
 // --- Type-specific setters ---
