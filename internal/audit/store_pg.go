@@ -16,6 +16,17 @@ import (
 	"github.com/opendecree/decree/internal/storage/pgconv"
 )
 
+// dbNow fetches the current timestamp from the database.
+// Using the DB clock instead of time.Now() ensures authoritative, skew-free
+// timestamps regardless of the application server's wall clock.
+func dbNow(ctx context.Context, tx pgx.Tx) (time.Time, error) {
+	var ts pgtype.Timestamptz
+	if err := tx.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts); err != nil {
+		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
+	}
+	return ts.Time.Truncate(time.Microsecond), nil
+}
+
 // PGStore implements Store using PostgreSQL via sqlc-generated queries.
 type PGStore struct {
 	writePool *pgxpool.Pool
@@ -85,10 +96,14 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	if kind == "" {
 		kind = "field"
 	}
-	// Truncate to microseconds to match PostgreSQL timestamptz precision so
-	// that the hash computed here and the hash recomputed during chain
-	// verification both use the same CreatedAt value.
-	now := time.Now().Truncate(time.Microsecond)
+	// Use the database clock so the timestamp is authoritative and independent
+	// of application-server clock skew. Truncate to microseconds matches
+	// PostgreSQL timestamptz precision, ensuring the hash computed here equals
+	// the hash recomputed by VerifyChain after reading the stored value.
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
 	hash := ComputeEntryHash(ChainInput{
 		PreviousHash:  prevHash,
 		ID:            pgconv.UUIDToString(id),

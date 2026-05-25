@@ -37,10 +37,9 @@ type writeRPCSpec struct {
 func writeRPCs() []writeRPCSpec {
 	return []writeRPCSpec{
 		// Note: SetField / SetFields go through the configclient SDK
-		// which maps codes.PermissionDenied to ErrLocked. isAuthDenied
-		// recognizes that mapping (matrix 2 setup guarantees no real
-		// field locks, so ErrLocked here is always a tenant-access
-		// denial in disguise).
+		// which maps codes.PermissionDenied to ErrPermissionDenied.
+		// isAuthDenied recognizes that sentinel; matrix 2 setup
+		// guarantees no active field locks on the target fields.
 		{
 			name: "SetField",
 			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
