@@ -321,6 +321,85 @@ func TestSchemaService_RequiresAuth(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
+// --- Cross-tenant write rejection (issue #422) ---
+
+const testOtherTenantID = "00000000-0000-0000-0000-000000000099"
+
+// adminCtxWithTenants returns a context for an admin whose access is scoped to the given tenant IDs.
+func adminCtxWithTenants(tenantIDs ...string) context.Context {
+	return auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: tenantIDs,
+	})
+}
+
+func TestLockField_CrossTenantRejected(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	// Admin scoped to testTenantID; tries to lock a field on testOtherTenantID.
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testOtherTenantID).
+		Return(domain.Tenant{ID: testOtherTenantID, Name: "other"}, nil)
+
+	_, err := svc.LockField(ctx, &pb.LockFieldRequest{
+		TenantId:  testOtherTenantID,
+		FieldPath: "foo.bar",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
+func TestUnlockField_CrossTenantRejected(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testOtherTenantID).
+		Return(domain.Tenant{ID: testOtherTenantID, Name: "other"}, nil)
+
+	_, err := svc.UnlockField(ctx, &pb.UnlockFieldRequest{
+		TenantId:  testOtherTenantID,
+		FieldPath: "foo.bar",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
+func TestUpdateTenant_CrossTenantRejected(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testOtherTenantID).
+		Return(domain.Tenant{ID: testOtherTenantID, Name: "other"}, nil)
+
+	_, err := svc.UpdateTenant(ctx, &pb.UpdateTenantRequest{Id: testOtherTenantID})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
+func TestDeleteTenant_CrossTenantRejected(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testOtherTenantID).
+		Return(domain.Tenant{ID: testOtherTenantID, Name: "other"}, nil)
+
+	_, err := svc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: testOtherTenantID})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
 // --- helpers ---
 
 func ptrInt32(v int32) *int32 {

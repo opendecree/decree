@@ -143,7 +143,7 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Name == "" {
@@ -292,7 +292,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -385,7 +385,7 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -419,7 +419,7 @@ func (s *Service) PublishSchema(ctx context.Context, req *pb.PublishSchemaReques
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Id == "" {
@@ -473,7 +473,7 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if req.Name == "" {
@@ -599,11 +599,11 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
-		return nil, err
-	}
 	resolved, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: resolved.ID}); err != nil {
 		return nil, err
 	}
 	tenantID := resolved.ID
@@ -671,11 +671,11 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
-		return nil, err
-	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.Id)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant.ID}); err != nil {
 		return nil, err
 	}
 
@@ -705,11 +705,11 @@ func (s *Service) LockField(ctx context.Context, req *pb.LockFieldRequest) (*pb.
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
-		return nil, err
-	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant.ID}); err != nil {
 		return nil, err
 	}
 
@@ -746,11 +746,11 @@ func (s *Service) UnlockField(ctx context.Context, req *pb.UnlockFieldRequest) (
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{}); err != nil {
-		return nil, err
-	}
 	tenant, err := s.resolveTenantWithAccess(ctx, req.TenantId)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant.ID}); err != nil {
 		return nil, err
 	}
 
@@ -835,7 +835,7 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionAdmin, authz.Resource{}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	if s.limits.MaxDocBytes > 0 && len(req.YamlContent) > s.limits.MaxDocBytes {
