@@ -1,6 +1,7 @@
 package grpctransport_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -54,5 +55,28 @@ func TestNewWatcher_NoRole_Errors(t *testing.T) {
 	_, err := grpctransport.NewWatcher(conn(), "tenant-id")
 	if !errors.Is(err, grpctransport.ErrRoleRequired) {
 		t.Fatalf("expected ErrRoleRequired, got %v", err)
+	}
+}
+
+func TestBuildConfig_WithTokenSource_NoRoleRequired(t *testing.T) {
+	_, err := grpctransport.NewConfigTransport(conn(),
+		grpctransport.WithTokenSource(func(context.Context) (string, error) {
+			return "tok", nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error with token source and no role: %v", err)
+	}
+}
+
+func TestBuildConfig_WithTokenSource_ErrorPropagates(t *testing.T) {
+	// Construction succeeds; token source errors surface on RPC calls, not at build time.
+	_, err := grpctransport.NewConfigTransport(conn(),
+		grpctransport.WithTokenSource(func(context.Context) (string, error) {
+			return "", errors.New("token refresh failed")
+		}),
+	)
+	if err != nil {
+		t.Fatalf("unexpected construction error: %v", err)
 	}
 }

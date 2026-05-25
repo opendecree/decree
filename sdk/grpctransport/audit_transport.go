@@ -35,7 +35,10 @@ func NewAuditTransport(conn grpc.ClientConnInterface, opts ...Option) (*AuditTra
 }
 
 func (t *AuditTransport) QueryWriteLog(ctx context.Context, req *adminclient.QueryWriteLogRequest) (*adminclient.QueryWriteLogResponse, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	protoReq := &pb.QueryWriteLogRequest{
 		TenantId:  req.TenantID,
 		Actor:     req.Actor,
@@ -60,7 +63,10 @@ func (t *AuditTransport) QueryWriteLog(ctx context.Context, req *adminclient.Que
 }
 
 func (t *AuditTransport) GetFieldUsage(ctx context.Context, tenantID, fieldPath string, start, end *time.Time) (*adminclient.UsageStats, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.GetFieldUsage(ctx, &pb.GetFieldUsageRequest{
 		TenantId:  tenantID,
 		FieldPath: fieldPath,
@@ -74,7 +80,10 @@ func (t *AuditTransport) GetFieldUsage(ctx context.Context, tenantID, fieldPath 
 }
 
 func (t *AuditTransport) GetTenantUsage(ctx context.Context, tenantID string, start, end *time.Time) ([]*adminclient.UsageStats, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.GetTenantUsage(ctx, &pb.GetTenantUsageRequest{
 		TenantId:  tenantID,
 		StartTime: timeToProto(start),
@@ -91,7 +100,10 @@ func (t *AuditTransport) GetTenantUsage(ctx context.Context, tenantID string, st
 }
 
 func (t *AuditTransport) GetUnusedFields(ctx context.Context, tenantID string, since time.Time) ([]string, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{
 		TenantId: tenantID,
 		Since:    timestamppb.New(since),
