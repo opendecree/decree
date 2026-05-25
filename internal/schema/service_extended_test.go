@@ -175,6 +175,31 @@ func TestListSchemas_ZeroPageSize(t *testing.T) {
 	assert.Len(t, resp.Schemas, 1)
 }
 
+func TestListSchemas_VersionNotFound_Skips(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(domain.SchemaVersion{}, domain.ErrNotFound)
+
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Schemas)
+}
+
+func TestListSchemas_FieldsNotFound_Skips(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
+	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, domain.ErrNotFound)
+
+	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Schemas)
+}
+
 func TestListSchemas_VersionDBError_ReturnsInternal(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
