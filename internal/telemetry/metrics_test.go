@@ -124,6 +124,16 @@ func TestValidationMetrics_NilSafe(t *testing.T) {
 	counter, ok = m.RegexErrorCounter()
 	assert.False(t, ok)
 	assert.Nil(t, counter)
+	gauge, ok := m.InFlightGauge()
+	assert.False(t, ok)
+	assert.Nil(t, gauge)
+}
+
+func TestValidationMetrics_InFlightGauge(t *testing.T) {
+	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
+	gauge, ok := m.InFlightGauge()
+	assert.True(t, ok)
+	assert.NotNil(t, gauge)
 }
 
 func TestValidationMetrics_TimeoutCounter(t *testing.T) {

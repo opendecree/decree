@@ -25,32 +25,50 @@ type Limits struct {
 	// before compilation. A schema deeper than this is rejected
 	// without invoking the compiler.
 	MaxDepth int
+
+	// MaxConcurrentCompiles caps the number of jsonschema.Compile calls
+	// that may run simultaneously across the process. When the limit is
+	// reached, new compile requests block until a slot is released or
+	// CompileTimeout fires. This bounds goroutine growth when malicious
+	// input repeatedly triggers the timeout path. 0 means no limit.
+	MaxConcurrentCompiles int
 }
 
 // DefaultLimits returns conservative defaults: a 5-second compile
-// timeout and a max nesting depth of 64. Tune via env vars at the call
-// site (cmd/server).
+// timeout, a max nesting depth of 64, and a concurrency cap of 32.
+// Tune via env vars at the call site (cmd/server).
 func DefaultLimits() Limits {
 	return Limits{
-		CompileTimeout: 5 * time.Second,
-		MaxDepth:       64,
+		CompileTimeout:        5 * time.Second,
+		MaxDepth:              64,
+		MaxConcurrentCompiles: 32,
 	}
 }
 
 // Option configures a [ValidatorFactory] or [FieldValidator]. See
-// [WithLimits], [WithTimeoutCounter], and [WithRegexErrorCounter].
+// [WithLimits], [WithTimeoutCounter], [WithRegexErrorCounter], and
+// [WithInFlightGauge].
 type Option func(*options)
 
 type options struct {
 	limits            Limits
-	timeoutCounter    metric.Int64Counter // nil when metrics are disabled
-	regexErrorCounter metric.Int64Counter // nil when metrics are disabled
+	timeoutCounter    metric.Int64Counter       // nil when metrics are disabled
+	regexErrorCounter metric.Int64Counter       // nil when metrics are disabled
+	inFlightGauge     metric.Int64UpDownCounter // nil when metrics are disabled
+	compileSem        chan struct{}             // nil when MaxConcurrentCompiles == 0
 }
 
 // WithLimits sets the JSON-Schema compile limits. Defaults to
 // [DefaultLimits] when unset.
 func WithLimits(l Limits) Option {
-	return func(o *options) { o.limits = l }
+	return func(o *options) {
+		o.limits = l
+		if l.MaxConcurrentCompiles > 0 {
+			o.compileSem = make(chan struct{}, l.MaxConcurrentCompiles)
+		} else {
+			o.compileSem = nil
+		}
+	}
 }
 
 // WithTimeoutCounter sets the OTEL counter incremented when a JSON-Schema
@@ -68,8 +86,20 @@ func WithRegexErrorCounter(c metric.Int64Counter) Option {
 	return func(o *options) { o.regexErrorCounter = c }
 }
 
+// WithInFlightGauge sets the OTEL up-down counter tracking the number of
+// JSON-Schema compile goroutines currently in flight (including zombies
+// that outlived their timeout). The metric name should be
+// "validation.json_schema_compiles_in_flight". Pass nil to disable.
+func WithInFlightGauge(g metric.Int64UpDownCounter) Option {
+	return func(o *options) { o.inFlightGauge = g }
+}
+
 func resolveOptions(opts []Option) options {
-	o := options{limits: DefaultLimits()}
+	defaults := DefaultLimits()
+	o := options{
+		limits:     defaults,
+		compileSem: make(chan struct{}, defaults.MaxConcurrentCompiles),
+	}
 	for _, opt := range opts {
 		opt(&o)
 	}

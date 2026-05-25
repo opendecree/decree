@@ -131,10 +131,11 @@ func (m *RateLimitMetrics) Counter() (metric.Int64Counter, bool) {
 	return m.rejected, true
 }
 
-// ValidationMetrics records validation-related counters.
+// ValidationMetrics records validation-related counters and gauges.
 type ValidationMetrics struct {
 	compileTimeouts    metric.Int64Counter
 	regexCompileErrors metric.Int64Counter
+	inFlightCompiles   metric.Int64UpDownCounter
 }
 
 // NewValidationMetrics creates validation metrics. Returns nil if not enabled.
@@ -147,7 +148,9 @@ func NewValidationMetrics(cfg Config) *ValidationMetrics {
 		metric.WithDescription("Number of JSON-Schema compile goroutines that exceeded their deadline"))
 	regexErrors, _ := meter.Int64Counter("validator_regex_compile_errors_total",
 		metric.WithDescription("Number of regex constraint patterns that failed to compile"))
-	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors}
+	inFlight, _ := meter.Int64UpDownCounter("validation.json_schema_compiles_in_flight",
+		metric.WithDescription("Number of JSON-Schema compile goroutines currently in flight, including zombies that outlived their timeout"))
+	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors, inFlightCompiles: inFlight}
 }
 
 // TimeoutCounter returns the underlying Int64Counter and true when metrics are
@@ -166,6 +169,15 @@ func (m *ValidationMetrics) RegexErrorCounter() (metric.Int64Counter, bool) {
 		return nil, false
 	}
 	return m.regexCompileErrors, true
+}
+
+// InFlightGauge returns the in-flight compile gauge and true when metrics are
+// enabled, or a nil interface and false when disabled.
+func (m *ValidationMetrics) InFlightGauge() (metric.Int64UpDownCounter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.inFlightCompiles, true
 }
 
 // StartDBPoolMetrics starts a background goroutine that periodically records
