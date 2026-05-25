@@ -21,6 +21,8 @@ func mapConfigError(err error) error {
 	case codes.NotFound:
 		return configclient.ErrNotFound
 	case codes.PermissionDenied:
+		return configclient.ErrPermissionDenied
+	case codes.FailedPrecondition:
 		return configclient.ErrLocked
 	case codes.Aborted:
 		return configclient.ErrChecksumMismatch

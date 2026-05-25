@@ -142,3 +142,123 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 	cancel()
 	_ = w.Close()
 }
+
+// TestValue_CloseRacesWithUpdate exercises the race between Value.close() and
+// Value.update() that previously caused a "send on closed channel" panic.
+// Run with: go test -race ./sdk/configwatcher/
+func TestValue_CloseRacesWithUpdate(t *testing.T) {
+	const iterations = 1000
+
+	for range iterations {
+		v := newValue(int64(0), parseInt)
+
+		// ready gates both goroutines to start at the same instant.
+		ready := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// Goroutine 1: hammer update.
+		go func() {
+			defer wg.Done()
+			<-ready
+			for i := range 50 {
+				v.update(fmt.Sprintf("%d", i), true)
+			}
+		}()
+
+		// Goroutine 2: close immediately after the gate opens.
+		go func() {
+			defer wg.Done()
+			<-ready
+			v.close()
+		}()
+
+		close(ready)
+		wg.Wait()
+	}
+}
+
+// TestWatcher_CloseWhileStreamSends verifies that Close does not panic when
+// the subscription stream delivers updates concurrently with shutdown.
+func TestWatcher_CloseWhileStreamSends(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// subCh is written to by the test to simulate incoming stream events.
+	subCh := make(chan *configclient.ConfigChange, 64)
+	sub := &mockSubscription{ch: subCh, ctx: ctx}
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(sCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts: options{
+			minBackoff: 5 * time.Millisecond,
+			maxBackoff: 10 * time.Millisecond,
+			logger:     slog.Default(),
+		},
+		fields: make(map[string]*fieldEntry),
+		done:   make(chan struct{}),
+	}
+
+	val := w.String("key", "default")
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Drain Changes so the buffer doesn't fill.
+	drainDone := make(chan struct{})
+	go func() {
+		defer close(drainDone)
+		for range val.Changes() {
+		}
+	}()
+
+	// Flood the stream with changes while concurrently closing.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 200 {
+			select {
+			case subCh <- &configclient.ConfigChange{
+				TenantID:  "t1",
+				FieldPath: "key",
+				NewValue:  configclient.StringVal(fmt.Sprintf("v%d", i)),
+			}:
+			default:
+			}
+		}
+	}()
+
+	// Close shortly after starting the flood.
+	time.Sleep(2 * time.Millisecond)
+	cancel()
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	wg.Wait()
+
+	// Changes channel must be closed after Close returns.
+	select {
+	case _, ok := <-val.Changes():
+		if ok {
+			t.Error("expected Changes channel to be closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Changes channel was not closed after Close()")
+	}
+
+	<-drainDone
+}
