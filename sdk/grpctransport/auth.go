@@ -29,6 +29,7 @@ type authConfig struct {
 	role        string
 	tenantID    string
 	bearerToken string
+	tokenSource func(context.Context) (string, error)
 }
 
 // WithSubject sets the x-subject metadata header.
@@ -50,6 +51,14 @@ func WithTenantID(id string) Option {
 // When set, the x-subject/x-role/x-tenant-id headers are not sent.
 func WithBearerToken(token string) Option {
 	return func(c *config) { c.auth.bearerToken = token }
+}
+
+// WithTokenSource sets a per-RPC token source. The function is called on
+// every RPC and its return value is used as the Bearer token. Use this
+// instead of [WithBearerToken] when tokens can expire (e.g. OAuth2,
+// short-lived JWTs).
+func WithTokenSource(fn func(context.Context) (string, error)) Option {
+	return func(c *config) { c.auth.tokenSource = fn }
 }
 
 // WithRetry passes a retry configuration through to configclient.
@@ -74,26 +83,33 @@ func WithLogger(l *slog.Logger) Option {
 }
 
 // ErrRoleRequired is returned by transport constructors when neither
-// WithRole nor WithBearerToken is provided.
-var ErrRoleRequired = errors.New("grpctransport: WithRole is required when not using WithBearerToken")
+// WithRole, WithBearerToken, nor WithTokenSource is provided.
+var ErrRoleRequired = errors.New("grpctransport: WithRole is required when not using WithBearerToken or WithTokenSource")
 
 func buildConfig(opts []Option) (config, error) {
 	var cfg config
 	for _, o := range opts {
 		o(&cfg)
 	}
-	if cfg.auth.bearerToken == "" && cfg.auth.role == "" {
+	if cfg.auth.bearerToken == "" && cfg.auth.tokenSource == nil && cfg.auth.role == "" {
 		return config{}, ErrRoleRequired
 	}
 	return cfg, nil
 }
 
 // applyAuth injects authentication metadata into the outgoing gRPC context.
-func applyAuth(ctx context.Context, auth authConfig) context.Context {
+func applyAuth(ctx context.Context, auth authConfig) (context.Context, error) {
 	md := metadata.MD{}
-	if auth.bearerToken != "" {
+	switch {
+	case auth.tokenSource != nil:
+		tok, err := auth.tokenSource(ctx)
+		if err != nil {
+			return ctx, err
+		}
+		md.Set("authorization", "Bearer "+tok)
+	case auth.bearerToken != "":
 		md.Set("authorization", "Bearer "+auth.bearerToken)
-	} else {
+	default:
 		if auth.subject != "" {
 			md.Set("x-subject", auth.subject)
 		}
@@ -104,5 +120,5 @@ func applyAuth(ctx context.Context, auth authConfig) context.Context {
 			md.Set("x-tenant-id", auth.tenantID)
 		}
 	}
-	return metadata.NewOutgoingContext(ctx, md)
+	return metadata.NewOutgoingContext(ctx, md), nil
 }

@@ -32,7 +32,10 @@ func NewAdminConfigTransport(conn grpc.ClientConnInterface, opts ...Option) (*Ad
 }
 
 func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*adminclient.ListVersionsResponse, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.ListVersions(ctx, &pb.ListVersionsRequest{
 		TenantId:  tenantID,
 		PageSize:  pageSize,
@@ -52,7 +55,10 @@ func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string
 }
 
 func (t *AdminConfigTransport) GetVersion(ctx context.Context, tenantID string, version int32) (*adminclient.Version, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.GetVersion(ctx, &pb.GetVersionRequest{
 		TenantId: tenantID,
 		Version:  version,
@@ -64,7 +70,10 @@ func (t *AdminConfigTransport) GetVersion(ctx context.Context, tenantID string, 
 }
 
 func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID string, version int32, description string) (*adminclient.Version, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	protoReq := &pb.RollbackToVersionRequest{
 		TenantId: tenantID,
 		Version:  version,
@@ -80,7 +89,10 @@ func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID s
 }
 
 func (t *AdminConfigTransport) ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := t.rpc.ExportConfig(ctx, &pb.ExportConfigRequest{
 		TenantId: tenantID,
 		Version:  version,
@@ -92,7 +104,10 @@ func (t *AdminConfigTransport) ExportConfig(ctx context.Context, tenantID string
 }
 
 func (t *AdminConfigTransport) ImportConfig(ctx context.Context, req *adminclient.ImportConfigRequest) (*adminclient.Version, error) {
-	ctx = applyAuth(ctx, t.auth)
+	ctx, err := applyAuth(ctx, t.auth)
+	if err != nil {
+		return nil, err
+	}
 	protoReq := &pb.ImportConfigRequest{
 		TenantId:    req.TenantID,
 		YamlContent: req.YamlContent,
