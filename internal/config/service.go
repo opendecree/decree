@@ -1050,6 +1050,10 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
+	if s.limits.MaxDocBytes > 0 && len(req.YamlContent) > s.limits.MaxDocBytes {
+		return nil, status.Errorf(codes.InvalidArgument, "config document is %d bytes, exceeds limit of %d", len(req.YamlContent), s.limits.MaxDocBytes)
+	}
+
 	// Upfront role + tenant check before any store reads.
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
 	if err != nil {
@@ -1079,6 +1083,9 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 	// Check field locks and validate.
 	for _, v := range values {
+		if s.limits.MaxFieldValueBytes > 0 && len(v.Value) > s.limits.MaxFieldValueBytes {
+			return nil, status.Errorf(codes.InvalidArgument, "field %q value is %d bytes, exceeds limit of %d", v.FieldPath, len(v.Value), s.limits.MaxFieldValueBytes)
+		}
 		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: v.FieldPath}); err != nil {
 			return nil, err
 		}
