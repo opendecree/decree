@@ -134,6 +134,62 @@ func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
 
 // --- SetField ---
 
+func TestSetField_EmptyFieldPath(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	store.AssertNotCalled(t, "SetConfigValue")
+}
+
+func TestSetFields_EmptyFieldPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		updates  []*pb.FieldUpdate
+		wantCode codes.Code
+	}{
+		{
+			"one update empty field_path",
+			[]*pb.FieldUpdate{
+				{FieldPath: "", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}}},
+			},
+			codes.InvalidArgument,
+		},
+		{
+			"second update empty field_path",
+			[]*pb.FieldUpdate{
+				{FieldPath: "a.b", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}}},
+				{FieldPath: "", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}}},
+			},
+			codes.InvalidArgument,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, store, _, _ := newTestService()
+			ctx := superadminCtx()
+
+			store.On("GetTenantByID", ctx, tenantID1).
+				Return(domain.Tenant{ID: tenantID1, Name: "t"}, nil)
+			store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+
+			_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+				TenantId: tenantID1,
+				Updates:  tc.updates,
+			})
+
+			assert.Equal(t, tc.wantCode, status.Code(err))
+		})
+	}
+}
+
 func TestSetField_Success(t *testing.T) {
 	svc, store, cache, pub := newTestService()
 	ctx := superadminCtx()

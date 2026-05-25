@@ -436,6 +436,38 @@ func TestDeleteTenant_CrossTenantRejected(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
+// --- Empty FieldPath validation (issue #447) ---
+
+func TestLockField_EmptyFieldPath(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	_, err := svc.LockField(ctx, &pb.LockFieldRequest{
+		TenantId:  testTenantID,
+		FieldPath: "",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	store.AssertNotCalled(t, "CreateFieldLock")
+}
+
+func TestUnlockField_EmptyFieldPath(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	_, err := svc.UnlockField(ctx, &pb.UnlockFieldRequest{
+		TenantId:  testTenantID,
+		FieldPath: "",
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	store.AssertNotCalled(t, "DeleteFieldLock")
+}
+
 // --- helpers ---
 
 func ptrInt32(v int32) *int32 {
