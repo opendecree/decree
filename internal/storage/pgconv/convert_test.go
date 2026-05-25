@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -120,6 +121,27 @@ func TestWrapNotFound(t *testing.T) {
 	t.Run("other error", func(t *testing.T) {
 		other := errors.New("something else")
 		assert.Equal(t, other, WrapNotFound(other))
+	})
+}
+
+func TestWrapUniqueViolation(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		assert.Nil(t, WrapUniqueViolation(nil))
+	})
+
+	t.Run("23505 unique_violation", func(t *testing.T) {
+		err := WrapUniqueViolation(&pgconn.PgError{Code: "23505"})
+		assert.ErrorIs(t, err, domain.ErrAlreadyExists)
+	})
+
+	t.Run("other pg error", func(t *testing.T) {
+		pgErr := &pgconn.PgError{Code: "23503"}
+		assert.Equal(t, pgErr, WrapUniqueViolation(pgErr))
+	})
+
+	t.Run("non-pg error", func(t *testing.T) {
+		other := errors.New("something else")
+		assert.Equal(t, other, WrapUniqueViolation(other))
 	})
 }
 

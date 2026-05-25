@@ -125,7 +125,7 @@ func (s *PGStore) CreateSchema(ctx context.Context, arg CreateSchemaParams) (dom
 		Description: arg.Description,
 	})
 	if err != nil {
-		return domain.Schema{}, err
+		return domain.Schema{}, pgconv.WrapUniqueViolation(err)
 	}
 	return schemaFromDB(row), nil
 }
@@ -318,7 +318,7 @@ func (s *PGStore) CreateTenant(ctx context.Context, arg CreateTenantParams) (dom
 		SchemaVersion: arg.SchemaVersion,
 	})
 	if err != nil {
-		return domain.Tenant{}, err
+		return domain.Tenant{}, pgconv.WrapUniqueViolation(err)
 	}
 	return tenantFromDB(row), nil
 }
