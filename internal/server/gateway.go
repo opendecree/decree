@@ -22,6 +22,7 @@ import (
 // It is optional — only started when httpPort is non-empty.
 type Gateway struct {
 	httpServer *http.Server
+	conn       *grpc.ClientConn
 	logger     *slog.Logger
 }
 
@@ -145,6 +146,7 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 
 	return &Gateway{
 		httpServer: httpServer,
+		conn:       conn,
 		logger:     o.logger,
 	}, nil
 }
@@ -163,6 +165,7 @@ func (g *Gateway) Serve(ctx context.Context) error {
 func (g *Gateway) Shutdown(ctx context.Context) {
 	g.logger.InfoContext(ctx, "shutting down HTTP gateway")
 	_ = g.httpServer.Shutdown(ctx)
+	_ = g.conn.Close()
 }
 
 // forwardAuthHeaders extracts auth-related HTTP headers and forwards them as
