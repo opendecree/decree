@@ -64,21 +64,33 @@ const (
 	ImportModeDefaults ImportMode = 3
 )
 
+// ImportConfigOption configures an ImportConfig call.
+type ImportConfigOption func(*importConfigOptions)
+
+type importConfigOptions struct {
+	mode ImportMode
+}
+
+// WithImportMode sets the import mode. Defaults to [ImportModeMerge] if not specified.
+func WithImportMode(mode ImportMode) ImportConfigOption {
+	return func(o *importConfigOptions) { o.mode = mode }
+}
+
 // ImportConfig applies configuration values from YAML, creating a new version.
 // The description is optional — pass an empty string to use the default.
-// Mode defaults to ImportModeMerge if not specified.
-func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...ImportMode) (*Version, error) {
+// Mode defaults to [ImportModeMerge] unless [WithImportMode] is passed.
+func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, opts ...ImportConfigOption) (*Version, error) {
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	m := ImportModeMerge
-	if len(mode) > 0 {
-		m = mode[0]
+	o := importConfigOptions{mode: ImportModeMerge}
+	for _, opt := range opts {
+		opt(&o)
 	}
 	return c.config.ImportConfig(ctx, &ImportConfigRequest{
 		TenantID:    tenantID,
 		YamlContent: yamlContent,
 		Description: description,
-		Mode:        m,
+		Mode:        o.mode,
 	})
 }

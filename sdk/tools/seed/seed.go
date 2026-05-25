@@ -146,12 +146,12 @@ type LockDef struct {
 // Client defines the adminclient methods used by seed operations.
 // The [adminclient.Client] type satisfies this interface.
 type Client interface {
-	ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error)
+	ImportSchema(ctx context.Context, yamlContent []byte, opts ...adminclient.ImportSchemaOption) (*adminclient.Schema, error)
 	ListSchemas(ctx context.Context) ([]*adminclient.Schema, error)
 	GetLatestPublishedSchemaVersion(ctx context.Context, name string) (string, int32, error)
 	ListTenants(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error)
 	CreateTenant(ctx context.Context, name, schemaID string, schemaVersion int32) (*adminclient.Tenant, error)
-	ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error)
+	ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, opts ...adminclient.ImportConfigOption) (*adminclient.Version, error)
 	ListConfigVersions(ctx context.Context, tenantID string) ([]*adminclient.Version, error)
 	LockField(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error
 }
@@ -294,7 +294,11 @@ func importSchema(ctx context.Context, client Client, file *File, o options, res
 		return fmt.Errorf("marshaling schema: %w", err)
 	}
 
-	schema, err := client.ImportSchema(ctx, schemaYAML, o.autoPublish)
+	var importOpts []adminclient.ImportSchemaOption
+	if o.autoPublish {
+		importOpts = append(importOpts, adminclient.WithAutoPublish())
+	}
+	schema, err := client.ImportSchema(ctx, schemaYAML, importOpts...)
 	if err == nil {
 		result.SchemaID = schema.ID
 		result.SchemaVersion = schema.Version
@@ -392,7 +396,7 @@ func importConfig(ctx context.Context, client Client, file *File, result *Result
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}
-	ver, err := client.ImportConfig(ctx, result.TenantID, configYAML, file.Config.Description, adminclient.ImportModeMerge)
+	ver, err := client.ImportConfig(ctx, result.TenantID, configYAML, file.Config.Description, adminclient.WithImportMode(adminclient.ImportModeMerge))
 	if err == nil {
 		result.ConfigVersion = ver.Version
 		result.ConfigImported = true

@@ -76,16 +76,39 @@ func (c *Client) UpdateTenantSchema(ctx context.Context, id string, schemaVersio
 	})
 }
 
+// UpdateTenantOption configures an UpdateTenant call.
+type UpdateTenantOption func(*updateTenantOptions)
+
+type updateTenantOptions struct {
+	name          *string
+	schemaVersion *int32
+}
+
+// WithTenantName sets the new name for a tenant.
+func WithTenantName(name string) UpdateTenantOption {
+	return func(o *updateTenantOptions) { o.name = &name }
+}
+
+// WithTenantSchemaVersion sets the schema version to upgrade the tenant to.
+func WithTenantSchemaVersion(version int32) UpdateTenantOption {
+	return func(o *updateTenantOptions) { o.schemaVersion = &version }
+}
+
 // UpdateTenant updates a tenant's name and/or schema version in a single call.
-// Pass nil for fields that should be left unchanged. At least one field must be non-nil.
-func (c *Client) UpdateTenant(ctx context.Context, id string, name *string, schemaVersion *int32) (*Tenant, error) {
+// At least one option must be provided. Use [WithTenantName] and/or
+// [WithTenantSchemaVersion] to specify what to change.
+func (c *Client) UpdateTenant(ctx context.Context, id string, opts ...UpdateTenantOption) (*Tenant, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
+	var o updateTenantOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
 	return c.schema.UpdateTenant(ctx, &UpdateTenantRequest{
 		ID:            id,
-		Name:          name,
-		SchemaVersion: schemaVersion,
+		Name:          o.name,
+		SchemaVersion: o.schemaVersion,
 	})
 }
 

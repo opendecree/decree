@@ -108,7 +108,7 @@ fields:
   - path: app.environment
     type: string
 `)
-	schema, err := client.ImportSchema(ctx, yaml, true)
+	schema, err := client.ImportSchema(ctx, yaml, adminclient.WithAutoPublish())
 	if err != nil {
 		fmt.Println("error:", err)
 		return
