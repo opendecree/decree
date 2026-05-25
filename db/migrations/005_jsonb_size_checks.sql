@@ -1,7 +1,9 @@
 -- +goose Up
 
--- Cap JSONB column sizes at 1 MiB to prevent unbounded storage.
+-- Cap user-supplied JSONB column sizes at 1 MiB to prevent unbounded storage.
 -- pg_column_size returns the on-disk size including storage overhead.
+-- audit_write_log.metadata is excluded: it is server-generated context and
+-- may legitimately exceed 1 MiB for bulk-import audit entries.
 
 ALTER TABLE schema_fields
     ADD CONSTRAINT chk_schema_fields_constraints_size
@@ -15,10 +17,6 @@ ALTER TABLE tenant_field_locks
     ADD CONSTRAINT chk_tenant_field_locks_locked_values_size
         CHECK (pg_column_size(locked_values) <= 1048576);
 
-ALTER TABLE audit_write_log
-    ADD CONSTRAINT chk_audit_write_log_metadata_size
-        CHECK (pg_column_size(metadata) <= 1048576);
-
 -- +goose Down
 
 ALTER TABLE schema_fields
@@ -28,6 +26,3 @@ ALTER TABLE schema_fields
 
 ALTER TABLE tenant_field_locks
     DROP CONSTRAINT IF EXISTS chk_tenant_field_locks_locked_values_size;
-
-ALTER TABLE audit_write_log
-    DROP CONSTRAINT IF EXISTS chk_audit_write_log_metadata_size;
