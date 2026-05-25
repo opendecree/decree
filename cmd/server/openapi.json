@@ -1927,6 +1927,13 @@
           "type": "integer",
           "format": "int32",
           "description": "For string: maximum allowed length."
+        },
+        "allowedSchemes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For url: allowed URI schemes (e.g. \"https\", \"http\").\nIf non-empty, schemes not in this list are rejected with InvalidArgument.\nDefaults to [\"http\", \"https\"] when empty."
         }
       },
       "description": "FieldConstraints defines validation rules for a schema field.\nWhich constraints apply depends on the field's type \u2014 see FieldType docs."

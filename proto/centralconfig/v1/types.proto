@@ -65,6 +65,11 @@ message FieldConstraints {
 
   // For string: maximum allowed length.
   optional int32 max_length = 9;
+
+  // For url: allowed URI schemes (e.g. "https", "http").
+  // If non-empty, schemes not in this list are rejected with InvalidArgument.
+  // Defaults to ["http", "https"] when empty.
+  repeated string allowed_schemes = 10;
 }
 
 // SchemaField defines a single field within a configuration schema.
