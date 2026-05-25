@@ -315,7 +315,7 @@ var configImportCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		v, err := admin.ImportConfig(cmd.Context(), args[0], data, desc, mode)
+		v, err := admin.ImportConfig(cmd.Context(), args[0], data, desc, adminclient.WithImportMode(mode))
 		if err != nil {
 			return err
 		}

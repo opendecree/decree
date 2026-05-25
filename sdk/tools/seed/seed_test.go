@@ -12,18 +12,18 @@ import (
 // --- Mock client ---
 
 type mockClient struct {
-	importSchemaFn                    func(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error)
+	importSchemaFn                    func(ctx context.Context, yamlContent []byte, opts ...adminclient.ImportSchemaOption) (*adminclient.Schema, error)
 	listSchemasFn                     func(ctx context.Context) ([]*adminclient.Schema, error)
 	getLatestPublishedSchemaVersionFn func(ctx context.Context, name string) (string, int32, error)
 	listTenantsFn                     func(ctx context.Context, schemaID string) ([]*adminclient.Tenant, error)
 	createTenantFn                    func(ctx context.Context, name, schemaID string, schemaVersion int32) (*adminclient.Tenant, error)
-	importConfigFn                    func(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error)
+	importConfigFn                    func(ctx context.Context, tenantID string, yamlContent []byte, description string, opts ...adminclient.ImportConfigOption) (*adminclient.Version, error)
 	listConfigVersionsFn              func(ctx context.Context, tenantID string) ([]*adminclient.Version, error)
 	lockFieldFn                       func(ctx context.Context, tenantID, fieldPath string, lockedValues ...string) error
 }
 
-func (m *mockClient) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*adminclient.Schema, error) {
-	return m.importSchemaFn(ctx, yamlContent, autoPublish...)
+func (m *mockClient) ImportSchema(ctx context.Context, yamlContent []byte, opts ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
+	return m.importSchemaFn(ctx, yamlContent, opts...)
 }
 
 func (m *mockClient) ListSchemas(ctx context.Context) ([]*adminclient.Schema, error) {
@@ -42,8 +42,8 @@ func (m *mockClient) CreateTenant(ctx context.Context, name, schemaID string, sc
 	return m.createTenantFn(ctx, name, schemaID, schemaVersion)
 }
 
-func (m *mockClient) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, mode ...adminclient.ImportMode) (*adminclient.Version, error) {
-	return m.importConfigFn(ctx, tenantID, yamlContent, description, mode...)
+func (m *mockClient) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, opts ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
+	return m.importConfigFn(ctx, tenantID, yamlContent, description, opts...)
 }
 
 func (m *mockClient) ListConfigVersions(ctx context.Context, tenantID string) ([]*adminclient.Version, error) {
@@ -303,7 +303,7 @@ tenant:
 func TestRun_NewSchemaNewTenantWithConfig(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -312,7 +312,7 @@ func TestRun_NewSchemaNewTenantWithConfig(t *testing.T) {
 		createTenantFn: func(_ context.Context, name, schemaID string, _ int32) (*adminclient.Tenant, error) {
 			return &adminclient.Tenant{ID: "t1", Name: name, SchemaID: schemaID}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return &adminclient.Version{Version: 1}, nil
 		},
 		lockFieldFn: func(_ context.Context, _, _ string, _ ...string) error {
@@ -353,7 +353,7 @@ func TestRun_ExistingSchemaExistingTenant(t *testing.T) {
 	file.Locks = nil         // no locks
 
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
@@ -399,10 +399,10 @@ func TestRun_AutoPublish(t *testing.T) {
 
 	var gotAutoPublish bool
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, autoPublish ...bool) (*adminclient.Schema, error) {
-			if len(autoPublish) > 0 {
-				gotAutoPublish = autoPublish[0]
-			}
+		importSchemaFn: func(_ context.Context, _ []byte, opts ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
+			// WithAutoPublish is the only option the seed package ever passes;
+			// any opt present means auto-publish was requested.
+			gotAutoPublish = len(opts) > 0
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -425,7 +425,7 @@ func TestRun_AutoPublish(t *testing.T) {
 func TestRun_SchemaImportError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, fmt.Errorf("connection refused")
 		},
 	}
@@ -439,7 +439,7 @@ func TestRun_SchemaImportError(t *testing.T) {
 func TestRun_SchemaExistsButNotFound(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
@@ -458,7 +458,7 @@ func TestRun_SchemaExistsButNotFound(t *testing.T) {
 func TestRun_ListSchemasError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
@@ -475,7 +475,7 @@ func TestRun_ListSchemasError(t *testing.T) {
 func TestRun_ListTenantsError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -492,7 +492,7 @@ func TestRun_ListTenantsError(t *testing.T) {
 func TestRun_CreateTenantError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -512,7 +512,7 @@ func TestRun_CreateTenantError(t *testing.T) {
 func TestRun_ImportConfigError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -521,7 +521,7 @@ func TestRun_ImportConfigError(t *testing.T) {
 		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
 			return &adminclient.Tenant{ID: "t1"}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return nil, fmt.Errorf("validation error")
 		},
 	}
@@ -535,7 +535,7 @@ func TestRun_ImportConfigError(t *testing.T) {
 func TestRun_LockFieldError(t *testing.T) {
 	file := testFile()
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -544,7 +544,7 @@ func TestRun_LockFieldError(t *testing.T) {
 		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
 			return &adminclient.Tenant{ID: "t1"}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return &adminclient.Version{Version: 1}, nil
 		},
 		lockFieldFn: func(_ context.Context, _, _ string, _ ...string) error {
@@ -631,14 +631,14 @@ func TestRun_SchemaOnly(t *testing.T) {
 	}
 	var importConfigCalled, createTenantCalled bool
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
 			createTenantCalled = true
 			return nil, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			importConfigCalled = true
 			return nil, nil
 		},
@@ -679,7 +679,7 @@ func TestRun_ConfigOnly_LatestPublished(t *testing.T) {
 	var resolvedName string
 	var importSchemaCalled bool
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			importSchemaCalled = true
 			return nil, nil
 		},
@@ -690,7 +690,7 @@ func TestRun_ConfigOnly_LatestPublished(t *testing.T) {
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
 			return []*adminclient.Tenant{{ID: "t1", Name: "org1"}}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return &adminclient.Version{Version: 2}, nil
 		},
 	}
@@ -736,7 +736,7 @@ func TestRun_ConfigOnly_ExplicitVersion(t *testing.T) {
 			}
 			return &adminclient.Tenant{ID: "t1"}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return &adminclient.Version{Version: 1}, nil
 		},
 	}
@@ -794,7 +794,7 @@ func TestRun_SchemaReseed_NoNewVersion(t *testing.T) {
 	file.Config.Values = nil
 	file.Locks = nil
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
@@ -820,13 +820,13 @@ func TestRun_ConfigReseed_NoNewVersion(t *testing.T) {
 	file := testFile()
 	file.Locks = nil
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
 			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
@@ -849,7 +849,7 @@ func TestRun_FullNoOpReseed(t *testing.T) {
 	file := testFile()
 	file.Locks = nil
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
@@ -858,7 +858,7 @@ func TestRun_FullNoOpReseed(t *testing.T) {
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
 			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
@@ -931,7 +931,7 @@ func TestRun_SchemaAndTenant(t *testing.T) {
 	}
 	var importConfigCalled bool
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
@@ -940,7 +940,7 @@ func TestRun_SchemaAndTenant(t *testing.T) {
 		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
 			return &adminclient.Tenant{ID: "t1"}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			importConfigCalled = true
 			return nil, nil
 		},
@@ -964,7 +964,7 @@ func TestRun_TenantOnly(t *testing.T) {
 	}
 	var importSchemaCalled, importConfigCalled bool
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			importSchemaCalled = true
 			return nil, nil
 		},
@@ -980,7 +980,7 @@ func TestRun_TenantOnly(t *testing.T) {
 		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
 			return &adminclient.Tenant{ID: "t1"}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			importConfigCalled = true
 			return nil, nil
 		},
@@ -1046,7 +1046,7 @@ func TestRun_ConfigOnly_WithLocks(t *testing.T) {
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
 			return []*adminclient.Tenant{{ID: "t1", Name: "org1"}}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return &adminclient.Version{Version: 1}, nil
 		},
 		lockFieldFn: func(_ context.Context, tenantID, fieldPath string, _ ...string) error {
@@ -1155,13 +1155,13 @@ func TestRun_ConfigReseed_ListConfigVersionsError(t *testing.T) {
 	file := testFile()
 	file.Locks = nil
 	mock := &mockClient{
-		importSchemaFn: func(_ context.Context, _ []byte, _ ...bool) (*adminclient.Schema, error) {
+		importSchemaFn: func(_ context.Context, _ []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
 			return &adminclient.Schema{ID: "s1", Version: 1}, nil
 		},
 		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
 			return []*adminclient.Tenant{{ID: "t1", Name: "test-tenant"}}, nil
 		},
-		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportMode) (*adminclient.Version, error) {
+		importConfigFn: func(_ context.Context, _ string, _ []byte, _ string, _ ...adminclient.ImportConfigOption) (*adminclient.Version, error) {
 			return nil, adminclient.ErrAlreadyExists
 		},
 		listConfigVersionsFn: func(_ context.Context, _ string) ([]*adminclient.Version, error) {
