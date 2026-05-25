@@ -3,6 +3,7 @@ package configclient_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/opendecree/decree/sdk/configclient"
 )
@@ -101,4 +102,73 @@ func ExampleClient_SetMany() {
 	}
 	fmt.Println("ok")
 	// Output: ok
+}
+
+func ExampleClient_Snapshot() {
+	client := configclient.New(&fakeTransport{})
+	ctx := context.Background()
+
+	// Snapshot pins all reads to the current version — consistent across calls.
+	snap, err := client.Snapshot(ctx, "tenant-1")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(snap.Version() > 0)
+
+	val, err := snap.Get(ctx, "app.environment")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(val)
+	// Output:
+	// true
+	// production
+}
+
+func ExampleClient_Update() {
+	client := configclient.New(&fakeTransport{})
+	ctx := context.Background()
+
+	// Atomic read-modify-write: append a suffix to the current value.
+	err := client.Update(ctx, "tenant-1", "app.environment", func(current string) (string, error) {
+		return current + "-updated", nil
+	})
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println("ok")
+	// Output: ok
+}
+
+func ExampleWithRetry() {
+	client := configclient.New(&fakeTransport{}, configclient.WithRetry(configclient.RetryConfig{
+		MaxAttempts:    5,
+		InitialBackoff: 50 * time.Millisecond,
+		Jitter:         true,
+	}))
+	ctx := context.Background()
+
+	val, err := client.GetString(ctx, "tenant-1", "app.environment")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(val)
+	// Output: production
+}
+
+func ExampleTypedValue() {
+	tv := configclient.IntVal(42)
+	fmt.Println(tv.Kind() == configclient.KindInteger)
+
+	n, ok := tv.IntValue()
+	fmt.Println(n, ok)
+	fmt.Println(tv.String())
+	// Output:
+	// true
+	// 42 true
+	// 42
 }

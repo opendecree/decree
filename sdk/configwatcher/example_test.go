@@ -3,6 +3,7 @@ package configwatcher_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/opendecree/decree/sdk/configclient"
 	"github.com/opendecree/decree/sdk/configwatcher"
@@ -66,4 +67,46 @@ func ExampleWatcher_Start() {
 	// Get returns the current value; defaults are returned until the first snapshot.
 	fmt.Println(timeout.Get())
 	// Output: 30s
+}
+
+func ExampleValue_Changes() {
+	w := configwatcher.New(&fakeTransport{}, "tenant-1")
+	maxConn := w.Int("limits.max_connections", 100)
+
+	// Changes channel receives a notification on every update.
+	// Read without blocking — no update has arrived yet.
+	select {
+	case change := <-maxConn.Changes():
+		fmt.Println("updated to", change.New)
+	default:
+		fmt.Println("no update yet")
+	}
+	// Output: no update yet
+}
+
+func ExampleValue_GetWithNull() {
+	w := configwatcher.New(&fakeTransport{}, "tenant-1")
+	flag := w.Bool("feature.enabled", false)
+
+	val, ok := flag.GetWithNull()
+	fmt.Println(val, ok) // default; field not yet received from server
+	// Output: false false
+}
+
+func ExampleWithReconnectBackoff() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	w := configwatcher.New(&fakeTransport{}, "tenant-1",
+		configwatcher.WithReconnectBackoff(100*time.Millisecond, 10*time.Second),
+	)
+	flag := w.Bool("feature.enabled", false)
+
+	if err := w.Start(ctx); err != nil {
+		fmt.Println("start error:", err)
+	}
+	defer w.Close()
+
+	fmt.Println(flag.Get())
+	// Output: false
 }
