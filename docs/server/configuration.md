@@ -182,8 +182,9 @@ All observability flags are opt-in. Set to `true` or `1` to enable.
 | `OTEL_METRICS_GRPC` | gRPC request count, latency histograms, and message sizes (via otelgrpc). |
 | `OTEL_METRICS_DB_POOL` | Database connection pool gauges: total, acquired, idle, and max connections. |
 | `OTEL_METRICS_CACHE` | Cache hit/miss counters for config value reads. |
-| `OTEL_METRICS_CONFIG` | Config write counter and current version gauge per tenant. |
+| `OTEL_METRICS_CONFIG` | Config write counter and current version gauge. By default, no `tenant_id` label is emitted. |
 | `OTEL_METRICS_SCHEMA` | Schema publish counter. |
+| `OTEL_METRICS_TENANT_ALLOWLIST` | Comma-separated list of tenant IDs that receive a `tenant_id` label on config metrics. Empty by default to prevent cardinality explosion. See [Observability](observability.md) for the trade-off. |
 
 ### Standard OTel Variables
 

@@ -51,6 +51,26 @@ func TestConfigMetrics_RecordWrite_RecordVersion(t *testing.T) {
 	m.RecordVersion(context.Background(), "t1", 5)
 }
 
+func TestConfigMetrics_AllowlistEmptyByDefault(t *testing.T) {
+	// No allowlist — tenant_id label is suppressed; recording must not panic.
+	m := NewConfigMetrics(Config{Enabled: true, MetricsConfig: true})
+	m.RecordWrite(context.Background(), "t1", "set_field")
+	m.RecordVersion(context.Background(), "t1", 5)
+}
+
+func TestConfigMetrics_AllowlistLabelsMatchingTenants(t *testing.T) {
+	// Only tenants in the allowlist receive the label; others must still record without panic.
+	m := NewConfigMetrics(Config{
+		Enabled:                true,
+		MetricsConfig:          true,
+		MetricsTenantAllowlist: []string{"tenant-a"},
+	})
+	m.RecordWrite(context.Background(), "tenant-a", "set_field") // in allowlist
+	m.RecordWrite(context.Background(), "tenant-b", "set_field") // not in allowlist
+	m.RecordVersion(context.Background(), "tenant-a", 3)
+	m.RecordVersion(context.Background(), "tenant-b", 7)
+}
+
 func TestNewSchemaMetrics_Disabled(t *testing.T) {
 	assert.Nil(t, NewSchemaMetrics(Config{}))
 	assert.Nil(t, NewSchemaMetrics(Config{Enabled: true, MetricsSchema: false}))

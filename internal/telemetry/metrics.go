@@ -47,8 +47,9 @@ func (m *CacheMetrics) Miss(ctx context.Context) {
 
 // ConfigMetrics records config write counters and version gauge.
 type ConfigMetrics struct {
-	writes   metric.Int64Counter
-	versions metric.Int64Gauge
+	writes          metric.Int64Counter
+	versions        metric.Int64Gauge
+	tenantAllowlist map[string]struct{}
 }
 
 // NewConfigMetrics creates config metrics. Returns nil if not enabled.
@@ -61,26 +62,37 @@ func NewConfigMetrics(cfg Config) *ConfigMetrics {
 		metric.WithDescription("Number of config write operations"))
 	versions, _ := meter.Int64Gauge("config.versions",
 		metric.WithDescription("Current config version number per tenant"))
-	return &ConfigMetrics{writes: writes, versions: versions}
+	allowlist := make(map[string]struct{}, len(cfg.MetricsTenantAllowlist))
+	for _, id := range cfg.MetricsTenantAllowlist {
+		allowlist[id] = struct{}{}
+	}
+	return &ConfigMetrics{writes: writes, versions: versions, tenantAllowlist: allowlist}
 }
 
-// RecordWrite records a config write event.
+// RecordWrite records a config write event. The tenant_id label is only added when the
+// tenant is in the allowlist (OTEL_METRICS_TENANT_ALLOWLIST) to prevent cardinality explosion.
 func (m *ConfigMetrics) RecordWrite(ctx context.Context, tenantID, action string) {
-	if m != nil {
-		m.writes.Add(ctx, 1,
-			metric.WithAttributes(
-				attribute.String("tenant_id", tenantID),
-				attribute.String("action", action),
-			))
+	if m == nil {
+		return
 	}
+	attrs := []attribute.KeyValue{attribute.String("action", action)}
+	if _, ok := m.tenantAllowlist[tenantID]; ok {
+		attrs = append(attrs, attribute.String("tenant_id", tenantID))
+	}
+	m.writes.Add(ctx, 1, metric.WithAttributes(attrs...))
 }
 
-// RecordVersion records the current config version for a tenant.
+// RecordVersion records the current config version for a tenant. The tenant_id label is
+// only added when the tenant is in the allowlist (OTEL_METRICS_TENANT_ALLOWLIST).
 func (m *ConfigMetrics) RecordVersion(ctx context.Context, tenantID string, version int64) {
-	if m != nil {
-		m.versions.Record(ctx, version,
-			metric.WithAttributes(attribute.String("tenant_id", tenantID)))
+	if m == nil {
+		return
 	}
+	var opts []metric.RecordOption
+	if _, ok := m.tenantAllowlist[tenantID]; ok {
+		opts = append(opts, metric.WithAttributes(attribute.String("tenant_id", tenantID)))
+	}
+	m.versions.Record(ctx, version, opts...)
 }
 
 // SchemaMetrics records schema lifecycle counters.
