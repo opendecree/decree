@@ -289,6 +289,7 @@ Which constraints apply depends on the field&#39;s type — see FieldType docs.
 | exclusive_max | [double](#double) | optional | For integer/number/duration: exclusive maximum (strict, &lt;). |
 | min_length | [int32](#int32) | optional | For string: minimum allowed length. |
 | max_length | [int32](#int32) | optional | For string: maximum allowed length. |
+| allowed_schemes | [string](#string) | repeated | For url: allowed URI schemes (e.g. &#34;https&#34;, &#34;http&#34;). If non-empty, schemes not in this list are rejected with InvalidArgument. Defaults to [&#34;http&#34;, &#34;https&#34;] when empty. |
 
 
 
