@@ -23,7 +23,9 @@ func (c *Client) GetSchema(ctx context.Context, id string) (*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.schema.GetSchema(ctx, id, nil)
+	return retry(ctx, c, func(ctx context.Context) (*Schema, error) {
+		return c.schema.GetSchema(ctx, id, nil)
+	})
 }
 
 // GetSchemaVersion retrieves a schema at a specific version.
@@ -31,7 +33,9 @@ func (c *Client) GetSchemaVersion(ctx context.Context, id string, version int32)
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.schema.GetSchema(ctx, id, &version)
+	return retry(ctx, c, func(ctx context.Context) (*Schema, error) {
+		return c.schema.GetSchema(ctx, id, &version)
+	})
 }
 
 // ListSchemas returns all schemas, auto-paginating through all results.
@@ -39,20 +43,22 @@ func (c *Client) ListSchemas(ctx context.Context) ([]*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	var all []*Schema
-	pageToken := ""
-	for {
-		resp, err := c.schema.ListSchemas(ctx, 100, pageToken)
-		if err != nil {
-			return nil, err
+	return retry(ctx, c, func(ctx context.Context) ([]*Schema, error) {
+		var all []*Schema
+		pageToken := ""
+		for {
+			resp, err := c.schema.ListSchemas(ctx, 100, pageToken)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, resp.Schemas...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
-		all = append(all, resp.Schemas...)
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-	return all, nil
+		return all, nil
+	})
 }
 
 // UpdateSchema creates a new draft version by merging field changes with the latest version.
@@ -94,7 +100,9 @@ func (c *Client) ExportSchema(ctx context.Context, id string, version *int32) ([
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.schema.ExportSchema(ctx, id, version)
+	return retry(ctx, c, func(ctx context.Context) ([]byte, error) {
+		return c.schema.ExportSchema(ctx, id, version)
+	})
 }
 
 // ImportSchema creates a schema (or new version) from YAML content.
