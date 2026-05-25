@@ -105,16 +105,31 @@ func (c *Client) ExportSchema(ctx context.Context, id string, version *int32) ([
 	})
 }
 
+// ImportSchemaOption configures an ImportSchema call.
+type ImportSchemaOption func(*importSchemaOptions)
+
+type importSchemaOptions struct {
+	autoPublish bool
+}
+
+// WithAutoPublish publishes the imported schema version immediately.
+func WithAutoPublish() ImportSchemaOption {
+	return func(o *importSchemaOptions) { o.autoPublish = true }
+}
+
 // ImportSchema creates a schema (or new version) from YAML content.
 // Full-replace semantics: the YAML defines the complete field set.
 // Returns [ErrAlreadyExists] if the imported fields are identical to the latest version.
-// Imported versions are always created as drafts (unpublished) unless autoPublish is true.
-func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish ...bool) (*Schema, error) {
+// Imported versions are always created as drafts (unpublished) unless [WithAutoPublish] is passed.
+func (c *Client) ImportSchema(ctx context.Context, yamlContent []byte, opts ...ImportSchemaOption) (*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	ap := len(autoPublish) > 0 && autoPublish[0]
-	return c.schema.ImportSchema(ctx, yamlContent, ap)
+	var o importSchemaOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return c.schema.ImportSchema(ctx, yamlContent, o.autoPublish)
 }
 
 // GetLatestPublishedSchemaVersion finds the most recent published version of a schema by name.
