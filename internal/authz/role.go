@@ -12,7 +12,7 @@ type RolePolicyGuard struct{}
 
 func (RolePolicyGuard) Check(ctx context.Context, action Action, _ Resource) error {
 	switch action {
-	case ActionAdmin:
+	case ActionAdmin, ActionGlobal:
 		return auth.RequireSuperAdmin(ctx)
 	case ActionWrite:
 		return auth.RequireAdminOrAbove(ctx)

@@ -8,10 +8,13 @@ type Action string
 const (
 	// ActionRead — any authenticated caller may read.
 	ActionRead Action = "read"
-	// ActionWrite — requires admin or superadmin role.
+	// ActionWrite — requires admin or superadmin role; must be paired with a tenant-scoped Resource.
 	ActionWrite Action = "write"
-	// ActionAdmin — requires superadmin role.
+	// ActionAdmin — requires superadmin role; must be paired with a tenant-scoped Resource.
 	ActionAdmin Action = "admin"
+	// ActionGlobal — for schema-level operations that are intentionally not tenant-scoped (e.g.
+	// CreateSchema, PublishSchema). Requires superadmin. TenantScopeGuard always skips this action.
+	ActionGlobal Action = "global"
 )
 
 // Resource carries the subject of an authorization check.

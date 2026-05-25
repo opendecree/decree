@@ -10,8 +10,8 @@ import (
 // No-ops when TenantID is empty.
 type TenantScopeGuard struct{}
 
-func (TenantScopeGuard) Check(ctx context.Context, _ Action, r Resource) error {
-	if r.TenantID == "" {
+func (TenantScopeGuard) Check(ctx context.Context, action Action, r Resource) error {
+	if action == ActionGlobal || r.TenantID == "" {
 		return nil
 	}
 	return auth.CheckTenantAccess(ctx, r.TenantID)

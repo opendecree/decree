@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 // userCtx returns a context carrying user-role claims scoped to testTenantID.
@@ -116,22 +117,38 @@ func TestCreateTenant_DeniedForUser(t *testing.T) {
 }
 
 // --- admin-or-above RPCs: user must be denied, admin must pass role check ---
+//
+// These tests exercise the write-action guard, which fires AFTER tenant resolution.
+// The mock must return the tenant so resolveTenantWithAccess succeeds before the
+// role check can fire.
 
 func TestUpdateTenant_DeniedForUser(t *testing.T) {
-	svc := NewService(&mockStore{}, WithLogger(testLogger))
-	_, err := svc.UpdateTenant(userCtx(), &pb.UpdateTenantRequest{Id: testTenantID})
+	store := &mockStore{}
+	ctx := userCtx()
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID}, nil)
+	svc := NewService(store, WithLogger(testLogger))
+	_, err := svc.UpdateTenant(ctx, &pb.UpdateTenantRequest{Id: testTenantID})
 	assertPermissionDenied(t, err)
 }
 
 func TestDeleteTenant_DeniedForUser(t *testing.T) {
-	svc := NewService(&mockStore{}, WithLogger(testLogger))
-	_, err := svc.DeleteTenant(userCtx(), &pb.DeleteTenantRequest{Id: testTenantID})
+	store := &mockStore{}
+	ctx := userCtx()
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID}, nil)
+	svc := NewService(store, WithLogger(testLogger))
+	_, err := svc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: testTenantID})
 	assertPermissionDenied(t, err)
 }
 
 func TestLockField_DeniedForUser(t *testing.T) {
-	svc := NewService(&mockStore{}, WithLogger(testLogger))
-	_, err := svc.LockField(userCtx(), &pb.LockFieldRequest{
+	store := &mockStore{}
+	ctx := userCtx()
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID}, nil)
+	svc := NewService(store, WithLogger(testLogger))
+	_, err := svc.LockField(ctx, &pb.LockFieldRequest{
 		TenantId:  testTenantID,
 		FieldPath: "app.x",
 	})
@@ -139,8 +156,12 @@ func TestLockField_DeniedForUser(t *testing.T) {
 }
 
 func TestUnlockField_DeniedForUser(t *testing.T) {
-	svc := NewService(&mockStore{}, WithLogger(testLogger))
-	_, err := svc.UnlockField(userCtx(), &pb.UnlockFieldRequest{
+	store := &mockStore{}
+	ctx := userCtx()
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID}, nil)
+	svc := NewService(store, WithLogger(testLogger))
+	_, err := svc.UnlockField(ctx, &pb.UnlockFieldRequest{
 		TenantId:  testTenantID,
 		FieldPath: "app.x",
 	})
