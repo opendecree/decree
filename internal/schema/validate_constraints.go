@@ -13,9 +13,10 @@ import (
 // the slice and returns the first error encountered. It is used by ImportSchema
 // to validate all constraints before any storage writes, ensuring that bad
 // patterns (e.g. invalid regex) are rejected immediately with a clear error.
-func validateFieldConstraintsBatch(fields []*pb.SchemaField) error {
+// regexMaxLen is the maximum allowed byte length for a regex pattern (0 = no limit).
+func validateFieldConstraintsBatch(fields []*pb.SchemaField, regexMaxLen int) error {
 	for _, f := range fields {
-		if err := validateFieldConstraints(f); err != nil {
+		if err := validateFieldConstraints(f, regexMaxLen); err != nil {
 			return err
 		}
 	}
@@ -51,8 +52,9 @@ func validateNoPrefixOverlap(fields []*pb.SchemaField) error {
 }
 
 // validateFieldConstraints checks that constraints are applicable to the field type.
+// regexMaxLen caps the byte length of regex patterns (0 = no limit).
 // Returns an error if a constraint is applied to an incompatible type.
-func validateFieldConstraints(field *pb.SchemaField) error {
+func validateFieldConstraints(field *pb.SchemaField, regexMaxLen int) error {
 	c := field.Constraints
 	if c == nil {
 		return nil
@@ -92,6 +94,9 @@ func validateFieldConstraints(field *pb.SchemaField) error {
 		return fmt.Errorf("field %s: 'pattern' constraint is not valid for type %s (only string)", path, ft)
 	}
 	if c.Regex != nil && ft == pb.FieldType_FIELD_TYPE_STRING {
+		if regexMaxLen > 0 && len(*c.Regex) > regexMaxLen {
+			return fmt.Errorf("field %s: regex pattern exceeds maximum length of %d characters", path, regexMaxLen)
+		}
 		if _, err := regexp.Compile(*c.Regex); err != nil {
 			return fmt.Errorf("field %s: invalid regex constraint: %w", path, err)
 		}

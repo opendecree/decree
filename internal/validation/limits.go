@@ -32,16 +32,22 @@ type Limits struct {
 	// CompileTimeout fires. This bounds goroutine growth when malicious
 	// input repeatedly triggers the timeout path. 0 means no limit.
 	MaxConcurrentCompiles int
+
+	// RegexMaxLength caps the byte length of a regex pattern at SetField
+	// validation time. Patterns longer than this are rejected without
+	// compilation. 0 means no limit.
+	RegexMaxLength int
 }
 
 // DefaultLimits returns conservative defaults: a 5-second compile
-// timeout, a max nesting depth of 64, and a concurrency cap of 32.
-// Tune via env vars at the call site (cmd/server).
+// timeout, a max nesting depth of 64, a concurrency cap of 32, and a
+// 1 024-byte regex pattern cap. Tune via env vars at the call site (cmd/server).
 func DefaultLimits() Limits {
 	return Limits{
 		CompileTimeout:        5 * time.Second,
 		MaxDepth:              64,
 		MaxConcurrentCompiles: 32,
+		RegexMaxLength:        1024,
 	}
 }
 

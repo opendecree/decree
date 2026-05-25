@@ -182,7 +182,7 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 			return err
 		}
 
-		fields, err = createFieldsOn(ctx, s.logger, tx, version.ID, req.Fields)
+		fields, err = createFieldsOn(ctx, s.logger, tx, version.ID, req.Fields, s.limits.RegexPatternMaxLength)
 		if err != nil {
 			return err
 		}
@@ -355,7 +355,7 @@ func (s *Service) UpdateSchema(ctx context.Context, req *pb.UpdateSchemaRequest)
 			return err
 		}
 
-		fields, err = createFieldsOn(ctx, s.logger, tx, newVersion.ID, mergedFields)
+		fields, err = createFieldsOn(ctx, s.logger, tx, newVersion.ID, mergedFields, s.limits.RegexPatternMaxLength)
 		if err != nil {
 			return err
 		}
@@ -852,7 +852,7 @@ func (s *Service) ImportSchema(ctx context.Context, req *pb.ImportSchemaRequest)
 	}
 	// Validate field constraints (including regex compilation) before any
 	// storage write so that bad patterns are caught immediately.
-	if err := validateFieldConstraintsBatch(fields); err != nil {
+	if err := validateFieldConstraintsBatch(fields, s.limits.RegexPatternMaxLength); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	depReqs := parsed.DependentRequired
@@ -993,16 +993,16 @@ func (s *Service) getActor(ctx context.Context) string {
 }
 
 func (s *Service) createFields(ctx context.Context, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
-	return createFieldsOn(ctx, s.logger, s.store, versionID, fields)
+	return createFieldsOn(ctx, s.logger, s.store, versionID, fields, s.limits.RegexPatternMaxLength)
 }
 
-func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versionID string, fields []*pb.SchemaField) ([]domain.SchemaField, error) {
+func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versionID string, fields []*pb.SchemaField, regexPatternMaxLength int) ([]domain.SchemaField, error) {
 	if err := validateNoPrefixOverlap(fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	result := make([]domain.SchemaField, 0, len(fields))
 	for _, f := range fields {
-		if err := validateFieldConstraints(f); err != nil {
+		if err := validateFieldConstraints(f, regexPatternMaxLength); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 		}
 
