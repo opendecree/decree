@@ -33,7 +33,7 @@ fields:
     nullable: true
 validations:
   - path: payments
-    rule: "self.payments.min_amount < self.payments.max_amount"
+    rule: "!has(self.payments.min_amount) || !has(self.payments.max_amount) || self.payments.min_amount < self.payments.max_amount"
     message: "payments.min_amount must be less than payments.max_amount"
     reason: MIN_LESS_THAN_MAX
 dependentRequired:
