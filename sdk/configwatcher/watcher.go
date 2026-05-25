@@ -27,6 +27,7 @@ package configwatcher
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -70,7 +71,7 @@ func New(transport configclient.Transport, tenantID string, opts ...Option) *Wat
 		minBackoff:      500 * time.Millisecond,
 		maxBackoff:      30 * time.Second,
 		snapshotTimeout: 10 * time.Second,
-		logger:          slog.Default(),
+		logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -97,7 +98,8 @@ func WithReconnectBackoff(min, max time.Duration) Option {
 	}
 }
 
-// WithLogger sets a custom logger. Defaults to slog.Default().
+// WithLogger sets a custom logger. By default all log output is discarded.
+// Pass an explicit logger to opt into watcher diagnostics.
 func WithLogger(logger *slog.Logger) Option {
 	return func(o *options) { o.logger = logger }
 }
