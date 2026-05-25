@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel/metric"
-
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -18,27 +16,52 @@ type jsonSchemaValidator struct {
 }
 
 // newJSONSchemaValidator compiles a JSON Schema document for validation.
-// limits.MaxDepth bounds structural nesting before compile;
-// limits.CompileTimeout caps the wall-clock duration of the compile call.
-// timeoutCounter, if non-nil, is incremented when the deadline fires.
+// opts.limits.MaxDepth bounds structural nesting before compile;
+// opts.limits.CompileTimeout caps the wall-clock duration of the compile call.
+// opts.limits.MaxConcurrentCompiles caps simultaneous goroutines — new requests
+// block until a slot is free or the timeout fires, bounding goroutine growth
+// when malicious input repeatedly triggers the timeout path.
 //
 // Goroutine leak: jsonschema/v6 has no CompileContext, so a compile that
 // exceeds the deadline will continue running until it finishes or the
-// process exits. This is acceptable because:
-//   - The pre-compile depth check (MaxDepth) rejects deeply-nested bombs
-//     before the goroutine is started.
-//   - The upstream document-size cap (schema.Limits.MaxDocBytes) bounds
-//     the total input the compiler can process.
+// process exits. MaxConcurrentCompiles bounds the number of such zombies at
+// any instant; the depth and upstream document-size checks (schema.Limits.MaxDocBytes)
+// bound the work each zombie can perform.
 //
-// Together these make the worst-case work finite. The timeout is a
-// defence-in-depth backstop against unanticipated compiler pathologies.
-// When it fires, the counter "validation.json_schema_compile_timeouts_total"
-// is incremented so operators can alert on sustained activity.
-func newJSONSchemaValidator(schemaDoc string, limits Limits, timeoutCounter metric.Int64Counter) (*jsonSchemaValidator, error) {
-	if limits.MaxDepth > 0 {
-		if err := scanJSONDepth(schemaDoc, limits.MaxDepth); err != nil {
+// When the deadline fires, opts.timeoutCounter is incremented.
+// opts.inFlightGauge tracks goroutines currently executing the compile
+// (including zombies), incremented before spawn and decremented on finish.
+func newJSONSchemaValidator(schemaDoc string, opts options) (*jsonSchemaValidator, error) {
+	if opts.limits.MaxDepth > 0 {
+		if err := scanJSONDepth(schemaDoc, opts.limits.MaxDepth); err != nil {
 			return nil, err
 		}
+	}
+
+	var timer *time.Timer
+	var timerC <-chan time.Time
+	if opts.limits.CompileTimeout > 0 {
+		timer = time.NewTimer(opts.limits.CompileTimeout)
+		defer timer.Stop()
+		timerC = timer.C
+	}
+
+	// Acquire semaphore slot before spawning the goroutine.
+	// If the semaphore is full (MaxConcurrentCompiles zombies already running),
+	// block here until a slot is released or the deadline fires.
+	if opts.compileSem != nil {
+		select {
+		case opts.compileSem <- struct{}{}:
+		case <-timerC:
+			if opts.timeoutCounter != nil {
+				opts.timeoutCounter.Add(context.Background(), 1)
+			}
+			return nil, fmt.Errorf("compile json schema: timeout after %s", opts.limits.CompileTimeout)
+		}
+	}
+
+	if opts.inFlightGauge != nil {
+		opts.inFlightGauge.Add(context.Background(), 1)
 	}
 
 	type result struct {
@@ -50,14 +73,32 @@ func newJSONSchemaValidator(schemaDoc string, limits Limits, timeoutCounter metr
 		c := jsonschema.NewCompiler()
 		doc, err := jsonschema.UnmarshalJSON(strings.NewReader(schemaDoc))
 		if err != nil {
+			if opts.inFlightGauge != nil {
+				opts.inFlightGauge.Add(context.Background(), -1)
+			}
+			if opts.compileSem != nil {
+				<-opts.compileSem
+			}
 			ch <- result{nil, fmt.Errorf("invalid json schema: %w", err)}
 			return
 		}
 		if err := c.AddResource("schema.json", doc); err != nil {
+			if opts.inFlightGauge != nil {
+				opts.inFlightGauge.Add(context.Background(), -1)
+			}
+			if opts.compileSem != nil {
+				<-opts.compileSem
+			}
 			ch <- result{nil, fmt.Errorf("add json schema resource: %w", err)}
 			return
 		}
 		schema, err := c.Compile("schema.json")
+		if opts.inFlightGauge != nil {
+			opts.inFlightGauge.Add(context.Background(), -1)
+		}
+		if opts.compileSem != nil {
+			<-opts.compileSem
+		}
 		if err != nil {
 			ch <- result{nil, fmt.Errorf("compile json schema: %w", err)}
 			return
@@ -65,20 +106,18 @@ func newJSONSchemaValidator(schemaDoc string, limits Limits, timeoutCounter metr
 		ch <- result{&jsonSchemaValidator{schema: schema}, nil}
 	}()
 
-	if limits.CompileTimeout <= 0 {
+	if timerC == nil {
 		r := <-ch
 		return r.v, r.err
 	}
-	timer := time.NewTimer(limits.CompileTimeout)
-	defer timer.Stop()
 	select {
 	case r := <-ch:
 		return r.v, r.err
-	case <-timer.C:
-		if timeoutCounter != nil {
-			timeoutCounter.Add(context.Background(), 1)
+	case <-timerC:
+		if opts.timeoutCounter != nil {
+			opts.timeoutCounter.Add(context.Background(), 1)
 		}
-		return nil, fmt.Errorf("compile json schema: timeout after %s", limits.CompileTimeout)
+		return nil, fmt.Errorf("compile json schema: timeout after %s", opts.limits.CompileTimeout)
 	}
 }
 

@@ -262,8 +262,9 @@ func run() int {
 	// Validator factory (shared between schema + config services).
 	validatorOpts := []validation.Option{
 		validation.WithLimits(validation.Limits{
-			CompileTimeout: cfg.SchemaCompileTimeout,
-			MaxDepth:       cfg.SchemaMaxRefDepth,
+			CompileTimeout:        cfg.SchemaCompileTimeout,
+			MaxDepth:              cfg.SchemaMaxRefDepth,
+			MaxConcurrentCompiles: cfg.SchemaMaxConcurrentCompiles,
 		}),
 	}
 	if counter, ok := validationMetrics.TimeoutCounter(); ok {
@@ -271,6 +272,9 @@ func run() int {
 	}
 	if counter, ok := validationMetrics.RegexErrorCounter(); ok {
 		validatorOpts = append(validatorOpts, validation.WithRegexErrorCounter(counter))
+	}
+	if gauge, ok := validationMetrics.InFlightGauge(); ok {
+		validatorOpts = append(validatorOpts, validation.WithInFlightGauge(gauge))
 	}
 	validatorFactory := validation.NewValidatorFactory(validatorStore, validatorOpts...)
 
@@ -417,49 +421,50 @@ func run() int {
 }
 
 type serverConfig struct {
-	GRPCPort                 string
-	HTTPPort                 string
-	StorageBackend           string
-	DBWriteURL               string
-	DBReadURL                string
-	DBMaxConns               int
-	DBMinConns               int
-	DBMaxConnLifetime        time.Duration
-	DBMaxConnIdleTime        time.Duration
-	DBHealthCheckPeriod      time.Duration
-	RedisURL                 string
-	EnableServices           []string
-	JWTIssuer                string
-	JWTJWKSURL               string
-	LogLevel                 string
-	UsageTrackingEnabled     bool
-	UsageFlushInterval       time.Duration
-	GRPCMaxRecvMsgBytes      int
-	GRPCMaxSendMsgBytes      int
-	SchemaMaxFields          int
-	SchemaMaxDocBytes        int
-	SchemaMaxRemoveFields    int
-	SchemaCompileTimeout     time.Duration
-	SchemaMaxRefDepth        int
-	ConfigMaxListLen         int
-	ConfigMaxDocBytes        int
-	ConfigMaxFieldValueBytes int
-	InsecureListen           bool
-	TLSCertFile              string
-	TLSKeyFile               string
-	TLSClientCAFile          string
-	TLSGatewayCAFile         string
-	TLSGatewayServerName     string
-	TLSGatewayClientCertFile string
-	TLSGatewayClientKeyFile  string
-	RateLimitEnabled         bool
-	RateLimitAnonRPS         float64
-	RateLimitAuthedRPS       float64
-	RateLimitSuperAdminRPS   float64 // 0 = unlimited
-	RateLimitBurst           int
-	EnableReflection         bool
-	EnableUI                 bool
-	GatewayTrustedProxy      bool
+	GRPCPort                    string
+	HTTPPort                    string
+	StorageBackend              string
+	DBWriteURL                  string
+	DBReadURL                   string
+	DBMaxConns                  int
+	DBMinConns                  int
+	DBMaxConnLifetime           time.Duration
+	DBMaxConnIdleTime           time.Duration
+	DBHealthCheckPeriod         time.Duration
+	RedisURL                    string
+	EnableServices              []string
+	JWTIssuer                   string
+	JWTJWKSURL                  string
+	LogLevel                    string
+	UsageTrackingEnabled        bool
+	UsageFlushInterval          time.Duration
+	GRPCMaxRecvMsgBytes         int
+	GRPCMaxSendMsgBytes         int
+	SchemaMaxFields             int
+	SchemaMaxDocBytes           int
+	SchemaMaxRemoveFields       int
+	SchemaCompileTimeout        time.Duration
+	SchemaMaxRefDepth           int
+	SchemaMaxConcurrentCompiles int
+	ConfigMaxListLen            int
+	ConfigMaxDocBytes           int
+	ConfigMaxFieldValueBytes    int
+	InsecureListen              bool
+	TLSCertFile                 string
+	TLSKeyFile                  string
+	TLSClientCAFile             string
+	TLSGatewayCAFile            string
+	TLSGatewayServerName        string
+	TLSGatewayClientCertFile    string
+	TLSGatewayClientKeyFile     string
+	RateLimitEnabled            bool
+	RateLimitAnonRPS            float64
+	RateLimitAuthedRPS          float64
+	RateLimitSuperAdminRPS      float64 // 0 = unlimited
+	RateLimitBurst              int
+	EnableReflection            bool
+	EnableUI                    bool
+	GatewayTrustedProxy         bool
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -513,49 +518,50 @@ func loadConfig() serverConfig {
 	}
 
 	return serverConfig{
-		GRPCPort:                 getEnv("GRPC_PORT", "9090"),
-		HTTPPort:                 getEnv("HTTP_PORT", ""),
-		StorageBackend:           getEnv("STORAGE_BACKEND", "postgres"),
-		DBWriteURL:               dbWriteURL,
-		DBReadURL:                dbReadURL,
-		DBMaxConns:               parseEnvInt("DB_MAX_CONNS", 0),
-		DBMinConns:               parseEnvInt("DB_MIN_CONNS", 0),
-		DBMaxConnLifetime:        dbMaxConnLifetime,
-		DBMaxConnIdleTime:        dbMaxConnIdleTime,
-		DBHealthCheckPeriod:      dbHealthCheckPeriod,
-		RedisURL:                 getEnv("REDIS_URL", ""),
-		EnableServices:           parseServices(enableServices),
-		JWTIssuer:                getEnv("JWT_ISSUER", ""),
-		JWTJWKSURL:               getEnv("JWT_JWKS_URL", ""),
-		LogLevel:                 getEnv("LOG_LEVEL", "info"),
-		UsageTrackingEnabled:     getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
-		UsageFlushInterval:       flushInterval,
-		GRPCMaxRecvMsgBytes:      parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
-		GRPCMaxSendMsgBytes:      parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
-		SchemaMaxFields:          parseEnvInt("SCHEMA_MAX_FIELDS", 10_000),
-		SchemaMaxDocBytes:        parseEnvInt("SCHEMA_MAX_DOC_BYTES", 5*1024*1024),
-		SchemaMaxRemoveFields:    parseEnvInt("SCHEMA_MAX_REMOVE_FIELDS", 1_000),
-		SchemaCompileTimeout:     compileTimeout,
-		SchemaMaxRefDepth:        parseEnvInt("SCHEMA_MAX_REF_DEPTH", 64),
-		ConfigMaxListLen:         parseEnvInt("CONFIG_MAX_LIST_LEN", 1_000),
-		ConfigMaxDocBytes:        parseEnvInt("CONFIG_MAX_DOC_BYTES", 5*1024*1024),
-		ConfigMaxFieldValueBytes: parseEnvInt("CONFIG_MAX_FIELD_VALUE_BYTES", 1*1024*1024),
-		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
-		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
-		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),
-		TLSClientCAFile:          getEnv("TLS_CLIENT_CA_FILE", ""),
-		TLSGatewayCAFile:         getEnv("TLS_GATEWAY_CA_FILE", ""),
-		TLSGatewayServerName:     getEnv("TLS_GATEWAY_SERVER_NAME", ""),
-		TLSGatewayClientCertFile: getEnv("TLS_GATEWAY_CLIENT_CERT_FILE", ""),
-		TLSGatewayClientKeyFile:  getEnv("TLS_GATEWAY_CLIENT_KEY_FILE", ""),
-		RateLimitEnabled:         getEnv("RATE_LIMIT_ENABLED", "true") != "false",
-		RateLimitAnonRPS:         parseEnvFloat("RATE_LIMIT_ANON_RPS", 10),
-		RateLimitAuthedRPS:       parseEnvFloat("RATE_LIMIT_AUTHED_RPS", 100),
-		RateLimitSuperAdminRPS:   parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
-		RateLimitBurst:           parseEnvInt("RATE_LIMIT_BURST", 10),
-		EnableReflection:         getEnv("ENABLE_REFLECTION", "") == "1",
-		EnableUI:                 getEnv("ENABLE_UI", "") == "1",
-		GatewayTrustedProxy:      getEnv("DECREE_GATEWAY_TRUSTED_PROXY", "") == "1",
+		GRPCPort:                    getEnv("GRPC_PORT", "9090"),
+		HTTPPort:                    getEnv("HTTP_PORT", ""),
+		StorageBackend:              getEnv("STORAGE_BACKEND", "postgres"),
+		DBWriteURL:                  dbWriteURL,
+		DBReadURL:                   dbReadURL,
+		DBMaxConns:                  parseEnvInt("DB_MAX_CONNS", 0),
+		DBMinConns:                  parseEnvInt("DB_MIN_CONNS", 0),
+		DBMaxConnLifetime:           dbMaxConnLifetime,
+		DBMaxConnIdleTime:           dbMaxConnIdleTime,
+		DBHealthCheckPeriod:         dbHealthCheckPeriod,
+		RedisURL:                    getEnv("REDIS_URL", ""),
+		EnableServices:              parseServices(enableServices),
+		JWTIssuer:                   getEnv("JWT_ISSUER", ""),
+		JWTJWKSURL:                  getEnv("JWT_JWKS_URL", ""),
+		LogLevel:                    getEnv("LOG_LEVEL", "info"),
+		UsageTrackingEnabled:        getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
+		UsageFlushInterval:          flushInterval,
+		GRPCMaxRecvMsgBytes:         parseEnvInt("GRPC_MAX_RECV_MSG_BYTES", 0),
+		GRPCMaxSendMsgBytes:         parseEnvInt("GRPC_MAX_SEND_MSG_BYTES", 0),
+		SchemaMaxFields:             parseEnvInt("SCHEMA_MAX_FIELDS", 10_000),
+		SchemaMaxDocBytes:           parseEnvInt("SCHEMA_MAX_DOC_BYTES", 5*1024*1024),
+		SchemaMaxRemoveFields:       parseEnvInt("SCHEMA_MAX_REMOVE_FIELDS", 1_000),
+		SchemaCompileTimeout:        compileTimeout,
+		SchemaMaxRefDepth:           parseEnvInt("SCHEMA_MAX_REF_DEPTH", 64),
+		SchemaMaxConcurrentCompiles: parseEnvInt("SCHEMA_MAX_CONCURRENT_COMPILES", 32),
+		ConfigMaxListLen:            parseEnvInt("CONFIG_MAX_LIST_LEN", 1_000),
+		ConfigMaxDocBytes:           parseEnvInt("CONFIG_MAX_DOC_BYTES", 5*1024*1024),
+		ConfigMaxFieldValueBytes:    parseEnvInt("CONFIG_MAX_FIELD_VALUE_BYTES", 1*1024*1024),
+		InsecureListen:              getEnv("INSECURE_LISTEN", "") == "1",
+		TLSCertFile:                 getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:                  getEnv("TLS_KEY_FILE", ""),
+		TLSClientCAFile:             getEnv("TLS_CLIENT_CA_FILE", ""),
+		TLSGatewayCAFile:            getEnv("TLS_GATEWAY_CA_FILE", ""),
+		TLSGatewayServerName:        getEnv("TLS_GATEWAY_SERVER_NAME", ""),
+		TLSGatewayClientCertFile:    getEnv("TLS_GATEWAY_CLIENT_CERT_FILE", ""),
+		TLSGatewayClientKeyFile:     getEnv("TLS_GATEWAY_CLIENT_KEY_FILE", ""),
+		RateLimitEnabled:            getEnv("RATE_LIMIT_ENABLED", "true") != "false",
+		RateLimitAnonRPS:            parseEnvFloat("RATE_LIMIT_ANON_RPS", 10),
+		RateLimitAuthedRPS:          parseEnvFloat("RATE_LIMIT_AUTHED_RPS", 100),
+		RateLimitSuperAdminRPS:      parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
+		RateLimitBurst:              parseEnvInt("RATE_LIMIT_BURST", 10),
+		EnableReflection:            getEnv("ENABLE_REFLECTION", "") == "1",
+		EnableUI:                    getEnv("ENABLE_UI", "") == "1",
+		GatewayTrustedProxy:         getEnv("DECREE_GATEWAY_TRUSTED_PROXY", "") == "1",
 	}
 }
 
