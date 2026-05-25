@@ -55,7 +55,7 @@ func (g FieldLockGuard) Check(ctx context.Context, action Action, r Resource) er
 	}
 	for _, lock := range locks {
 		if lock.FieldPath == r.FieldPath {
-			return status.Errorf(codes.PermissionDenied, "field %s is locked", r.FieldPath)
+			return status.Errorf(codes.FailedPrecondition, "field %s is locked", r.FieldPath)
 		}
 	}
 	return nil

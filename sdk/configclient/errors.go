@@ -14,8 +14,15 @@ var (
 	// ErrNotFound is returned when a requested field or version does not exist.
 	ErrNotFound = errors.New("not found")
 
-	// ErrLocked is returned when attempting to write a field that is locked.
+	// ErrLocked is returned when attempting to write a field that is
+	// administratively locked (FieldLock). Use errors.Is to distinguish
+	// this from ErrPermissionDenied.
 	ErrLocked = errors.New("field is locked")
+
+	// ErrPermissionDenied is returned when the caller lacks the required
+	// role or tenant access to perform the operation. This is distinct from
+	// ErrLocked, which indicates an administratively locked field.
+	ErrPermissionDenied = errors.New("permission denied")
 
 	// ErrChecksumMismatch is returned when an optimistic concurrency check fails
 	// because the value was modified between read and write.

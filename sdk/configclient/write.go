@@ -7,7 +7,7 @@ import (
 
 // Set writes a single configuration value as a string.
 // Creates a new config version atomically.
-// Returns [ErrLocked] if the field is locked.
+// Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string) error {
 	return retryDo(ctx, c, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
@@ -21,7 +21,7 @@ func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string) err
 
 // SetTyped writes a single typed configuration value.
 // Creates a new config version atomically.
-// Returns [ErrLocked] if the field is locked.
+// Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue) error {
 	return retryDo(ctx, c, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
@@ -35,7 +35,7 @@ func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value
 
 // SetNull sets a configuration field to null.
 // Creates a new config version atomically.
-// Returns [ErrLocked] if the field is locked.
+// Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string) error {
 	return retryDo(ctx, c, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
@@ -48,7 +48,7 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string) error 
 
 // SetMany writes multiple configuration values atomically in a single version.
 // The description is optional — pass an empty string to omit it.
-// Returns [ErrLocked] if any of the fields are locked.
+// Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string) error {
 	return retryDo(ctx, c, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
@@ -70,7 +70,7 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 
 // SetManyTyped writes multiple typed configuration values atomically in a single
 // version. The description is optional — pass an empty string to omit it.
-// Returns [ErrLocked] if any of the fields are locked.
+// Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string) error {
 	return retryDo(ctx, c, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
