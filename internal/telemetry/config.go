@@ -1,6 +1,9 @@
 package telemetry
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // Config holds the telemetry feature flags parsed from environment variables.
 type Config struct {
@@ -26,6 +29,10 @@ type Config struct {
 	MetricsRateLimit bool
 	// MetricsValidation enables validation counters (e.g. JSON-Schema compile timeouts).
 	MetricsValidation bool
+	// MetricsTenantAllowlist is the opt-in set of tenant IDs that receive a tenant_id label
+	// on config metrics. Empty (the default) suppresses the label on all tenants to prevent
+	// Prometheus/OTel cardinality explosion in deployments with many tenants.
+	MetricsTenantAllowlist []string
 }
 
 // AnyMetrics returns true if any metric flag is enabled.
@@ -36,21 +43,37 @@ func (c Config) AnyMetrics() bool {
 // ConfigFromEnv parses telemetry configuration from environment variables.
 func ConfigFromEnv() Config {
 	return Config{
-		Enabled:           envBool("OTEL_ENABLED"),
-		TracesGRPC:        envBool("OTEL_TRACES_GRPC"),
-		TracesDB:          envBool("OTEL_TRACES_DB"),
-		TracesRedis:       envBool("OTEL_TRACES_REDIS"),
-		MetricsGRPC:       envBool("OTEL_METRICS_GRPC"),
-		MetricsDBPool:     envBool("OTEL_METRICS_DB_POOL"),
-		MetricsCache:      envBool("OTEL_METRICS_CACHE"),
-		MetricsConfig:     envBool("OTEL_METRICS_CONFIG"),
-		MetricsSchema:     envBool("OTEL_METRICS_SCHEMA"),
-		MetricsRateLimit:  envBool("OTEL_METRICS_RATE_LIMIT"),
-		MetricsValidation: envBool("OTEL_METRICS_VALIDATION"),
+		Enabled:                envBool("OTEL_ENABLED"),
+		TracesGRPC:             envBool("OTEL_TRACES_GRPC"),
+		TracesDB:               envBool("OTEL_TRACES_DB"),
+		TracesRedis:            envBool("OTEL_TRACES_REDIS"),
+		MetricsGRPC:            envBool("OTEL_METRICS_GRPC"),
+		MetricsDBPool:          envBool("OTEL_METRICS_DB_POOL"),
+		MetricsCache:           envBool("OTEL_METRICS_CACHE"),
+		MetricsConfig:          envBool("OTEL_METRICS_CONFIG"),
+		MetricsSchema:          envBool("OTEL_METRICS_SCHEMA"),
+		MetricsRateLimit:       envBool("OTEL_METRICS_RATE_LIMIT"),
+		MetricsValidation:      envBool("OTEL_METRICS_VALIDATION"),
+		MetricsTenantAllowlist: envStringSlice("OTEL_METRICS_TENANT_ALLOWLIST"),
 	}
 }
 
 func envBool(key string) bool {
 	v := os.Getenv(key)
 	return v == "true" || v == "1"
+}
+
+func envStringSlice(key string) []string {
+	v := os.Getenv(key)
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

@@ -64,3 +64,34 @@ func TestAnyMetrics_OneEnabled(t *testing.T) {
 	assert.True(t, Config{MetricsConfig: true}.AnyMetrics())
 	assert.True(t, Config{MetricsSchema: true}.AnyMetrics())
 }
+
+func TestConfigFromEnv_TenantAllowlist(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		cfg := ConfigFromEnv()
+		assert.Nil(t, cfg.MetricsTenantAllowlist)
+	})
+
+	t.Run("single", func(t *testing.T) {
+		t.Setenv("OTEL_METRICS_TENANT_ALLOWLIST", "tenant-a")
+		cfg := ConfigFromEnv()
+		assert.Equal(t, []string{"tenant-a"}, cfg.MetricsTenantAllowlist)
+	})
+
+	t.Run("multiple", func(t *testing.T) {
+		t.Setenv("OTEL_METRICS_TENANT_ALLOWLIST", "tenant-a,tenant-b,tenant-c")
+		cfg := ConfigFromEnv()
+		assert.Equal(t, []string{"tenant-a", "tenant-b", "tenant-c"}, cfg.MetricsTenantAllowlist)
+	})
+
+	t.Run("trims_spaces", func(t *testing.T) {
+		t.Setenv("OTEL_METRICS_TENANT_ALLOWLIST", " tenant-a , tenant-b ")
+		cfg := ConfigFromEnv()
+		assert.Equal(t, []string{"tenant-a", "tenant-b"}, cfg.MetricsTenantAllowlist)
+	})
+
+	t.Run("skips_empty_entries", func(t *testing.T) {
+		t.Setenv("OTEL_METRICS_TENANT_ALLOWLIST", "tenant-a,,tenant-b")
+		cfg := ConfigFromEnv()
+		assert.Equal(t, []string{"tenant-a", "tenant-b"}, cfg.MetricsTenantAllowlist)
+	})
+}

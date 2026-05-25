@@ -120,8 +120,26 @@ Monitor your cache hit ratio to tune TTL and capacity.
 
 ### Config Metrics (`OTEL_METRICS_CONFIG`)
 
-- `ccs.config.writes` -- counter of config write operations (by tenant)
-- `ccs.config.version` -- gauge of the current config version (by tenant)
+- `config.writes` -- counter of config write operations (labeled by `action`)
+- `config.versions` -- gauge of the current config version
+
+By default, neither metric carries a `tenant_id` label. In deployments with many short-lived
+tenants, adding `tenant_id` would create unbounded label cardinality and exhaust the
+Prometheus/OTel collector cardinality budget.
+
+To attach `tenant_id` for a known subset of tenants (useful when debugging noisy activity from
+specific tenants), set `OTEL_METRICS_TENANT_ALLOWLIST`:
+
+```bash
+OTEL_METRICS_TENANT_ALLOWLIST=tenant-a,tenant-b
+```
+
+Only the listed tenant IDs receive the `tenant_id` attribute; all other tenants record into the
+unlabeled series. The allowlist is additive — removing a tenant from the list does not delete
+historical labeled series from your backend.
+
+**Trade-off:** without `tenant_id`, you lose per-tenant resolution on write activity. Use the
+allowlist sparingly (e.g. during an incident investigation) and remove entries once you are done.
 
 ### Schema Metrics (`OTEL_METRICS_SCHEMA`)
 
