@@ -314,3 +314,70 @@ func TestFlush_DBErrorCounter(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, int64(2), counter.n.Load(), "one increment per failing DB write")
 }
+
+// blockingStore blocks UpsertUsageStats until its gate is closed.
+type blockingStore struct {
+	*MemoryStore
+	gate chan struct{} // close to unblock
+}
+
+func newBlockingStore() *blockingStore {
+	return &blockingStore{MemoryStore: NewMemoryStore(), gate: make(chan struct{})}
+}
+
+func (s *blockingStore) UpsertUsageStats(ctx context.Context, p UpsertUsageStatsParams) error {
+	select {
+	case <-s.gate:
+		return s.MemoryStore.UpsertUsageStats(ctx, p)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func TestStop_FinalFlush_Timeout(t *testing.T) {
+	store := newBlockingStore() // gate never closed → always blocks
+	r := NewUsageRecorder(store,
+		WithFlushInterval(time.Hour),
+		WithShutdownTimeout(50*time.Millisecond),
+		WithLogger(testRecorderLogger),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go r.Start(ctx)
+
+	r.RecordRead("t1", "app.fee", nil)
+
+	cancel()
+
+	done := make(chan struct{})
+	go func() { r.Stop(); close(done) }()
+
+	select {
+	case <-done:
+		// Stop returned within a reasonable margin of the shutdown timeout.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Stop blocked indefinitely despite shutdown timeout")
+	}
+}
+
+func TestStop_FinalFlush_TimeoutCounter(t *testing.T) {
+	store := newBlockingStore() // gate never closed → always blocks
+	counter := &countingCounter{}
+
+	r := NewUsageRecorder(store,
+		WithFlushInterval(time.Hour),
+		WithShutdownTimeout(50*time.Millisecond),
+		WithLogger(testRecorderLogger),
+		WithFlushTimeoutCounter(counter),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go r.Start(ctx)
+
+	r.RecordRead("t1", "app.fee", nil)
+
+	cancel()
+	r.Stop()
+
+	assert.Equal(t, int64(1), counter.n.Load(), "timeout counter incremented once on flush deadline exceeded")
+}
