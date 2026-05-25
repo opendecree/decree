@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -55,6 +56,20 @@ func TestGateway_ServeAndShutdown(t *testing.T) {
 	// Shutdown should return cleanly.
 	gw.Shutdown(context.Background())
 	assert.NoError(t, <-errCh)
+}
+
+func TestGateway_ShutdownClosesGRPCConn(t *testing.T) {
+	// Snapshot goroutines before creating the gateway so that any leaked by
+	// other tests in the suite do not cause a false failure here.
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
+	require.NoError(t, err)
+
+	gw.Shutdown(context.Background())
 }
 
 func TestForwardAuthHeaders(t *testing.T) {
