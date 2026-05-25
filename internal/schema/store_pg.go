@@ -170,7 +170,7 @@ func (s *PGStore) DeleteSchema(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	return s.write.SoftDeleteSchema(ctx, pgID)
+	return pgconv.WrapFKViolation(s.write.SoftDeleteSchema(ctx, pgID))
 }
 
 // --- Schema versions ---

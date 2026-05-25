@@ -100,6 +100,19 @@ func WrapUniqueViolation(err error) error {
 	return err
 }
 
+// WrapFKViolation converts a PostgreSQL foreign-key constraint violation (23503)
+// to domain.ErrReferencedByOther. Returns the original error for all other errors.
+func WrapFKViolation(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+		return domain.ErrReferencedByOther
+	}
+	return err
+}
+
 // FieldTypeToDB converts a domain FieldType to the DB string representation.
 func FieldTypeToDB(ft domain.FieldType) string {
 	return string(ft)

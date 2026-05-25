@@ -15,6 +15,10 @@ var ErrNotFound = errors.New("not found")
 // ErrAlreadyExists is returned when an insert violates a unique constraint.
 var ErrAlreadyExists = errors.New("already exists")
 
+// ErrReferencedByOther is returned when a delete is blocked by a foreign-key
+// constraint (another row still references the target row).
+var ErrReferencedByOther = errors.New("referenced by other resource")
+
 // FieldType represents a schema field's value type.
 type FieldType string
 

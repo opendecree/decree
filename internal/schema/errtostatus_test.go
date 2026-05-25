@@ -55,6 +55,22 @@ func TestErrToStatus(t *testing.T) {
 			wantMsgPart: "already exists",
 		},
 		{
+			name:        "ErrReferencedByOther maps to FailedPrecondition",
+			err:         domain.ErrReferencedByOther,
+			notFoundMsg: "not found",
+			failedMsg:   "failed",
+			wantCode:    codes.FailedPrecondition,
+			wantMsgPart: "referenced by active config versions",
+		},
+		{
+			name:        "wrapped ErrReferencedByOther maps to FailedPrecondition",
+			err:         fmt.Errorf("db: %w", domain.ErrReferencedByOther),
+			notFoundMsg: "not found",
+			failedMsg:   "failed",
+			wantCode:    codes.FailedPrecondition,
+			wantMsgPart: "referenced by active config versions",
+		},
+		{
 			name:        "other error maps to Internal",
 			err:         errors.New("connection reset"),
 			notFoundMsg: "not found",
