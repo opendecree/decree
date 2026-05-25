@@ -162,7 +162,9 @@ func TestFieldLockGuard_LockedField(t *testing.T) {
 	})
 	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b"})
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	// Field locks use FailedPrecondition (a precondition on the resource state),
+	// distinct from PermissionDenied (role/tenant access denial).
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
 func TestFieldLockGuard_StoreError(t *testing.T) {
@@ -188,7 +190,9 @@ func TestFieldLockGuard_ContextCacheHit_LockedField(t *testing.T) {
 	})
 	err := g.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b"})
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	// Field locks use FailedPrecondition (a precondition on the resource state),
+	// distinct from PermissionDenied (role/tenant access denial).
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
 // --- ChainGuard ---
