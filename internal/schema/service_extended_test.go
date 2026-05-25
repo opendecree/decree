@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -172,6 +173,31 @@ func TestListSchemas_ZeroPageSize(t *testing.T) {
 	resp, err = svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: -1})
 	require.NoError(t, err)
 	assert.Len(t, resp.Schemas, 1)
+}
+
+func TestListSchemas_VersionDBError_ReturnsInternal(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(domain.SchemaVersion{}, errors.New("db connection lost"))
+
+	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestListSchemas_FieldsDBError_ReturnsInternal(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
+	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
+	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, errors.New("db connection lost"))
+
+	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
 // --- DeleteSchema ---

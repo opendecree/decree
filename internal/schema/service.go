@@ -279,11 +279,17 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 	for _, schema := range schemas {
 		version, err := s.store.GetLatestSchemaVersion(ctx, schema.ID)
 		if err != nil {
-			continue // Schema with no versions — skip.
+			if errors.Is(err, domain.ErrNotFound) {
+				continue // Schema with no versions — skip.
+			}
+			return nil, status.Errorf(codes.Internal, "failed to get latest version for schema %s", schema.ID)
 		}
 		fields, err := s.store.GetSchemaFields(ctx, version.ID)
 		if err != nil {
-			continue
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
+			return nil, status.Errorf(codes.Internal, "failed to get fields for schema %s", schema.ID)
 		}
 		pbSchemas = append(pbSchemas, schemaToProto(schema, version, fields))
 	}
