@@ -7,5 +7,7 @@ func (c *Client) GetServerInfo(ctx context.Context) (*ServerInfo, error) {
 	if c.server == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.server.GetServerInfo(ctx)
+	return retry(ctx, c, func(ctx context.Context) (*ServerInfo, error) {
+		return c.server.GetServerInfo(ctx)
+	})
 }

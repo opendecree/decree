@@ -187,6 +187,25 @@ func TestSet_Locked(t *testing.T) {
 	if !errors.Is(err, ErrLocked) {
 		t.Errorf("got error %v, want %v", err, ErrLocked)
 	}
+	if errors.Is(err, ErrPermissionDenied) {
+		t.Error("ErrLocked must not match ErrPermissionDenied")
+	}
+}
+
+func TestSet_PermissionDenied(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetField", nil, (*SetFieldResponse)(nil), ErrPermissionDenied)
+
+	err := client.Set(ctx, "t1", "a", "new")
+	if !errors.Is(err, ErrPermissionDenied) {
+		t.Errorf("got error %v, want ErrPermissionDenied", err)
+	}
+	if errors.Is(err, ErrLocked) {
+		t.Error("ErrPermissionDenied must not match ErrLocked")
+	}
 }
 
 // --- SetMany ---
