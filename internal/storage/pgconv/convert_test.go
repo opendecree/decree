@@ -145,6 +145,27 @@ func TestWrapUniqueViolation(t *testing.T) {
 	})
 }
 
+func TestWrapFKViolation(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		assert.Nil(t, WrapFKViolation(nil))
+	})
+
+	t.Run("23503 foreign_key_violation", func(t *testing.T) {
+		err := WrapFKViolation(&pgconn.PgError{Code: "23503"})
+		assert.ErrorIs(t, err, domain.ErrReferencedByOther)
+	})
+
+	t.Run("other pg error", func(t *testing.T) {
+		pgErr := &pgconn.PgError{Code: "23505"}
+		assert.Equal(t, pgErr, WrapFKViolation(pgErr))
+	})
+
+	t.Run("non-pg error", func(t *testing.T) {
+		other := errors.New("something else")
+		assert.Equal(t, other, WrapFKViolation(other))
+	})
+}
+
 func TestFieldTypeConversions(t *testing.T) {
 	types := []domain.FieldType{
 		domain.FieldTypeInteger, domain.FieldTypeNumber, domain.FieldTypeString,

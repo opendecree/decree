@@ -248,6 +248,17 @@ func TestDeleteSchema_InvalidID(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+func TestDeleteSchema_FKViolation(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	store.On("GetSchemaByID", mock.Anything, testSchemaID).Return(testSchema(), nil)
+	store.On("DeleteSchema", mock.Anything, testSchemaID).Return(domain.ErrReferencedByOther)
+
+	_, err := svc.DeleteSchema(superadminCtx(), &pb.DeleteSchemaRequest{Id: testSchemaID})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 // --- GetTenant ---
 
 func TestGetTenant_Success(t *testing.T) {

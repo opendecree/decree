@@ -63,6 +63,9 @@ func errToStatus(err error, notFoundMsg, failedMsg string) error {
 	if errors.Is(err, domain.ErrAlreadyExists) {
 		return status.Error(codes.AlreadyExists, "resource with this name already exists")
 	}
+	if errors.Is(err, domain.ErrReferencedByOther) {
+		return status.Error(codes.FailedPrecondition, "schema is referenced by active config versions")
+	}
 	return status.Error(codes.Internal, failedMsg)
 }
 
@@ -421,7 +424,7 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 		})
 	}); err != nil {
 		s.logger.ErrorContext(ctx, "delete schema", "error", err)
-		return nil, status.Error(codes.Internal, "failed to delete schema")
+		return nil, errToStatus(err, "schema not found", "failed to delete schema")
 	}
 
 	return &pb.DeleteSchemaResponse{}, nil
