@@ -16,12 +16,19 @@ import (
 // whose internal cost counter exceeds the limit; cel.InterruptCheckFrequency
 // pins how often the cost counter is sampled while a loop or comprehension
 // runs. The brief picked 100_000 and 100; both are tunable per deployment.
+//
+// defaultAggregateCostCap bounds the summed cost across all rules evaluated
+// in a single Eval call. A tenant with 1000 rules × 100k per-rule limit
+// could otherwise drive 100M total cost per write; the aggregate cap cuts
+// that to 1M before the call aborts.
 const (
-	defaultCostLimit     uint64 = 100_000
-	defaultInterruptFreq uint   = 100
+	defaultCostLimit        uint64 = 100_000
+	defaultInterruptFreq    uint   = 100
+	defaultAggregateCostCap uint64 = 1_000_000
 
-	envCostLimit     = "DECREE_CEL_COST_LIMIT"
-	envInterruptFreq = "DECREE_CEL_INTERRUPT_FREQ"
+	envCostLimit        = "DECREE_CEL_COST_LIMIT"
+	envInterruptFreq    = "DECREE_CEL_INTERRUPT_FREQ"
+	envAggregateCostCap = "DECREE_CEL_AGGREGATE_COST_CAP"
 )
 
 // Cache memoises compiled CEL programs across config writes. Keys are tuples
@@ -73,7 +80,9 @@ func (c *Cache) InvalidateSchema(schemaID string) {
 }
 
 // compileProgram compiles a single CEL rule against the env and wraps it
-// with the configured cost-limit and interrupt-check guards.
+// with the configured cost-limit and interrupt-check guards. OptTrackCost
+// is always enabled so EvalDetails.ActualCost() is populated for aggregate
+// cost accounting in Eval.
 func compileProgram(env *cel.Env, rule string) (cel.Program, error) {
 	ast, issues := env.Compile(rule)
 	if issues != nil && issues.Err() != nil {
@@ -82,6 +91,7 @@ func compileProgram(env *cel.Env, rule string) (cel.Program, error) {
 	prog, err := env.Program(ast,
 		cel.CostLimit(costLimit()),
 		cel.InterruptCheckFrequency(interruptFreq()),
+		cel.EvalOptions(cel.OptTrackCost),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("build program: %w", err)
@@ -94,6 +104,13 @@ func costLimit() uint64 {
 		return v
 	}
 	return defaultCostLimit
+}
+
+func aggregateCostCap() uint64 {
+	if v, ok := readUint64(envAggregateCostCap); ok {
+		return v
+	}
+	return defaultAggregateCostCap
 }
 
 func interruptFreq() uint {

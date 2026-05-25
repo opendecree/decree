@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/google/cel-go/cel"
+	"go.opentelemetry.io/otel/metric"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	celpkg "github.com/opendecree/decree/internal/schema/cel"
@@ -33,6 +34,7 @@ type ValidatorFactory struct {
 	celProgramsCache sync.Map // tenantID → []cel.Program
 	celCache         *celpkg.Cache
 	limits           Limits
+	celCapCounter    metric.Int64Counter // nil when metrics are disabled
 }
 
 // NewValidatorFactory creates a new validator factory. Pass [WithLimits]
@@ -40,11 +42,19 @@ type ValidatorFactory struct {
 func NewValidatorFactory(store Store, opts ...Option) *ValidatorFactory {
 	o := resolveOptions(opts)
 	return &ValidatorFactory{
-		store:    store,
-		cache:    NewValidatorCache(0),
-		celCache: celpkg.NewCache(),
-		limits:   o.limits,
+		store:         store,
+		cache:         NewValidatorCache(0),
+		celCache:      celpkg.NewCache(),
+		limits:        o.limits,
+		celCapCounter: o.celCapCounter,
 	}
+}
+
+// CelCapCounter returns the OTEL counter for aggregate CEL cost cap
+// exceedances (nil when metrics are disabled). Callers pass it to
+// celpkg.Eval via celpkg.WithCapCounter.
+func (f *ValidatorFactory) CelCapCounter() metric.Int64Counter {
+	return f.celCapCounter
 }
 
 // Cache returns the underlying cache for invalidation.

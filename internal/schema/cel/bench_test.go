@@ -175,3 +175,28 @@ func BenchmarkCache_ProgramFor_Cached(b *testing.B) {
 		_, _ = cache.ProgramFor(env, rule, "schema", 1, 0)
 	}
 }
+
+// BenchmarkEval_AggregateCostCap_EarlyAbort measures the overhead of
+// aggregate cost tracking when the cap fires after the first rule. The
+// happy path (cap never reached) is already covered by
+// BenchmarkEval_FullCycle_LargeSchema; this bench captures the abort path
+// specifically, where the extra cost-sum check terminates the loop early.
+func BenchmarkEval_AggregateCostCap_EarlyAbort(b *testing.B) {
+	b.Setenv(envAggregateCostCap, "1") // fires after rule 0
+	env, err := BuildEnv(largeSchemaFields())
+	require.NoError(b, err)
+	rules := largeSchemaRules(50)
+	cache := NewCache()
+	programs := make([]cel.Program, len(rules))
+	for i, r := range rules {
+		p, err := cache.ProgramFor(env, r, "schema-id", 1, i)
+		require.NoError(b, err)
+		programs[i] = p
+	}
+	rows, types := largeSchemaSnapshot()
+	act := BuildActivation(rows, types, TenantBinding{ID: "tenant"})
+
+	for b.Loop() {
+		_, _, _ = Eval(programs, act, rules)
+	}
+}

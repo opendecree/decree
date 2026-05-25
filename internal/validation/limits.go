@@ -55,6 +55,7 @@ type options struct {
 	timeoutCounter    metric.Int64Counter       // nil when metrics are disabled
 	regexErrorCounter metric.Int64Counter       // nil when metrics are disabled
 	inFlightGauge     metric.Int64UpDownCounter // nil when metrics are disabled
+	celCapCounter     metric.Int64Counter       // nil when metrics are disabled
 	compileSem        chan struct{}             // nil when MaxConcurrentCompiles == 0
 }
 
@@ -92,6 +93,14 @@ func WithRegexErrorCounter(c metric.Int64Counter) Option {
 // "validation.json_schema_compiles_in_flight". Pass nil to disable.
 func WithInFlightGauge(g metric.Int64UpDownCounter) Option {
 	return func(o *options) { o.inFlightGauge = g }
+}
+
+// WithCelCapCounter sets the OTEL counter incremented (with a tenant_id
+// attribute) when the aggregate CEL evaluation cost cap is exceeded. The
+// metric name should be
+// "validation.cel_aggregate_cost_cap_exceeded_total". Pass nil to disable.
+func WithCelCapCounter(c metric.Int64Counter) Option {
+	return func(o *options) { o.celCapCounter = c }
 }
 
 func resolveOptions(opts []Option) options {

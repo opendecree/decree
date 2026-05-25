@@ -1,11 +1,15 @@
 package cel
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/cel-go/cel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
@@ -227,6 +231,84 @@ func TestEval_NullComparisonIsSoftError(t *testing.T) {
 	assert.Empty(t, failed, "null comparison must not fail the write")
 	require.Len(t, softErrs, 1)
 }
+
+func TestEval_AggregateCostCapExceeded(t *testing.T) {
+	// Set aggregate cap to 1 so it fires after the very first rule.
+	t.Setenv(envAggregateCostCap, "1")
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "rule-0"},
+		{rule: "self.payments.max_amount <= 1000.0", message: "rule-1"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{
+			{FieldPath: "payments.min_amount", Value: strPtr("1")},
+			{FieldPath: "payments.max_amount", Value: strPtr("2")},
+		},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+	_, _, err := Eval(programs, act, rules)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "aggregate cost limit exceeded")
+}
+
+func TestEval_AggregateCostCapNotExceeded(t *testing.T) {
+	// Cap well above what two simple comparisons can cost.
+	t.Setenv(envAggregateCostCap, "1000000")
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "rule-0"},
+		{rule: "self.payments.max_amount <= 1000.0", message: "rule-1"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{
+			{FieldPath: "payments.min_amount", Value: strPtr("1")},
+			{FieldPath: "payments.max_amount", Value: strPtr("2")},
+		},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+	failed, _, err := Eval(programs, act, rules)
+	require.NoError(t, err)
+	assert.Empty(t, failed)
+}
+
+func TestEval_AggregateCostCapIncrementsCounter(t *testing.T) {
+	t.Setenv(envAggregateCostCap, "1")
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "x"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{
+			{FieldPath: "payments.min_amount", Value: strPtr("1")},
+			{FieldPath: "payments.max_amount", Value: strPtr("2")},
+		},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+
+	counter := &fakeCounter{}
+	_, _, err := Eval(programs, act, rules, WithCapCounter(counter, "tenant-abc"))
+	require.Error(t, err)
+	assert.Equal(t, int64(1), counter.n.Load(), "counter must be incremented exactly once on cap fire")
+}
+
+// fakeCounter is a metric.Int64Counter that counts Add calls for tests.
+// Embeds noop.Int64Counter to satisfy the embedded marker interface.
+type fakeCounter struct {
+	noop.Int64Counter
+	n atomic.Int64
+}
+
+func (f *fakeCounter) Add(_ context.Context, incr int64, _ ...metric.AddOption) { f.n.Add(incr) }
 
 func BenchmarkEval_TenRules(b *testing.B) {
 	env, err := BuildEnv(showcaseFields())

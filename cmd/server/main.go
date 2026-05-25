@@ -276,6 +276,9 @@ func run() int {
 	if gauge, ok := validationMetrics.InFlightGauge(); ok {
 		validatorOpts = append(validatorOpts, validation.WithInFlightGauge(gauge))
 	}
+	if counter, ok := validationMetrics.CelCapExceededCounter(); ok {
+		validatorOpts = append(validatorOpts, validation.WithCelCapCounter(counter))
+	}
 	validatorFactory := validation.NewValidatorFactory(validatorStore, validatorOpts...)
 
 	// Usage recorder — async batched read tracking for audit stats.

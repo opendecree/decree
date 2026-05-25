@@ -1510,7 +1510,11 @@ func (s *Service) enforceCrossFieldInTx(
 		}
 		types := pbFieldTypeMap(celArtifacts.FieldTypes)
 		act := celpkg.BuildActivation(snapshot, types, tenantMeta)
-		failed, softErrs, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules)
+		evalOpts := []celpkg.EvalOption{}
+		if counter := s.validators.CelCapCounter(); counter != nil {
+			evalOpts = append(evalOpts, celpkg.WithCapCounter(counter, tenantID))
+		}
+		failed, softErrs, evalErr := celpkg.Eval(celArtifacts.Programs, act, celArtifacts.Rules, evalOpts...)
 		if evalErr != nil {
 			return fmt.Errorf("evaluate validations: %w", evalErr)
 		}

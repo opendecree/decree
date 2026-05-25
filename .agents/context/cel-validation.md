@@ -213,9 +213,9 @@ Rule 3's type matching is the load-bearing reason to use a **typed CEL env** (`c
 |---|---|
 | Maturity | Production at Google, Kubernetes (CRD validation, admission policy), Istio. v0.x but stable. BSD-3. |
 | Sandboxing | No file/network/syscall access by default. Pure expression evaluation. |
-| Resource limits | `cel.CostLimit(N)`, `cel.InterruptCheckFrequency(N)` — abort runaway evaluation. |
-| Compile/eval split | Yes. Compile once at `ImportSchema`, cache `cel.Program`, evaluate per write. |
-| Performance | Single-rule eval is microseconds. Full per-write cost = O(rules × cost-per-rule). Cap with `CostLimit`. |
+| Resource limits | `cel.CostLimit(N)`, `cel.InterruptCheckFrequency(N)` — per-rule guards. `DECREE_CEL_AGGREGATE_COST_CAP` (default 1 000 000) caps summed cost across all rules per write; aborts early and increments `validation.cel_aggregate_cost_cap_exceeded_total` (per-tenant). |
+| Compile/eval split | Yes. Compile once at `ImportSchema`, cache `cel.Program`, evaluate per write. `OptTrackCost` enabled on every program so aggregate cost is tracked at zero per-call overhead on non-cap paths. |
+| Performance | Single-rule eval is microseconds. Full per-write cost = O(rules × cost-per-rule). Per-rule cap: `DECREE_CEL_COST_LIMIT` (default 100 000). Aggregate cap: `DECREE_CEL_AGGREGATE_COST_CAP` (default 1 000 000). |
 | Vanilla principle | Single dependency (`github.com/google/cel-go`). One transitive (cel-spec proto). Acceptable. |
 
 No competing options worth evaluating: `expr-lang/expr` lacks the spec/governance, and embedding a JS engine fails the vanilla bar.
@@ -277,7 +277,7 @@ Multi-field writes (`SetFields`) evaluate rules **once** against the post-merge 
 
 | Concern | Mitigation |
 |---|---|
-| Runaway evaluation (DoS) | `cel.CostLimit(100_000)` + `cel.InterruptCheckFrequency(100)` per rule. Tunable via env var. |
+| Runaway evaluation (DoS) | Per-rule: `cel.CostLimit(100_000)` + `cel.InterruptCheckFrequency(100)`. Aggregate: `DECREE_CEL_AGGREGATE_COST_CAP=1_000_000` caps summed cost across all rules per write — prevents 1000 rules × 100k per-rule = 100M total cost. Both tunable via env vars. Exceedances increment `validation.cel_aggregate_cost_cap_exceeded_total` tagged by `tenant_id`. |
 | Memory blow-up via large strings | Field-level `maxLength` already caps inputs. CEL operates on already-validated values. |
 | Schema author writes a rule that always fails | Caught by lint rule 2 (constant) for trivial cases. Non-trivial always-false rules are a schema-author bug, surfaced via test fixtures. |
 | Information leak via error messages | `message:` is author-controlled; advise in docs not to include sensitive values. |

@@ -133,9 +133,10 @@ func (m *RateLimitMetrics) Counter() (metric.Int64Counter, bool) {
 
 // ValidationMetrics records validation-related counters and gauges.
 type ValidationMetrics struct {
-	compileTimeouts    metric.Int64Counter
-	regexCompileErrors metric.Int64Counter
-	inFlightCompiles   metric.Int64UpDownCounter
+	compileTimeouts     metric.Int64Counter
+	regexCompileErrors  metric.Int64Counter
+	inFlightCompiles    metric.Int64UpDownCounter
+	celAggregateCostCap metric.Int64Counter
 }
 
 // NewValidationMetrics creates validation metrics. Returns nil if not enabled.
@@ -150,7 +151,9 @@ func NewValidationMetrics(cfg Config) *ValidationMetrics {
 		metric.WithDescription("Number of regex constraint patterns that failed to compile"))
 	inFlight, _ := meter.Int64UpDownCounter("validation.json_schema_compiles_in_flight",
 		metric.WithDescription("Number of JSON-Schema compile goroutines currently in flight, including zombies that outlived their timeout"))
-	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors, inFlightCompiles: inFlight}
+	celCap, _ := meter.Int64Counter("validation.cel_aggregate_cost_cap_exceeded_total",
+		metric.WithDescription("Number of times the aggregate CEL evaluation cost cap was exceeded per tenant, causing the write to be rejected"))
+	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors, inFlightCompiles: inFlight, celAggregateCostCap: celCap}
 }
 
 // TimeoutCounter returns the underlying Int64Counter and true when metrics are
@@ -178,6 +181,15 @@ func (m *ValidationMetrics) InFlightGauge() (metric.Int64UpDownCounter, bool) {
 		return nil, false
 	}
 	return m.inFlightCompiles, true
+}
+
+// CelCapExceededCounter returns the counter incremented when the aggregate
+// CEL evaluation cost cap is exceeded, and true when metrics are enabled.
+func (m *ValidationMetrics) CelCapExceededCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.celAggregateCostCap, true
 }
 
 // StartDBPoolMetrics starts a background goroutine that periodically records
