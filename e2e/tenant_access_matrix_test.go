@@ -70,7 +70,7 @@ func writeRPCs() []writeRPCSpec {
 			name: "UpdateTenant",
 			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
 				newName := fmt.Sprintf("m2-rename-%s", randSuffix())
-				_, err := c.admin.UpdateTenant(ctx, tenantID, &newName, nil)
+				_, err := c.admin.UpdateTenant(ctx, tenantID, adminclient.WithTenantName(newName))
 				return err
 			},
 		},

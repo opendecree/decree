@@ -144,7 +144,7 @@ func TestUpdateTenantBothFields(t *testing.T) {
 
 	newName := "tenant-both-after"
 	newVersion := int32(2)
-	updated, err := admin.UpdateTenant(ctx, tenant.ID, &newName, &newVersion)
+	updated, err := admin.UpdateTenant(ctx, tenant.ID, adminclient.WithTenantName(newName), adminclient.WithTenantSchemaVersion(newVersion))
 	require.NoError(t, err)
 	assert.Equal(t, newName, updated.Name)
 	assert.Equal(t, newVersion, updated.SchemaVersion)
