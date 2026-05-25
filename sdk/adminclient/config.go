@@ -10,20 +10,22 @@ func (c *Client) ListConfigVersions(ctx context.Context, tenantID string) ([]*Ve
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	var all []*Version
-	pageToken := ""
-	for {
-		resp, err := c.config.ListVersions(ctx, tenantID, 100, pageToken)
-		if err != nil {
-			return nil, err
+	return retry(ctx, c, func(ctx context.Context) ([]*Version, error) {
+		var all []*Version
+		pageToken := ""
+		for {
+			resp, err := c.config.ListVersions(ctx, tenantID, 100, pageToken)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, resp.Versions...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
-		all = append(all, resp.Versions...)
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-	return all, nil
+		return all, nil
+	})
 }
 
 // GetConfigVersion retrieves metadata for a specific config version.
@@ -31,7 +33,9 @@ func (c *Client) GetConfigVersion(ctx context.Context, tenantID string, version 
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.config.GetVersion(ctx, tenantID, version)
+	return retry(ctx, c, func(ctx context.Context) (*Version, error) {
+		return c.config.GetVersion(ctx, tenantID, version)
+	})
 }
 
 // RollbackConfig creates a new config version with the values from a previous version.
@@ -49,7 +53,9 @@ func (c *Client) ExportConfig(ctx context.Context, tenantID string, version *int
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.config.ExportConfig(ctx, tenantID, version)
+	return retry(ctx, c, func(ctx context.Context) ([]byte, error) {
+		return c.config.ExportConfig(ctx, tenantID, version)
+	})
 }
 
 // ImportMode controls how imported values interact with existing config.
