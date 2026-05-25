@@ -168,6 +168,8 @@ func (w *Watcher) Raw(fieldPath string, defaultVal string) *Value[string] {
 
 func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func(string) (T, error)) *Value[T] {
 	v := newValue(defaultVal, parse)
+	v.fieldPath = fieldPath
+	v.logger = w.opts.logger
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.fields[fieldPath] = &fieldEntry{
