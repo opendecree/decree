@@ -322,7 +322,9 @@ func run() int {
 			config.WithValidators(validatorFactory),
 			config.WithRecorder(recorder),
 			config.WithLimits(config.Limits{
-				MaxListLen: cfg.ConfigMaxListLen,
+				MaxListLen:         cfg.ConfigMaxListLen,
+				MaxDocBytes:        cfg.ConfigMaxDocBytes,
+				MaxFieldValueBytes: cfg.ConfigMaxFieldValueBytes,
 			}),
 		)
 		pb.RegisterConfigServiceServer(srv.GRPCServer(), configSvc)
@@ -440,6 +442,8 @@ type serverConfig struct {
 	SchemaCompileTimeout     time.Duration
 	SchemaMaxRefDepth        int
 	ConfigMaxListLen         int
+	ConfigMaxDocBytes        int
+	ConfigMaxFieldValueBytes int
 	InsecureListen           bool
 	TLSCertFile              string
 	TLSKeyFile               string
@@ -534,6 +538,8 @@ func loadConfig() serverConfig {
 		SchemaCompileTimeout:     compileTimeout,
 		SchemaMaxRefDepth:        parseEnvInt("SCHEMA_MAX_REF_DEPTH", 64),
 		ConfigMaxListLen:         parseEnvInt("CONFIG_MAX_LIST_LEN", 1_000),
+		ConfigMaxDocBytes:        parseEnvInt("CONFIG_MAX_DOC_BYTES", 5*1024*1024),
+		ConfigMaxFieldValueBytes: parseEnvInt("CONFIG_MAX_FIELD_VALUE_BYTES", 1*1024*1024),
 		InsecureListen:           getEnv("INSECURE_LISTEN", "") == "1",
 		TLSCertFile:              getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:               getEnv("TLS_KEY_FILE", ""),

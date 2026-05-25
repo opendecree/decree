@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,11 +10,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/internal/storage/domain"
 )
 
 func TestDefaultLimits(t *testing.T) {
 	l := DefaultLimits()
 	assert.Equal(t, 1_000, l.MaxListLen)
+	assert.Equal(t, 5*1024*1024, l.MaxDocBytes)
+	assert.Equal(t, 1*1024*1024, l.MaxFieldValueBytes)
 }
 
 func newLimitedService(maxListLen int) *Service {
@@ -25,6 +29,18 @@ func newLimitedService(maxListLen int) *Service {
 		WithLogger(testLogger),
 		WithLimits(Limits{MaxListLen: maxListLen}),
 	)
+}
+
+func newImportLimitedService(limits Limits) (*Service, *mockStore) {
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	sub := &mockSubscriber{}
+	svc := NewService(store, c, pub, sub,
+		WithLogger(testLogger),
+		WithLimits(limits),
+	)
+	return svc, store
 }
 
 func TestGetFields_ExceedsMaxListLen(t *testing.T) {
@@ -69,4 +85,43 @@ func TestSubscribe_ExceedsMaxListLen(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 	assert.Contains(t, status.Convert(err).Message(), "exceeds limit of 2")
+}
+
+func TestImportConfig_ExceedsMaxDocBytes(t *testing.T) {
+	svc, _ := newImportLimitedService(Limits{MaxDocBytes: 10})
+
+	_, err := svc.ImportConfig(superadminCtx(), &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: []byte(strings.Repeat("x", 11)),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "exceeds limit of 10")
+}
+
+func TestImportConfig_ExceedsMaxFieldValueBytes(t *testing.T) {
+	svc, store := newImportLimitedService(Limits{MaxFieldValueBytes: 5})
+
+	store.On("GetTenantByID", superadminCtx(), tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", superadminCtx(), domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", superadminCtx(), schemaVersionID).
+		Return([]domain.SchemaField{{Path: "app.name", FieldType: domain.FieldTypeString}}, nil)
+	store.On("GetFieldLocks", superadminCtx(), tenantID1).
+		Return([]domain.TenantFieldLock{}, nil)
+
+	_, err := svc.ImportConfig(superadminCtx(), &pb.ImportConfigRequest{
+		TenantId: tenantID1,
+		YamlContent: []byte(`spec_version: "v1"
+values:
+  app.name:
+    value: "toolongvalue"
+`),
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "exceeds limit of 5")
 }
