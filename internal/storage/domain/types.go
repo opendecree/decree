@@ -12,6 +12,9 @@ import (
 // ErrNotFound is returned when a requested entity does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrAlreadyExists is returned when an insert violates a unique constraint.
+var ErrAlreadyExists = errors.New("already exists")
+
 // FieldType represents a schema field's value type.
 type FieldType string
 

@@ -60,6 +60,9 @@ func errToStatus(err error, notFoundMsg, failedMsg string) error {
 	if errors.Is(err, domain.ErrNotFound) {
 		return status.Error(codes.NotFound, notFoundMsg)
 	}
+	if errors.Is(err, domain.ErrAlreadyExists) {
+		return status.Error(codes.AlreadyExists, "resource with this name already exists")
+	}
 	return status.Error(codes.Internal, failedMsg)
 }
 
@@ -170,6 +173,9 @@ func (s *Service) CreateSchema(ctx context.Context, req *pb.CreateSchemaRequest)
 			Description: ptrString(req.GetDescription()),
 		})
 		if err != nil {
+			if errors.Is(err, domain.ErrAlreadyExists) {
+				return status.Error(codes.AlreadyExists, "schema with this name already exists")
+			}
 			return err
 		}
 
@@ -510,6 +516,9 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 			SchemaVersion: req.SchemaVersion,
 		})
 		if err != nil {
+			if errors.Is(err, domain.ErrAlreadyExists) {
+				return status.Error(codes.AlreadyExists, "tenant with this name already exists")
+			}
 			return err
 		}
 		meta, _ := json.Marshal(map[string]any{"name": req.Name, "schema_id": req.SchemaId, "schema_version": req.SchemaVersion})
@@ -522,6 +531,9 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 			Metadata:   meta,
 		})
 	}); err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() != codes.OK {
+			return nil, err
+		}
 		s.logger.ErrorContext(ctx, "create tenant", "error", err)
 		return nil, status.Error(codes.Internal, "failed to create tenant")
 	}

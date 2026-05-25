@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/opendecree/decree/internal/storage/domain"
@@ -82,6 +83,19 @@ func WrapNotFound(err error) error {
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrNotFound
+	}
+	return err
+}
+
+// WrapUniqueViolation converts a PostgreSQL unique-constraint violation (23505)
+// to domain.ErrAlreadyExists. Returns the original error for all other errors.
+func WrapUniqueViolation(err error) error {
+	if err == nil {
+		return nil
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return domain.ErrAlreadyExists
 	}
 	return err
 }

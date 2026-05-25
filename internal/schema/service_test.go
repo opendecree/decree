@@ -67,6 +67,21 @@ func TestCreateSchema_EmptyName(t *testing.T) {
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
+func TestCreateSchema_AlreadyExists(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	store.On("CreateSchema", ctx, mock.AnythingOfType("schema.CreateSchemaParams")).
+		Return(domain.Schema{}, domain.ErrAlreadyExists)
+
+	_, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{Name: "dup-schema"})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.AlreadyExists, status.Code(err))
+	store.AssertExpectations(t)
+}
+
 // --- GetSchema ---
 
 func TestGetSchema_LatestVersion(t *testing.T) {
@@ -219,6 +234,27 @@ func TestCreateTenant_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "test-tenant", resp.Tenant.Name)
+	store.AssertExpectations(t)
+}
+
+func TestCreateTenant_AlreadyExists(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	ctx := superadminCtx()
+
+	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
+		Return(domain.SchemaVersion{Published: true}, nil)
+	store.On("CreateTenant", ctx, mock.AnythingOfType("schema.CreateTenantParams")).
+		Return(domain.Tenant{}, domain.ErrAlreadyExists)
+
+	_, err := svc.CreateTenant(ctx, &pb.CreateTenantRequest{
+		Name:          "dup-tenant",
+		SchemaId:      testSchemaID,
+		SchemaVersion: 1,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.AlreadyExists, status.Code(err))
 	store.AssertExpectations(t)
 }
 
