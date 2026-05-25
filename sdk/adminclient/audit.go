@@ -43,27 +43,29 @@ func (c *Client) QueryWriteLog(ctx context.Context, filters ...AuditFilter) ([]*
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	var all []*AuditEntry
-	pageToken := ""
-	for {
-		req := &QueryWriteLogRequest{
-			PageSize:  100,
-			PageToken: pageToken,
+	return retry(ctx, c, func(ctx context.Context) ([]*AuditEntry, error) {
+		var all []*AuditEntry
+		pageToken := ""
+		for {
+			req := &QueryWriteLogRequest{
+				PageSize:  100,
+				PageToken: pageToken,
+			}
+			for _, f := range filters {
+				f(req)
+			}
+			resp, err := c.audit.QueryWriteLog(ctx, req)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, resp.Entries...)
+			if resp.NextPageToken == "" {
+				break
+			}
+			pageToken = resp.NextPageToken
 		}
-		for _, f := range filters {
-			f(req)
-		}
-		resp, err := c.audit.QueryWriteLog(ctx, req)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, resp.Entries...)
-		if resp.NextPageToken == "" {
-			break
-		}
-		pageToken = resp.NextPageToken
-	}
-	return all, nil
+		return all, nil
+	})
 }
 
 // GetFieldUsage returns aggregated read statistics for a specific field.
@@ -72,7 +74,9 @@ func (c *Client) GetFieldUsage(ctx context.Context, tenantID, fieldPath string, 
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.audit.GetFieldUsage(ctx, tenantID, fieldPath, start, end)
+	return retry(ctx, c, func(ctx context.Context) (*UsageStats, error) {
+		return c.audit.GetFieldUsage(ctx, tenantID, fieldPath, start, end)
+	})
 }
 
 // GetTenantUsage returns aggregated read statistics for all fields of a tenant.
@@ -81,7 +85,9 @@ func (c *Client) GetTenantUsage(ctx context.Context, tenantID string, start, end
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.audit.GetTenantUsage(ctx, tenantID, start, end)
+	return retry(ctx, c, func(ctx context.Context) ([]*UsageStats, error) {
+		return c.audit.GetTenantUsage(ctx, tenantID, start, end)
+	})
 }
 
 // GetUnusedFields returns field paths that have not been read since the given time.
@@ -90,7 +96,9 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.audit.GetUnusedFields(ctx, tenantID, since)
+	return retry(ctx, c, func(ctx context.Context) ([]string, error) {
+		return c.audit.GetUnusedFields(ctx, tenantID, since)
+	})
 }
 
 // VerifyChain fetches all audit entries for tenantID (oldest-first) and
