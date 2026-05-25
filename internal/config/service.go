@@ -435,6 +435,9 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
+	if req.FieldPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "field_path must not be empty")
+	}
 	tenantID, err := s.resolveTenantID(ctx, req.TenantId)
 	if err != nil {
 		return nil, err
@@ -575,6 +578,9 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 
 	// Pre-transaction validation (schema/lock checks only).
 	for _, update := range req.Updates {
+		if update.FieldPath == "" {
+			return nil, status.Error(codes.InvalidArgument, "field_path must not be empty")
+		}
 		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: update.FieldPath}); err != nil {
 			return nil, err
 		}
