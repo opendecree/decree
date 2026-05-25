@@ -130,9 +130,13 @@ type FieldConstraints struct {
 	// For string: minimum allowed length.
 	MinLength *int32 `protobuf:"varint,8,opt,name=min_length,json=minLength,proto3,oneof" json:"min_length,omitempty"`
 	// For string: maximum allowed length.
-	MaxLength     *int32 `protobuf:"varint,9,opt,name=max_length,json=maxLength,proto3,oneof" json:"max_length,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	MaxLength *int32 `protobuf:"varint,9,opt,name=max_length,json=maxLength,proto3,oneof" json:"max_length,omitempty"`
+	// For url: allowed URI schemes (e.g. "https", "http").
+	// If non-empty, schemes not in this list are rejected with InvalidArgument.
+	// Defaults to ["http", "https"] when empty.
+	AllowedSchemes []string `protobuf:"bytes,10,rep,name=allowed_schemes,json=allowedSchemes,proto3" json:"allowed_schemes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FieldConstraints) Reset() {
@@ -226,6 +230,13 @@ func (x *FieldConstraints) GetMaxLength() int32 {
 		return *x.MaxLength
 	}
 	return 0
+}
+
+func (x *FieldConstraints) GetAllowedSchemes() []string {
+	if x != nil {
+		return x.AllowedSchemes
+	}
+	return nil
 }
 
 // SchemaField defines a single field within a configuration schema.
@@ -1929,7 +1940,7 @@ var File_centralconfig_v1_types_proto protoreflect.FileDescriptor
 
 const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
-	"\x1ccentralconfig/v1/types.proto\x12\x10centralconfig.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xaa\x03\n" +
+	"\x1ccentralconfig/v1/types.proto\x12\x10centralconfig.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd3\x03\n" +
 	"\x10FieldConstraints\x12\x15\n" +
 	"\x03min\x18\x01 \x01(\x01H\x00R\x03min\x88\x01\x01\x12\x15\n" +
 	"\x03max\x18\x02 \x01(\x01H\x01R\x03max\x88\x01\x01\x12\x19\n" +
@@ -1943,7 +1954,9 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"min_length\x18\b \x01(\x05H\x06R\tminLength\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"max_length\x18\t \x01(\x05H\aR\tmaxLength\x88\x01\x01B\x06\n" +
+	"max_length\x18\t \x01(\x05H\aR\tmaxLength\x88\x01\x01\x12'\n" +
+	"\x0fallowed_schemes\x18\n" +
+	" \x03(\tR\x0eallowedSchemesB\x06\n" +
 	"\x04_minB\x06\n" +
 	"\x04_maxB\b\n" +
 	"\x06_regexB\x0e\n" +

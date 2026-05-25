@@ -208,6 +208,46 @@ func TestValidate_URL(t *testing.T) {
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "/relative/path"}}))
 }
 
+// --- URL scheme allowlist ---
+
+func TestValidate_URL_DefaultSchemeAllowlist(t *testing.T) {
+	v := NewFieldValidator("webhook", pb.FieldType_FIELD_TYPE_URL, false, false, nil)
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "https://example.com"}}))
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "http://example.com"}}))
+
+	for _, blocked := range []string{
+		"gopher://example.com",
+		"file:///etc/passwd",
+		"ftp://files.example.com",
+		"javascript:alert(1)",
+		"data:text/html,<h1>x</h1>",
+	} {
+		err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: blocked}})
+		assert.Errorf(t, err, "expected error for scheme in %q", blocked)
+		assert.Contains(t, err.Error(), "not in the allowed list")
+	}
+}
+
+func TestValidate_URL_CustomSchemeAllowlist(t *testing.T) {
+	v := NewFieldValidator("s3path", pb.FieldType_FIELD_TYPE_URL, false, false, &pb.FieldConstraints{
+		AllowedSchemes: []string{"s3", "gs"},
+	})
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "s3://my-bucket/key"}}))
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "gs://my-bucket/key"}}))
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "https://example.com"}}))
+}
+
+func TestValidate_URL_SensitiveSchemeError(t *testing.T) {
+	v := NewFieldValidator("secret.url", pb.FieldType_FIELD_TYPE_URL, false, true, nil)
+
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "gopher://example.com"}})
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "gopher://example.com")
+	assert.Contains(t, err.Error(), "not in the allowed list")
+}
+
 // --- JSON Schema validation ---
 
 func TestValidate_JSONSchema(t *testing.T) {

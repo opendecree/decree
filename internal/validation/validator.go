@@ -106,6 +106,26 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 			}
 			return nil
 		})
+		schemes := constraints.GetAllowedSchemes()
+		if len(schemes) == 0 {
+			schemes = []string{"http", "https"}
+		}
+		allowedSchemes := make(map[string]struct{}, len(schemes))
+		for _, s := range schemes {
+			allowedSchemes[s] = struct{}{}
+		}
+		schemeList := schemes
+		v.checks = append(v.checks, func(tv *pb.TypedValue) error {
+			val := tv.Kind.(*pb.TypedValue_UrlValue).UrlValue
+			u, _ := url.Parse(val)
+			if _, ok := allowedSchemes[u.Scheme]; !ok {
+				if v.sensitive {
+					return fmt.Errorf("URL scheme is not in the allowed list %v", schemeList)
+				}
+				return fmt.Errorf("URL scheme %q is not in the allowed list %v", u.Scheme, schemeList)
+			}
+			return nil
+		})
 	}
 
 	if constraints == nil {
