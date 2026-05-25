@@ -21,6 +21,8 @@ func mapConfigError(err error) error {
 	case codes.NotFound:
 		return configclient.ErrNotFound
 	case codes.PermissionDenied:
+		return configclient.ErrPermissionDenied
+	case codes.FailedPrecondition:
 		return configclient.ErrLocked
 	case codes.Aborted:
 		return configclient.ErrChecksumMismatch
@@ -53,6 +55,8 @@ func mapAdminError(err error) error {
 		return adminclient.ErrFailedPrecondition
 	case codes.InvalidArgument:
 		return adminclient.InvalidArgumentError(st.Message())
+	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+		return &adminclient.RetryableError{Err: err}
 	default:
 		return err
 	}

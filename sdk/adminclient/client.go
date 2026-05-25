@@ -14,6 +14,7 @@ type Client struct {
 	config ConfigTransport
 	audit  AuditTransport
 	server ServerTransport
+	opts   clientOptions
 }
 
 // New creates a new admin client. Pass [WithSchemaTransport],
@@ -38,5 +39,5 @@ func New(opts ...Option) *Client {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return &Client{schema: o.schema, config: o.config, audit: o.audit, server: o.server}
+	return &Client{schema: o.schema, config: o.config, audit: o.audit, server: o.server, opts: o}
 }

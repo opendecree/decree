@@ -30,3 +30,19 @@ var (
 func InvalidArgumentError(message string) error {
 	return fmt.Errorf("%w: %s", ErrInvalidArgument, message)
 }
+
+// RetryableError wraps an error to indicate the operation may succeed on retry.
+// Transport implementations should wrap transient errors (e.g. Unavailable,
+// DeadlineExceeded, ResourceExhausted) in RetryableError.
+type RetryableError struct {
+	Err error
+}
+
+func (e *RetryableError) Error() string { return e.Err.Error() }
+func (e *RetryableError) Unwrap() error { return e.Err }
+
+// IsRetryable reports whether err is marked as retryable by the transport.
+func IsRetryable(err error) bool {
+	var re *RetryableError
+	return errors.As(err, &re)
+}

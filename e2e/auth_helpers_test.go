@@ -92,27 +92,17 @@ func scopedClients(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs
 // only about whether the auth gate fired, not whether the request was
 // otherwise valid.
 //
-// It also treats configclient.ErrLocked as an auth denial. The
-// configclient SDK collapses every codes.PermissionDenied response into
-// ErrLocked (see sdk/grpctransport/errors.go:mapConfigError), losing the
-// distinction between a field-lock denial and a tenant-access denial at
-// the SDK layer. Callers must therefore guarantee that no field locks
-// exist on the target field at the time of the call. Both matrices that
-// invoke this helper meet that precondition structurally:
-//
-//   - matrix 1 (TestRoleActionMatrix) operates on a fresh fixture from
-//     bootstrapMatrixFixture, which never installs locks.
-//   - matrix 2 (TestTenantAccessMatrix) builds a brand-new fixture per
-//     subtest, so cells cannot leak lock state to one another.
-//
-// If a future cell installs a lock before invoking a write RPC through
-// the configclient SDK, ErrLocked stops being a reliable auth signal and
-// the cell must be reworked to call the proto client directly.
+// It also treats configclient.ErrPermissionDenied as an auth denial.
+// The configclient SDK maps codes.PermissionDenied to ErrPermissionDenied
+// (role / tenant-access denial) and codes.FailedPrecondition to ErrLocked
+// (field-lock denial). Both matrices that invoke this helper guarantee no
+// active field locks on the target fields, so ErrPermissionDenied here
+// always means a genuine auth gate fired.
 func isAuthDenied(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, configclient.ErrLocked) {
+	if errors.Is(err, configclient.ErrPermissionDenied) {
 		return true
 	}
 	st, ok := status.FromError(err)
