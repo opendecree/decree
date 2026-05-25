@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ func TestValidateConstraints_IntegerMinMax(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_INT,
 		Constraints: &pb.FieldConstraints{Min: pf(0), Max: pf(10)},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -27,7 +28,7 @@ func TestValidateConstraints_NumberExclusive(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_NUMBER,
 		Constraints: &pb.FieldConstraints{ExclusiveMin: pf(0), ExclusiveMax: pf(1)},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -35,7 +36,7 @@ func TestValidateConstraints_StringLength(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 		Constraints: &pb.FieldConstraints{MinLength: pi(2), MaxLength: pi(50)},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -43,7 +44,7 @@ func TestValidateConstraints_StringPattern(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 		Constraints: &pb.FieldConstraints{Regex: ps("^[A-Z]+$")},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -59,7 +60,7 @@ func TestValidateConstraints_InvalidRegex_Rejected(t *testing.T) {
 			err := validateFieldConstraints(&pb.SchemaField{
 				Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 				Constraints: &pb.FieldConstraints{Regex: ps(pat)},
-			})
+			}, 0)
 			assert.Error(t, err, "expected error for invalid regex %q", pat)
 			assert.Contains(t, err.Error(), "invalid regex constraint")
 		})
@@ -70,7 +71,7 @@ func TestValidateConstraints_DurationMinMax(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_DURATION,
 		Constraints: &pb.FieldConstraints{Min: pf(1), Max: pf(3600)},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -79,7 +80,7 @@ func TestValidateConstraints_JSONSchema(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_JSON,
 		Constraints: &pb.FieldConstraints{JsonSchema: &schema},
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -93,7 +94,7 @@ func TestValidateConstraints_EnumOnAnyType(t *testing.T) {
 		err := validateFieldConstraints(&pb.SchemaField{
 			Path: "x", Type: ft,
 			Constraints: &pb.FieldConstraints{EnumValues: []string{"a", "b"}},
-		})
+		}, 0)
 		require.NoError(t, err, "enum should be valid on %s", ft)
 	}
 }
@@ -101,7 +102,7 @@ func TestValidateConstraints_EnumOnAnyType(t *testing.T) {
 func TestValidateConstraints_NoConstraints(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_BOOL,
-	})
+	}, 0)
 	require.NoError(t, err)
 }
 
@@ -111,7 +112,7 @@ func TestValidateConstraints_MinOnString_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 		Constraints: &pb.FieldConstraints{Min: pf(0)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "minimum")
 	assert.Contains(t, err.Error(), "not valid")
@@ -121,7 +122,7 @@ func TestValidateConstraints_MinLengthOnInteger_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_INT,
 		Constraints: &pb.FieldConstraints{MinLength: pi(2)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "minLength")
 }
@@ -130,7 +131,7 @@ func TestValidateConstraints_PatternOnBool_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_BOOL,
 		Constraints: &pb.FieldConstraints{Regex: ps("^true$")},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "pattern")
 }
@@ -140,7 +141,7 @@ func TestValidateConstraints_JsonSchemaOnString_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 		Constraints: &pb.FieldConstraints{JsonSchema: &schema},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "json_schema")
 }
@@ -149,7 +150,7 @@ func TestValidateConstraints_ExclusiveMinOnBool_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_BOOL,
 		Constraints: &pb.FieldConstraints{ExclusiveMin: pf(0)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "exclusiveMinimum")
 }
@@ -158,7 +159,7 @@ func TestValidateConstraints_MaxOnURL_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_URL,
 		Constraints: &pb.FieldConstraints{Max: pf(100)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "maximum")
 }
@@ -169,7 +170,7 @@ func TestValidateConstraints_MinGreaterThanMax_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_INT,
 		Constraints: &pb.FieldConstraints{Min: pf(10), Max: pf(5)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "greater than maximum")
 }
@@ -178,7 +179,7 @@ func TestValidateConstraints_ExclusiveMinEqualToMax_Rejected(t *testing.T) {
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_NUMBER,
 		Constraints: &pb.FieldConstraints{ExclusiveMin: pf(5), ExclusiveMax: pf(5)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "must be less than")
 }
@@ -187,9 +188,40 @@ func TestValidateConstraints_MinLengthGreaterThanMaxLength_Rejected(t *testing.T
 	err := validateFieldConstraints(&pb.SchemaField{
 		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
 		Constraints: &pb.FieldConstraints{MinLength: pi(10), MaxLength: pi(5)},
-	})
+	}, 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "minLength")
+}
+
+// --- Regex pattern length cap ---
+
+func TestValidateConstraints_RegexAtLimit_Accepted(t *testing.T) {
+	pat := strings.Repeat("a", 1024)
+	err := validateFieldConstraints(&pb.SchemaField{
+		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
+		Constraints: &pb.FieldConstraints{Regex: ps(pat)},
+	}, 1024)
+	require.NoError(t, err)
+}
+
+func TestValidateConstraints_RegexOverLimit_Rejected(t *testing.T) {
+	pat := strings.Repeat("a", 1025)
+	err := validateFieldConstraints(&pb.SchemaField{
+		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
+		Constraints: &pb.FieldConstraints{Regex: ps(pat)},
+	}, 1024)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum length")
+}
+
+func TestValidateConstraints_RegexLimitDisabled_LongPatternAccepted(t *testing.T) {
+	// 0 means no limit.
+	pat := strings.Repeat("a", 5000)
+	err := validateFieldConstraints(&pb.SchemaField{
+		Path: "x", Type: pb.FieldType_FIELD_TYPE_STRING,
+		Constraints: &pb.FieldConstraints{Regex: ps(pat)},
+	}, 0)
+	require.NoError(t, err)
 }
 
 // --- Prefix-overlap (cross-field) ---

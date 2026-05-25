@@ -179,6 +179,45 @@ func TestGetValidators_GetSchemaFieldsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "fields error")
 }
 
+// --- GetValidators: regex pattern length cap ---
+
+func TestGetValidators_RegexOverLimit_Rejected(t *testing.T) {
+	raw := []byte(`{"regex":"` + repeat("a", 1025) + `"}`)
+	store := newMockStore()
+	store.getSchemaFieldsFn = func(_ context.Context, _ string) ([]domain.SchemaField, error) {
+		return []domain.SchemaField{
+			{Path: "x", FieldType: domain.FieldTypeString, Constraints: raw},
+		}, nil
+	}
+
+	f := NewValidatorFactory(store, WithLimits(Limits{RegexMaxLength: 1024}))
+	_, err := f.GetValidators(context.Background(), testTenantID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum length")
+}
+
+func TestGetValidators_RegexAtLimit_Accepted(t *testing.T) {
+	raw := []byte(`{"regex":"` + repeat("a", 1024) + `"}`)
+	store := newMockStore()
+	store.getSchemaFieldsFn = func(_ context.Context, _ string) ([]domain.SchemaField, error) {
+		return []domain.SchemaField{
+			{Path: "x", FieldType: domain.FieldTypeString, Constraints: raw},
+		}, nil
+	}
+
+	f := NewValidatorFactory(store, WithLimits(Limits{RegexMaxLength: 1024}))
+	_, err := f.GetValidators(context.Background(), testTenantID)
+	require.NoError(t, err)
+}
+
+func repeat(s string, n int) string {
+	result := make([]byte, n)
+	for i := range result {
+		result[i] = s[0]
+	}
+	return string(result)
+}
+
 // --- GetValidators: no constraints ---
 
 func TestGetValidators_FieldWithoutConstraints(t *testing.T) {

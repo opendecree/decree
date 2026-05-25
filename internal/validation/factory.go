@@ -136,6 +136,9 @@ func (f *ValidatorFactory) GetValidators(ctx context.Context, tenantID string) (
 			constraints = &pb.FieldConstraints{}
 			_ = json.Unmarshal(field.Constraints, constraints)
 		}
+		if f.limits.RegexMaxLength > 0 && constraints.GetRegex() != "" && len(constraints.GetRegex()) > f.limits.RegexMaxLength {
+			return nil, fmt.Errorf("field %s: regex pattern exceeds maximum length of %d characters", field.Path, f.limits.RegexMaxLength)
+		}
 		validators[field.Path] = NewFieldValidator(field.Path, ft, field.Nullable, field.Sensitive, constraints, WithLimits(f.limits))
 	}
 
