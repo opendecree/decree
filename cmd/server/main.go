@@ -227,13 +227,18 @@ func run() int {
 	// Rate limiter (nil when disabled; nil WithRateLimiter is a no-op).
 	rlMetrics := telemetry.NewRateLimitMetrics(otelCfg)
 	var rlInterceptor *ratelimit.Interceptor
+	var preAuthInterceptor *ratelimit.Interceptor
 	if cfg.RateLimitEnabled {
 		rlCfg := ratelimit.Config{
 			Anonymous:     ratelimit.NewInProcess(rate.Limit(cfg.RateLimitAnonRPS), cfg.RateLimitBurst),
 			Authenticated: ratelimit.NewInProcess(rate.Limit(cfg.RateLimitAuthedRPS), cfg.RateLimitBurst),
+			TrustedProxy:  cfg.RateLimitTrustedProxy,
 		}
 		if cfg.RateLimitSuperAdminRPS > 0 {
 			rlCfg.SuperAdmin = ratelimit.NewInProcess(rate.Limit(cfg.RateLimitSuperAdminRPS), cfg.RateLimitBurst)
+		}
+		if cfg.RateLimitGlobalRPS > 0 {
+			rlCfg.Global = ratelimit.NewInProcess(rate.Limit(cfg.RateLimitGlobalRPS), cfg.RateLimitBurst)
 		}
 		rlOpts := []ratelimit.Option{ratelimit.WithInterceptorLogger(logger)}
 		if counter, ok := rlMetrics.Counter(); ok {
@@ -244,15 +249,28 @@ func run() int {
 			"anon_rps", cfg.RateLimitAnonRPS,
 			"authed_rps", cfg.RateLimitAuthedRPS,
 			"superadmin_rps", cfg.RateLimitSuperAdminRPS,
+			"global_rps", cfg.RateLimitGlobalRPS,
 			"burst", cfg.RateLimitBurst,
 		)
+
+		if cfg.RateLimitPreAuthRPS > 0 {
+			preAuthCfg := ratelimit.Config{
+				Anonymous:    ratelimit.NewInProcess(rate.Limit(cfg.RateLimitPreAuthRPS), cfg.RateLimitBurst),
+				TrustedProxy: cfg.RateLimitTrustedProxy,
+			}
+			preAuthInterceptor = ratelimit.New(preAuthCfg, ratelimit.WithInterceptorLogger(logger))
+			logger.InfoContext(ctx, "pre-auth rate limiting enabled",
+				"rps", cfg.RateLimitPreAuthRPS,
+				"burst", cfg.RateLimitBurst,
+			)
+		}
 	}
 
 	if cfg.EnableReflection {
 		logger.WarnContext(ctx, "ENABLE_REFLECTION=1 set — gRPC server reflection enabled (not recommended for production)")
 	}
 
-	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rlInterceptor)
+	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rlInterceptor, preAuthInterceptor)
 	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvBuild.Opts...)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)
@@ -473,6 +491,9 @@ type serverConfig struct {
 	RateLimitAnonRPS            float64
 	RateLimitAuthedRPS          float64
 	RateLimitSuperAdminRPS      float64 // 0 = unlimited
+	RateLimitGlobalRPS          float64 // 0 = no global cap
+	RateLimitPreAuthRPS         float64 // 0 = disabled
+	RateLimitTrustedProxy       bool    // trust x-forwarded-for for anon IP keying
 	RateLimitBurst              int
 	EnableReflection            bool
 	EnableUI                    bool
@@ -570,6 +591,9 @@ func loadConfig() serverConfig {
 		RateLimitAnonRPS:            parseEnvFloat("RATE_LIMIT_ANON_RPS", 10),
 		RateLimitAuthedRPS:          parseEnvFloat("RATE_LIMIT_AUTHED_RPS", 100),
 		RateLimitSuperAdminRPS:      parseEnvFloat("RATE_LIMIT_SUPERADMIN_RPS", 0),
+		RateLimitGlobalRPS:          parseEnvFloat("RATE_LIMIT_GLOBAL_RPS", 0),
+		RateLimitPreAuthRPS:         parseEnvFloat("RATE_LIMIT_PREAUTH_RPS", 0),
+		RateLimitTrustedProxy:       getEnv("RATE_LIMIT_TRUSTED_PROXY", "") == "1",
 		RateLimitBurst:              parseEnvInt("RATE_LIMIT_BURST", 10),
 		EnableReflection:            getEnv("ENABLE_REFLECTION", "") == "1",
 		EnableUI:                    getEnv("ENABLE_UI", "") == "1",

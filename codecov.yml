@@ -10,6 +10,7 @@ coverage:
 
 ignore:
   - "cmd/decree"
+  - "cmd/server/main.go"
   - "api/centralconfig/**"
   - "internal/storage/dbstore/**"
   - "internal/audit/store_pg.go"

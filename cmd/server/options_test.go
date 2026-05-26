@@ -37,7 +37,7 @@ func TestBuildServerOptions_TLS(t *testing.T) {
 	cfg.InsecureListen = false
 	tlsCfg := &server.TLSConfig{CertFile: "cert.pem", KeyFile: "key.pem"}
 
-	got := buildServerOptions(cfg, discardLogger(), nil, tlsCfg, nil)
+	got := buildServerOptions(cfg, discardLogger(), nil, tlsCfg, nil, nil)
 
 	assert.True(t, got.UseTLS, "expected TLS branch")
 	assert.False(t, got.UseInsecure, "expected insecure branch off")
@@ -49,7 +49,7 @@ func TestBuildServerOptions_Insecure(t *testing.T) {
 	cfg := baseServerCfg()
 	cfg.InsecureListen = true
 
-	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
 
 	assert.False(t, got.UseTLS)
 	assert.True(t, got.UseInsecure)
@@ -60,7 +60,7 @@ func TestBuildServerOptions_RateLimiterWired(t *testing.T) {
 	cfg := baseServerCfg()
 	cfg.InsecureListen = true
 
-	got := buildServerOptions(cfg, discardLogger(), nil, nil, newTestRateLimiter())
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, newTestRateLimiter(), nil)
 
 	assert.True(t, got.HasRateLimiter, "non-nil rate limiter must be wired into the option slice")
 	assert.Len(t, got.Opts, 7, "5 base options + Insecure + RateLimiter")
@@ -70,10 +70,20 @@ func TestBuildServerOptions_RateLimiterAbsent(t *testing.T) {
 	cfg := baseServerCfg()
 	cfg.InsecureListen = true
 
-	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
 
 	assert.False(t, got.HasRateLimiter, "nil rate limiter must not produce a WithRateLimiter option")
 	assert.Len(t, got.Opts, 6)
+}
+
+func TestBuildServerOptions_PreAuthLimiterWired(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, newTestRateLimiter())
+
+	assert.True(t, got.HasPreAuthLimiter, "non-nil pre-auth limiter must be wired into the option slice")
+	assert.Len(t, got.Opts, 7, "5 base options + Insecure + PreAuthLimiter")
 }
 
 func TestBuildServerOptions_ReflectionWired(t *testing.T) {
@@ -81,7 +91,7 @@ func TestBuildServerOptions_ReflectionWired(t *testing.T) {
 	cfg.InsecureListen = true
 	cfg.EnableReflection = true
 
-	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
 
 	assert.True(t, got.HasReflection, "EnableReflection=true must wire WithReflection option")
 	assert.Len(t, got.Opts, 7, "5 base options + Insecure + Reflection")
@@ -92,7 +102,7 @@ func TestBuildServerOptions_ReflectionAbsent(t *testing.T) {
 	cfg.InsecureListen = true
 	cfg.EnableReflection = false
 
-	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil)
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
 
 	assert.False(t, got.HasReflection, "EnableReflection=false must not wire WithReflection option")
 	assert.Len(t, got.Opts, 6)
@@ -103,7 +113,7 @@ func TestBuildServerOptions_ExtraGRPCOpts(t *testing.T) {
 	cfg.InsecureListen = true
 	extra := []grpc.ServerOption{grpc.MaxConcurrentStreams(42)}
 
-	got := buildServerOptions(cfg, discardLogger(), extra, nil, nil)
+	got := buildServerOptions(cfg, discardLogger(), extra, nil, nil, nil)
 
 	assert.Len(t, got.Opts, 6, "extra grpc opts go inside WithGRPCServerOptions, not as separate options")
 }

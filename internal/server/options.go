@@ -17,6 +17,7 @@ type options struct {
 	maxSendMsgBytes  int
 	tls              *TLSConfig
 	insecure         bool
+	preAuthLimiter   GRPCInterceptor // optional; runs before auth (unauthenticated flood protection)
 	rateLimiter      GRPCInterceptor // optional; runs after auth
 	enableReflection bool
 }
@@ -60,6 +61,13 @@ func WithTLS(cfg *TLSConfig) Option {
 // (INSECURE_LISTEN=1). Mutually exclusive with WithTLS.
 func WithInsecure() Option {
 	return func(o *options) { o.insecure = true }
+}
+
+// WithPreAuthLimiter adds a rate-limit interceptor that runs before authentication.
+// Use this to shed unauthenticated floods before paying JWT/JWKS validation cost.
+// Pass nil to disable.
+func WithPreAuthLimiter(rl GRPCInterceptor) Option {
+	return func(o *options) { o.preAuthLimiter = rl }
 }
 
 // WithRateLimiter adds a rate-limit interceptor that runs after authentication.

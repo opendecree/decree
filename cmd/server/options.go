@@ -14,11 +14,12 @@ import (
 // boolean decisions that drove it. Tests assert on the decisions so a flag
 // silently dropped (read but never wired into an option) is caught.
 type serverOptionsBuild struct {
-	Opts           []server.Option
-	UseTLS         bool
-	UseInsecure    bool
-	HasRateLimiter bool
-	HasReflection  bool
+	Opts              []server.Option
+	UseTLS            bool
+	UseInsecure       bool
+	HasPreAuthLimiter bool
+	HasRateLimiter    bool
+	HasReflection     bool
 }
 
 func buildServerOptions(
@@ -27,6 +28,7 @@ func buildServerOptions(
 	extraGRPCOpts []grpc.ServerOption,
 	serverTLS *server.TLSConfig,
 	rl *ratelimit.Interceptor,
+	preAuth *ratelimit.Interceptor,
 ) serverOptionsBuild {
 	out := serverOptionsBuild{
 		Opts: []server.Option{
@@ -43,6 +45,10 @@ func buildServerOptions(
 	} else {
 		out.Opts = append(out.Opts, server.WithTLS(serverTLS))
 		out.UseTLS = true
+	}
+	if preAuth != nil {
+		out.Opts = append(out.Opts, server.WithPreAuthLimiter(preAuth))
+		out.HasPreAuthLimiter = true
 	}
 	if rl != nil {
 		out.Opts = append(out.Opts, server.WithRateLimiter(rl))
