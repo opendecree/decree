@@ -271,7 +271,7 @@ func BenchmarkGetForUpdate_ThenSet(b *testing.B) {
 		if err != nil {
 			continue
 		}
-		_ = lv.Set(ctx, cfg, "updated")
+		_ = lv.Set(ctx, "updated")
 	}
 }
 

@@ -56,13 +56,13 @@ func run() error {
 	fmt.Printf("Current app.name: %q (checksum: %s)\n", locked.Value, locked.Checksum)
 
 	// Update with the checksum — succeeds only if no one else changed it.
-	if err := locked.Set(ctx, client, "Acme Corp App v2"); err != nil {
+	if err := locked.Set(ctx, "Acme Corp App v2"); err != nil {
 		return fmt.Errorf("cas set: %w", err)
 	}
 	fmt.Println("Updated to \"Acme Corp App v2\" via CAS")
 
 	// Try again with the stale checksum — fails with ErrChecksumMismatch.
-	err = locked.Set(ctx, client, "Acme Corp App v3")
+	err = locked.Set(ctx, "Acme Corp App v3")
 	if err != nil {
 		fmt.Printf("Stale CAS correctly rejected: %v\n", err)
 	}
