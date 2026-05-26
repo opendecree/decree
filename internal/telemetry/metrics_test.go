@@ -212,3 +212,27 @@ func TestPubSubMetrics_NilSafe(t *testing.T) {
 	_, ok := m.DroppedCounter()
 	assert.False(t, ok)
 }
+
+func TestNewAuthMetrics_Disabled(t *testing.T) {
+	assert.Nil(t, NewAuthMetrics(Config{}))
+	assert.Nil(t, NewAuthMetrics(Config{Enabled: true, MetricsAuth: false}))
+}
+
+func TestNewAuthMetrics_Enabled(t *testing.T) {
+	m := NewAuthMetrics(Config{Enabled: true, MetricsAuth: true})
+	assert.NotNil(t, m)
+}
+
+func TestAuthMetrics_NilSafe(t *testing.T) {
+	var m *AuthMetrics
+	counter, ok := m.JWKSRefreshFailureCounter()
+	assert.False(t, ok)
+	assert.Nil(t, counter)
+}
+
+func TestAuthMetrics_JWKSRefreshFailureCounter(t *testing.T) {
+	m := NewAuthMetrics(Config{Enabled: true, MetricsAuth: true})
+	counter, ok := m.JWKSRefreshFailureCounter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}

@@ -241,6 +241,30 @@ func (m *PubSubMetrics) DroppedCounter() (metric.Int64Counter, bool) {
 	return m.dropped, true
 }
 
+// AuthMetrics records auth-related counters.
+type AuthMetrics struct {
+	jwksRefreshFailures metric.Int64Counter
+}
+
+// NewAuthMetrics creates auth metrics. Returns nil if not enabled.
+func NewAuthMetrics(cfg Config) *AuthMetrics {
+	if !cfg.Enabled || !cfg.MetricsAuth {
+		return nil
+	}
+	meter := otel.Meter(meterName)
+	failures, _ := meter.Int64Counter("auth.jwks_refresh_failures_total",
+		metric.WithDescription("Number of JWKS background refresh failures"))
+	return &AuthMetrics{jwksRefreshFailures: failures}
+}
+
+// JWKSRefreshFailureCounter returns the counter and true when metrics are enabled.
+func (m *AuthMetrics) JWKSRefreshFailureCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.jwksRefreshFailures, true
+}
+
 // StartDBPoolMetrics starts a background goroutine that periodically records
 // DB connection pool statistics. Returns immediately if not enabled.
 func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pgxpool.Pool) {

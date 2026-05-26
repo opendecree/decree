@@ -65,6 +65,7 @@ func TestAnyMetrics_OneEnabled(t *testing.T) {
 	assert.True(t, Config{MetricsConfig: true}.AnyMetrics())
 	assert.True(t, Config{MetricsSchema: true}.AnyMetrics())
 	assert.True(t, Config{MetricsPubSub: true}.AnyMetrics())
+	assert.True(t, Config{MetricsAuth: true}.AnyMetrics())
 }
 
 func TestConfigFromEnv_TenantAllowlist(t *testing.T) {
