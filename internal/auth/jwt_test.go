@@ -21,6 +21,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -822,6 +823,20 @@ func TestUnaryInterceptor_JWKSRefreshFailureHandler_LogsOnRefreshError(t *testin
 	// With a broken JWKS server, the token must not be accepted.
 	require.Error(t, authErr)
 	assert.Equal(t, codes.Unauthenticated, status.Code(authErr))
+}
+
+func TestNewInterceptor_WithJWKSRefreshFailureCounter(t *testing.T) {
+	meter := noop.NewMeterProvider().Meter("test")
+	counter, err := meter.Int64Counter("test.failures")
+	require.NoError(t, err)
+
+	interceptor := newTestInterceptor(t, "", WithJWKSRefreshFailureCounter(counter))
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithBearer(signToken(t, validClaims(RoleAdmin, "t1")))
+	resp, authErr := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, authErr)
+	assert.Equal(t, "ok", resp)
 }
 
 // --- EmptyRoleInJWT ---
