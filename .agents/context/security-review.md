@@ -331,9 +331,16 @@ to be correctly protected at the audit date:
   `internal/config/service.go:705` calls `CheckTenantAccess` *before*
   delegating to `pubsub.Subscribe`. Redis channel naming
   (`internal/pubsub/redis.go:12,29,52`) is per-tenant.
-- **JWT algorithm allowlist** — `internal/auth/jwt.go:129` uses
+- **JWT algorithm allowlist** — `internal/auth/jwt.go` uses
   `jwt.WithValidMethods([]string{"RS256", "ES256"})`; `alg=none` and
   `alg=HS256` are rejected. Test coverage in `jwt_test.go`.
+- **JWT hardening (decree#424)** — implemented in `internal/auth/jwt.go`:
+  `jwt.WithExpirationRequired()` (tokens without `exp` are rejected);
+  default 60s leeway overridable via `WithLeeway` / `JWT_LEEWAY` env;
+  optional audience enforcement via `WithAudience` / `JWT_AUDIENCE` env;
+  JWKS refresh error handler logs at ERROR and increments
+  `auth.jwks_refresh_failures_total` metric (`OTEL_METRICS_AUTH=1`);
+  JWT parse errors logged by category only (no raw token bytes in logs).
 - **JWT e2e test suite** — `e2e/jwt_auth_test.go` (decree#470) adds a
   parallel e2e suite for JWT-mode: role matrix, tenant-access matrix, JWKS
   rotation (graceful handoff), and expired-token rejection. Runs via

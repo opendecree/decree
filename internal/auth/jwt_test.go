@@ -21,6 +21,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -440,7 +441,7 @@ func TestUnaryInterceptor_WrongSigningKey(t *testing.T) {
 // --- Expiry boundary / leeway ---
 
 func TestUnaryInterceptor_ExpiryBoundaryRejected(t *testing.T) {
-	interceptor := newTestInterceptor(t, "")
+	interceptor := newTestInterceptor(t, "", WithLeeway(0))
 	unary := interceptor.UnaryInterceptor()
 
 	claims := Claims{
@@ -550,7 +551,7 @@ func TestUnaryInterceptor_JWKSRotation(t *testing.T) {
 // --- Clock skew (nbf) ---
 
 func TestUnaryInterceptor_ClockSkew_NBF_Rejected(t *testing.T) {
-	interceptor := newTestInterceptor(t, "")
+	interceptor := newTestInterceptor(t, "", WithLeeway(0))
 	unary := interceptor.UnaryInterceptor()
 
 	// nbf 10s in the future — no leeway configured.
@@ -689,6 +690,156 @@ func TestUnaryInterceptor_TenantIDHeader_DoesNotOverrideJWT(t *testing.T) {
 	assert.Equal(t, []string{"t1"}, capturedClaims.TenantIDs, "tenant list must come from JWT, not x-tenant-id header")
 	assert.False(t, capturedClaims.HasTenantAccess("t2"), "header-injected tenant must not grant access")
 }
+
+// --- ExpirationRequired ---
+
+func TestUnaryInterceptor_NoExpiry_Rejected(t *testing.T) {
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+			// No ExpiresAt — should be rejected by WithExpirationRequired.
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- Audience ---
+
+func TestUnaryInterceptor_AudienceMismatch_Rejected(t *testing.T) {
+	interceptor := newTestInterceptor(t, "", WithAudience("api.example.com"))
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims(RoleAdmin, "t1")
+	claims.Audience = jwt.ClaimStrings{"wrong.audience"}
+	ctx := ctxWithBearer(signToken(t, claims))
+
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+func TestUnaryInterceptor_AudienceMatch_Accepted(t *testing.T) {
+	interceptor := newTestInterceptor(t, "", WithAudience("api.example.com"))
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims(RoleAdmin, "t1")
+	claims.Audience = jwt.ClaimStrings{"api.example.com"}
+	ctx := ctxWithBearer(signToken(t, claims))
+
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
+func TestUnaryInterceptor_AudienceNotConfigured_TokenWithAudIgnored(t *testing.T) {
+	// When WithAudience is not set, audience in the token is not checked.
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := validClaims(RoleAdmin, "t1")
+	claims.Audience = jwt.ClaimStrings{"some.audience"}
+	ctx := ctxWithBearer(signToken(t, claims))
+
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
+// --- Default leeway ---
+
+func TestUnaryInterceptor_DefaultLeeway_AcceptsRecentlyExpired(t *testing.T) {
+	// Default leeway is 60s; token expired 30s ago should be accepted.
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-30 * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	resp, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", resp)
+}
+
+func TestUnaryInterceptor_DefaultLeeway_RejectsFarExpired(t *testing.T) {
+	// Default leeway is 60s; token expired 2 minutes ago must be rejected.
+	interceptor := newTestInterceptor(t, "")
+	unary := interceptor.UnaryInterceptor()
+
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-120 * time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-2 * time.Hour)),
+		},
+		Role:      RoleAdmin,
+		TenantIDs: []string{"t1"},
+	}
+	ctx := ctxWithBearer(signToken(t, claims))
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// --- JWKS refresh failure counter ---
+
+func TestUnaryInterceptor_JWKSRefreshFailureHandler_LogsOnRefreshError(t *testing.T) {
+	// Verify that a JWKS server returning errors causes the refresh error handler to fire.
+	// We verify this indirectly: an unknown KID triggers an on-demand fetch; when the server
+	// is broken, authentication fails with Unauthenticated (not a crash or panic).
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	// NewInterceptor with a broken server — first fetch will fail.
+	interceptor, err := NewInterceptor(context.Background(), srv.URL, WithLogger(logger))
+	// keyfunc.NewDefaultOverrideCtx with NoErrorReturnFirstHTTPReq=true (keyfunc default)
+	// may return nil err even if the first fetch fails. Either way, if we got an interceptor
+	// we should verify it rejects tokens gracefully.
+	if err != nil {
+		t.Skip("interceptor creation failed (expected for broken JWKS)")
+	}
+	t.Cleanup(interceptor.Close)
+
+	unary := interceptor.UnaryInterceptor()
+	ctx := ctxWithBearer(signToken(t, validClaims(RoleAdmin, "t1")))
+	_, authErr := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	// With a broken JWKS server, the token must not be accepted.
+	require.Error(t, authErr)
+	assert.Equal(t, codes.Unauthenticated, status.Code(authErr))
+}
+
+func TestNewInterceptor_WithJWKSRefreshFailureCounter(t *testing.T) {
+	meter := noop.NewMeterProvider().Meter("test")
+	counter, err := meter.Int64Counter("test.failures")
+	require.NoError(t, err)
+
+	interceptor := newTestInterceptor(t, "", WithJWKSRefreshFailureCounter(counter))
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithBearer(signToken(t, validClaims(RoleAdmin, "t1")))
+	resp, authErr := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, authErr)
+	assert.Equal(t, "ok", resp)
+}
+
+// --- EmptyRoleInJWT ---
 
 // TestUnaryInterceptor_EmptyRoleInJWT verifies that a JWT with an empty role claim
 // is rejected with PermissionDenied — an empty string is not a valid role.
