@@ -157,9 +157,14 @@ type Store interface {
 	GetLatestSchemaVersion(ctx context.Context, schemaID string) (domain.SchemaVersion, error)
 	PublishSchemaVersion(ctx context.Context, arg PublishSchemaVersionParams) (domain.SchemaVersion, error)
 
+	// Schema versions (batch).
+	GetLatestSchemaVersionsBatch(ctx context.Context, schemaIDs []string) ([]domain.SchemaVersion, error)
+
 	// Schema fields.
 	CreateSchemaField(ctx context.Context, arg CreateSchemaFieldParams) (domain.SchemaField, error)
+	BulkCreateSchemaFields(ctx context.Context, args []CreateSchemaFieldParams) ([]domain.SchemaField, error)
 	GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error)
+	GetSchemaFieldsByVersionIDs(ctx context.Context, versionIDs []string) ([]domain.SchemaField, error)
 	DeleteSchemaField(ctx context.Context, arg DeleteSchemaFieldParams) error
 
 	// Tenants.

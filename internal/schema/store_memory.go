@@ -268,6 +268,61 @@ func (m *MemoryStore) GetSchemaFields(_ context.Context, schemaVersionID string)
 	return result, nil
 }
 
+func (m *MemoryStore) BulkCreateSchemaFields(ctx context.Context, args []CreateSchemaFieldParams) ([]domain.SchemaField, error) {
+	result := make([]domain.SchemaField, 0, len(args))
+	for _, a := range args {
+		f, err := m.CreateSchemaField(ctx, a)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, f)
+	}
+	return result, nil
+}
+
+func (m *MemoryStore) GetSchemaFieldsByVersionIDs(_ context.Context, versionIDs []string) ([]domain.SchemaField, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	idSet := make(map[string]struct{}, len(versionIDs))
+	for _, id := range versionIDs {
+		idSet[id] = struct{}{}
+	}
+	var result []domain.SchemaField
+	for vID, fields := range m.schemaFields {
+		if _, ok := idSet[vID]; ok {
+			result = append(result, fields...)
+		}
+	}
+	return result, nil
+}
+
+func (m *MemoryStore) GetLatestSchemaVersionsBatch(_ context.Context, schemaIDs []string) ([]domain.SchemaVersion, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	idSet := make(map[string]struct{}, len(schemaIDs))
+	for _, id := range schemaIDs {
+		idSet[id] = struct{}{}
+	}
+	latest := make(map[string]*domain.SchemaVersion)
+	for _, sv := range m.schemaVersions {
+		if _, ok := idSet[sv.SchemaID]; !ok {
+			continue
+		}
+		cur := latest[sv.SchemaID]
+		if cur == nil || sv.Version > cur.Version {
+			cp := sv
+			latest[sv.SchemaID] = &cp
+		}
+	}
+	result := make([]domain.SchemaVersion, 0, len(latest))
+	for _, sv := range latest {
+		result = append(result, *sv)
+	}
+	return result, nil
+}
+
 func (m *MemoryStore) DeleteSchemaField(_ context.Context, arg DeleteSchemaFieldParams) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

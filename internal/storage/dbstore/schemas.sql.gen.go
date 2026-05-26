@@ -195,6 +195,44 @@ func (q *Queries) GetLatestSchemaVersion(ctx context.Context, schemaID pgtype.UU
 	return i, err
 }
 
+const getLatestSchemaVersionsBatch = `-- name: GetLatestSchemaVersionsBatch :many
+SELECT DISTINCT ON (schema_id) id, schema_id, version, parent_version, description, checksum, published, dependent_required, validations, created_at
+FROM schema_versions
+WHERE schema_id = ANY($1::uuid[])
+ORDER BY schema_id, version DESC
+`
+
+func (q *Queries) GetLatestSchemaVersionsBatch(ctx context.Context, dollar_1 []pgtype.UUID) ([]SchemaVersion, error) {
+	rows, err := q.db.Query(ctx, getLatestSchemaVersionsBatch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SchemaVersion{}
+	for rows.Next() {
+		var i SchemaVersion
+		if err := rows.Scan(
+			&i.ID,
+			&i.SchemaID,
+			&i.Version,
+			&i.ParentVersion,
+			&i.Description,
+			&i.Checksum,
+			&i.Published,
+			&i.DependentRequired,
+			&i.Validations,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSchemaByID = `-- name: GetSchemaByID :one
 SELECT id, name, description, created_at, updated_at, deleted_at FROM schemas WHERE id = $1 AND deleted_at IS NULL
 `
@@ -239,6 +277,52 @@ ORDER BY path
 
 func (q *Queries) GetSchemaFields(ctx context.Context, schemaVersionID pgtype.UUID) ([]SchemaField, error) {
 	rows, err := q.db.Query(ctx, getSchemaFields, schemaVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SchemaField{}
+	for rows.Next() {
+		var i SchemaField
+		if err := rows.Scan(
+			&i.ID,
+			&i.SchemaVersionID,
+			&i.Path,
+			&i.FieldType,
+			&i.Constraints,
+			&i.Nullable,
+			&i.Deprecated,
+			&i.RedirectTo,
+			&i.DefaultValue,
+			&i.Description,
+			&i.Title,
+			&i.Example,
+			&i.Examples,
+			&i.ExternalDocs,
+			&i.Tags,
+			&i.Format,
+			&i.ReadOnly,
+			&i.WriteOnce,
+			&i.Sensitive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSchemaFieldsByVersionIDs = `-- name: GetSchemaFieldsByVersionIDs :many
+SELECT id, schema_version_id, path, field_type, constraints, nullable, deprecated, redirect_to, default_value, description, title, example, examples, external_docs, tags, format, read_only, write_once, sensitive FROM schema_fields
+WHERE schema_version_id = ANY($1::uuid[])
+ORDER BY schema_version_id, path
+`
+
+func (q *Queries) GetSchemaFieldsByVersionIDs(ctx context.Context, dollar_1 []pgtype.UUID) ([]SchemaField, error) {
+	rows, err := q.db.Query(ctx, getSchemaFieldsByVersionIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}

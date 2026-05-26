@@ -40,8 +40,9 @@ func TestCreateSchema_Success(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "test.field", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "test.field"
+	})).Return([]domain.SchemaField{{Path: "test.field", FieldType: "string"}}, nil)
 
 	resp, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{
 		Name: "test-schema",
@@ -158,8 +159,9 @@ func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 		}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: newVersionID, Version: 2, ParentVersion: ptrInt32(1)}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 2 // existing + new
+	})).Return([]domain.SchemaField{{}, {}}, nil)
 
 	resp, err := svc.UpdateSchema(ctx, &pb.UpdateSchemaRequest{
 		Id: testSchemaID,
@@ -170,8 +172,6 @@ func TestUpdateSchema_CreatesNewVersion(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), resp.Schema.Version)
-	// Should have 2 fields: existing + new
-	store.AssertNumberOfCalls(t, "CreateSchemaField", 2)
 	store.AssertExpectations(t)
 }
 
@@ -293,9 +293,9 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "test-schema"}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.MatchedBy(func(p CreateSchemaFieldParams) bool {
-		return p.Path == "payments.fee_rate"
-	})).Return(domain.SchemaField{
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "payments.fee_rate"
+	})).Return([]domain.SchemaField{{
 		Path:        "payments.fee_rate",
 		FieldType:   "number",
 		Description: &desc,
@@ -304,7 +304,7 @@ func TestCreateSchema_FieldTagsNotPersisted(t *testing.T) {
 		Tags:        []string{"billing", "critical"},
 		ReadOnly:    true,
 		Sensitive:   true,
-	}, nil)
+	}}, nil)
 
 	resp, err := svc.CreateSchema(ctx, &pb.CreateSchemaRequest{
 		Name:   "test-schema",

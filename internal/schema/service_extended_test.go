@@ -48,8 +48,8 @@ func TestListSchemas_Success(t *testing.T) {
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{
 		testSchema(),
 	}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
-	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{testVersion()}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 10})
 	require.NoError(t, err)
@@ -68,13 +68,18 @@ func TestListSchemas_Pagination(t *testing.T) {
 	v1 := testVersion()
 	v2 := testVersion()
 	v2.ID = "33333333-3333-3333-3333-333333333333"
+	v2.SchemaID = s2.ID
 
 	// Page 1: returns 2 results (pageSize+1) → has next page
 	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
 		return p.Offset == 0 && p.Limit == 2
 	})).Return([]domain.Schema{s1, s2}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, s1.ID).Return(v1, nil)
-	store.On("GetSchemaFields", mock.Anything, v1.ID).Return([]domain.SchemaField{}, nil)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.MatchedBy(func(ids []string) bool {
+		return len(ids) == 1 && ids[0] == s1.ID
+	})).Return([]domain.SchemaVersion{v1}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.MatchedBy(func(ids []string) bool {
+		return len(ids) == 1 && ids[0] == v1.ID
+	})).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 1})
 	require.NoError(t, err)
@@ -85,8 +90,12 @@ func TestListSchemas_Pagination(t *testing.T) {
 	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
 		return p.Offset == 1 && p.Limit == 2
 	})).Return([]domain.Schema{s2}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, s2.ID).Return(v2, nil)
-	store.On("GetSchemaFields", mock.Anything, v2.ID).Return([]domain.SchemaField{}, nil)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.MatchedBy(func(ids []string) bool {
+		return len(ids) == 1 && ids[0] == s2.ID
+	})).Return([]domain.SchemaVersion{v2}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.MatchedBy(func(ids []string) bool {
+		return len(ids) == 1 && ids[0] == v2.ID
+	})).Return([]domain.SchemaField{}, nil)
 
 	resp, err = svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{
 		PageSize:  1,
@@ -130,8 +139,8 @@ func TestListSchemas_BoundaryNextPageIsEmpty(t *testing.T) {
 	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
 		return p.Offset == 0 && p.Limit == 2
 	})).Return([]domain.Schema{s1, s1}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
-	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{testVersion()}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 1})
 	require.NoError(t, err)
@@ -158,8 +167,8 @@ func TestListSchemas_ZeroPageSize(t *testing.T) {
 	store.On("ListSchemas", mock.Anything, mock.MatchedBy(func(p ListSchemasParams) bool {
 		return p.Limit > 0 // clamped to default, not zero
 	})).Return([]domain.Schema{testSchema()}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
-	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, nil)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{testVersion()}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	// page_size=0 should fall back to default and succeed.
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{PageSize: 0})
@@ -180,24 +189,26 @@ func TestListSchemas_VersionNotFound_Skips(t *testing.T) {
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(domain.SchemaVersion{}, domain.ErrNotFound)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
 	require.NoError(t, err)
 	assert.Empty(t, resp.Schemas)
 }
 
-func TestListSchemas_FieldsNotFound_Skips(t *testing.T) {
+func TestListSchemas_FieldsNotFound_IncludesSchemaWithEmptyFields(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
-	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, domain.ErrNotFound)
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{testVersion()}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, nil)
 
 	resp, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
 	require.NoError(t, err)
-	assert.Empty(t, resp.Schemas)
+	assert.Len(t, resp.Schemas, 1)
+	assert.Empty(t, resp.Schemas[0].Fields)
 }
 
 func TestListSchemas_VersionDBError_ReturnsInternal(t *testing.T) {
@@ -205,7 +216,7 @@ func TestListSchemas_VersionDBError_ReturnsInternal(t *testing.T) {
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(domain.SchemaVersion{}, errors.New("db connection lost"))
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{}, errors.New("db connection lost"))
 
 	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
 	require.Error(t, err)
@@ -217,8 +228,8 @@ func TestListSchemas_FieldsDBError_ReturnsInternal(t *testing.T) {
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("ListSchemas", mock.Anything, mock.Anything).Return([]domain.Schema{testSchema()}, nil)
-	store.On("GetLatestSchemaVersion", mock.Anything, testSchemaID).Return(testVersion(), nil)
-	store.On("GetSchemaFields", mock.Anything, testVersionID).Return([]domain.SchemaField{}, errors.New("db connection lost"))
+	store.On("GetLatestSchemaVersionsBatch", mock.Anything, mock.Anything).Return([]domain.SchemaVersion{testVersion()}, nil)
+	store.On("GetSchemaFieldsByVersionIDs", mock.Anything, mock.Anything).Return([]domain.SchemaField{}, errors.New("db connection lost"))
 
 	_, err := svc.ListSchemas(auth.WithoutAuth(context.Background()), &pb.ListSchemasRequest{})
 	require.Error(t, err)
@@ -868,8 +879,9 @@ func TestImportSchema_NewSchema(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "my-schema"}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "app.name", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "app.name"
+	})).Return([]domain.SchemaField{{Path: "app.name", FieldType: "string"}}, nil)
 
 	resp, err := svc.ImportSchema(ctx, &pb.ImportSchemaRequest{
 		YamlContent: validYAML("my-schema"),
@@ -890,8 +902,9 @@ func TestImportSchema_NewSchemaWithAutoPublish(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "pub-schema"}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "app.name", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "app.name"
+	})).Return([]domain.SchemaField{{Path: "app.name", FieldType: "string"}}, nil)
 	// autoPublish calls PublishSchema which calls GetSchemaByID + PublishSchemaVersion + GetSchemaFields.
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(domain.Schema{ID: testSchemaID, Name: "pub-schema"}, nil)
@@ -925,8 +938,9 @@ func TestImportSchema_ExistingSchemaNewVersion(t *testing.T) {
 	store.On("GetLatestSchemaVersion", ctx, testSchemaID).Return(latestVersion, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: newVersionID, SchemaID: testSchemaID, Version: 2, Checksum: "new-checksum"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "app.name", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "app.name"
+	})).Return([]domain.SchemaField{{Path: "app.name", FieldType: "string"}}, nil)
 
 	resp, err := svc.ImportSchema(ctx, &pb.ImportSchemaRequest{
 		YamlContent: validYAML("my-schema"),
@@ -1022,8 +1036,8 @@ func TestImportSchema_AcceptsValidCELRule(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "cel-good"}, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1, Checksum: "abc"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "payments.min", FieldType: "integer"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.Anything).
+		Return([]domain.SchemaField{{Path: "payments.min", FieldType: "integer"}, {Path: "payments.max", FieldType: "integer"}}, nil)
 
 	yaml := []byte(`spec_version: v1
 name: cel-good
@@ -1072,8 +1086,9 @@ func TestImportSchema_ExistingWithAutoPublish(t *testing.T) {
 	store.On("GetLatestSchemaVersion", ctx, testSchemaID).Return(latestVersion, nil)
 	store.On("CreateSchemaVersion", ctx, mock.AnythingOfType("schema.CreateSchemaVersionParams")).
 		Return(domain.SchemaVersion{ID: newVersionID, SchemaID: testSchemaID, Version: 2, Checksum: "new"}, nil)
-	store.On("CreateSchemaField", ctx, mock.AnythingOfType("schema.CreateSchemaFieldParams")).
-		Return(domain.SchemaField{Path: "app.name", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", ctx, mock.MatchedBy(func(args []CreateSchemaFieldParams) bool {
+		return len(args) == 1 && args[0].Path == "app.name"
+	})).Return([]domain.SchemaField{{Path: "app.name", FieldType: "string"}}, nil)
 	// autoPublish flow
 	store.On("GetSchemaByID", ctx, testSchemaID).
 		Return(existingSchema, nil)
