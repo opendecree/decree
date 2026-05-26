@@ -74,3 +74,139 @@ func TestMapAdminError_Nil(t *testing.T) {
 		t.Errorf("expected nil, got %v", err)
 	}
 }
+
+// --- mapConfigError: remaining codes ---
+
+func TestMapConfigError_AlreadyExists(t *testing.T) {
+	err := mapConfigError(status.Error(codes.AlreadyExists, "field exists"))
+	if !errors.Is(err, configclient.ErrAlreadyExists) {
+		t.Errorf("got %v, want ErrAlreadyExists", err)
+	}
+}
+
+func TestMapConfigError_InvalidArgument_IsInvalidArgumentError(t *testing.T) {
+	err := mapConfigError(status.Error(codes.InvalidArgument, "bad value"))
+	if !errors.Is(err, configclient.ErrInvalidArgument) {
+		t.Errorf("got %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestMapConfigError_Unavailable_IsRetryable(t *testing.T) {
+	err := mapConfigError(status.Error(codes.Unavailable, "service down"))
+	var re *configclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapConfigError_DeadlineExceeded_IsRetryable(t *testing.T) {
+	err := mapConfigError(status.Error(codes.DeadlineExceeded, "deadline"))
+	var re *configclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapConfigError_ResourceExhausted_IsRetryable(t *testing.T) {
+	err := mapConfigError(status.Error(codes.ResourceExhausted, "rate limit"))
+	var re *configclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapConfigError_RetryableWrapsOriginalError(t *testing.T) {
+	orig := status.Error(codes.Unavailable, "service down")
+	err := mapConfigError(orig)
+	var re *configclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Fatalf("got %v, want *RetryableError", err)
+	}
+	if re.Err != orig {
+		t.Errorf("RetryableError.Err = %v, want original gRPC error", re.Err)
+	}
+}
+
+func TestMapConfigError_NonGRPC_PassThrough(t *testing.T) {
+	orig := errors.New("some non-grpc error")
+	err := mapConfigError(orig)
+	if err != orig {
+		t.Errorf("got %v, want original error passed through", err)
+	}
+}
+
+func TestMapConfigError_Default_PassThrough(t *testing.T) {
+	orig := status.Error(codes.Internal, "internal")
+	err := mapConfigError(orig)
+	if err != orig {
+		t.Errorf("got %v, want original gRPC error passed through for default code", err)
+	}
+}
+
+// --- mapAdminError: remaining codes ---
+
+func TestMapAdminError_AlreadyExists(t *testing.T) {
+	err := mapAdminError(status.Error(codes.AlreadyExists, "schema exists"))
+	if !errors.Is(err, adminclient.ErrAlreadyExists) {
+		t.Errorf("got %v, want ErrAlreadyExists", err)
+	}
+}
+
+func TestMapAdminError_InvalidArgument_IsInvalidArgumentError(t *testing.T) {
+	err := mapAdminError(status.Error(codes.InvalidArgument, "bad field"))
+	if !errors.Is(err, adminclient.ErrInvalidArgument) {
+		t.Errorf("got %v, want ErrInvalidArgument", err)
+	}
+}
+
+func TestMapAdminError_Unavailable_IsRetryable(t *testing.T) {
+	err := mapAdminError(status.Error(codes.Unavailable, "service down"))
+	var re *adminclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapAdminError_DeadlineExceeded_IsRetryable(t *testing.T) {
+	err := mapAdminError(status.Error(codes.DeadlineExceeded, "deadline"))
+	var re *adminclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapAdminError_ResourceExhausted_IsRetryable(t *testing.T) {
+	err := mapAdminError(status.Error(codes.ResourceExhausted, "rate limit"))
+	var re *adminclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Errorf("got %v, want *RetryableError", err)
+	}
+}
+
+func TestMapAdminError_RetryableWrapsOriginalError(t *testing.T) {
+	orig := status.Error(codes.Unavailable, "service down")
+	err := mapAdminError(orig)
+	var re *adminclient.RetryableError
+	if !errors.As(err, &re) {
+		t.Fatalf("got %v, want *RetryableError", err)
+	}
+	if re.Err != orig {
+		t.Errorf("RetryableError.Err = %v, want original gRPC error", re.Err)
+	}
+}
+
+func TestMapAdminError_NonGRPC_PassThrough(t *testing.T) {
+	orig := errors.New("some non-grpc error")
+	err := mapAdminError(orig)
+	if err != orig {
+		t.Errorf("got %v, want original error passed through", err)
+	}
+}
+
+func TestMapAdminError_Default_PassThrough(t *testing.T) {
+	orig := status.Error(codes.Internal, "internal")
+	err := mapAdminError(orig)
+	if err != orig {
+		t.Errorf("got %v, want original gRPC error passed through for default code", err)
+	}
+}
