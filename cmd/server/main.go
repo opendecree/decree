@@ -82,13 +82,14 @@ func run() int {
 	pubSubMetrics := telemetry.NewPubSubMetrics(otelCfg)
 
 	var (
-		configStore    config.Store
-		schemaStoreVal schema.Store
-		auditStoreVal  audit.Store
-		configCache    cache.ConfigCache
-		publisher      pubsub.Publisher
-		subscriber     pubsub.Subscriber
-		validatorStore validation.Store
+		configStore      config.Store
+		schemaStoreVal   schema.Store
+		auditStoreVal    audit.Store
+		configCache      cache.ConfigCache
+		idempotencyCache cache.IdempotencyCache
+		publisher        pubsub.Publisher
+		subscriber       pubsub.Subscriber
+		validatorStore   validation.Store
 	)
 
 	if cfg.StorageBackend == "memory" {
@@ -99,6 +100,7 @@ func run() int {
 		schemaStoreVal = memSchema
 		auditStoreVal = audit.NewMemoryStore()
 		configCache = cache.NewMemoryCache(0)
+		idempotencyCache = cache.NewMemoryIdempotencyCache()
 		memOpts := []pubsub.MemoryOption{pubsub.WithLogger(logger)}
 		if counter, ok := pubSubMetrics.DroppedCounter(); ok {
 			memOpts = append(memOpts, pubsub.WithDroppedCounter(counter))
@@ -179,6 +181,7 @@ func run() int {
 		schemaStoreVal = schema.NewPGStore(db.WritePool, db.ReadPool)
 		auditStoreVal = audit.NewPGStore(db.WritePool, db.ReadPool)
 		configCache = cache.NewRedisCache(redisClient)
+		idempotencyCache = cache.NewRedisIdempotencyCache(redisClient)
 		publisher = pubsub.NewRedisPublisher(redisClient)
 		subscriber = pubsub.NewRedisSubscriber(redisClient, logger)
 		defer func() { _ = publisher.Close() }()
@@ -355,6 +358,7 @@ func run() int {
 			config.WithMetrics(configMetrics),
 			config.WithValidators(validatorFactory),
 			config.WithRecorder(recorder),
+			config.WithIdempotencyCache(idempotencyCache),
 			config.WithLimits(config.Limits{
 				MaxListLen:         cfg.ConfigMaxListLen,
 				MaxDocBytes:        cfg.ConfigMaxDocBytes,
