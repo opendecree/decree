@@ -94,10 +94,10 @@ func TestFullFlow(t *testing.T) {
 	assert.Equal(t, "0.5%", lv.Value)
 
 	// Set with correct checksum → succeeds.
-	require.NoError(t, lv.Set(ctx, cfg, "0.3%"))
+	require.NoError(t, lv.Set(ctx, "0.3%"))
 
 	// Set with stale checksum → fails.
-	err = lv.Set(ctx, cfg, "0.1%")
+	err = lv.Set(ctx, "0.1%")
 	assert.ErrorIs(t, err, configclient.ErrChecksumMismatch)
 
 	// 8. Update convenience CAS.
