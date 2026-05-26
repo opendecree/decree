@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -65,22 +67,30 @@ func ContextWithClaims(ctx context.Context, claims *Claims) context.Context {
 	return context.WithValue(ctx, claimsContextKey{}, claims)
 }
 
+const defaultLeeway = 60 * time.Second
+
 // Interceptor provides gRPC interceptors for JWT authentication.
 type Interceptor struct {
-	jwks       keyfunc.Keyfunc
-	jwksCancel context.CancelFunc
-	issuer     string
-	leeway     time.Duration
-	logger     *slog.Logger
+	jwks               keyfunc.Keyfunc
+	jwksCancel         context.CancelFunc
+	issuer             string
+	audience           string
+	leeway             time.Duration
+	logger             *slog.Logger
+	jwksRefreshCounter metric.Int64Counter
+	hasCounter         bool
 }
 
 // InterceptorOption configures a JWT Interceptor.
 type InterceptorOption func(*interceptorOptions)
 
 type interceptorOptions struct {
-	issuer string
-	leeway time.Duration
-	logger *slog.Logger
+	issuer             string
+	audience           string
+	leeway             time.Duration
+	logger             *slog.Logger
+	jwksRefreshCounter metric.Int64Counter
+	hasCounter         bool
 }
 
 // WithIssuer enforces an expected `iss` claim during JWT validation.
@@ -89,7 +99,14 @@ func WithIssuer(issuer string) InterceptorOption {
 	return func(o *interceptorOptions) { o.issuer = issuer }
 }
 
+// WithAudience enforces an expected `aud` claim during JWT validation.
+// When unset, the audience claim is not checked.
+func WithAudience(audience string) InterceptorOption {
+	return func(o *interceptorOptions) { o.audience = audience }
+}
+
 // WithLeeway sets the clock-skew tolerance applied to exp, nbf, and iat claims.
+// Defaults to 60s when unset.
 func WithLeeway(d time.Duration) InterceptorOption {
 	return func(o *interceptorOptions) { o.leeway = d }
 }
@@ -99,27 +116,60 @@ func WithLogger(l *slog.Logger) InterceptorOption {
 	return func(o *interceptorOptions) { o.logger = l }
 }
 
+// WithJWKSRefreshFailureCounter sets an OTel counter incremented on each JWKS
+// background refresh failure. Pass the counter from telemetry.AuthMetrics.
+func WithJWKSRefreshFailureCounter(c metric.Int64Counter) InterceptorOption {
+	return func(o *interceptorOptions) {
+		o.jwksRefreshCounter = c
+		o.hasCounter = true
+	}
+}
+
 // NewInterceptor creates a new auth interceptor. jwksURL is the JWKS endpoint
-// for key discovery; pass WithIssuer / WithLogger for optional configuration.
+// for key discovery; pass WithIssuer / WithAudience / WithLeeway / WithLogger for
+// optional configuration. Leeway defaults to 60s when not explicitly set.
 func NewInterceptor(ctx context.Context, jwksURL string, opts ...InterceptorOption) (*Interceptor, error) {
-	o := interceptorOptions{logger: slog.Default()}
+	o := interceptorOptions{
+		logger: slog.Default(),
+		leeway: defaultLeeway,
+	}
 	for _, opt := range opts {
 		opt(&o)
 	}
 
+	logger := o.logger
+	var counter metric.Int64Counter
+	hasCounter := o.hasCounter
+	if hasCounter {
+		counter = o.jwksRefreshCounter
+	}
+
 	jwksCtx, jwksCancel := context.WithCancel(ctx)
-	jwks, err := keyfunc.NewDefaultCtx(jwksCtx, []string{jwksURL})
+	override := keyfunc.Override{
+		RefreshErrorHandlerFunc: func(u string) func(ctx context.Context, err error) {
+			return func(ctx context.Context, err error) {
+				logger.ErrorContext(ctx, "jwks refresh failed", "url", u, "error", err)
+				if hasCounter {
+					counter.Add(ctx, 1)
+				}
+			}
+		},
+	}
+	jwks, err := keyfunc.NewDefaultOverrideCtx(jwksCtx, []string{jwksURL}, override)
 	if err != nil {
 		jwksCancel()
 		return nil, fmt.Errorf("create jwks keyfunc: %w", err)
 	}
 
 	return &Interceptor{
-		jwks:       jwks,
-		jwksCancel: jwksCancel,
-		issuer:     o.issuer,
-		leeway:     o.leeway,
-		logger:     o.logger,
+		jwks:               jwks,
+		jwksCancel:         jwksCancel,
+		issuer:             o.issuer,
+		audience:           o.audience,
+		leeway:             o.leeway,
+		logger:             o.logger,
+		jwksRefreshCounter: counter,
+		hasCounter:         hasCounter,
 	}, nil
 }
 
@@ -161,9 +211,15 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 	}
 
 	claims := &Claims{}
-	opts := []jwt.ParserOption{jwt.WithValidMethods([]string{"RS256", "ES256"})}
+	opts := []jwt.ParserOption{
+		jwt.WithValidMethods([]string{"RS256", "ES256"}),
+		jwt.WithExpirationRequired(),
+	}
 	if i.issuer != "" {
 		opts = append(opts, jwt.WithIssuer(i.issuer))
+	}
+	if i.audience != "" {
+		opts = append(opts, jwt.WithAudience(i.audience))
 	}
 	if i.leeway > 0 {
 		opts = append(opts, jwt.WithLeeway(i.leeway))
@@ -171,7 +227,7 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 
 	parsed, err := jwt.ParseWithClaims(token, claims, i.jwks.KeyfuncCtx(ctx), opts...)
 	if err != nil {
-		i.logger.DebugContext(ctx, "jwt validation failed", "error", err)
+		i.logger.DebugContext(ctx, "jwt validation failed", "reason", jwtErrCategory(err))
 		return nil, status.Error(codes.Unauthenticated, "invalid token")
 	}
 	if !parsed.Valid {
@@ -192,6 +248,24 @@ func (i *Interceptor) authenticate(ctx context.Context) (context.Context, error)
 	}
 
 	return context.WithValue(ctx, claimsContextKey{}, claims), nil
+}
+
+// jwtErrCategory returns a safe, non-token-bearing description of a JWT parse error.
+func jwtErrCategory(err error) string {
+	switch {
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		return "malformed"
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		return "invalid_signature"
+	case errors.Is(err, jwt.ErrTokenExpired):
+		return "expired"
+	case errors.Is(err, jwt.ErrTokenNotValidYet):
+		return "not_yet_valid"
+	case errors.Is(err, jwt.ErrTokenRequiredClaimMissing):
+		return "missing_required_claim"
+	default:
+		return "invalid"
+	}
 }
 
 func extractBearerToken(ctx context.Context) (string, error) {

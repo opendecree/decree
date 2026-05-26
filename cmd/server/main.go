@@ -189,12 +189,23 @@ func run() int {
 	}
 
 	// Auth interceptor.
+	authMetrics := telemetry.NewAuthMetrics(otelCfg)
 	var authInterceptor server.GRPCInterceptor
 	if cfg.JWTJWKSURL != "" {
-		jwtInterceptor, jwtErr := auth.NewInterceptor(ctx, cfg.JWTJWKSURL,
+		jwtOpts := []auth.InterceptorOption{
 			auth.WithIssuer(cfg.JWTIssuer),
 			auth.WithLogger(logger),
-		)
+		}
+		if cfg.JWTAudience != "" {
+			jwtOpts = append(jwtOpts, auth.WithAudience(cfg.JWTAudience))
+		}
+		if cfg.JWTLeeway > 0 {
+			jwtOpts = append(jwtOpts, auth.WithLeeway(cfg.JWTLeeway))
+		}
+		if counter, ok := authMetrics.JWKSRefreshFailureCounter(); ok {
+			jwtOpts = append(jwtOpts, auth.WithJWKSRefreshFailureCounter(counter))
+		}
+		jwtInterceptor, jwtErr := auth.NewInterceptor(ctx, cfg.JWTJWKSURL, jwtOpts...)
 		if jwtErr != nil {
 			logger.ErrorContext(ctx, "failed to create auth interceptor", "error", jwtErr)
 			return 1
@@ -464,6 +475,8 @@ type serverConfig struct {
 	RedisURL                    string
 	EnableServices              []string
 	JWTIssuer                   string
+	JWTAudience                 string
+	JWTLeeway                   time.Duration
 	JWTJWKSURL                  string
 	LogLevel                    string
 	UsageTrackingEnabled        bool
@@ -564,6 +577,8 @@ func loadConfig() serverConfig {
 		RedisURL:                    getEnv("REDIS_URL", ""),
 		EnableServices:              parseServices(enableServices),
 		JWTIssuer:                   getEnv("JWT_ISSUER", ""),
+		JWTAudience:                 getEnv("JWT_AUDIENCE", ""),
+		JWTLeeway:                   parseEnvDuration("JWT_LEEWAY", 0),
 		JWTJWKSURL:                  getEnv("JWT_JWKS_URL", ""),
 		LogLevel:                    getEnv("LOG_LEVEL", "info"),
 		UsageTrackingEnabled:        getEnv("USAGE_TRACKING_ENABLED", "true") != "false",
