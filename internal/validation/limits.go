@@ -62,6 +62,7 @@ type options struct {
 	regexErrorCounter metric.Int64Counter       // nil when metrics are disabled
 	inFlightGauge     metric.Int64UpDownCounter // nil when metrics are disabled
 	celCapCounter     metric.Int64Counter       // nil when metrics are disabled
+	celSoftErrCounter metric.Int64Counter       // nil when metrics are disabled
 	compileSem        chan struct{}             // nil when MaxConcurrentCompiles == 0
 }
 
@@ -107,6 +108,14 @@ func WithInFlightGauge(g metric.Int64UpDownCounter) Option {
 // "validation.cel_aggregate_cost_cap_exceeded_total". Pass nil to disable.
 func WithCelCapCounter(c metric.Int64Counter) Option {
 	return func(o *options) { o.celCapCounter = c }
+}
+
+// WithCelSoftErrCounter sets the OTEL counter incremented (with a tenant_id
+// attribute) when a CEL runtime error is treated as a soft error in lenient
+// mode. The metric name should be
+// "validation.cel_soft_error_total". Pass nil to disable.
+func WithCelSoftErrCounter(c metric.Int64Counter) Option {
+	return func(o *options) { o.celSoftErrCounter = c }
 }
 
 func resolveOptions(opts []Option) options {

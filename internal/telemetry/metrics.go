@@ -149,6 +149,7 @@ type ValidationMetrics struct {
 	regexCompileErrors  metric.Int64Counter
 	inFlightCompiles    metric.Int64UpDownCounter
 	celAggregateCostCap metric.Int64Counter
+	celSoftErr          metric.Int64Counter
 }
 
 // NewValidationMetrics creates validation metrics. Returns nil if not enabled.
@@ -165,7 +166,9 @@ func NewValidationMetrics(cfg Config) *ValidationMetrics {
 		metric.WithDescription("Number of JSON-Schema compile goroutines currently in flight, including zombies that outlived their timeout"))
 	celCap, _ := meter.Int64Counter("validation.cel_aggregate_cost_cap_exceeded_total",
 		metric.WithDescription("Number of times the aggregate CEL evaluation cost cap was exceeded per tenant, causing the write to be rejected"))
-	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors, inFlightCompiles: inFlight, celAggregateCostCap: celCap}
+	celSoftErr, _ := meter.Int64Counter("validation.cel_soft_error_total",
+		metric.WithDescription("Number of CEL runtime errors treated as soft errors in lenient mode"))
+	return &ValidationMetrics{compileTimeouts: timeouts, regexCompileErrors: regexErrors, inFlightCompiles: inFlight, celAggregateCostCap: celCap, celSoftErr: celSoftErr}
 }
 
 // TimeoutCounter returns the underlying Int64Counter and true when metrics are
@@ -202,6 +205,15 @@ func (m *ValidationMetrics) CelCapExceededCounter() (metric.Int64Counter, bool) 
 		return nil, false
 	}
 	return m.celAggregateCostCap, true
+}
+
+// CelSoftErrCounter returns the counter incremented when a CEL runtime error
+// is treated as a soft error in lenient mode, and true when metrics are enabled.
+func (m *ValidationMetrics) CelSoftErrCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.celSoftErr, true
 }
 
 // StartDBPoolMetrics starts a background goroutine that periodically records

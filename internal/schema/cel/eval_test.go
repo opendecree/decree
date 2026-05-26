@@ -193,7 +193,9 @@ type stringError string
 
 func (a stringError) Error() string { return string(a) }
 
-func TestEval_NonBoolResultIsSoftError(t *testing.T) {
+func TestEval_NonBoolResult_StrictMode_FailsWrite(t *testing.T) {
+	// In strict mode (default), a rule that evaluates to a non-bool value
+	// must be treated as a validation failure so the write is rejected.
 	programs, rules := compileRunnable(t, []ruleSpec{
 		{rule: "self.payments.min_amount + 1.0", message: "not bool"},
 	})
@@ -204,17 +206,16 @@ func TestEval_NonBoolResultIsSoftError(t *testing.T) {
 	)
 	failed, softErrs, err := Eval(programs, act, rules)
 	require.NoError(t, err)
-	assert.Empty(t, failed, "non-bool rule must not count as a failure")
-	require.Len(t, softErrs, 1)
-	assert.Contains(t, softErrs[0].Error(), "did not evaluate to bool")
+	assert.Empty(t, softErrs, "strict mode must not produce soft errors")
+	require.Len(t, failed, 1, "non-bool rule must fail the write in strict mode")
+	assert.Equal(t, "cel_non_bool_result", failed[0].Reason)
+	assert.Contains(t, failed[0].Message, "did not evaluate to bool")
 }
 
-func TestEval_NullComparisonIsSoftError(t *testing.T) {
-	// Rule references a field that is null in the activation. cel-go raises
-	// a runtime error ("no such overload") that must surface as a soft
-	// error rather than failing the write — otherwise authors would have to
-	// wrap every field reference in has() to keep unrelated writes from
-	// being rejected.
+func TestEval_RuntimeError_StrictMode_FailsWrite(t *testing.T) {
+	// In strict mode (default), a CEL runtime error (e.g. null dereference)
+	// must fail the write so the rule author receives immediate feedback.
+	// Previously this was a silent soft-error that allowed the write to proceed.
 	programs, rules := compileRunnable(t, []ruleSpec{
 		{rule: "self.payments.min_amount < self.payments.max_amount", message: "min < max"},
 	})
@@ -228,8 +229,71 @@ func TestEval_NullComparisonIsSoftError(t *testing.T) {
 	)
 	failed, softErrs, err := Eval(programs, act, rules)
 	require.NoError(t, err)
-	assert.Empty(t, failed, "null comparison must not fail the write")
+	assert.Empty(t, softErrs, "strict mode must not produce soft errors")
+	require.Len(t, failed, 1, "runtime error must fail the write in strict mode")
+	assert.Equal(t, "cel_runtime_error", failed[0].Reason)
+	assert.Contains(t, failed[0].Message, "rule evaluation failed")
+}
+
+func TestEval_NonBoolResult_LenientMode_IsSoftError(t *testing.T) {
+	// Lenient mode restores legacy behaviour: non-bool results are logged as
+	// soft errors and the write proceeds.
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount + 1.0", message: "not bool"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{{FieldPath: "payments.min_amount", Value: strPtr("1")}},
+		map[string]pb.FieldType{"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER},
+		TenantBinding{},
+	)
+	failed, softErrs, err := Eval(programs, act, rules, WithLenientRuntimeErrors())
+	require.NoError(t, err)
+	assert.Empty(t, failed, "lenient mode: non-bool rule must not count as a failure")
 	require.Len(t, softErrs, 1)
+	assert.Contains(t, softErrs[0].Error(), "did not evaluate to bool")
+}
+
+func TestEval_RuntimeError_LenientMode_IsSoftError(t *testing.T) {
+	// Lenient mode restores legacy behaviour: runtime errors (e.g. null
+	// dereference when a field is missing from the activation) are soft errors
+	// and the write proceeds.
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "min < max"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{{FieldPath: "payments.max_amount", Value: strPtr("100")}},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+	failed, softErrs, err := Eval(programs, act, rules, WithLenientRuntimeErrors())
+	require.NoError(t, err)
+	assert.Empty(t, failed, "lenient mode: null comparison must not fail the write")
+	require.Len(t, softErrs, 1)
+}
+
+func TestEval_LenientMode_SoftErrCounterIncremented(t *testing.T) {
+	// Verify the soft-error counter fires in lenient mode on a runtime error.
+	programs, rules := compileRunnable(t, []ruleSpec{
+		{rule: "self.payments.min_amount < self.payments.max_amount", message: "min < max"},
+	})
+	act := BuildActivation(
+		[]SnapshotRow{{FieldPath: "payments.max_amount", Value: strPtr("100")}},
+		map[string]pb.FieldType{
+			"payments.min_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+			"payments.max_amount": pb.FieldType_FIELD_TYPE_NUMBER,
+		},
+		TenantBinding{},
+	)
+	counter := &fakeCounter{}
+	_, _, err := Eval(programs, act, rules,
+		WithLenientRuntimeErrors(),
+		WithSoftErrCounter(counter, "tenant-xyz"),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), counter.n.Load(), "soft-error counter must be incremented once")
 }
 
 func TestEval_AggregateCostCapExceeded(t *testing.T) {

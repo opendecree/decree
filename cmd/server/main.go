@@ -279,6 +279,9 @@ func run() int {
 	if counter, ok := validationMetrics.CelCapExceededCounter(); ok {
 		validatorOpts = append(validatorOpts, validation.WithCelCapCounter(counter))
 	}
+	if counter, ok := validationMetrics.CelSoftErrCounter(); ok {
+		validatorOpts = append(validatorOpts, validation.WithCelSoftErrCounter(counter))
+	}
 	validatorFactory := validation.NewValidatorFactory(validatorStore, validatorOpts...)
 
 	// Usage recorder — async batched read tracking for audit stats.
