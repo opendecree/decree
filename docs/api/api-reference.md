@@ -1098,6 +1098,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | expected_checksum | [string](#string) | optional | Optimistic concurrency control: the checksum from a previous GetField/GetConfig response. If provided and the field&#39;s current checksum doesn&#39;t match, the request fails with ABORTED. This prevents lost updates when multiple actors modify the same field concurrently. |
 | description | [string](#string) | optional | Version-level description explaining why this change was made. |
 | value_description | [string](#string) | optional | Value-level description explaining what this specific value means. Retrievable via include_description in read requests. |
+| idempotency_key | [string](#string) | optional | Idempotency key for safe retries. When set, the server deduplicates writes with the same key within a 24-hour window. Use the SDK&#39;s WithIdempotencyKey option to set this field and enable retry. |
 
 
 
@@ -1130,6 +1131,7 @@ FieldUpdate represents a single field change within a SetFields batch.
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
 | updates | [FieldUpdate](#centralconfig-v1-FieldUpdate) | repeated | Field updates to apply. All updates are applied atomically in a single config version. If any update fails validation (checksum, field lock), no changes are committed. Maximum 1 000 entries (configurable via CONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument. |
 | description | [string](#string) | optional | Version-level description explaining why these changes were made. |
+| idempotency_key | [string](#string) | optional | Idempotency key for safe retries. When set, the server deduplicates writes with the same key within a 24-hour window. Use the SDK&#39;s WithIdempotencyKey option to set this field and enable retry. |
 
 
 
