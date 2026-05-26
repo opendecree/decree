@@ -2,12 +2,25 @@ package pubsub
 
 import (
 	"context"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 )
+
+type countingCounter struct {
+	noop.Int64Counter
+	n atomic.Int64
+}
+
+func (c *countingCounter) Add(_ context.Context, incr int64, _ ...metric.AddOption) {
+	c.n.Add(incr)
+}
 
 func TestMemoryPubSub_PublishSubscribe(t *testing.T) {
 	ps := NewMemoryPubSub()
@@ -111,4 +124,48 @@ func TestMemoryPubSub_PublishNoSubscribers(t *testing.T) {
 	ps := NewMemoryPubSub()
 	err := ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1"})
 	assert.NoError(t, err)
+}
+
+func TestMemoryPubSub_DropCounter(t *testing.T) {
+	counter := &countingCounter{}
+	ps := NewMemoryPubSub(WithDroppedCounter(counter))
+
+	// Subscribe but never drain the channel so it fills up.
+	ch, cancel, err := ps.Subscribe(context.Background(), "t1")
+	require.NoError(t, err)
+	defer cancel()
+	_ = ch
+
+	// Overflow the 64-deep buffer.
+	for i := range 70 {
+		_ = ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1", FieldPath: "a", Version: int32(i)})
+	}
+	assert.Greater(t, counter.n.Load(), int64(0))
+}
+
+func TestMemoryPubSub_PayloadTooLarge(t *testing.T) {
+	ps := NewMemoryPubSub()
+	big := ConfigChangeEvent{
+		TenantID: "t1",
+		NewValue: strings.Repeat("x", MaxPayloadBytes+1),
+	}
+	err := ps.Publish(context.Background(), big)
+	assert.ErrorIs(t, err, ErrPayloadTooLarge)
+}
+
+func TestMemoryPubSub_EventIDAndSeq(t *testing.T) {
+	ps := NewMemoryPubSub()
+	ch, cancel, err := ps.Subscribe(context.Background(), "t1")
+	require.NoError(t, err)
+	defer cancel()
+
+	require.NoError(t, ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1"}))
+	require.NoError(t, ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1"}))
+
+	e1 := <-ch
+	e2 := <-ch
+	assert.NotEmpty(t, e1.EventID)
+	assert.NotEmpty(t, e2.EventID)
+	assert.NotEqual(t, e1.EventID, e2.EventID)
+	assert.Less(t, e1.Seq, e2.Seq)
 }

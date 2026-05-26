@@ -29,6 +29,8 @@ type Config struct {
 	MetricsRateLimit bool
 	// MetricsValidation enables validation counters (e.g. JSON-Schema compile timeouts).
 	MetricsValidation bool
+	// MetricsPubSub enables the pubsub dropped-event counter.
+	MetricsPubSub bool
 	// MetricsTenantAllowlist is the opt-in set of tenant IDs that receive a tenant_id label
 	// on config metrics. Empty (the default) suppresses the label on all tenants to prevent
 	// Prometheus/OTel cardinality explosion in deployments with many tenants.
@@ -37,7 +39,7 @@ type Config struct {
 
 // AnyMetrics returns true if any metric flag is enabled.
 func (c Config) AnyMetrics() bool {
-	return c.MetricsGRPC || c.MetricsDBPool || c.MetricsCache || c.MetricsConfig || c.MetricsSchema || c.MetricsRateLimit || c.MetricsValidation
+	return c.MetricsGRPC || c.MetricsDBPool || c.MetricsCache || c.MetricsConfig || c.MetricsSchema || c.MetricsRateLimit || c.MetricsValidation || c.MetricsPubSub
 }
 
 // ConfigFromEnv parses telemetry configuration from environment variables.
@@ -54,6 +56,7 @@ func ConfigFromEnv() Config {
 		MetricsSchema:          envBool("OTEL_METRICS_SCHEMA"),
 		MetricsRateLimit:       envBool("OTEL_METRICS_RATE_LIMIT"),
 		MetricsValidation:      envBool("OTEL_METRICS_VALIDATION"),
+		MetricsPubSub:          envBool("OTEL_METRICS_PUBSUB"),
 		MetricsTenantAllowlist: envStringSlice("OTEL_METRICS_TENANT_ALLOWLIST"),
 	}
 }
