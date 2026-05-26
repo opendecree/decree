@@ -2,6 +2,7 @@ package ratelimit_test
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,7 @@ import (
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/opendecree/decree/internal/auth"
@@ -102,13 +104,14 @@ func TestHealthCheckExempt(t *testing.T) {
 }
 
 // fakeStream is a minimal grpc.ServerStream for testing StreamInterceptor.
-// Only Context() needs a real body; all other methods are no-ops via the embedded interface.
 type fakeStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
 func (f *fakeStream) Context() context.Context { return f.ctx }
+func (f *fakeStream) SendMsg(_ any) error      { return nil }
+func (f *fakeStream) RecvMsg(_ any) error      { return nil }
 
 func streamHandler(_ any, _ grpc.ServerStream) error { return nil }
 
@@ -202,4 +205,90 @@ func TestStream_HealthCheckExempt(t *testing.T) {
 		err := invokeStream(t, i, ctx, m)
 		assert.NoError(t, err, "health stream method %s must be exempt", m)
 	}
+}
+
+// TestGlobalLimiterBlocksAllRoles: exhausting the global method bucket blocks
+// subsequent callers regardless of their per-role limit.
+func TestGlobalLimiterBlocksAllRoles(t *testing.T) {
+	i := ratelimit.New(ratelimit.Config{
+		Global:        ratelimit.NewInProcess(rate.Limit(1), 1), // burst=1 for the method
+		Anonymous:     ratelimit.NewInProcess(rate.Limit(100), 100),
+		Authenticated: ratelimit.NewInProcess(rate.Limit(100), 100),
+		SuperAdmin:    ratelimit.NewInProcess(rate.Limit(100), 100),
+	})
+
+	ctxAnon := context.Background()
+	ctxAuthed := auth.ContextWithClaims(context.Background(), &auth.Claims{TenantIDs: []string{"t1"}})
+
+	require.NoError(t, invokeUnary(t, i, ctxAnon, testMethod), "first request should pass")
+
+	err := invokeUnary(t, i, ctxAuthed, testMethod)
+	require.Error(t, err, "second request (different role) should be blocked by global limit")
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+}
+
+// TestGlobalLimiterCapsSuperAdmin: superadmin with nil per-role limiter (unlimited)
+// is still capped by the global limiter.
+func TestGlobalLimiterCapsSuperAdmin(t *testing.T) {
+	i := ratelimit.New(ratelimit.Config{
+		Global:        ratelimit.NewInProcess(rate.Limit(1), 1),
+		Authenticated: ratelimit.NewInProcess(rate.Limit(100), 100),
+		// SuperAdmin intentionally nil = unlimited per-role
+	})
+
+	ctxSA := auth.ContextWithClaims(context.Background(), &auth.Claims{Role: auth.RoleSuperAdmin})
+
+	require.NoError(t, invokeUnary(t, i, ctxSA, testMethod), "first superadmin request should pass")
+	err := invokeUnary(t, i, ctxSA, testMethod)
+	require.Error(t, err, "second superadmin request should be blocked by global limit")
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+}
+
+// TestAnonPerIPIsolation: two anonymous callers from different IPs have separate
+// buckets and do not starve each other.
+func TestAnonPerIPIsolation(t *testing.T) {
+	lim := ratelimit.NewInProcess(rate.Limit(1), 1) // burst=1 per bucket
+	i := ratelimit.New(ratelimit.Config{Anonymous: lim})
+
+	ctxIP1 := peer.NewContext(context.Background(), &peer.Peer{
+		Addr: &net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 50000},
+	})
+	ctxIP2 := peer.NewContext(context.Background(), &peer.Peer{
+		Addr: &net.TCPAddr{IP: net.ParseIP("5.6.7.8"), Port: 50001},
+	})
+
+	// Exhaust IP1.
+	require.NoError(t, invokeUnary(t, i, ctxIP1, testMethod))
+	require.Error(t, invokeUnary(t, i, ctxIP1, testMethod), "IP1 should be exhausted")
+
+	// IP2 is unaffected.
+	require.NoError(t, invokeUnary(t, i, ctxIP2, testMethod), "IP2 should still pass")
+}
+
+// TestStream_MessageMeteringExhausted: per-message rate limiting kicks in after
+// the connect-time token is consumed — the (burst)th SendMsg call is rejected.
+func TestStream_MessageMeteringExhausted(t *testing.T) {
+	const burst = 3 // connect uses 1 token; 2 messages pass; 3rd message is rejected
+	lim := ratelimit.NewInProcess(rate.Limit(1), burst)
+	i := ratelimit.New(ratelimit.Config{Authenticated: lim})
+
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{TenantIDs: []string{"tenant-a"}})
+
+	sendCount := 0
+	handler := func(_ any, ss grpc.ServerStream) error {
+		for range burst {
+			if err := ss.SendMsg(struct{}{}); err != nil {
+				return err
+			}
+			sendCount++
+		}
+		return nil
+	}
+
+	info := &grpc.StreamServerInfo{FullMethod: testMethod}
+	err := i.StreamInterceptor()(nil, &fakeStream{ctx: ctx}, info, handler)
+	require.Error(t, err, "stream should be terminated when message limit is hit")
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
+	// connect-time uses 1 token; (burst-1) messages succeed before exhaustion
+	assert.Equal(t, burst-1, sendCount, "expected %d messages before exhaustion", burst-1)
 }
