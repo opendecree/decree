@@ -50,7 +50,7 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
 
 	if tid := storage.TenantIDFromCtx(ctx); tid != "" {
-		if _, err := tx.Exec(ctx, "SET LOCAL app.tenant_id = $1", tid); err != nil {
+		if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_id', $1, true)", tid); err != nil {
 			return fmt.Errorf("set tenant guc: %w", err)
 		}
 	}

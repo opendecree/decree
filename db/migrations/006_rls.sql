@@ -16,17 +16,19 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 
 -- Shared helper: true when the current transaction has set the superadmin escape GUC
 -- (schema admin, tenant lifecycle, global reads that must bypass tenant isolation).
+-- COALESCE guards against NULL: current_setting returns NULL (not '') when the
+-- custom GUC has never been set in this session, and NULL = 'true' is NULL (falsy).
 CREATE FUNCTION is_superadmin_ctx() RETURNS BOOLEAN
     LANGUAGE sql STABLE
-    AS $$ SELECT current_setting('app.superadmin_mode', true) = 'true' $$;
+    AS $$ SELECT COALESCE(current_setting('app.superadmin_mode', true), '') = 'true' $$;
 
 -- Shared helper: true when app.tenant_id has not been set for the current transaction.
 -- Non-transactional reads from the pool arrive without a GUC; the application layer
 -- is responsible for WHERE tenant_id = $1 in those paths. RLS enforces isolation only
--- when a transaction has pinned a tenant GUC via SET LOCAL app.tenant_id.
+-- when a transaction has pinned a tenant GUC via set_config / SET LOCAL.
 CREATE FUNCTION tenant_guc_unset() RETURNS BOOLEAN
     LANGUAGE sql STABLE
-    AS $$ SELECT current_setting('app.tenant_id', true) = '' $$;
+    AS $$ SELECT COALESCE(current_setting('app.tenant_id', true), '') = '' $$;
 
 ALTER TABLE tenants               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenants               FORCE  ROW LEVEL SECURITY;

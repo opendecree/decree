@@ -80,7 +80,7 @@ func TestRLSTenantIsolation(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = tx.Rollback(ctx) })
 
-		_, err = tx.Exec(ctx, "SET LOCAL app.tenant_id = $1", tenantAID)
+		_, err = tx.Exec(ctx, "SELECT set_config('app.tenant_id', $1, true)", tenantAID)
 		require.NoError(t, err)
 
 		// Raw SELECT with no WHERE clause — RLS must filter to tenant A only.
@@ -105,7 +105,7 @@ func TestRLSTenantIsolation(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = tx.Rollback(ctx) })
 
-		_, err = tx.Exec(ctx, "SET LOCAL app.superadmin_mode = 'true'")
+		_, err = tx.Exec(ctx, "SELECT set_config('app.superadmin_mode', 'true', true)")
 		require.NoError(t, err)
 
 		rows, err := tx.Query(ctx, "SELECT tenant_id::text FROM config_versions")
