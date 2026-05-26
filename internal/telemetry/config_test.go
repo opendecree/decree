@@ -17,6 +17,7 @@ func TestConfigFromEnv_Defaults(t *testing.T) {
 	assert.False(t, cfg.MetricsCache)
 	assert.False(t, cfg.MetricsConfig)
 	assert.False(t, cfg.MetricsSchema)
+	assert.False(t, cfg.MetricsPubSub)
 }
 
 func TestConfigFromEnv_AllEnabled(t *testing.T) {
@@ -63,6 +64,7 @@ func TestAnyMetrics_OneEnabled(t *testing.T) {
 	assert.True(t, Config{MetricsDBPool: true}.AnyMetrics())
 	assert.True(t, Config{MetricsConfig: true}.AnyMetrics())
 	assert.True(t, Config{MetricsSchema: true}.AnyMetrics())
+	assert.True(t, Config{MetricsPubSub: true}.AnyMetrics())
 }
 
 func TestConfigFromEnv_TenantAllowlist(t *testing.T) {
