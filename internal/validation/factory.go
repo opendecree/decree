@@ -26,15 +26,16 @@ type Store interface {
 
 // ValidatorFactory builds and caches field validators per tenant.
 type ValidatorFactory struct {
-	store            Store
-	cache            *ValidatorCache
-	rulesCache       sync.Map // tenantID → []byte (raw dependent_required JSON)
-	validationsCache sync.Map // tenantID → []*pb.ValidationRule
-	celEnvCache      sync.Map // tenantID → *cel.Env
-	celProgramsCache sync.Map // tenantID → []cel.Program
-	celCache         *celpkg.Cache
-	limits           Limits
-	celCapCounter    metric.Int64Counter // nil when metrics are disabled
+	store             Store
+	cache             *ValidatorCache
+	rulesCache        sync.Map // tenantID → []byte (raw dependent_required JSON)
+	validationsCache  sync.Map // tenantID → []*pb.ValidationRule
+	celEnvCache       sync.Map // tenantID → *cel.Env
+	celProgramsCache  sync.Map // tenantID → []cel.Program
+	celCache          *celpkg.Cache
+	limits            Limits
+	celCapCounter     metric.Int64Counter // nil when metrics are disabled
+	celSoftErrCounter metric.Int64Counter // nil when metrics are disabled
 }
 
 // NewValidatorFactory creates a new validator factory. Pass [WithLimits]
@@ -42,11 +43,12 @@ type ValidatorFactory struct {
 func NewValidatorFactory(store Store, opts ...Option) *ValidatorFactory {
 	o := resolveOptions(opts)
 	return &ValidatorFactory{
-		store:         store,
-		cache:         NewValidatorCache(0),
-		celCache:      celpkg.NewCache(),
-		limits:        o.limits,
-		celCapCounter: o.celCapCounter,
+		store:             store,
+		cache:             NewValidatorCache(0),
+		celCache:          celpkg.NewCache(),
+		limits:            o.limits,
+		celCapCounter:     o.celCapCounter,
+		celSoftErrCounter: o.celSoftErrCounter,
 	}
 }
 
@@ -55,6 +57,13 @@ func NewValidatorFactory(store Store, opts ...Option) *ValidatorFactory {
 // celpkg.Eval via celpkg.WithCapCounter.
 func (f *ValidatorFactory) CelCapCounter() metric.Int64Counter {
 	return f.celCapCounter
+}
+
+// CelSoftErrCounter returns the OTEL counter for CEL soft errors in lenient
+// mode (nil when metrics are disabled). Callers pass it to celpkg.Eval via
+// celpkg.WithSoftErrCounter.
+func (f *ValidatorFactory) CelSoftErrCounter() metric.Int64Counter {
+	return f.celSoftErrCounter
 }
 
 // Cache returns the underlying cache for invalidation.

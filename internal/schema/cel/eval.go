@@ -20,8 +20,10 @@ import (
 type EvalOption func(*evalConfig)
 
 type evalConfig struct {
-	capCounter metric.Int64Counter
-	tenantID   string
+	capCounter     metric.Int64Counter
+	softErrCounter metric.Int64Counter
+	tenantID       string
+	lenient        bool // if true, runtime errors are soft-errors (logged, write proceeds)
 }
 
 // WithCapCounter wires an OTEL counter that is incremented (with the
@@ -32,6 +34,25 @@ func WithCapCounter(c metric.Int64Counter, tenantID string) EvalOption {
 		cfg.capCounter = c
 		cfg.tenantID = tenantID
 	}
+}
+
+// WithSoftErrCounter wires an OTEL counter that is incremented (with the
+// given tenantID attribute) whenever a CEL runtime error is treated as a
+// soft error (lenient mode only). Pass nil to disable.
+func WithSoftErrCounter(c metric.Int64Counter, tenantID string) EvalOption {
+	return func(cfg *evalConfig) {
+		cfg.softErrCounter = c
+		cfg.tenantID = tenantID
+	}
+}
+
+// WithLenientRuntimeErrors opts into the legacy soft-error behaviour: CEL
+// runtime errors (type mismatches, nil dereferences, non-bool results) are
+// collected as warnings and the write proceeds. Without this option the
+// default is strict: runtime errors fail the write with a descriptive
+// FailedRule entry so the rule author is notified immediately.
+func WithLenientRuntimeErrors() EvalOption {
+	return func(cfg *evalConfig) { cfg.lenient = true }
 }
 
 // FailedRule names a CEL rule that returned false against the current
@@ -48,17 +69,21 @@ type FailedRule struct {
 // rules that failed. Programs and rules must align by index — the caller
 // builds them together in factory.GetCelArtifacts.
 //
-// Three outcome shapes:
+// Outcome shapes (strict mode — default):
 //
 //   - rule returns false      → appended to the failed slice.
 //   - rule returns true       → dropped.
-//   - rule errors at runtime  → appended to the soft-error slice (returned
-//     separately so the caller can log without failing the write). The
-//     common runtime error is comparison against an unset (null) field;
-//     authors should not need to wrap every reference in `has()` to keep
-//     unrelated writes from being rejected.
+//   - rule errors at runtime  → appended to the failed slice with a
+//     descriptive message so the write is rejected and the rule author
+//     receives immediate feedback.
+//   - rule returns non-bool   → appended to the failed slice.
 //
-// Three terminal errors:
+// In lenient mode (pass [WithLenientRuntimeErrors]):
+//
+//   - runtime errors and non-bool results are collected as soft errors
+//     (returned in the second return value) and the write proceeds.
+//
+// Three terminal errors (both modes):
 //
 //   - per-rule cost-limit exceedance  — abort; caller returns InvalidArgument.
 //   - aggregate cost-limit exceedance — abort after summing cost across all
@@ -89,7 +114,21 @@ func Eval(programs []cel.Program, activation map[string]any, rules []*pb.Validat
 			if isCostLimit(err) {
 				return nil, softErrs, fmt.Errorf("cel: cost limit exceeded for validations[%d]: %w", i, err)
 			}
-			softErrs = append(softErrs, fmt.Errorf("validations[%d]: %w", i, err))
+			runtimeErr := fmt.Errorf("validations[%d]: %w", i, err)
+			if cfg.lenient {
+				if cfg.softErrCounter != nil {
+					cfg.softErrCounter.Add(context.Background(), 1, metric.WithAttributes(
+						attribute.String("tenant_id", cfg.tenantID),
+					))
+				}
+				softErrs = append(softErrs, runtimeErr)
+			} else {
+				failed = append(failed, FailedRule{
+					Index:   i,
+					Message: fmt.Sprintf("rule evaluation failed: %v", err),
+					Reason:  "cel_runtime_error",
+				})
+			}
 			continue
 		}
 		if details != nil {
@@ -106,7 +145,21 @@ func Eval(programs []cel.Program, activation map[string]any, rules []*pb.Validat
 			}
 		}
 		if val == nil || val.Type() != types.BoolType {
-			softErrs = append(softErrs, fmt.Errorf("validations[%d]: rule did not evaluate to bool (got %v)", i, valType(val)))
+			nonBoolErr := fmt.Errorf("validations[%d]: rule did not evaluate to bool (got %v)", i, valType(val))
+			if cfg.lenient {
+				if cfg.softErrCounter != nil {
+					cfg.softErrCounter.Add(context.Background(), 1, metric.WithAttributes(
+						attribute.String("tenant_id", cfg.tenantID),
+					))
+				}
+				softErrs = append(softErrs, nonBoolErr)
+			} else {
+				failed = append(failed, FailedRule{
+					Index:   i,
+					Message: fmt.Sprintf("rule did not evaluate to bool (got %v)", valType(val)),
+					Reason:  "cel_non_bool_result",
+				})
+			}
 			continue
 		}
 		if val.Value() == false {

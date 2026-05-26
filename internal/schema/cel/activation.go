@@ -29,9 +29,10 @@ type TenantBinding struct {
 // BuildActivation returns the activation map handed to cel.Program.Eval.
 // The returned map has two top-level keys:
 //
-//   - self   — nested map keyed by dotted-path segments. Null/absent fields
-//     surface as the CEL `null` literal (Go nil) so authors can write
-//     `has(self.x)` or `self.x == null` interchangeably.
+//   - self   — nested map keyed by dotted-path segments. Unset fields
+//     surface as the CEL `null` literal (Go nil). Use `self.x == null` to
+//     guard comparisons — do NOT use `has(self.x)`, which returns true for
+//     pre-seeded nil keys and will not short-circuit correctly.
 //   - tenant — flat `{id, name}` map of strings.
 //
 // types must cover every path declared on the schema. Every key in types is

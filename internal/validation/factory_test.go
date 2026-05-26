@@ -84,6 +84,21 @@ func TestValidatorFactory_CelCapCounter_NilWhenUnset(t *testing.T) {
 	assert.Nil(t, f.CelCapCounter())
 }
 
+func TestNewValidatorFactory_WithCelSoftErrCounter(t *testing.T) {
+	store := newMockStore()
+	m := telemetry.NewValidationMetrics(telemetry.Config{Enabled: true, MetricsValidation: true})
+	counter, ok := m.CelSoftErrCounter()
+	require.True(t, ok)
+
+	f := NewValidatorFactory(store, WithCelSoftErrCounter(counter))
+	assert.NotNil(t, f.CelSoftErrCounter())
+}
+
+func TestValidatorFactory_CelSoftErrCounter_NilWhenUnset(t *testing.T) {
+	f := NewValidatorFactory(newMockStore())
+	assert.Nil(t, f.CelSoftErrCounter())
+}
+
 // --- GetValidators: cache miss → builds validators ---
 
 func TestGetValidators_CacheMiss_BuildsValidators(t *testing.T) {
