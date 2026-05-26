@@ -150,11 +150,21 @@ func TestValidationMetrics_NilSafe(t *testing.T) {
 	counter, ok = m.CelCapExceededCounter()
 	assert.False(t, ok)
 	assert.Nil(t, counter)
+	counter, ok = m.CelSoftErrCounter()
+	assert.False(t, ok)
+	assert.Nil(t, counter)
 }
 
 func TestValidationMetrics_CelCapExceededCounter(t *testing.T) {
 	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
 	counter, ok := m.CelCapExceededCounter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}
+
+func TestValidationMetrics_CelSoftErrCounter(t *testing.T) {
+	m := NewValidationMetrics(Config{Enabled: true, MetricsValidation: true})
+	counter, ok := m.CelSoftErrCounter()
 	assert.True(t, ok)
 	assert.NotNil(t, counter)
 }
