@@ -10,6 +10,7 @@ import (
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -291,4 +292,24 @@ func TestStream_MessageMeteringExhausted(t *testing.T) {
 	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
 	// connect-time uses 1 token; (burst-1) messages succeed before exhaustion
 	assert.Equal(t, burst-1, sendCount, "expected %d messages before exhaustion", burst-1)
+}
+
+// TestAnonTrustedProxy: when TrustedProxy is set, x-forwarded-for is used as the IP key
+// so two callers with different x-forwarded-for values have independent buckets.
+func TestAnonTrustedProxy(t *testing.T) {
+	lim := ratelimit.NewInProcess(rate.Limit(1), 1) // burst=1 per bucket
+	i := ratelimit.New(ratelimit.Config{
+		Anonymous:    lim,
+		TrustedProxy: true,
+	})
+
+	ctxIP1 := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", "10.0.0.1"))
+	ctxIP2 := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", "10.0.0.2"))
+
+	// Exhaust IP1 bucket.
+	require.NoError(t, invokeUnary(t, i, ctxIP1, testMethod))
+	require.Error(t, invokeUnary(t, i, ctxIP1, testMethod), "IP1 via x-forwarded-for should be exhausted")
+
+	// IP2 bucket is independent.
+	require.NoError(t, invokeUnary(t, i, ctxIP2, testMethod), "IP2 via x-forwarded-for should still pass")
 }
