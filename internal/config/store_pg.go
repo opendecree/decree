@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/opendecree/decree/internal/audit"
+	"github.com/opendecree/decree/internal/storage"
 	"github.com/opendecree/decree/internal/storage/dbstore"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/storage/pgconv"
@@ -47,6 +48,12 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // no-op after commit
+
+	if tid := storage.TenantIDFromCtx(ctx); tid != "" {
+		if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_id', $1, true)", tid); err != nil {
+			return fmt.Errorf("set tenant guc: %w", err)
+		}
+	}
 
 	txQueries := s.write.WithTx(tx)
 	txStore := &PGStore{
