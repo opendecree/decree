@@ -1,6 +1,10 @@
 package configwatcher
 
-import "sync"
+import (
+	"log/slog"
+	"sync"
+	"sync/atomic"
+)
 
 // Change represents a value transition for a typed config field.
 type Change[T any] struct {
@@ -27,6 +31,10 @@ type Value[T any] struct {
 	defaultVal T
 	parse      func(string) (T, error)
 	changesCh  chan Change[T]
+
+	dropped   atomic.Int64
+	logger    *slog.Logger
+	fieldPath string
 }
 
 func newValue[T any](defaultVal T, parse func(string) (T, error)) *Value[T] {
@@ -37,6 +45,13 @@ func newValue[T any](defaultVal T, parse func(string) (T, error)) *Value[T] {
 		parse:      parse,
 		changesCh:  make(chan Change[T], 16),
 	}
+}
+
+// DroppedCount returns the number of change notifications that were dropped
+// because the Changes channel was full. Each drop also emits a WARN log (if a
+// logger was configured via [WithLogger]).
+func (v *Value[T]) DroppedCount() int64 {
+	return v.dropped.Load()
 }
 
 // Get returns the current value of the field. If the field is null or missing,
@@ -93,7 +108,7 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 		return
 	}
 
-	ch := Change[T]{
+	change := Change[T]{
 		Old:     oldVal,
 		New:     v.current,
 		WasNull: wasNull,
@@ -102,15 +117,23 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 
 	// Send change notification (non-blocking).
 	select {
-	case v.changesCh <- ch:
+	case v.changesCh <- change:
 	default:
-		// Channel full — drop oldest, send new.
+		// Channel full — record the drop, log a warning, then drop oldest and
+		// send the latest change so Get() callers can still observe the newest value.
+		v.dropped.Add(1)
+		if v.logger != nil {
+			v.logger.Warn("configwatcher: change dropped (channel full)",
+				"field", v.fieldPath,
+				"dropped_total", v.dropped.Load(),
+			)
+		}
 		select {
 		case <-v.changesCh:
 		default:
 		}
 		select {
-		case v.changesCh <- ch:
+		case v.changesCh <- change:
 		default:
 		}
 	}

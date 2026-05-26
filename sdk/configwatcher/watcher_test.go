@@ -1,10 +1,12 @@
 package configwatcher
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -562,6 +564,170 @@ func TestWatcher_TimeField(t *testing.T) {
 
 	if got := scheduled.Get(); !got.Equal(ts) {
 		t.Errorf("got %v, want %v", got, ts)
+	}
+
+	cancel()
+	_ = w.Close()
+}
+
+// --- DroppedCount tests ---
+
+// TestValue_DroppedCount_IncrementOnFull verifies that DroppedCount increments
+// each time an update is dropped because the Changes channel is full.
+func TestValue_DroppedCount_IncrementOnFull(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+
+	// Pre-fill the channel to capacity (16).
+	for i := range 16 {
+		v.update(fmt.Sprintf("%d", i), true)
+	}
+	if got := v.DroppedCount(); got != 0 {
+		t.Fatalf("expected 0 drops before overflow, got %d", got)
+	}
+
+	// The next 5 updates should each count as a drop (channel remains full
+	// because we never drain it; drop-oldest then re-send means the channel
+	// stays at capacity, so every subsequent send triggers the drop path).
+	const extraUpdates = 5
+	for i := range extraUpdates {
+		v.update(fmt.Sprintf("%d", 100+i), true)
+	}
+
+	if got := v.DroppedCount(); got != extraUpdates {
+		t.Errorf("DroppedCount: got %d, want %d", got, extraUpdates)
+	}
+
+	// The value itself should reflect the latest update.
+	if got := v.Get(); got != int64(100+extraUpdates-1) {
+		t.Errorf("Get after drops: got %d, want %d", got, int64(100+extraUpdates-1))
+	}
+}
+
+// TestValue_DroppedCount_ZeroUnderNormal verifies that no drops are counted
+// when the channel is drained normally.
+func TestValue_DroppedCount_ZeroUnderNormal(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+
+	for i := range 10 {
+		v.update(fmt.Sprintf("%d", i), true)
+		// Drain each notification immediately.
+		select {
+		case <-v.Changes():
+		case <-time.After(50 * time.Millisecond):
+			t.Fatal("expected change on channel")
+		}
+	}
+
+	if got := v.DroppedCount(); got != 0 {
+		t.Errorf("expected 0 drops under normal operation, got %d", got)
+	}
+}
+
+// TestValue_DroppedCount_WarnLog verifies that a WARN log entry is emitted
+// (with the field name) each time a change is dropped.
+func TestValue_DroppedCount_WarnLog(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	v := newValue(int64(0), parseInt)
+	v.logger = logger
+	v.fieldPath = "payments.fee"
+
+	// Fill the channel to capacity.
+	for i := range 16 {
+		v.update(fmt.Sprintf("%d", i), true)
+	}
+	// Trigger a drop.
+	v.update("999", true)
+
+	if got := v.DroppedCount(); got != 1 {
+		t.Fatalf("expected 1 drop, got %d", got)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "configwatcher: change dropped") {
+		t.Errorf("expected WARN log containing 'configwatcher: change dropped', got: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "payments.fee") {
+		t.Errorf("expected WARN log to include field name 'payments.fee', got: %s", logOutput)
+	}
+}
+
+// safeWriter is a goroutine-safe io.Writer backed by a bytes.Buffer.
+type safeWriter struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (sw *safeWriter) Write(p []byte) (int, error) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.buf.Write(p)
+}
+
+func (sw *safeWriter) String() string {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.buf.String()
+}
+
+// TestValue_DroppedCount_ViaWatcher verifies that DroppedCount is accessible
+// on values obtained through the Watcher and that the Watcher's logger is used.
+func TestValue_DroppedCount_ViaWatcher(t *testing.T) {
+	sw := &safeWriter{}
+	logger := slog.New(slog.NewTextHandler(sw, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sub := newMockSubscription(ctx)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := New(tr, "t1", WithLogger(logger))
+	fee := w.Int("payments.fee", 0)
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	// Drain the initial snapshot notification if any.
+	select {
+	case <-fee.Changes():
+	default:
+	}
+
+	// Fill channel to capacity by sending stream updates without draining.
+	for i := range 16 {
+		sub.send(&configclient.ConfigChange{
+			TenantID:  "t1",
+			FieldPath: "payments.fee",
+			NewValue:  configclient.IntVal(int64(i + 1)),
+		})
+	}
+	// Give stream goroutine time to process all sends.
+	time.Sleep(50 * time.Millisecond)
+
+	// Send one more to trigger a drop.
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "payments.fee",
+		NewValue:  configclient.IntVal(999),
+	})
+	time.Sleep(50 * time.Millisecond)
+
+	if got := fee.DroppedCount(); got < 1 {
+		t.Errorf("expected at least 1 drop, got %d", got)
+	}
+
+	if logOutput := sw.String(); !strings.Contains(logOutput, "payments.fee") {
+		t.Errorf("expected WARN log with field name, got: %s", logOutput)
 	}
 
 	cancel()
