@@ -189,3 +189,26 @@ func TestValidationMetrics_RegexErrorCounter(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, counter)
 }
+
+func TestNewPubSubMetrics_Disabled(t *testing.T) {
+	assert.Nil(t, NewPubSubMetrics(Config{}))
+	assert.Nil(t, NewPubSubMetrics(Config{Enabled: true, MetricsPubSub: false}))
+}
+
+func TestNewPubSubMetrics_Enabled(t *testing.T) {
+	m := NewPubSubMetrics(Config{Enabled: true, MetricsPubSub: true})
+	assert.NotNil(t, m)
+}
+
+func TestPubSubMetrics_DroppedCounter(t *testing.T) {
+	m := NewPubSubMetrics(Config{Enabled: true, MetricsPubSub: true})
+	counter, ok := m.DroppedCounter()
+	assert.True(t, ok)
+	assert.NotNil(t, counter)
+}
+
+func TestPubSubMetrics_NilSafe(t *testing.T) {
+	var m *PubSubMetrics
+	_, ok := m.DroppedCounter()
+	assert.False(t, ok)
+}
