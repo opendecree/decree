@@ -2,10 +2,12 @@
 
 -- Create a non-superuser application role used in production.
 -- Tests connect as the container superuser and switch via SET SESSION AUTHORIZATION.
+-- +goose StatementBegin
 DO $$ BEGIN
     CREATE ROLE decree_app;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+-- +goose StatementEnd
 
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON tenants, config_versions, config_values,
