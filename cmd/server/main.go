@@ -79,6 +79,8 @@ func run() int {
 	}
 
 	// Storage backend.
+	pubSubMetrics := telemetry.NewPubSubMetrics(otelCfg)
+
 	var (
 		configStore    config.Store
 		schemaStoreVal schema.Store
@@ -97,7 +99,11 @@ func run() int {
 		schemaStoreVal = memSchema
 		auditStoreVal = audit.NewMemoryStore()
 		configCache = cache.NewMemoryCache(0)
-		memPubSub := pubsub.NewMemoryPubSub()
+		memOpts := []pubsub.MemoryOption{pubsub.WithLogger(logger)}
+		if counter, ok := pubSubMetrics.DroppedCounter(); ok {
+			memOpts = append(memOpts, pubsub.WithDroppedCounter(counter))
+		}
+		memPubSub := pubsub.NewMemoryPubSub(memOpts...)
 		publisher = memPubSub
 		subscriber = memPubSub
 		defer func() { _ = publisher.Close() }()

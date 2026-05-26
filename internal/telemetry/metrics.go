@@ -216,6 +216,31 @@ func (m *ValidationMetrics) CelSoftErrCounter() (metric.Int64Counter, bool) {
 	return m.celSoftErr, true
 }
 
+// PubSubMetrics records pub/sub dropped-event counters.
+type PubSubMetrics struct {
+	dropped metric.Int64Counter
+}
+
+// NewPubSubMetrics creates pub/sub metrics. Returns nil if not enabled.
+func NewPubSubMetrics(cfg Config) *PubSubMetrics {
+	if !cfg.Enabled || !cfg.MetricsPubSub {
+		return nil
+	}
+	meter := otel.Meter(meterName)
+	dropped, _ := meter.Int64Counter("pubsub.dropped_total",
+		metric.WithDescription("Number of events dropped because a subscriber channel was full"))
+	return &PubSubMetrics{dropped: dropped}
+}
+
+// DroppedCounter returns the underlying Int64Counter and true when metrics are
+// enabled, or a nil interface and false when disabled.
+func (m *PubSubMetrics) DroppedCounter() (metric.Int64Counter, bool) {
+	if m == nil {
+		return nil, false
+	}
+	return m.dropped, true
+}
+
 // StartDBPoolMetrics starts a background goroutine that periodically records
 // DB connection pool statistics. Returns immediately if not enabled.
 func StartDBPoolMetrics(ctx context.Context, cfg Config, writePool, readPool *pgxpool.Pool) {
