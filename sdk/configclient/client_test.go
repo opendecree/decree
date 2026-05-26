@@ -347,7 +347,7 @@ func TestGetForUpdate_ThenSet(t *testing.T) {
 		return r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk123" && r.Value != nil && r.Value.String() == "new"
 	}, &SetFieldResponse{}, nil)
 
-	err = lv.Set(ctx, client, "new")
+	err = lv.Set(ctx, "new")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -369,9 +369,47 @@ func TestGetForUpdate_ChecksumMismatch(t *testing.T) {
 
 	tr.on("SetField", nil, (*SetFieldResponse)(nil), ErrChecksumMismatch)
 
-	err = lv.Set(ctx, client, "new")
+	err = lv.Set(ctx, "new")
 	if !errors.Is(err, ErrChecksumMismatch) {
 		t.Errorf("got error %v, want %v", err, ErrChecksumMismatch)
+	}
+}
+
+// TestLockedValue_CapturesClient verifies that the client is captured at
+// GetForUpdate time so that Set() can invoke the remote call without the
+// caller having to pass the client explicitly.
+func TestLockedValue_CapturesClient(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", func(args ...any) bool {
+		r := args[0].(*GetFieldRequest)
+		return r.TenantID == "tenant-a" && r.FieldPath == "feature.flag"
+	}, &GetFieldResponse{
+		FieldPath: "feature.flag", Value: StringVal("off"), Checksum: "sum42",
+	}, nil)
+
+	lv, err := client.GetForUpdate(ctx, "tenant-a", "feature.flag")
+	if err != nil {
+		t.Fatalf("GetForUpdate: unexpected error: %v", err)
+	}
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		return r.TenantID == "tenant-a" &&
+			r.FieldPath == "feature.flag" &&
+			r.Value != nil && r.Value.String() == "on" &&
+			r.ExpectedChecksum != nil && *r.ExpectedChecksum == "sum42"
+	}, &SetFieldResponse{}, nil)
+
+	// Set takes only ctx + new value — no client argument required.
+	if err := lv.Set(ctx, "on"); err != nil {
+		t.Fatalf("Set: unexpected error: %v", err)
+	}
+
+	if n := tr.called("SetField"); n != 1 {
+		t.Errorf("expected SetField to be called once, got %d", n)
 	}
 }
 
