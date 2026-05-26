@@ -23,6 +23,7 @@ import (
 	"github.com/opendecree/decree/internal/pubsub"
 	"github.com/opendecree/decree/internal/schema"
 	celpkg "github.com/opendecree/decree/internal/schema/cel"
+	"github.com/opendecree/decree/internal/storage"
 	"github.com/opendecree/decree/internal/storage/domain"
 	"github.com/opendecree/decree/internal/telemetry"
 	"github.com/opendecree/decree/internal/validation"
@@ -475,7 +476,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	// the UNIQUE(tenant_id, version) constraint on CreateConfigVersion, so at
 	// most one writer succeeds per version slot.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(ctx, func(tx Store) error {
+	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
 		if txErr != nil {
@@ -623,7 +624,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	// Checksums are verified inside the tx after re-reading the latest version so
 	// concurrent writes cannot bypass the check (TOCTOU fix for #417).
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(ctx, func(tx Store) error {
+	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
 		if txErr != nil {
@@ -809,7 +810,7 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 
 	// Transaction: new version + copied values + audit + dependentRequired check.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(ctx, func(tx Store) error {
+	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
@@ -1159,7 +1160,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 	// Transaction: version + all values + audit entries + dependentRequired check.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(ctx, func(tx Store) error {
+	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,

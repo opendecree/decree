@@ -41,6 +41,11 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Schema/tenant admin operations are not tenant-scoped; bypass RLS policies.
+	if _, err := tx.Exec(ctx, "SET LOCAL app.superadmin_mode = 'true'"); err != nil {
+		return fmt.Errorf("set superadmin guc: %w", err)
+	}
+
 	txQueries := s.write.WithTx(tx)
 	txStore := &PGStore{
 		writePool: s.writePool,
