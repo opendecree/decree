@@ -52,19 +52,23 @@ const (
 	// getFieldsConcurrency caps in-flight per-field reads in GetFields.
 	// Bounded so a large FieldPaths request cannot exhaust the DB pool.
 	getFieldsConcurrency = 16
+
+	// idempotencyKeyTTL is the deduplication window for write idempotency keys.
+	idempotencyKeyTTL = 24 * time.Hour
 )
 
 // Option configures a Service.
 type Option func(*serviceOptions)
 
 type serviceOptions struct {
-	logger       *slog.Logger
-	cacheMetrics *telemetry.CacheMetrics
-	metrics      *telemetry.ConfigMetrics
-	validators   *validation.ValidatorFactory
-	recorder     *audit.UsageRecorder
-	guard        authz.Guard
-	limits       Limits
+	logger           *slog.Logger
+	cacheMetrics     *telemetry.CacheMetrics
+	metrics          *telemetry.ConfigMetrics
+	validators       *validation.ValidatorFactory
+	recorder         *audit.UsageRecorder
+	guard            authz.Guard
+	limits           Limits
+	idempotencyCache cache.IdempotencyCache
 }
 
 // WithLogger sets the service logger. Defaults to slog.Default() when unset.
@@ -104,20 +108,27 @@ func WithLimits(l Limits) Option {
 	return func(o *serviceOptions) { o.limits = l }
 }
 
+// WithIdempotencyCache wires a cache for write deduplication. Nil disables
+// idempotency key handling (writes are not deduplicated).
+func WithIdempotencyCache(c cache.IdempotencyCache) Option {
+	return func(o *serviceOptions) { o.idempotencyCache = c }
+}
+
 // Service implements the ConfigService gRPC server.
 type Service struct {
 	pb.UnimplementedConfigServiceServer
-	store        Store
-	cache        cache.ConfigCache
-	publisher    pubsub.Publisher
-	subscriber   pubsub.Subscriber
-	logger       *slog.Logger
-	cacheMetrics *telemetry.CacheMetrics
-	metrics      *telemetry.ConfigMetrics
-	validators   *validation.ValidatorFactory
-	recorder     *audit.UsageRecorder
-	guard        authz.Guard
-	limits       Limits
+	store            Store
+	cache            cache.ConfigCache
+	idempotencyCache cache.IdempotencyCache
+	publisher        pubsub.Publisher
+	subscriber       pubsub.Subscriber
+	logger           *slog.Logger
+	cacheMetrics     *telemetry.CacheMetrics
+	metrics          *telemetry.ConfigMetrics
+	validators       *validation.ValidatorFactory
+	recorder         *audit.UsageRecorder
+	guard            authz.Guard
+	limits           Limits
 }
 
 // NewService creates a new ConfigService. The four required dependencies
@@ -136,17 +147,18 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 		)
 	}
 	return &Service{
-		store:        store,
-		cache:        cache,
-		publisher:    publisher,
-		subscriber:   subscriber,
-		logger:       o.logger,
-		cacheMetrics: o.cacheMetrics,
-		metrics:      o.metrics,
-		validators:   o.validators,
-		recorder:     o.recorder,
-		guard:        o.guard,
-		limits:       o.limits,
+		store:            store,
+		cache:            cache,
+		idempotencyCache: o.idempotencyCache,
+		publisher:        publisher,
+		subscriber:       subscriber,
+		logger:           o.logger,
+		cacheMetrics:     o.cacheMetrics,
+		metrics:          o.metrics,
+		validators:       o.validators,
+		recorder:         o.recorder,
+		guard:            o.guard,
+		limits:           o.limits,
 	}
 }
 
@@ -447,6 +459,15 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		return nil, err
 	}
 
+	if key := req.GetIdempotencyKey(); key != "" && s.idempotencyCache != nil {
+		first, idemErr := s.idempotencyCache.Claim(ctx, tenantID+":"+key, idempotencyKeyTTL)
+		if idemErr != nil {
+			s.logger.WarnContext(ctx, "idempotency cache unavailable, proceeding without dedup", "error", idemErr)
+		} else if !first {
+			return &pb.SetFieldResponse{}, nil
+		}
+	}
+
 	actor := s.getActor(ctx)
 
 	// Pre-transaction validation (schema/lock checks only).
@@ -564,6 +585,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
 	if err != nil {
 		return nil, err
+	}
+
+	if key := req.GetIdempotencyKey(); key != "" && s.idempotencyCache != nil {
+		first, idemErr := s.idempotencyCache.Claim(ctx, tenantID+":"+key, idempotencyKeyTTL)
+		if idemErr != nil {
+			s.logger.WarnContext(ctx, "idempotency cache unavailable, proceeding without dedup", "error", idemErr)
+		} else if !first {
+			return &pb.SetFieldsResponse{}, nil
+		}
 	}
 
 	actor := s.getActor(ctx)

@@ -193,6 +193,11 @@ message SetFieldRequest {
   // Value-level description explaining what this specific value means.
   // Retrievable via include_description in read requests.
   optional string value_description = 6;
+
+  // Idempotency key for safe retries. When set, the server deduplicates
+  // writes with the same key within a 24-hour window. Use the SDK's
+  // WithIdempotencyKey option to set this field and enable retry.
+  optional string idempotency_key = 7;
 }
 
 message SetFieldResponse {
@@ -212,6 +217,11 @@ message SetFieldsRequest {
 
   // Version-level description explaining why these changes were made.
   optional string description = 3;
+
+  // Idempotency key for safe retries. When set, the server deduplicates
+  // writes with the same key within a 24-hour window. Use the SDK's
+  // WithIdempotencyKey option to set this field and enable retry.
+  optional string idempotency_key = 4;
 }
 
 message SetFieldsResponse {
