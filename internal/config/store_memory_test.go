@@ -239,3 +239,104 @@ func TestMemoryStore_RunInTx(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), v.Version)
 }
+
+func TestMemoryStore_BulkSetConfigValues(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	v, err := s.CreateConfigVersion(ctx, CreateConfigVersionParams{
+		TenantID: "t1", Version: 1, CreatedBy: "admin",
+	})
+	require.NoError(t, err)
+
+	valA := "hello"
+	chkA := "chk-a"
+	valB := "42"
+
+	err = s.BulkSetConfigValues(ctx, []SetConfigValueParams{
+		{
+			ConfigVersionID: v.ID,
+			FieldPath:       "app.name",
+			Value:           &valA,
+			Checksum:        &chkA,
+		},
+		{
+			ConfigVersionID: v.ID,
+			FieldPath:       "app.retries",
+			Value:           &valB,
+		},
+	})
+	require.NoError(t, err)
+
+	values, err := s.GetConfigValues(ctx, v.ID)
+	require.NoError(t, err)
+	require.Len(t, values, 2)
+
+	assert.Equal(t, "app.name", values[0].FieldPath)
+	require.NotNil(t, values[0].Value)
+	assert.Equal(t, "hello", *values[0].Value)
+	require.NotNil(t, values[0].Checksum)
+	assert.Equal(t, "chk-a", *values[0].Checksum)
+
+	assert.Equal(t, "app.retries", values[1].FieldPath)
+	require.NotNil(t, values[1].Value)
+	assert.Equal(t, "42", *values[1].Value)
+	assert.Nil(t, values[1].Checksum)
+
+	// Empty bulk call should be a no-op.
+	err = s.BulkSetConfigValues(ctx, nil)
+	require.NoError(t, err)
+
+	valuesAfterNoop, err := s.GetConfigValues(ctx, v.ID)
+	require.NoError(t, err)
+	assert.Len(t, valuesAfterNoop, 2)
+}
+
+func TestMemoryStore_BulkInsertAuditWriteLog(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	newValue1 := `"on"`
+	newValue2 := `"off"`
+	version := int32(3)
+
+	err := s.BulkInsertAuditWriteLog(ctx, []InsertAuditWriteLogParams{
+		{
+			TenantID:      "t1",
+			Actor:         "alice",
+			Action:        "set_field",
+			ObjectKind:    "field",
+			FieldPath:     strPtr("flags.feature_x"),
+			NewValue:      &newValue1,
+			ConfigVersion: &version,
+			Metadata:      []byte(`{"source":"test"}`),
+		},
+		{
+			TenantID:      "t1",
+			Actor:         "bob",
+			Action:        "set_field",
+			ObjectKind:    "field",
+			FieldPath:     strPtr("flags.feature_y"),
+			NewValue:      &newValue2,
+			ConfigVersion: &version,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, s.auditLog, 2)
+
+	assert.Equal(t, "alice", s.auditLog[0].params.Actor)
+	assert.Equal(t, "set_field", s.auditLog[0].params.Action)
+	require.NotNil(t, s.auditLog[0].params.FieldPath)
+	assert.Equal(t, "flags.feature_x", *s.auditLog[0].params.FieldPath)
+	assert.False(t, s.auditLog[0].createdAt.IsZero())
+
+	assert.Equal(t, "bob", s.auditLog[1].params.Actor)
+	require.NotNil(t, s.auditLog[1].params.FieldPath)
+	assert.Equal(t, "flags.feature_y", *s.auditLog[1].params.FieldPath)
+	assert.False(t, s.auditLog[1].createdAt.IsZero())
+
+	// Empty bulk call should be a no-op.
+	err = s.BulkInsertAuditWriteLog(ctx, nil)
+	require.NoError(t, err)
+	assert.Len(t, s.auditLog, 2)
+}
