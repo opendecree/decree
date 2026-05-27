@@ -663,7 +663,7 @@ func TestMemoryStore_GetSchemaFieldsByVersionIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 
-	var gotKeys []string
+	gotKeys := make([]string, 0, len(got))
 	for _, f := range got {
 		gotKeys = append(gotKeys, f.SchemaVersionID+":"+f.Path)
 	}
