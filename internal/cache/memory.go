@@ -153,6 +153,29 @@ func (c *MemoryCache) rebuildOrder() {
 	c.order = cleaned
 }
 
+// MemoryIdempotencyCache implements IdempotencyCache with an in-memory map.
+// Suitable for single-instance dev/test deployments; does not share state across
+// server replicas. Use RedisIdempotencyCache in production.
+type MemoryIdempotencyCache struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+}
+
+// NewMemoryIdempotencyCache creates an in-memory idempotency cache.
+func NewMemoryIdempotencyCache() *MemoryIdempotencyCache {
+	return &MemoryIdempotencyCache{entries: make(map[string]time.Time)}
+}
+
+func (c *MemoryIdempotencyCache) Claim(_ context.Context, key string, ttl time.Duration) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if exp, ok := c.entries[key]; ok && time.Now().Before(exp) {
+		return false, nil
+	}
+	c.entries[key] = time.Now().Add(ttl)
+	return true, nil
+}
+
 // sweepLoop periodically removes expired entries.
 func (c *MemoryCache) sweepLoop() {
 	ticker := time.NewTicker(time.Minute)

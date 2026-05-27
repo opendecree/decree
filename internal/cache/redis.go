@@ -74,3 +74,23 @@ func (c *RedisCache) Invalidate(ctx context.Context, tenantID string) error {
 	}
 	return nil
 }
+
+// RedisIdempotencyCache implements IdempotencyCache using Redis SET NX.
+// Safe across multiple server replicas.
+type RedisIdempotencyCache struct {
+	client *redis.Client
+	prefix string
+}
+
+// NewRedisIdempotencyCache creates a Redis-backed idempotency cache.
+func NewRedisIdempotencyCache(client *redis.Client) *RedisIdempotencyCache {
+	return &RedisIdempotencyCache{client: client, prefix: "idem:"}
+}
+
+func (c *RedisIdempotencyCache) Claim(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	ok, err := c.client.SetNX(ctx, c.prefix+key, 1, ttl).Result()
+	if err != nil {
+		return false, fmt.Errorf("idempotency claim: %w", err)
+	}
+	return ok, nil
+}

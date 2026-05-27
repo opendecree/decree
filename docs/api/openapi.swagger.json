@@ -1464,6 +1464,10 @@
         "valueDescription": {
           "type": "string",
           "description": "Value-level description explaining what this specific value means.\nRetrievable via include_description in read requests."
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Idempotency key for safe retries. When set, the server deduplicates\nwrites with the same key within a 24-hour window. Use the SDK's\nWithIdempotencyKey option to set this field and enable retry."
         }
       }
     },
@@ -1481,6 +1485,10 @@
         "description": {
           "type": "string",
           "description": "Version-level description explaining why these changes were made."
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "description": "Idempotency key for safe retries. When set, the server deduplicates\nwrites with the same key within a 24-hour window. Use the SDK's\nWithIdempotencyKey option to set this field and enable retry."
         }
       }
     },

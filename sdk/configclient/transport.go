@@ -73,6 +73,7 @@ type SetFieldRequest struct {
 	Value            *TypedValue // nil sets the field to null
 	ExpectedChecksum *string
 	Description      string
+	IdempotencyKey   string
 }
 
 // SetFieldResponse is the output of [Transport.SetField].
@@ -87,9 +88,10 @@ type FieldUpdate struct {
 
 // SetFieldsRequest is the input for [Transport.SetFields].
 type SetFieldsRequest struct {
-	TenantID    string
-	Updates     []FieldUpdate
-	Description string
+	TenantID       string
+	Updates        []FieldUpdate
+	Description    string
+	IdempotencyKey string
 }
 
 // SetFieldsResponse is the output of [Transport.SetFields].
