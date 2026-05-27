@@ -34,13 +34,13 @@ func TestNewRedisCache(t *testing.T) {
 
 func TestRedisCache_Key(t *testing.T) {
 	c := &RedisCache{prefix: "config:"}
-	require.Equal(t, "config:tenant-1:v7", c.key("tenant-1", 7))
-	require.Equal(t, "config:t:v0", c.key("t", 0))
+	require.Equal(t, "config:{tenant-1}:v7", c.key("tenant-1", 7))
+	require.Equal(t, "config:{t}:v0", c.key("t", 0))
 }
 
-func TestRedisCache_TenantPattern(t *testing.T) {
+func TestRedisCache_IndexKey(t *testing.T) {
 	c := &RedisCache{prefix: "config:"}
-	require.Equal(t, "config:tenant-1:*", c.tenantPattern("tenant-1"))
+	require.Equal(t, "config-idx:{tenant-1}", c.indexKey("tenant-1"))
 }
 
 // --- miniredis integration tests ---
@@ -182,6 +182,46 @@ func TestRedisCache_KeyCollisionAcrossTenants(t *testing.T) {
 	gotB, err = c.Get(ctx, "tenant-b", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "b", gotB["x"])
+}
+
+func TestRedisCache_Invalidate_EmptyTenantIsNoOp(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	require.NoError(t, c.Invalidate(context.Background(), "no-such-tenant"))
+}
+
+func TestRedisCache_Invalidate_IndexCleanedUp(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 2, map[string]string{"b": "2"}, time.Minute))
+
+	members, err := c.client.SMembers(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	require.Len(t, members, 2, "index should hold both version keys before invalidation")
+
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	n, err := c.client.Exists(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n, "index must be deleted after invalidation")
+}
+
+func TestRedisCache_Invalidate_StaleIndexEntryIsNoOp(t *testing.T) {
+	c, mr := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Second))
+
+	mr.FastForward(2 * time.Second) // data key expired; index still holds the reference
+
+	// Invalidate must succeed even when all indexed keys have already expired.
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	// Index itself is cleaned up.
+	n, err := c.client.Exists(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n)
 }
 
 // --- RedisIdempotencyCache ---
