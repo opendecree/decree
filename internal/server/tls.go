@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -21,17 +22,25 @@ type TLSConfig struct {
 }
 
 // ServerCredentials builds gRPC server credentials from the TLS config.
+// The minimum TLS version defaults to 1.3; set DECREE_TLS_MIN_VERSION=TLS12
+// to allow TLS 1.2 clients (enables an explicit cipher suite allowlist).
+// Certificates are reloaded from disk on every TLS handshake so cert rotation
+// requires no server restart.
 func (c TLSConfig) ServerCredentials() (credentials.TransportCredentials, error) {
 	if c.CertFile == "" || c.KeyFile == "" {
 		return nil, errors.New("TLS cert and key files are required")
 	}
-	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
-	if err != nil {
+	// Fail fast at startup if the files are unreadable.
+	if _, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile); err != nil {
 		return nil, fmt.Errorf("load server keypair: %w", err)
 	}
+	minVer := tlsMinVersion()
 	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
+		GetCertificate: certLoader(c.CertFile, c.KeyFile),
+		MinVersion:     minVer,
+	}
+	if minVer == tls.VersionTLS12 {
+		tlsCfg.CipherSuites = tls12CipherSuites
 	}
 	if c.ClientCAFile != "" {
 		pool, err := loadCAPool(c.ClientCAFile)
@@ -59,8 +68,12 @@ type GatewayTLSConfig struct {
 
 // ClientCredentials builds gRPC client credentials for the gateway dial.
 func (c GatewayTLSConfig) ClientCredentials() (credentials.TransportCredentials, error) {
+	minVer := tlsMinVersion()
 	tlsCfg := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+		MinVersion: minVer,
+	}
+	if minVer == tls.VersionTLS12 {
+		tlsCfg.CipherSuites = tls12CipherSuites
 	}
 	if c.CAFile != "" {
 		pool, err := loadCAPool(c.CAFile)
@@ -83,6 +96,39 @@ func (c GatewayTLSConfig) ClientCredentials() (credentials.TransportCredentials,
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 	return credentials.NewTLS(tlsCfg), nil
+}
+
+// tlsMinVersion returns the configured TLS floor version.
+// DECREE_TLS_MIN_VERSION=TLS12 enables TLS 1.2 for legacy clients.
+func tlsMinVersion() uint16 {
+	if strings.EqualFold(os.Getenv("DECREE_TLS_MIN_VERSION"), "TLS12") {
+		return tls.VersionTLS12
+	}
+	return tls.VersionTLS13
+}
+
+// tls12CipherSuites is an explicit allowlist used when TLS 1.2 is enabled.
+// All suites use ECDHE key exchange and AEAD encryption; RC4, CBC, and
+// static RSA key exchange are excluded.
+var tls12CipherSuites = []uint16{
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+}
+
+// certLoader returns a GetCertificate callback that reloads the cert+key pair
+// from disk on every TLS handshake, enabling zero-downtime certificate rotation.
+func certLoader(certFile, keyFile string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+	return func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("reload cert: %w", err)
+		}
+		return &cert, nil
+	}
 }
 
 func loadCAPool(path string) (*x509.CertPool, error) {
