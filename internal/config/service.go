@@ -677,22 +677,21 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 			return fmt.Errorf("create config version: %w", txErr)
 		}
 
+		cvParams := make([]SetConfigValueParams, len(req.Updates))
+		auditParams := make([]InsertAuditWriteLogParams, len(req.Updates))
 		for i, update := range req.Updates {
 			updateValStr := typedValueToString(update.Value)
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+			cvParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       update.FieldPath,
 				Value:           updateValStr,
 				Checksum:        checksumPtr(updateValStr),
 				Description:     ptrString(update.GetValueDescription()),
-			}); txErr != nil {
-				return fmt.Errorf("set config value %s: %w", update.FieldPath, txErr)
 			}
-
 			newValueStr := typedValueToString(update.Value)
 			redactedNew := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], derefString(newValueStr))
 			redactedOld := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], changes[i].oldValue)
-			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			auditParams[i] = InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "set_field",
@@ -701,9 +700,13 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 				OldValue:      ptrString(redactedOld),
 				NewValue:      ptrString(redactedNew),
 				ConfigVersion: &newVersion.Version,
-			}); txErr != nil {
-				return fmt.Errorf("insert audit log for %s: %w", update.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, cvParams); txErr != nil {
+			return fmt.Errorf("bulk set config values: %w", txErr)
+		}
+		if txErr = tx.BulkInsertAuditWriteLog(ctx, auditParams); txErr != nil {
+			return fmt.Errorf("bulk insert audit log: %w", txErr)
 		}
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
@@ -852,16 +855,18 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 			return fmt.Errorf("create rollback version: %w", txErr)
 		}
 
-		for _, row := range targetRows {
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+		rollbackParams := make([]SetConfigValueParams, len(targetRows))
+		for i, row := range targetRows {
+			rollbackParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       row.FieldPath,
 				Value:           row.Value,
 				Checksum:        row.Checksum,
 				Description:     row.Description,
-			}); txErr != nil {
-				return fmt.Errorf("copy field %s: %w", row.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, rollbackParams); txErr != nil {
+			return fmt.Errorf("bulk copy fields: %w", txErr)
 		}
 
 		if txErr = s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules); txErr != nil {
@@ -1202,20 +1207,19 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 			return fmt.Errorf("create config version: %w", txErr)
 		}
 
+		importCVParams := make([]SetConfigValueParams, len(values))
+		importAuditParams := make([]InsertAuditWriteLogParams, len(values))
 		for i, v := range values {
 			importValStr := strPtr(v.Value)
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+			importCVParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       v.FieldPath,
 				Value:           importValStr,
 				Checksum:        checksumPtr(importValStr),
 				Description:     v.Description,
-			}); txErr != nil {
-				return fmt.Errorf("set config value %s: %w", v.FieldPath, txErr)
 			}
-
 			isSensitive := sensitiveFields[v.FieldPath]
-			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			importAuditParams[i] = InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "import",
@@ -1224,9 +1228,13 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 				OldValue:      ptrString(redactIfSensitive(isSensitive, changes[i].oldValue)),
 				NewValue:      strPtr(redactIfSensitive(isSensitive, v.Value)),
 				ConfigVersion: &newVersion.Version,
-			}); txErr != nil {
-				return fmt.Errorf("insert audit log for %s: %w", v.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, importCVParams); txErr != nil {
+			return fmt.Errorf("bulk set config values: %w", txErr)
+		}
+		if txErr = tx.BulkInsertAuditWriteLog(ctx, importAuditParams); txErr != nil {
+			return fmt.Errorf("bulk insert audit log: %w", txErr)
 		}
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)

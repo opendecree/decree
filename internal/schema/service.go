@@ -276,25 +276,42 @@ func (s *Service) ListSchemas(ctx context.Context, req *pb.ListSchemasRequest) (
 	if int32(len(schemas)) > pageSize {
 		schemas = schemas[:pageSize]
 	}
+	if len(schemas) == 0 {
+		return &pb.ListSchemasResponse{NextPageToken: nextToken}, nil
+	}
 
-	// Fetch latest version for each schema.
+	schemaIDs := make([]string, len(schemas))
+	for i, sc := range schemas {
+		schemaIDs[i] = sc.ID
+	}
+
+	versions, err := s.store.GetLatestSchemaVersionsBatch(ctx, schemaIDs)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get latest schema versions")
+	}
+	versionsBySchema := make(map[string]domain.SchemaVersion, len(versions))
+	versionIDs := make([]string, 0, len(versions))
+	for _, v := range versions {
+		versionsBySchema[v.SchemaID] = v
+		versionIDs = append(versionIDs, v.ID)
+	}
+
+	allFields, err := s.store.GetSchemaFieldsByVersionIDs(ctx, versionIDs)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get schema fields")
+	}
+	fieldsByVersion := make(map[string][]domain.SchemaField, len(versionIDs))
+	for _, f := range allFields {
+		fieldsByVersion[f.SchemaVersionID] = append(fieldsByVersion[f.SchemaVersionID], f)
+	}
+
 	pbSchemas := make([]*pb.Schema, 0, len(schemas))
-	for _, schema := range schemas {
-		version, err := s.store.GetLatestSchemaVersion(ctx, schema.ID)
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				continue // Schema with no versions — skip.
-			}
-			return nil, status.Errorf(codes.Internal, "failed to get latest version for schema %s", schema.ID)
+	for _, sc := range schemas {
+		v, ok := versionsBySchema[sc.ID]
+		if !ok {
+			continue // Schema with no versions — skip.
 		}
-		fields, err := s.store.GetSchemaFields(ctx, version.ID)
-		if err != nil {
-			if errors.Is(err, domain.ErrNotFound) {
-				continue
-			}
-			return nil, status.Errorf(codes.Internal, "failed to get fields for schema %s", schema.ID)
-		}
-		pbSchemas = append(pbSchemas, schemaToProto(schema, version, fields))
+		pbSchemas = append(pbSchemas, schemaToProto(sc, v, fieldsByVersion[v.ID]))
 	}
 
 	return &pb.ListSchemasResponse{
@@ -1041,7 +1058,7 @@ func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versi
 	if err := validateNoPrefixOverlap(fields); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	result := make([]domain.SchemaField, 0, len(fields))
+	params := make([]CreateSchemaFieldParams, 0, len(fields))
 	for _, f := range fields {
 		if err := validateFieldConstraints(f, regexPatternMaxLength); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
@@ -1060,7 +1077,7 @@ func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versi
 			externalDocs, _ = json.Marshal(f.ExternalDocs)
 		}
 
-		dbField, err := store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		params = append(params, CreateSchemaFieldParams{
 			SchemaVersionID: versionID,
 			Path:            f.Path,
 			FieldType:       domain.FieldTypeFromProto(f.Type),
@@ -1080,11 +1097,11 @@ func createFieldsOn(ctx context.Context, logger *slog.Logger, store Store, versi
 			WriteOnce:       f.WriteOnce,
 			Sensitive:       f.Sensitive,
 		})
-		if err != nil {
-			logger.ErrorContext(ctx, "create schema field", "path", f.Path, "error", err)
-			return nil, status.Errorf(codes.Internal, "failed to create field %s", f.Path)
-		}
-		result = append(result, dbField)
+	}
+	result, err := store.BulkCreateSchemaFields(ctx, params)
+	if err != nil {
+		logger.ErrorContext(ctx, "bulk create schema fields", "error", err)
+		return nil, status.Error(codes.Internal, "failed to create schema fields")
 	}
 	return result, nil
 }

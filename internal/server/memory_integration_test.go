@@ -126,11 +126,13 @@ func TestMemoryBackend_Integration(t *testing.T) {
 		memConfig.SetSchemaFields(sv2.ID, fields2)
 	}
 
-	// 4. Set config value.
-	_, err = configClient.SetField(authCtx, &pb.SetFieldRequest{
-		TenantId:  tenantID,
-		FieldPath: "fee",
-		Value:     &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 0.025}},
+	// 4. Set config values (exercises BulkSetConfigValues + BulkInsertAuditWriteLog).
+	_, err = configClient.SetFields(authCtx, &pb.SetFieldsRequest{
+		TenantId: tenantID,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "fee", Value: &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 0.025}}},
+			{FieldPath: "enabled", Value: &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: true}}},
+		},
 	})
 	require.NoError(t, err)
 
@@ -141,12 +143,17 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0.025, getResp.Value.GetValue().GetNumberValue())
 
-	// 6. List versions.
+	// 6. List schemas (exercises GetLatestSchemaVersionsBatch + GetSchemaFieldsByVersionIDs).
+	listResp, err := schemaClient.ListSchemas(authCtx, &pb.ListSchemasRequest{PageSize: 10})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(listResp.Schemas), 1)
+
+	// 7. List versions.
 	versionsResp, err := configClient.ListVersions(authCtx, &pb.ListVersionsRequest{TenantId: tenantID})
 	require.NoError(t, err)
 	assert.Len(t, versionsResp.Versions, 1)
 
-	// 7. Cleanup.
+	// 8. Cleanup.
 	_, err = schemaClient.DeleteTenant(authCtx, &pb.DeleteTenantRequest{Id: tenantID})
 	require.NoError(t, err)
 	_, err = schemaClient.DeleteSchema(authCtx, &pb.DeleteSchemaRequest{Id: schemaID})

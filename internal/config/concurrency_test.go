@@ -194,10 +194,8 @@ func TestImportConfigChangeEventFanOut_RunsConcurrently(t *testing.T) {
 	})
 	gs.mockStore.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(newVer, nil)
-	gs.mockStore.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil)
-	gs.mockStore.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
-		Return(nil)
+	gs.mockStore.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	gs.mockStore.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
 	gs.mockStore.On("GetFullConfigAtVersion", mock.Anything, mock.Anything).
 		Return([]GetFullConfigAtVersionRow{}, nil)
 

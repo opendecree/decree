@@ -565,5 +565,167 @@ func TestMemoryStore_ListTenantsBySchema_FilteredByAllowedIDs(t *testing.T) {
 	assert.Len(t, all, 2)
 }
 
+func TestMemoryStore_BulkCreateSchemaFields(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "bulk-fields"})
+	require.NoError(t, err)
+
+	sv, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: s.ID, Version: 1, Checksum: "bulk",
+	})
+	require.NoError(t, err)
+
+	created, err := store.BulkCreateSchemaFields(ctx, []CreateSchemaFieldParams{
+		{
+			SchemaVersionID: sv.ID,
+			Path:            "app.name",
+			FieldType:       domain.FieldTypeString,
+		},
+		{
+			SchemaVersionID: sv.ID,
+			Path:            "app.port",
+			FieldType:       domain.FieldTypeInteger,
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, created, 2)
+	assert.NotEmpty(t, created[0].ID)
+	assert.NotEmpty(t, created[1].ID)
+
+	fields, err := store.GetSchemaFields(ctx, sv.ID)
+	require.NoError(t, err)
+	require.Len(t, fields, 2)
+
+	gotPaths := []string{fields[0].Path, fields[1].Path}
+	assert.ElementsMatch(t, []string{"app.name", "app.port"}, gotPaths)
+
+	// Empty batch returns empty result and no error.
+	empty, err := store.BulkCreateSchemaFields(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
+	// Error when any item references a missing schema version.
+	_, err = store.BulkCreateSchemaFields(ctx, []CreateSchemaFieldParams{
+		{
+			SchemaVersionID: "bad-version-id",
+			Path:            "x",
+			FieldType:       domain.FieldTypeString,
+		},
+	})
+	assert.True(t, errors.Is(err, domain.ErrNotFound))
+}
+
+func TestMemoryStore_GetSchemaFieldsByVersionIDs(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "version-ids"})
+	require.NoError(t, err)
+
+	sv1, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: s.ID, Version: 1, Checksum: "v1",
+	})
+	require.NoError(t, err)
+
+	sv2, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: s.ID, Version: 2, Checksum: "v2",
+	})
+	require.NoError(t, err)
+
+	// Control version not requested later.
+	s2, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "other-schema"})
+	require.NoError(t, err)
+	svOther, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: s2.ID, Version: 1, Checksum: "other",
+	})
+	require.NoError(t, err)
+
+	_, err = store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		SchemaVersionID: sv1.ID, Path: "a", FieldType: domain.FieldTypeString,
+	})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		SchemaVersionID: sv1.ID, Path: "b", FieldType: domain.FieldTypeInteger,
+	})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		SchemaVersionID: sv2.ID, Path: "c", FieldType: domain.FieldTypeBool,
+	})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		SchemaVersionID: svOther.ID, Path: "z", FieldType: domain.FieldTypeString,
+	})
+	require.NoError(t, err)
+
+	got, err := store.GetSchemaFieldsByVersionIDs(ctx, []string{sv1.ID, sv2.ID, "missing"})
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+
+	gotKeys := make([]string, 0, len(got))
+	for _, f := range got {
+		gotKeys = append(gotKeys, f.SchemaVersionID+":"+f.Path)
+	}
+	assert.ElementsMatch(t, []string{
+		sv1.ID + ":a",
+		sv1.ID + ":b",
+		sv2.ID + ":c",
+	}, gotKeys)
+
+	// Empty input -> empty output.
+	none, err := store.GetSchemaFieldsByVersionIDs(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+}
+
+func TestMemoryStore_GetLatestSchemaVersionsBatch(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s1, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "batch-a"})
+	require.NoError(t, err)
+	s2, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "batch-b"})
+	require.NoError(t, err)
+	s3, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "batch-c"})
+	require.NoError(t, err)
+
+	// s1 latest should be version 3.
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s1.ID, Version: 1, Checksum: "a1"})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s1.ID, Version: 3, Checksum: "a3"})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s1.ID, Version: 2, Checksum: "a2"})
+	require.NoError(t, err)
+
+	// s2 latest should be version 2.
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s2.ID, Version: 1, Checksum: "b1"})
+	require.NoError(t, err)
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s2.ID, Version: 2, Checksum: "b2"})
+	require.NoError(t, err)
+
+	// s3 has versions but is not requested.
+	_, err = store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{SchemaID: s3.ID, Version: 9, Checksum: "c9"})
+	require.NoError(t, err)
+
+	got, err := store.GetLatestSchemaVersionsBatch(ctx, []string{s1.ID, s2.ID, "missing"})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+
+	bySchema := make(map[string]domain.SchemaVersion, len(got))
+	for _, sv := range got {
+		bySchema[sv.SchemaID] = sv
+	}
+
+	require.Contains(t, bySchema, s1.ID)
+	require.Contains(t, bySchema, s2.ID)
+	assert.Equal(t, int32(3), bySchema[s1.ID].Version)
+	assert.Equal(t, int32(2), bySchema[s2.ID].Version)
+
+	none, err := store.GetLatestSchemaVersionsBatch(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, none)
+}
+
 // Verify MemoryStore implements Store at compile time.
 var _ Store = (*MemoryStore)(nil)

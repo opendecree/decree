@@ -126,7 +126,7 @@ func TestSetFields_Validations_PostMergeStateChecked(t *testing.T) {
 		Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 2}, nil)
-	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).
 		Return(nil)
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
@@ -135,7 +135,7 @@ func TestSetFields_Validations_PostMergeStateChecked(t *testing.T) {
 		{FieldPath: "payments.min_amount", Value: strPtr("10")},
 		{FieldPath: "payments.max_amount", Value: strPtr("100")},
 	}, nil)
-	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
+	store.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).
 		Return(nil)
 	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	svc.publisher.(*mockPublisher).On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).

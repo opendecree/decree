@@ -55,3 +55,14 @@ ORDER BY path;
 -- name: DeleteSchemaField :exec
 DELETE FROM schema_fields
 WHERE schema_version_id = $1 AND path = $2;
+
+-- name: GetLatestSchemaVersionsBatch :many
+SELECT DISTINCT ON (schema_id) *
+FROM schema_versions
+WHERE schema_id = ANY($1::uuid[])
+ORDER BY schema_id, version DESC;
+
+-- name: GetSchemaFieldsByVersionIDs :many
+SELECT * FROM schema_fields
+WHERE schema_version_id = ANY($1::uuid[])
+ORDER BY schema_version_id, path;

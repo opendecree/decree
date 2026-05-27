@@ -73,8 +73,8 @@ func TestCreateSchema_AtLimitAllowed(t *testing.T) {
 		Return(domain.Schema{ID: testSchemaID, Name: "ok"}, nil)
 	store.On("CreateSchemaVersion", mock.Anything, mock.Anything).
 		Return(domain.SchemaVersion{ID: testVersionID, SchemaID: testSchemaID, Version: 1}, nil)
-	store.On("CreateSchemaField", mock.Anything, mock.Anything).
-		Return(domain.SchemaField{Path: "a", FieldType: "string"}, nil)
+	store.On("BulkCreateSchemaFields", mock.Anything, mock.Anything).
+		Return([]domain.SchemaField{{Path: "a", FieldType: "string"}, {Path: "b", FieldType: "string"}}, nil)
 
 	_, err := svc.CreateSchema(superadminCtx(), &pb.CreateSchemaRequest{
 		Name: "ok",

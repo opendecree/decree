@@ -91,6 +91,16 @@ func (m *mockStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWrit
 	return args.Error(0)
 }
 
+func (m *mockStore) BulkSetConfigValues(ctx context.Context, arg []SetConfigValueParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
+func (m *mockStore) BulkInsertAuditWriteLog(ctx context.Context, arg []InsertAuditWriteLogParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
 // setupNoSensitiveFields configures the mock store to return an empty
 // sensitive field set for tenantID1. Use in tests that exercise code paths
 // that call getSensitiveFieldSet but don't care about redaction.

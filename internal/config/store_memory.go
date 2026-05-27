@@ -342,3 +342,21 @@ func (s *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWrit
 	s.auditLog = append(s.auditLog, auditEntry{params: arg, createdAt: time.Now()})
 	return nil
 }
+
+func (s *MemoryStore) BulkSetConfigValues(ctx context.Context, args []SetConfigValueParams) error {
+	for _, a := range args {
+		if err := s.SetConfigValue(ctx, a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *MemoryStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAuditWriteLogParams) error {
+	for _, a := range args {
+		if err := s.InsertAuditWriteLog(ctx, a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
