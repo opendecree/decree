@@ -229,3 +229,10 @@ func TestRedisIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
 	assert.True(t, a)
 	assert.True(t, b)
 }
+
+func TestRedisIdempotencyCache_ClaimError(t *testing.T) {
+	c, mr := newTestRedisIdempotencyCache(t)
+	mr.Close() // force connection failure
+	_, err := c.Claim(context.Background(), "k1", time.Minute)
+	require.Error(t, err)
+}

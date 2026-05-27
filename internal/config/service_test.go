@@ -427,6 +427,96 @@ func TestSetField_LockedField(t *testing.T) {
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
+// --- SetField idempotency ---
+
+func TestSetField_IdempotencyDeduplicated(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	idem := &mockIdempotencyCache{claimFn: func(_ context.Context, _ string, _ time.Duration) (bool, error) {
+		return false, nil // already seen → deduplicate
+	}}
+	svc := NewService(store, c, pub, &mockSubscriber{},
+		WithLogger(testLogger),
+		WithIdempotencyCache(idem),
+	)
+	ctx := superadminCtx()
+
+	// Guard Check calls FieldLockGuard which calls GetFieldLocks.
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+
+	idemKey := "key-1"
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:       tenantID1,
+		FieldPath:      "a",
+		Value:          &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}},
+		IdempotencyKey: &idemKey,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp) // empty success — write was not re-applied
+	store.AssertNotCalled(t, "CreateConfigVersion")
+	pub.AssertNotCalled(t, "Publish")
+}
+
+func TestSetField_IdempotencyCacheError_ProceedsWithWrite(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	idem := &mockIdempotencyCache{claimFn: func(_ context.Context, _ string, _ time.Duration) (bool, error) {
+		return false, errors.New("redis down") // error → degrade gracefully, proceed
+	}}
+	svc := NewService(store, c, pub, &mockSubscriber{},
+		WithLogger(testLogger),
+		WithIdempotencyCache(idem),
+	)
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	c.On("Invalidate", ctx, tenantID1).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	idemKey := "key-1"
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:       tenantID1,
+		FieldPath:      "a",
+		Value:          &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}},
+		IdempotencyKey: &idemKey,
+	})
+	require.NoError(t, err)
+	store.AssertCalled(t, "CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams"))
+}
+
+func TestSetFields_IdempotencyDeduplicated(t *testing.T) {
+	store := &mockStore{}
+	c := &mockCache{}
+	pub := &mockPublisher{}
+	idem := &mockIdempotencyCache{claimFn: func(_ context.Context, _ string, _ time.Duration) (bool, error) {
+		return false, nil
+	}}
+	svc := NewService(store, c, pub, &mockSubscriber{},
+		WithLogger(testLogger),
+		WithIdempotencyCache(idem),
+	)
+	ctx := superadminCtx()
+
+	idemKey := "key-1"
+	resp, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId:       tenantID1,
+		Updates:        []*pb.FieldUpdate{{FieldPath: "a", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v"}}}},
+		IdempotencyKey: &idemKey,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, resp) // empty success — write was not re-applied
+	store.AssertNotCalled(t, "CreateConfigVersion")
+	pub.AssertNotCalled(t, "Publish")
+}
+
 // --- GetField ---
 
 func TestGetField_NotFound(t *testing.T) {

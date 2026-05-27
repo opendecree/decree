@@ -33,6 +33,15 @@ func (m *mockCache) Invalidate(ctx context.Context, tenantID string) error {
 	return args.Error(0)
 }
 
+// mockIdempotencyCache implements cache.IdempotencyCache for testing.
+type mockIdempotencyCache struct {
+	claimFn func(ctx context.Context, key string, ttl time.Duration) (bool, error)
+}
+
+func (m *mockIdempotencyCache) Claim(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return m.claimFn(ctx, key, ttl)
+}
+
 // mockPublisher implements pubsub.Publisher for testing.
 type mockPublisher struct {
 	mock.Mock
