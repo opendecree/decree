@@ -50,6 +50,11 @@ func (s *Service) resolveTenantWithAccess(ctx context.Context, idOrName string) 
 		return domain.Tenant{}, status.Error(codes.Internal, "failed to resolve tenant")
 	}
 	if err := s.guard.Check(ctx, authz.ActionRead, authz.Resource{TenantID: tenant.ID}); err != nil {
+		// Collapse PermissionDenied → NotFound to prevent slug enumeration:
+		// callers must not be able to distinguish "no such tenant" from "exists but no access".
+		if status.Code(err) == codes.PermissionDenied {
+			return domain.Tenant{}, status.Error(codes.NotFound, "tenant not found")
+		}
 		return domain.Tenant{}, err
 	}
 	return tenant, nil
