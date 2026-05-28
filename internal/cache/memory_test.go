@@ -213,3 +213,91 @@ func TestMemoryIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
 	assert.True(t, a)
 	assert.True(t, b)
 }
+
+// --- Negative cache ---
+
+func TestMemoryCache_NegativeCache_SetAndGet(t *testing.T) {
+	c := NewMemoryCache(0)
+	ctx := context.Background()
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "miss before set")
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+
+	neg, err = c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.True(t, neg, "hit after set")
+}
+
+func TestMemoryCache_NegativeCache_TTLExpiry(t *testing.T) {
+	c := NewMemoryCache(0)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Millisecond))
+	time.Sleep(5 * time.Millisecond)
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "expired entry must report miss")
+}
+
+func TestMemoryCache_NegativeCache_InvalidateClears(t *testing.T) {
+	c := NewMemoryCache(0)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t1", 2, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t2", 1, time.Minute))
+
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	neg, _ := c.GetNegative(ctx, "t1", 1)
+	assert.False(t, neg, "t1:v1 must be cleared")
+	neg, _ = c.GetNegative(ctx, "t1", 2)
+	assert.False(t, neg, "t1:v2 must be cleared")
+
+	neg, _ = c.GetNegative(ctx, "t2", 1)
+	assert.True(t, neg, "t2 must be unaffected")
+}
+
+func TestMemoryCache_NegativeCache_Sweep_RemovesExpired(t *testing.T) {
+	c := NewMemoryCache(0)
+	defer c.Stop()
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Millisecond))
+	require.NoError(t, c.SetNegative(ctx, "t2", 1, time.Hour))
+
+	time.Sleep(5 * time.Millisecond)
+	c.sweep()
+
+	neg, _ := c.GetNegative(ctx, "t1", 1)
+	assert.False(t, neg, "expired t1 swept")
+	neg, _ = c.GetNegative(ctx, "t2", 1)
+	assert.True(t, neg, "live t2 remains")
+}
+
+func TestMemoryCache_NegativeCache_IndependentFromPositive(t *testing.T) {
+	c := NewMemoryCache(0)
+	ctx := context.Background()
+
+	// Set positive entry and negative entry for same key.
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t1", 2, time.Minute))
+
+	// Positive entry not affected by negative check.
+	pos, _ := c.Get(ctx, "t1", 1)
+	assert.NotNil(t, pos)
+
+	// Negative entry not affected by positive set.
+	neg, _ := c.GetNegative(ctx, "t1", 2)
+	assert.True(t, neg)
+
+	// v1 has no negative entry; v2 has no positive entry.
+	neg1, _ := c.GetNegative(ctx, "t1", 1)
+	assert.False(t, neg1)
+	pos2, _ := c.Get(ctx, "t1", 2)
+	assert.Nil(t, pos2)
+}

@@ -87,7 +87,9 @@ func (noopCache) Get(_ context.Context, _ string, _ int32) (map[string]string, e
 func (noopCache) Set(_ context.Context, _ string, _ int32, _ map[string]string, _ time.Duration) error {
 	return nil
 }
-func (noopCache) Invalidate(_ context.Context, _ string) error { return nil }
+func (noopCache) Invalidate(_ context.Context, _ string) error                            { return nil }
+func (noopCache) SetNegative(_ context.Context, _ string, _ int32, _ time.Duration) error { return nil }
+func (noopCache) GetNegative(_ context.Context, _ string, _ int32) (bool, error)          { return false, nil }
 
 type noopPublisher struct{}
 
