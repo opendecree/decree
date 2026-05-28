@@ -102,7 +102,7 @@ func adminSchemaToDocgen(s *adminclient.Schema) docgen.Schema {
 	for i, f := range s.Fields {
 		ds.Fields[i] = docgen.Field{
 			Path:        f.Path,
-			Type:        docgen.FieldTypeName(f.Type),
+			Type:        string(f.Type),
 			Description: f.Description,
 			Default:     f.Default,
 			Nullable:    f.Nullable,

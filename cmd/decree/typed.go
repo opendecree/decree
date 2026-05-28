@@ -74,7 +74,7 @@ func tenantFieldTypes(ctx context.Context, admin *adminclient.Client, tenantID s
 	}
 	types := make(map[string]string, len(s.Fields))
 	for _, f := range s.Fields {
-		types[f.Path] = f.Type
+		types[f.Path] = string(f.Type)
 	}
 	return types, nil
 }

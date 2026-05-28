@@ -10,7 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opendecree/decree/sdk/adminclient"
-	"github.com/opendecree/decree/sdk/tools/internal/fieldtype"
 	"github.com/opendecree/decree/sdk/tools/seed"
 )
 
@@ -120,7 +119,7 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 
 	for _, f := range s.Fields {
 		fd := seed.FieldDef{
-			Type:        fieldtype.Name(f.Type),
+			Type:        string(f.Type),
 			Description: f.Description,
 			Default:     f.Default,
 			Nullable:    f.Nullable,

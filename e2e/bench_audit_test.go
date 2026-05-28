@@ -22,7 +22,7 @@ func benchAuditEnv(b *testing.B, name string, writes int) (*adminclient.Client, 
 	ctx := context.Background()
 
 	s, err := admin.CreateSchema(ctx, name, []adminclient.Field{
-		{Path: "bench.string", Type: "FIELD_TYPE_STRING"},
+		{Path: "bench.string", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(b, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

@@ -29,7 +29,7 @@ func BenchmarkCreateSchema(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		start := time.Now()
 		s, _ := admin.CreateSchema(ctx, fmt.Sprintf("bench-create-%d", i), []adminclient.Field{
-			{Path: "f.value", Type: "FIELD_TYPE_STRING"},
+			{Path: "f.value", Type: adminclient.FieldTypeString},
 		}, "")
 		latencies = append(latencies, float64(time.Since(start).Nanoseconds()))
 		if s != nil {
@@ -55,7 +55,7 @@ func BenchmarkPublishSchemaVersion(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		b.StopTimer()
 		s, err := admin.CreateSchema(ctx, fmt.Sprintf("bench-pub-%d", i), []adminclient.Field{
-			{Path: "f.value", Type: "FIELD_TYPE_STRING"},
+			{Path: "f.value", Type: adminclient.FieldTypeString},
 		}, "")
 		if err != nil || s == nil {
 			b.StartTimer()

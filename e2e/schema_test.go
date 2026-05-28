@@ -22,9 +22,9 @@ func TestSchemaLifecycle(t *testing.T) {
 
 	// Create schema with fields.
 	s, err := admin.CreateSchema(ctx, "payments-e2e", []adminclient.Field{
-		{Path: "payments.fee", Type: "FIELD_TYPE_STRING", Description: "Transaction fee percentage"},
-		{Path: "payments.currency", Type: "FIELD_TYPE_STRING", Description: "Default currency"},
-		{Path: "payments.timeout", Type: "FIELD_TYPE_DURATION", Description: "Payment timeout"},
+		{Path: "payments.fee", Type: adminclient.FieldTypeString, Description: "Transaction fee percentage"},
+		{Path: "payments.currency", Type: adminclient.FieldTypeString, Description: "Default currency"},
+		{Path: "payments.timeout", Type: adminclient.FieldTypeDuration, Description: "Payment timeout"},
 	}, "E2E test schema")
 	require.NoError(t, err)
 	assert.NotEmpty(t, s.ID)
@@ -45,7 +45,7 @@ func TestSchemaLifecycle(t *testing.T) {
 
 	// Update schema — add a field, creates v2.
 	updated, err := admin.UpdateSchema(ctx, s.ID, []adminclient.Field{
-		{Path: "payments.max_retries", Type: "FIELD_TYPE_INT", Description: "Max retry count"},
+		{Path: "payments.max_retries", Type: adminclient.FieldTypeInteger, Description: "Max retry count"},
 	}, nil, "Add max_retries field")
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), updated.Version)
@@ -83,9 +83,9 @@ func TestSchemaExportImport(t *testing.T) {
 
 	// 1. Create a schema with fields.
 	s, err := admin.CreateSchema(ctx, "export-e2e", []adminclient.Field{
-		{Path: "trade.fee", Type: "FIELD_TYPE_STRING", Description: "Fee percentage"},
-		{Path: "trade.currency", Type: "FIELD_TYPE_STRING"},
-		{Path: "trade.timeout", Type: "FIELD_TYPE_DURATION"},
+		{Path: "trade.fee", Type: adminclient.FieldTypeString, Description: "Fee percentage"},
+		{Path: "trade.currency", Type: adminclient.FieldTypeString},
+		{Path: "trade.timeout", Type: adminclient.FieldTypeDuration},
 	}, "Schema for export testing")
 	require.NoError(t, err)
 

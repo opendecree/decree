@@ -97,7 +97,7 @@ func TestSecurity_SensitiveFieldRedacted(t *testing.T) {
 
 	// Create schema with one sensitive field.
 	s, err := admin.CreateSchema(ctx, "sec-sensitive-"+randSuffix(), []adminclient.Field{
-		{Path: "auth.token", Type: "FIELD_TYPE_STRING", Sensitive: true},
+		{Path: "auth.token", Type: adminclient.FieldTypeString, Sensitive: true},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
@@ -189,7 +189,7 @@ func TestSecurity_SchemaLimitsEnforced(t *testing.T) {
 		for i := range fields {
 			fields[i] = adminclient.Field{
 				Path: fmt.Sprintf("f.field_%d", i),
-				Type: "FIELD_TYPE_STRING",
+				Type: adminclient.FieldTypeString,
 			}
 		}
 		_, err := admin.CreateSchema(ctx, "sec-limits-fields-"+randSuffix(), fields, "")
@@ -221,7 +221,7 @@ func TestSecurity_SchemaLimitsEnforced(t *testing.T) {
 		s, err := admin.CreateSchema(ctx, "sec-json-depth-"+randSuffix(), []adminclient.Field{
 			{
 				Path: "data.payload",
-				Type: "FIELD_TYPE_JSON",
+				Type: adminclient.FieldTypeJSON,
 				Constraints: &adminclient.FieldConstraints{
 					JSONSchema: deepSchema,
 				},
@@ -347,8 +347,8 @@ func TestSecurity_ImportConfigSensitiveFieldRedacted(t *testing.T) {
 	const secretValue = "import-s3cr3t-abc123"
 
 	s, err := admin.CreateSchema(ctx, "sec-import-sensitive-"+randSuffix(), []adminclient.Field{
-		{Path: "auth.token", Type: "FIELD_TYPE_STRING", Sensitive: true},
-		{Path: "app.name", Type: "FIELD_TYPE_STRING"},
+		{Path: "auth.token", Type: adminclient.FieldTypeString, Sensitive: true},
+		{Path: "app.name", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

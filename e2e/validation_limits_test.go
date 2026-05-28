@@ -52,7 +52,7 @@ func TestValidationLimits_MaxFieldsRejected(t *testing.T) {
 	for i := range fields {
 		fields[i] = adminclient.Field{
 			Path: fmt.Sprintf("f.field_%d", i),
-			Type: "FIELD_TYPE_STRING",
+			Type: adminclient.FieldTypeString,
 		}
 	}
 
@@ -74,7 +74,7 @@ func TestValidationLimits_MaxFieldsAtLimitAccepted(t *testing.T) {
 	for i := range fields {
 		fields[i] = adminclient.Field{
 			Path: fmt.Sprintf("f.field_%d", i),
-			Type: "FIELD_TYPE_STRING",
+			Type: adminclient.FieldTypeString,
 		}
 	}
 
@@ -145,7 +145,7 @@ func TestValidationLimits_GetFields_AtLimitAccepted(t *testing.T) {
 
 	fields := make([]adminclient.Field, maxConfigListLen)
 	for i := range fields {
-		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: "FIELD_TYPE_STRING"}
+		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: adminclient.FieldTypeString}
 	}
 	s, err := admin.CreateSchema(ctx, fmt.Sprintf("limits-get-%s", randSuffix()), fields, "")
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestValidationLimits_UpdateSchema_RemoveFields_ExceedsListLen(t *testing.T)
 
 	fields := make([]adminclient.Field, maxRemoveFields+1)
 	for i := range fields {
-		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: "FIELD_TYPE_STRING"}
+		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: adminclient.FieldTypeString}
 	}
 	s, err := admin.CreateSchema(ctx, fmt.Sprintf("limits-rm-%s", randSuffix()), fields, "")
 	require.NoError(t, err)

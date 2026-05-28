@@ -183,7 +183,7 @@ func ExampleClient_CreateSchema() {
 	ctx := context.Background()
 
 	schema, err := client.CreateSchema(ctx, "app-config", []adminclient.Field{
-		{Path: "app.env", Type: "FIELD_TYPE_STRING", Description: "Deployment environment"},
+		{Path: "app.env", Type: adminclient.FieldTypeString, Description: "Deployment environment"},
 	}, "initial schema")
 	if err != nil {
 		fmt.Println("error:", err)

@@ -144,11 +144,11 @@ func bootstrapMatrixFixture(t *testing.T, namePrefix string) *matrixFixture {
 
 	schemaName := fmt.Sprintf("%s-%s", namePrefix, randSuffix())
 	s, err := admin.CreateSchema(ctx, schemaName, []adminclient.Field{
-		{Path: "app.name", Type: "FIELD_TYPE_STRING", Nullable: true},
-		{Path: "app.retries", Type: "FIELD_TYPE_INT", Nullable: true},
-		{Path: "app.rate", Type: "FIELD_TYPE_NUMBER"},
-		{Path: "app.enabled", Type: "FIELD_TYPE_BOOL"},
-		{Path: "app.timeout", Type: "FIELD_TYPE_DURATION"},
+		{Path: "app.name", Type: adminclient.FieldTypeString, Nullable: true},
+		{Path: "app.retries", Type: adminclient.FieldTypeInteger, Nullable: true},
+		{Path: "app.rate", Type: adminclient.FieldTypeNumber},
+		{Path: "app.enabled", Type: adminclient.FieldTypeBool},
+		{Path: "app.timeout", Type: adminclient.FieldTypeDuration},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

@@ -24,26 +24,26 @@ func TestConstraintValidation(t *testing.T) {
 	// Create schema with constrained fields.
 	s, err := admin.CreateSchema(ctx, "validation-e2e", []adminclient.Field{
 		{
-			Path: "app.retries", Type: "FIELD_TYPE_INT",
+			Path: "app.retries", Type: adminclient.FieldTypeInteger,
 			Constraints: &adminclient.FieldConstraints{Min: ptr(0.0), Max: ptr(10.0)},
 		},
 		{
-			Path: "app.rate", Type: "FIELD_TYPE_NUMBER",
+			Path: "app.rate", Type: adminclient.FieldTypeNumber,
 			Constraints: &adminclient.FieldConstraints{Min: ptr(0.0), Max: ptr(1.0)},
 		},
 		{
-			Path: "app.name", Type: "FIELD_TYPE_STRING",
+			Path: "app.name", Type: adminclient.FieldTypeString,
 			Constraints: &adminclient.FieldConstraints{MinLength: ptr(int32(2)), MaxLength: ptr(int32(50))},
 		},
 		{
-			Path: "app.env", Type: "FIELD_TYPE_STRING",
+			Path: "app.env", Type: adminclient.FieldTypeString,
 			Constraints: &adminclient.FieldConstraints{Enum: []string{"dev", "staging", "prod"}},
 		},
 		{
-			Path: "app.webhook", Type: "FIELD_TYPE_URL",
+			Path: "app.webhook", Type: adminclient.FieldTypeURL,
 		},
 		{
-			Path: "app.enabled", Type: "FIELD_TYPE_BOOL",
+			Path: "app.enabled", Type: adminclient.FieldTypeBool,
 		},
 	}, "")
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestExclusiveConstraints(t *testing.T) {
 	// Schema with exclusiveMinimum/exclusiveMaximum.
 	s, err := admin.CreateSchema(ctx, "exclusive-e2e", []adminclient.Field{
 		{
-			Path: "app.rate", Type: "FIELD_TYPE_NUMBER",
+			Path: "app.rate", Type: adminclient.FieldTypeNumber,
 			Constraints: &adminclient.FieldConstraints{ExclusiveMin: ptr(0.0), ExclusiveMax: ptr(1.0)},
 		},
 	}, "")
@@ -210,7 +210,7 @@ func TestInvalidConstraintTypeCombinations(t *testing.T) {
 	t.Run("minimum on string rejected", func(t *testing.T) {
 		_, err := admin.CreateSchema(ctx, "bad-min-str-e2e", []adminclient.Field{
 			{
-				Path: "x", Type: "FIELD_TYPE_STRING",
+				Path: "x", Type: adminclient.FieldTypeString,
 				Constraints: &adminclient.FieldConstraints{Min: ptr(0.0)},
 			},
 		}, "")
@@ -221,7 +221,7 @@ func TestInvalidConstraintTypeCombinations(t *testing.T) {
 	t.Run("minLength on integer rejected", func(t *testing.T) {
 		_, err := admin.CreateSchema(ctx, "bad-minlen-int-e2e", []adminclient.Field{
 			{
-				Path: "x", Type: "FIELD_TYPE_INT",
+				Path: "x", Type: adminclient.FieldTypeInteger,
 				Constraints: &adminclient.FieldConstraints{MinLength: ptr(int32(2))},
 			},
 		}, "")
@@ -232,7 +232,7 @@ func TestInvalidConstraintTypeCombinations(t *testing.T) {
 	t.Run("pattern on bool rejected", func(t *testing.T) {
 		_, err := admin.CreateSchema(ctx, "bad-pattern-bool-e2e", []adminclient.Field{
 			{
-				Path: "x", Type: "FIELD_TYPE_BOOL",
+				Path: "x", Type: adminclient.FieldTypeBool,
 				Constraints: &adminclient.FieldConstraints{Pattern: "^true$"},
 			},
 		}, "")
@@ -243,7 +243,7 @@ func TestInvalidConstraintTypeCombinations(t *testing.T) {
 	t.Run("min greater than max rejected", func(t *testing.T) {
 		_, err := admin.CreateSchema(ctx, "bad-range-e2e", []adminclient.Field{
 			{
-				Path: "x", Type: "FIELD_TYPE_INT",
+				Path: "x", Type: adminclient.FieldTypeInteger,
 				Constraints: &adminclient.FieldConstraints{Min: ptr(10.0), Max: ptr(5.0)},
 			},
 		}, "")
