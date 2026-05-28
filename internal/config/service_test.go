@@ -534,7 +534,7 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 // --- ExportConfig ---
 
 func TestExportConfig_Success(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store := newTestServiceWithValidation()
 	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
@@ -1215,7 +1215,7 @@ func TestExportConfig_RedactsSensitiveFields(t *testing.T) {
 	store.On("GetConfigVersion", ctx, GetConfigVersionParams{TenantID: tenantID1, Version: 1}).
 		Return(domain.ConfigVersion{Version: 1, Description: &desc}, nil)
 
-	// getFieldTypeMap call
+	// getSensitiveFieldSet call
 	store.On("GetTenantByID", ctx, tenantID1).
 		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
 	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
@@ -1235,17 +1235,14 @@ func TestExportConfig_RedactsSensitiveFields(t *testing.T) {
 	assert.Contains(t, yaml, "myapp")
 }
 
-func TestDependentRequiredError(t *testing.T) {
+func TestCrossFieldError(t *testing.T) {
 	inner := errors.New("inner error")
-	e := &dependentRequiredError{err: inner}
+	e := &crossFieldError{kind: crossFieldKindDependentRequired, err: inner}
 	assert.Equal(t, "inner error", e.Error())
 	assert.Equal(t, inner, e.Unwrap())
-}
 
-func TestValidationError_Error(t *testing.T) {
-	inner := errors.New("cel rule failed")
-	e := &validationError{err: inner}
-	assert.Equal(t, "cel rule failed", e.Error())
+	e2 := &crossFieldError{kind: crossFieldKindValidation, err: errors.New("cel rule failed")}
+	assert.Equal(t, "cel rule failed", e2.Error())
 }
 
 func TestWithCacheMetrics_Option(t *testing.T) {
