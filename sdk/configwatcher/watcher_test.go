@@ -534,6 +534,66 @@ func TestWatcher_ReconnectVersionCursor(t *testing.T) {
 	_ = w.Close()
 }
 
+// TestWatcher_CleanStreamEndReconnects verifies that when the server closes the
+// stream with io.EOF (OK status, no error), the watcher reconnects with backoff
+// rather than treating it as a permanent shutdown.
+func TestWatcher_CleanStreamEndReconnects(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var subscribeCount atomic.Int32
+
+	// firstSub closes immediately with io.EOF (no context cancel — pure channel close).
+	firstSubCh := make(chan *configclient.ConfigChange)
+	close(firstSubCh) // closed at construction: Recv returns io.EOF immediately
+
+	// secondSub stays open until the watcher is shut down.
+	secondSubCh := make(chan *configclient.ConfigChange)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(subCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			call := int(subscribeCount.Add(1))
+			if call == 1 {
+				// Return the pre-closed channel — Recv will return io.EOF immediately.
+				return &mockSubscription{ch: firstSubCh, ctx: subCtx}, nil
+			}
+			return &mockSubscription{ch: secondSubCh, ctx: subCtx}, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts: options{
+			minBackoff:      5 * time.Millisecond,
+			maxBackoff:      20 * time.Millisecond,
+			snapshotTimeout: 100 * time.Millisecond,
+			logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		},
+		fields: make(map[string]*fieldEntry),
+		done:   make(chan struct{}),
+	}
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Wait for the second Subscribe call — proves reconnect happened.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for int(subscribeCount.Load()) < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for reconnect after clean stream-end")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	cancel()
+	_ = w.Close()
+}
+
 func TestWatcher_TimeField(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

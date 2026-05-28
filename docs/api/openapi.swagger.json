@@ -961,7 +961,8 @@
     },
     "/v1/tenants/{tenantId}/config:subscribe": {
       "get": {
-        "summary": "Subscribe opens a server-streaming connection that pushes ConfigChange events\nwhenever the tenant's configuration is modified. The stream remains open until\nthe client disconnects or the server shuts down.",
+        "summary": "Subscribe opens a server-streaming connection that pushes ConfigChange events\nwhenever the tenant's configuration is modified.",
+        "description": "Stream lifetime:\n  - Client disconnect: stream ends immediately.\n  - Server closes with OK status: the server-side pub/sub backend restarted\n    (e.g. Redis reconnect). Clients MUST reconnect with exponential backoff;\n    an OK close does NOT indicate the subscription is permanently gone.\n  - Server closes with error status: treat as a transient failure and reconnect\n    with backoff.\n\nUse the configwatcher package for a high-level client that handles reconnection\nautomatically.",
         "operationId": "ConfigService_Subscribe",
         "responses": {
           "200": {

@@ -264,8 +264,13 @@ func (w *Watcher) subscriptionLoop(ctx context.Context, snapshotVersion int32) {
 			return // Context cancelled — clean shutdown.
 		}
 
-		w.opts.logger.WarnContext(ctx, "subscription stream ended, reconnecting",
-			"error", err, "backoff", backoff)
+		if err == nil || err == io.EOF {
+			w.opts.logger.InfoContext(ctx, "subscription stream closed by server, reconnecting",
+				"backoff", backoff)
+		} else {
+			w.opts.logger.WarnContext(ctx, "subscription stream error, reconnecting",
+				"error", err, "backoff", backoff)
+		}
 
 		select {
 		case <-ctx.Done():
