@@ -24,10 +24,10 @@ func benchEnv(b *testing.B, name string) (*configclient.Client, string, func()) 
 	ctx := context.Background()
 
 	s, err := admin.CreateSchema(ctx, name, []adminclient.Field{
-		{Path: "bench.string", Type: "FIELD_TYPE_STRING"},
-		{Path: "bench.int", Type: "FIELD_TYPE_INT"},
-		{Path: "bench.bool", Type: "FIELD_TYPE_BOOL"},
-		{Path: "bench.number", Type: "FIELD_TYPE_NUMBER"},
+		{Path: "bench.string", Type: adminclient.FieldTypeString},
+		{Path: "bench.int", Type: adminclient.FieldTypeInteger},
+		{Path: "bench.bool", Type: adminclient.FieldTypeBool},
+		{Path: "bench.number", Type: adminclient.FieldTypeNumber},
 	}, "")
 	require.NoError(b, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
@@ -187,7 +187,7 @@ func benchGetFields(b *testing.B, name string, fieldCount int) {
 	paths := make([]string, fieldCount)
 	for i := range fields {
 		paths[i] = fmt.Sprintf("f.field_%d", i)
-		fields[i] = adminclient.Field{Path: paths[i], Type: "FIELD_TYPE_STRING"}
+		fields[i] = adminclient.Field{Path: paths[i], Type: adminclient.FieldTypeString}
 	}
 	s, err := admin.CreateSchema(ctx, name, fields, "")
 	require.NoError(b, err)
@@ -230,7 +230,7 @@ func benchImport(b *testing.B, name string, fieldCount int) {
 	// Create schema with N string fields.
 	fields := make([]adminclient.Field, fieldCount)
 	for i := range fields {
-		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: "FIELD_TYPE_STRING"}
+		fields[i] = adminclient.Field{Path: fmt.Sprintf("f.field_%d", i), Type: adminclient.FieldTypeString}
 	}
 	s, err := admin.CreateSchema(ctx, name, fields, "")
 	require.NoError(b, err)

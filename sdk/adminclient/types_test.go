@@ -21,8 +21,8 @@ func TestSchema_Fields(t *testing.T) {
 		Checksum:           "abc123",
 		Published:          true,
 		Fields: []Field{
-			{Path: "fee", Type: "NUMBER"},
-			{Path: "name", Type: "STRING", Nullable: true},
+			{Path: "fee", Type: FieldTypeNumber},
+			{Path: "name", Type: FieldTypeString, Nullable: true},
 		},
 		CreatedAt: now,
 		Info: &SchemaInfo{
@@ -72,7 +72,7 @@ func TestSchema_Fields(t *testing.T) {
 func TestField_AllMetadata(t *testing.T) {
 	f := Field{
 		Path:        "payments.fee",
-		Type:        "NUMBER",
+		Type:        FieldTypeNumber,
 		Nullable:    true,
 		Deprecated:  true,
 		RedirectTo:  "payments.new_fee",

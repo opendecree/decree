@@ -28,7 +28,7 @@ func TestErrorCases(t *testing.T) {
 
 	t.Run("create tenant with unpublished schema", func(t *testing.T) {
 		s, err := admin.CreateSchema(ctx, "unpublished-e2e", []adminclient.Field{
-			{Path: "x", Type: "FIELD_TYPE_STRING"},
+			{Path: "x", Type: adminclient.FieldTypeString},
 		}, "")
 		require.NoError(t, err)
 
@@ -41,7 +41,7 @@ func TestErrorCases(t *testing.T) {
 	t.Run("get nonexistent config field", func(t *testing.T) {
 		// Create schema + tenant to have a valid tenant ID.
 		s, err := admin.CreateSchema(ctx, "err-cfg-e2e", []adminclient.Field{
-			{Path: "x", Type: "FIELD_TYPE_STRING"},
+			{Path: "x", Type: adminclient.FieldTypeString},
 		}, "")
 		require.NoError(t, err)
 		_, err = admin.PublishSchema(ctx, s.ID, 1)

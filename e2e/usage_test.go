@@ -21,9 +21,9 @@ func TestUsageTracking(t *testing.T) {
 
 	// 1. Create schema + tenant + set values.
 	s, err := admin.CreateSchema(ctx, "usage-e2e", []adminclient.Field{
-		{Path: "billing.fee", Type: "FIELD_TYPE_STRING"},
-		{Path: "billing.currency", Type: "FIELD_TYPE_STRING"},
-		{Path: "billing.unused", Type: "FIELD_TYPE_STRING"},
+		{Path: "billing.fee", Type: adminclient.FieldTypeString},
+		{Path: "billing.currency", Type: adminclient.FieldTypeString},
+		{Path: "billing.unused", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

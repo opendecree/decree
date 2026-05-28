@@ -42,8 +42,8 @@ var sampleSeq int64
 
 // typeCase describes one field type for matrix 3.
 type typeCase struct {
-	name      string                                       // "string", "integer", ...
-	fieldType string                                       // "FIELD_TYPE_STRING"
+	name      string // "string", "integer", ...
+	fieldType adminclient.FieldType
 	sample    func() *configclient.TypedValue              // a fresh sample value
 	yamlValue func(sample *configclient.TypedValue) string // YAML literal for ImportConfig
 	verifyEq  func(t *testing.T, want, got *configclient.TypedValue)
@@ -52,7 +52,7 @@ type typeCase struct {
 func typeCases() []typeCase {
 	return []typeCase{
 		{
-			name: "string", fieldType: "FIELD_TYPE_STRING",
+			name: "string", fieldType: adminclient.FieldTypeString,
 			sample:    func() *configclient.TypedValue { return configclient.StringVal("hello-" + randSuffix()) },
 			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustStringValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
@@ -60,7 +60,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "integer", fieldType: "FIELD_TYPE_INT",
+			name: "integer", fieldType: adminclient.FieldTypeInteger,
 			sample: func() *configclient.TypedValue {
 				return configclient.IntVal(atomic.AddInt64(&sampleSeq, 1))
 			},
@@ -70,7 +70,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "number", fieldType: "FIELD_TYPE_NUMBER",
+			name: "number", fieldType: adminclient.FieldTypeNumber,
 			sample: func() *configclient.TypedValue {
 				return configclient.FloatVal(float64(atomic.AddInt64(&sampleSeq, 1)) / 100)
 			},
@@ -80,7 +80,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "bool", fieldType: "FIELD_TYPE_BOOL",
+			name: "bool", fieldType: adminclient.FieldTypeBool,
 			sample: func() *configclient.TypedValue {
 				return configclient.BoolVal(atomic.AddInt64(&sampleSeq, 1)%2 == 0)
 			},
@@ -90,7 +90,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "time", fieldType: "FIELD_TYPE_TIME",
+			name: "time", fieldType: adminclient.FieldTypeTime,
 			sample: func() *configclient.TypedValue {
 				return configclient.TimeVal(time.Unix(atomic.AddInt64(&sampleSeq, 1), 0).UTC())
 			},
@@ -103,7 +103,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "duration", fieldType: "FIELD_TYPE_DURATION",
+			name: "duration", fieldType: adminclient.FieldTypeDuration,
 			sample: func() *configclient.TypedValue {
 				return configclient.DurationVal(time.Duration(atomic.AddInt64(&sampleSeq, 1)) * time.Second)
 			},
@@ -113,7 +113,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "url", fieldType: "FIELD_TYPE_URL",
+			name: "url", fieldType: adminclient.FieldTypeURL,
 			sample:    func() *configclient.TypedValue { return configclient.URLVal("https://example.com/" + randSuffix()) },
 			yamlValue: func(tv *configclient.TypedValue) string { return fmt.Sprintf("%q", tv.MustURLValue()) },
 			verifyEq: func(t *testing.T, want, got *configclient.TypedValue) {
@@ -121,7 +121,7 @@ func typeCases() []typeCase {
 			},
 		},
 		{
-			name: "json", fieldType: "FIELD_TYPE_JSON",
+			name: "json", fieldType: adminclient.FieldTypeJSON,
 			sample: func() *configclient.TypedValue {
 				return configclient.JSONVal(fmt.Sprintf(`{"k":"v-%d"}`, atomic.AddInt64(&sampleSeq, 1)))
 			},

@@ -99,7 +99,7 @@ func allRPCs() []rpcSpec {
 			invoke: func(ctx context.Context, t *testing.T, c *clients, _ *matrixFixture) error {
 				s := mustCreateThrowawaySchema(ctx, t, c.bootstrapAdmin, "m1-update")
 				_, err := c.admin.UpdateSchema(ctx, s.ID,
-					[]adminclient.Field{{Path: "extra", Type: "FIELD_TYPE_STRING"}}, nil, "matrix update")
+					[]adminclient.Field{{Path: "extra", Type: adminclient.FieldTypeString}}, nil, "matrix update")
 				return err
 			},
 		},
@@ -412,7 +412,7 @@ func invokeSubscribe(c *clients, tenantID string) error {
 // --- shared throwaway helpers (used by matrix 1 + 2) ---
 
 func oneStringField() []adminclient.Field {
-	return []adminclient.Field{{Path: "x", Type: "FIELD_TYPE_STRING"}}
+	return []adminclient.Field{{Path: "x", Type: adminclient.FieldTypeString}}
 }
 
 func mustCreateThrowawaySchema(ctx context.Context, t *testing.T, admin *adminclient.Client, prefix string) *adminclient.Schema {

@@ -57,7 +57,7 @@ func baseMock() *mockClient {
 				},
 				Fields: []adminclient.Field{
 					{
-						Path: "rate", Type: "FIELD_TYPE_NUMBER", Description: "Rate",
+						Path: "rate", Type: adminclient.FieldTypeNumber, Description: "Rate",
 						Nullable: true, Title: "Fee Rate", Example: "0.025",
 						Format: "percentage", Tags: []string{"billing"},
 						ReadOnly: true, Sensitive: true,
@@ -69,7 +69,7 @@ func baseMock() *mockClient {
 						},
 						Constraints: &adminclient.FieldConstraints{Min: &min},
 					},
-					{Path: "name", Type: "FIELD_TYPE_STRING", Default: "default", WriteOnce: true},
+					{Path: "name", Type: adminclient.FieldTypeString, Default: "default", WriteOnce: true},
 				},
 			}, nil
 		},
@@ -323,14 +323,14 @@ func TestBuildSchemaDef(t *testing.T) {
 		Fields: []adminclient.Field{
 			{
 				Path:        "rate",
-				Type:        "FIELD_TYPE_NUMBER",
+				Type:        adminclient.FieldTypeNumber,
 				Description: "A rate",
 				Nullable:    true,
 				Constraints: &adminclient.FieldConstraints{Min: &min, Max: &max},
 			},
 			{
 				Path:       "name",
-				Type:       "FIELD_TYPE_STRING",
+				Type:       adminclient.FieldTypeString,
 				Default:    "default",
 				Deprecated: true,
 				RedirectTo: "new_name",

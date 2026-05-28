@@ -27,8 +27,8 @@ func TestUpgrade_Populate(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := admin.CreateSchema(ctx, upgradeSchemaName, []adminclient.Field{
-		{Path: "app.timeout", Type: "FIELD_TYPE_DURATION"},
-		{Path: "app.region", Type: "FIELD_TYPE_STRING"},
+		{Path: "app.timeout", Type: adminclient.FieldTypeDuration},
+		{Path: "app.region", Type: adminclient.FieldTypeString},
 	}, "upgrade e2e fixture")
 	require.NoError(t, err)
 

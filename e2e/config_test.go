@@ -25,9 +25,9 @@ func TestFullFlow(t *testing.T) {
 
 	// 1. Create and publish a schema.
 	s, err := admin.CreateSchema(ctx, "settlement-e2e", []adminclient.Field{
-		{Path: "settlement.window", Type: "FIELD_TYPE_DURATION"},
-		{Path: "settlement.currency", Type: "FIELD_TYPE_STRING"},
-		{Path: "settlement.fee", Type: "FIELD_TYPE_STRING"},
+		{Path: "settlement.window", Type: adminclient.FieldTypeDuration},
+		{Path: "settlement.currency", Type: adminclient.FieldTypeString},
+		{Path: "settlement.fee", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
@@ -151,11 +151,11 @@ func TestConfigExportImport(t *testing.T) {
 
 	// 1. Create and publish a schema with typed fields.
 	s, err := admin.CreateSchema(ctx, "config-export-e2e", []adminclient.Field{
-		{Path: "app.enabled", Type: "FIELD_TYPE_BOOL"},
-		{Path: "app.max_retries", Type: "FIELD_TYPE_INT"},
-		{Path: "app.fee_rate", Type: "FIELD_TYPE_NUMBER"},
-		{Path: "app.name", Type: "FIELD_TYPE_STRING"},
-		{Path: "app.timeout", Type: "FIELD_TYPE_DURATION"},
+		{Path: "app.enabled", Type: adminclient.FieldTypeBool},
+		{Path: "app.max_retries", Type: adminclient.FieldTypeInteger},
+		{Path: "app.fee_rate", Type: adminclient.FieldTypeNumber},
+		{Path: "app.name", Type: adminclient.FieldTypeString},
+		{Path: "app.timeout", Type: adminclient.FieldTypeDuration},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

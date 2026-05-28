@@ -141,56 +141,56 @@ func TestTypedValueFromProto_DurationValue_WithDuration(t *testing.T) {
 	}
 }
 
-// --- fieldTypeToString ---
+// --- fieldTypeFromProto ---
 
-func TestFieldTypeToString(t *testing.T) {
+func TestFieldTypeFromProto(t *testing.T) {
 	cases := []struct {
 		ft   pb.FieldType
-		want string
+		want adminclient.FieldType
 	}{
-		{pb.FieldType_FIELD_TYPE_INT, "integer"},
-		{pb.FieldType_FIELD_TYPE_STRING, "string"},
-		{pb.FieldType_FIELD_TYPE_TIME, "time"},
-		{pb.FieldType_FIELD_TYPE_DURATION, "duration"},
-		{pb.FieldType_FIELD_TYPE_URL, "url"},
-		{pb.FieldType_FIELD_TYPE_JSON, "json"},
-		{pb.FieldType_FIELD_TYPE_NUMBER, "number"},
-		{pb.FieldType_FIELD_TYPE_BOOL, "bool"},
+		{pb.FieldType_FIELD_TYPE_INT, adminclient.FieldTypeInteger},
+		{pb.FieldType_FIELD_TYPE_STRING, adminclient.FieldTypeString},
+		{pb.FieldType_FIELD_TYPE_TIME, adminclient.FieldTypeTime},
+		{pb.FieldType_FIELD_TYPE_DURATION, adminclient.FieldTypeDuration},
+		{pb.FieldType_FIELD_TYPE_URL, adminclient.FieldTypeURL},
+		{pb.FieldType_FIELD_TYPE_JSON, adminclient.FieldTypeJSON},
+		{pb.FieldType_FIELD_TYPE_NUMBER, adminclient.FieldTypeNumber},
+		{pb.FieldType_FIELD_TYPE_BOOL, adminclient.FieldTypeBool},
 		{pb.FieldType_FIELD_TYPE_UNSPECIFIED, ""},
 	}
 	for _, c := range cases {
-		if got := fieldTypeToString(c.ft); got != c.want {
-			t.Errorf("fieldTypeToString(%v) = %q, want %q", c.ft, got, c.want)
+		if got := fieldTypeFromProto(c.ft); got != c.want {
+			t.Errorf("fieldTypeFromProto(%v) = %q, want %q", c.ft, got, c.want)
 		}
 	}
 }
 
-// --- stringToFieldType ---
+// --- fieldTypeToProto ---
 
-func TestStringToFieldType(t *testing.T) {
+func TestFieldTypeToProto(t *testing.T) {
 	cases := []struct {
-		s    string
+		ft   adminclient.FieldType
 		want pb.FieldType
 	}{
-		{"integer", pb.FieldType_FIELD_TYPE_INT},
-		{"string", pb.FieldType_FIELD_TYPE_STRING},
-		{"time", pb.FieldType_FIELD_TYPE_TIME},
-		{"duration", pb.FieldType_FIELD_TYPE_DURATION},
-		{"url", pb.FieldType_FIELD_TYPE_URL},
-		{"json", pb.FieldType_FIELD_TYPE_JSON},
-		{"number", pb.FieldType_FIELD_TYPE_NUMBER},
-		{"bool", pb.FieldType_FIELD_TYPE_BOOL},
+		{adminclient.FieldTypeInteger, pb.FieldType_FIELD_TYPE_INT},
+		{adminclient.FieldTypeString, pb.FieldType_FIELD_TYPE_STRING},
+		{adminclient.FieldTypeTime, pb.FieldType_FIELD_TYPE_TIME},
+		{adminclient.FieldTypeDuration, pb.FieldType_FIELD_TYPE_DURATION},
+		{adminclient.FieldTypeURL, pb.FieldType_FIELD_TYPE_URL},
+		{adminclient.FieldTypeJSON, pb.FieldType_FIELD_TYPE_JSON},
+		{adminclient.FieldTypeNumber, pb.FieldType_FIELD_TYPE_NUMBER},
+		{adminclient.FieldTypeBool, pb.FieldType_FIELD_TYPE_BOOL},
 		{"unknown", pb.FieldType_FIELD_TYPE_UNSPECIFIED},
 		{"", pb.FieldType_FIELD_TYPE_UNSPECIFIED},
 	}
 	for _, c := range cases {
-		if got := stringToFieldType(c.s); got != c.want {
-			t.Errorf("stringToFieldType(%q) = %v, want %v", c.s, got, c.want)
+		if got := fieldTypeToProto(c.ft); got != c.want {
+			t.Errorf("fieldTypeToProto(%q) = %v, want %v", c.ft, got, c.want)
 		}
 	}
 }
 
-func TestFieldTypeStringRoundTrip(t *testing.T) {
+func TestFieldTypeRoundTrip(t *testing.T) {
 	types := []pb.FieldType{
 		pb.FieldType_FIELD_TYPE_INT,
 		pb.FieldType_FIELD_TYPE_STRING,
@@ -202,10 +202,10 @@ func TestFieldTypeStringRoundTrip(t *testing.T) {
 		pb.FieldType_FIELD_TYPE_BOOL,
 	}
 	for _, ft := range types {
-		s := fieldTypeToString(ft)
-		back := stringToFieldType(s)
+		sdk := fieldTypeFromProto(ft)
+		back := fieldTypeToProto(sdk)
 		if back != ft {
-			t.Errorf("round-trip %v: string=%q, back=%v", ft, s, back)
+			t.Errorf("round-trip %v: sdk=%q, back=%v", ft, sdk, back)
 		}
 	}
 }
@@ -216,7 +216,7 @@ func TestFieldsRoundTrip_Basic(t *testing.T) {
 	fields := []adminclient.Field{
 		{
 			Path:        "app.name",
-			Type:        "string",
+			Type:        adminclient.FieldTypeString,
 			Nullable:    true,
 			Deprecated:  false,
 			Tags:        []string{"core"},
@@ -338,7 +338,7 @@ func TestFieldsRoundTrip_OptionalFields(t *testing.T) {
 	fields := []adminclient.Field{
 		{
 			Path:       "alias",
-			Type:       "string",
+			Type:       adminclient.FieldTypeString,
 			RedirectTo: "canonical.path",
 			ExternalDocs: &adminclient.ExternalDocs{
 				Description: "See docs",

@@ -2,6 +2,20 @@ package adminclient
 
 import "time"
 
+// FieldType is the data type of a schema field.
+type FieldType string
+
+const (
+	FieldTypeInteger  FieldType = "integer"
+	FieldTypeNumber   FieldType = "number"
+	FieldTypeString   FieldType = "string"
+	FieldTypeBool     FieldType = "bool"
+	FieldTypeTime     FieldType = "time"
+	FieldTypeDuration FieldType = "duration"
+	FieldTypeURL      FieldType = "url"
+	FieldTypeJSON     FieldType = "json"
+)
+
 // Schema represents a configuration schema with its fields.
 type Schema struct {
 	ID                 string
@@ -35,7 +49,7 @@ type SchemaContact struct {
 // Field represents a single field definition within a schema.
 type Field struct {
 	Path         string
-	Type         string
+	Type         FieldType
 	Nullable     bool
 	Deprecated   bool
 	RedirectTo   string

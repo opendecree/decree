@@ -77,7 +77,7 @@ var schemaGetCmd = &cobra.Command{
 
 		rows := tableRows([]string{"PATH", "TYPE", "NULLABLE", "DEPRECATED", "DESCRIPTION"})
 		for _, f := range s.Fields {
-			rows = append(rows, []string{f.Path, f.Type, strconv.FormatBool(f.Nullable), strconv.FormatBool(f.Deprecated), f.Description})
+			rows = append(rows, []string{f.Path, string(f.Type), strconv.FormatBool(f.Nullable), strconv.FormatBool(f.Deprecated), f.Description})
 		}
 		fmt.Printf("Schema: %s (%s) v%d [published=%v]\n\n", s.Name, s.ID, s.Version, s.Published)
 		return printOutput(rows)

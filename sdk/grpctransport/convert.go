@@ -137,7 +137,7 @@ func fieldFromProto(f *pb.SchemaField) adminclient.Field {
 	}
 	field := adminclient.Field{
 		Path:       f.GetPath(),
-		Type:       fieldTypeToString(f.GetType()),
+		Type:       fieldTypeFromProto(f.GetType()),
 		Nullable:   f.GetNullable(),
 		Deprecated: f.GetDeprecated(),
 		Tags:       f.GetTags(),
@@ -229,7 +229,7 @@ func fieldsToProto(fields []adminclient.Field) []*pb.SchemaField {
 	for i, f := range fields {
 		sf := &pb.SchemaField{
 			Path:       f.Path,
-			Type:       stringToFieldType(f.Type),
+			Type:       fieldTypeToProto(f.Type),
 			Nullable:   f.Nullable,
 			Deprecated: f.Deprecated,
 			Tags:       f.Tags,
@@ -416,45 +416,46 @@ func timeToProto(t *time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(*t)
 }
 
-// protoTypeNames maps proto FieldType enum values to their short string names.
-// Mirrors the canonical string-keyed table in sdk/tools/internal/fieldtype.
-var protoTypeNames = map[pb.FieldType]string{
-	pb.FieldType_FIELD_TYPE_INT:      "integer",
-	pb.FieldType_FIELD_TYPE_NUMBER:   "number",
-	pb.FieldType_FIELD_TYPE_STRING:   "string",
-	pb.FieldType_FIELD_TYPE_BOOL:     "bool",
-	pb.FieldType_FIELD_TYPE_TIME:     "time",
-	pb.FieldType_FIELD_TYPE_DURATION: "duration",
-	pb.FieldType_FIELD_TYPE_URL:      "url",
-	pb.FieldType_FIELD_TYPE_JSON:     "json",
+func fieldTypeFromProto(ft pb.FieldType) adminclient.FieldType {
+	switch ft {
+	case pb.FieldType_FIELD_TYPE_INT:
+		return adminclient.FieldTypeInteger
+	case pb.FieldType_FIELD_TYPE_STRING:
+		return adminclient.FieldTypeString
+	case pb.FieldType_FIELD_TYPE_TIME:
+		return adminclient.FieldTypeTime
+	case pb.FieldType_FIELD_TYPE_DURATION:
+		return adminclient.FieldTypeDuration
+	case pb.FieldType_FIELD_TYPE_URL:
+		return adminclient.FieldTypeURL
+	case pb.FieldType_FIELD_TYPE_JSON:
+		return adminclient.FieldTypeJSON
+	case pb.FieldType_FIELD_TYPE_NUMBER:
+		return adminclient.FieldTypeNumber
+	case pb.FieldType_FIELD_TYPE_BOOL:
+		return adminclient.FieldTypeBool
+	default:
+		return ""
+	}
 }
 
-// fieldTypeToString converts a proto FieldType enum to its string representation
-// as used in the adminclient SDK.
-func fieldTypeToString(ft pb.FieldType) string {
-	return protoTypeNames[ft]
-}
-
-// stringToFieldType converts a string type name to the proto FieldType enum.
-// Accepts both short names ("integer", "string") and proto enum names
-// ("FIELD_TYPE_INT", "FIELD_TYPE_STRING").
-func stringToFieldType(s string) pb.FieldType {
-	switch s {
-	case "integer", "INT", "FIELD_TYPE_INT":
+func fieldTypeToProto(ft adminclient.FieldType) pb.FieldType {
+	switch ft {
+	case adminclient.FieldTypeInteger:
 		return pb.FieldType_FIELD_TYPE_INT
-	case "string", "STRING", "FIELD_TYPE_STRING":
+	case adminclient.FieldTypeString:
 		return pb.FieldType_FIELD_TYPE_STRING
-	case "time", "TIME", "FIELD_TYPE_TIME":
+	case adminclient.FieldTypeTime:
 		return pb.FieldType_FIELD_TYPE_TIME
-	case "duration", "DURATION", "FIELD_TYPE_DURATION":
+	case adminclient.FieldTypeDuration:
 		return pb.FieldType_FIELD_TYPE_DURATION
-	case "url", "URL", "FIELD_TYPE_URL":
+	case adminclient.FieldTypeURL:
 		return pb.FieldType_FIELD_TYPE_URL
-	case "json", "JSON", "FIELD_TYPE_JSON":
+	case adminclient.FieldTypeJSON:
 		return pb.FieldType_FIELD_TYPE_JSON
-	case "number", "NUMBER", "FIELD_TYPE_NUMBER":
+	case adminclient.FieldTypeNumber:
 		return pb.FieldType_FIELD_TYPE_NUMBER
-	case "bool", "BOOL", "FIELD_TYPE_BOOL":
+	case adminclient.FieldTypeBool:
 		return pb.FieldType_FIELD_TYPE_BOOL
 	default:
 		return pb.FieldType_FIELD_TYPE_UNSPECIFIED

@@ -26,8 +26,8 @@ func TestConfigSubscription(t *testing.T) {
 
 	// Setup: schema + tenant via adminclient.
 	s, err := admin.CreateSchema(ctx, "stream-e2e", []adminclient.Field{
-		{Path: "notify.enabled", Type: "FIELD_TYPE_STRING"},
-		{Path: "notify.channel", Type: "FIELD_TYPE_STRING"},
+		{Path: "notify.enabled", Type: adminclient.FieldTypeString},
+		{Path: "notify.channel", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)

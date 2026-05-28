@@ -38,7 +38,7 @@ func TestUpdateTenantName(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := admin.CreateSchema(ctx, "rename-tenant-e2e", []adminclient.Field{
-		{Path: "x", Type: "FIELD_TYPE_STRING"},
+		{Path: "x", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
@@ -71,7 +71,7 @@ func TestUpdateTenantSchemaVersion(t *testing.T) {
 
 	// v1 has only `app.value` (string).
 	s, err := admin.CreateSchema(ctx, "tenant-upgrade-e2e", []adminclient.Field{
-		{Path: "app.value", Type: "FIELD_TYPE_STRING"},
+		{Path: "app.value", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
@@ -79,7 +79,7 @@ func TestUpdateTenantSchemaVersion(t *testing.T) {
 
 	// v2 drops `app.value`, adds `app.count`.
 	_, err = admin.UpdateSchema(ctx, s.ID,
-		[]adminclient.Field{{Path: "app.count", Type: "FIELD_TYPE_INT"}},
+		[]adminclient.Field{{Path: "app.count", Type: adminclient.FieldTypeInteger}},
 		[]string{"app.value"},
 		"v2: swap fields",
 	)
@@ -120,14 +120,14 @@ func TestUpdateTenantBothFields(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := admin.CreateSchema(ctx, "tenant-both-e2e", []adminclient.Field{
-		{Path: "k", Type: "FIELD_TYPE_STRING"},
+		{Path: "k", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, s.ID, 1)
 	require.NoError(t, err)
 
 	_, err = admin.UpdateSchema(ctx, s.ID,
-		[]adminclient.Field{{Path: "k2", Type: "FIELD_TYPE_STRING"}},
+		[]adminclient.Field{{Path: "k2", Type: adminclient.FieldTypeString}},
 		nil,
 		"v2: add k2",
 	)
@@ -159,14 +159,14 @@ func TestListTenantsWithAccessFiltering(t *testing.T) {
 
 	// Two schemas so we can also test the SchemaId-filtered path.
 	sA, err := admin.CreateSchema(ctx, "tenant-filter-a", []adminclient.Field{
-		{Path: "f", Type: "FIELD_TYPE_STRING"},
+		{Path: "f", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, sA.ID, 1)
 	require.NoError(t, err)
 
 	sB, err := admin.CreateSchema(ctx, "tenant-filter-b", []adminclient.Field{
-		{Path: "f", Type: "FIELD_TYPE_STRING"},
+		{Path: "f", Type: adminclient.FieldTypeString},
 	}, "")
 	require.NoError(t, err)
 	_, err = admin.PublishSchema(ctx, sB.ID, 1)
