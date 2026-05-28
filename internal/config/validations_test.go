@@ -66,6 +66,7 @@ func TestSetField_Validations_RuleFires_Rejected(t *testing.T) {
 		{FieldPath: "payments.min_amount", Value: strPtr("100")},
 		{FieldPath: "payments.max_amount", Value: strPtr("100")},
 	}, nil)
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:  tenantID1,

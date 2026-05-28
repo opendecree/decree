@@ -69,7 +69,9 @@ func TestGetConfig_CacheHit(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
-	cache.On("Get", ctx, tenantID1, int32(5)).
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	cache.On("Get", ctx, tenantID1, int32(5), int32(1)).
 		Return(map[string]string{"payments.fee": "0.5"}, nil)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
@@ -89,13 +91,13 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 3}, nil)
-	cache.On("Get", ctx, tenantID1, int32(3)).
+	cache.On("Get", ctx, tenantID1, int32(3), int32(1)).
 		Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 3}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "a.b", Value: strPtr("123")},
 		}, nil)
-	cache.On("Set", ctx, tenantID1, int32(3), mock.AnythingOfType("map[string]string"), mock.Anything).
+	cache.On("Set", ctx, tenantID1, int32(3), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
 	setupNoSensitiveFields(store)
 
@@ -103,7 +105,7 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Len(t, resp.Config.Values, 1)
-	cache.AssertCalled(t, "Set", ctx, tenantID1, int32(3), mock.AnythingOfType("map[string]string"), mock.Anything)
+	cache.AssertCalled(t, "Set", ctx, tenantID1, int32(3), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything)
 }
 
 func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
@@ -219,8 +221,38 @@ func TestSetField_Success(t *testing.T) {
 	pub.AssertCalled(t, "Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent"))
 }
 
+// TestSetField_PreCommitInvalidationClosesStaleWindow is a regression test for
+// #431. A GetConfig read that executes after the tx commits but before the
+// post-commit invalidation fires can return stale data. The fix adds a
+// pre-commit invalidation so the cache is cleared before the commit. This test
+// asserts that Invalidate fires exactly twice — once pre-commit and once
+// post-commit — for a successful SetField.
+func TestSetField_PreCommitInvalidationClosesStaleWindow(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "payments.fee",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+	require.NoError(t, err)
+	cache.AssertNumberOfCalls(t, "Invalidate", 2)
+}
+
 func TestSetField_ChecksumMismatch(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	wrongChecksum := "wrong"
@@ -232,6 +264,7 @@ func TestSetField_ChecksumMismatch(t *testing.T) {
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{Value: strPtr("old-value")}, nil)
 	setupNoSensitiveFields(store)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:         tenantID1,
@@ -279,7 +312,7 @@ func TestSetField_ChecksumFirstWrite(t *testing.T) {
 func TestSetField_ChecksumDBError(t *testing.T) {
 	// When GetConfigValueAtVersion returns an unexpected error (not ErrNotFound),
 	// checkChecksumAtVersion surfaces it as codes.Internal.
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	checksum := "abc"
@@ -294,6 +327,7 @@ func TestSetField_ChecksumDBError(t *testing.T) {
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{}, dbErr).Once()
 	setupNoSensitiveFields(store)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:         tenantID1,
@@ -309,7 +343,7 @@ func TestSetField_ChecksumDBError(t *testing.T) {
 func TestSetField_TxLatestVersionDBError(t *testing.T) {
 	// When GetLatestConfigVersion fails inside the tx with a non-ErrNotFound
 	// error, SetField returns codes.Internal.
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	dbErr := errors.New("db exploded")
@@ -321,6 +355,7 @@ func TestSetField_TxLatestVersionDBError(t *testing.T) {
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
 		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 	setupNoSensitiveFields(store)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	// Inside-tx: txLatestVersion fails.
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{}, dbErr).Once()
@@ -477,7 +512,7 @@ func TestRollbackToVersion_Success(t *testing.T) {
 }
 
 func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
@@ -485,6 +520,7 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -590,7 +626,7 @@ values:
 }
 
 func TestImportConfig_VersionConflictReturnsAborted(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	yamlContent := []byte(`spec_version: "v1"
@@ -611,6 +647,7 @@ values:
 		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
 		TenantId:    tenantID1,
@@ -873,13 +910,13 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	c.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
+	c.On("Get", ctx, tenantID1, int32(1), int32(1)).Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "a.x", Value: strPtr("1")},
 			{FieldPath: "a.y", Value: strPtr("2")},
 		}, nil)
-	c.On("Set", ctx, tenantID1, int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
+	c.On("Set", ctx, tenantID1, int32(1), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
 	setupNoSensitiveFields(store)
 
@@ -952,7 +989,9 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
-	c.On("Get", ctx, tenantID1, int32(5)).
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	c.On("Get", ctx, tenantID1, int32(5), int32(1)).
 		Return(map[string]string{"a.x": "1", "a.y": "2"}, nil)
 
 	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
@@ -1058,7 +1097,7 @@ func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	cache.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
+	cache.On("Get", ctx, tenantID1, int32(1), int32(1)).Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "app.secret", Value: strPtr("s3cr3t")},
@@ -1066,7 +1105,7 @@ func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
 		}, nil)
 
 	var capturedCacheMap map[string]string
-	cache.On("Set", ctx, tenantID1, int32(1), mock.MatchedBy(func(m map[string]string) bool {
+	cache.On("Set", ctx, tenantID1, int32(1), int32(1), mock.MatchedBy(func(m map[string]string) bool {
 		capturedCacheMap = m
 		return true
 	}), mock.Anything).Return(nil)

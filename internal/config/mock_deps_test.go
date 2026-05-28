@@ -14,8 +14,8 @@ type mockCache struct {
 	mock.Mock
 }
 
-func (m *mockCache) Get(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
-	args := m.Called(ctx, tenantID, version)
+func (m *mockCache) Get(ctx context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
+	args := m.Called(ctx, tenantID, configVersion, schemaVersion)
 	v := args.Get(0)
 	if v == nil {
 		return nil, args.Error(1)
@@ -23,8 +23,8 @@ func (m *mockCache) Get(ctx context.Context, tenantID string, version int32) (ma
 	return v.(map[string]string), args.Error(1)
 }
 
-func (m *mockCache) Set(ctx context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
-	args := m.Called(ctx, tenantID, version, values, ttl)
+func (m *mockCache) Set(ctx context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error {
+	args := m.Called(ctx, tenantID, configVersion, schemaVersion, values, ttl)
 	return args.Error(0)
 }
 

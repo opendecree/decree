@@ -80,11 +80,11 @@ func BenchmarkSetFields_50Fields(b *testing.B) {
 
 type noopCache struct{}
 
-func (noopCache) Get(_ context.Context, _ string, _ int32) (map[string]string, error) {
+func (noopCache) Get(_ context.Context, _ string, _, _ int32) (map[string]string, error) {
 	return nil, nil
 }
 
-func (noopCache) Set(_ context.Context, _ string, _ int32, _ map[string]string, _ time.Duration) error {
+func (noopCache) Set(_ context.Context, _ string, _, _ int32, _ map[string]string, _ time.Duration) error {
 	return nil
 }
 func (noopCache) Invalidate(_ context.Context, _ string) error { return nil }

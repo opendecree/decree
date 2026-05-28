@@ -22,16 +22,16 @@ func NewRedisCache(client *redis.Client) *RedisCache {
 	}
 }
 
-func (c *RedisCache) key(tenantID string, version int32) string {
-	return fmt.Sprintf("%s%s:v%d", c.prefix, tenantID, version)
+func (c *RedisCache) key(tenantID string, configVersion, schemaVersion int32) string {
+	return fmt.Sprintf("%s%s:v%d:sv%d", c.prefix, tenantID, configVersion, schemaVersion)
 }
 
 func (c *RedisCache) tenantPattern(tenantID string) string {
 	return fmt.Sprintf("%s%s:*", c.prefix, tenantID)
 }
 
-func (c *RedisCache) Get(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
-	result, err := c.client.HGetAll(ctx, c.key(tenantID, version)).Result()
+func (c *RedisCache) Get(ctx context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
+	result, err := c.client.HGetAll(ctx, c.key(tenantID, configVersion, schemaVersion)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("cache get: %w", err)
 	}
@@ -41,13 +41,13 @@ func (c *RedisCache) Get(ctx context.Context, tenantID string, version int32) (m
 	return result, nil
 }
 
-func (c *RedisCache) Set(ctx context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
+func (c *RedisCache) Set(ctx context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error {
 	// Redis HSET rejects zero field/value pairs; skip the call. There is nothing
 	// to cache, and a subsequent Get will correctly report a miss.
 	if len(values) == 0 {
 		return nil
 	}
-	key := c.key(tenantID, version)
+	key := c.key(tenantID, configVersion, schemaVersion)
 	pipe := c.client.Pipeline()
 	pipe.HSet(ctx, key, values)
 	pipe.Expire(ctx, key, ttl)

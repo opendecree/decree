@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -42,32 +43,30 @@ func NewMemoryCache(maxEntries int) *MemoryCache {
 	return c
 }
 
-func (c *MemoryCache) key(tenantID string, version int32) string {
-	return fmt.Sprintf("%s:v%d", tenantID, version)
+func (c *MemoryCache) key(tenantID string, configVersion, schemaVersion int32) string {
+	return fmt.Sprintf("%s:v%d:sv%d", tenantID, configVersion, schemaVersion)
 }
 
-func (c *MemoryCache) Get(_ context.Context, tenantID string, version int32) (map[string]string, error) {
+func (c *MemoryCache) Get(_ context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, ok := c.entries[c.key(tenantID, version)]
+	entry, ok := c.entries[c.key(tenantID, configVersion, schemaVersion)]
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil, nil
 	}
 
 	// Return a copy to prevent mutation.
 	result := make(map[string]string, len(entry.values))
-	for k, v := range entry.values {
-		result[k] = v
-	}
+	maps.Copy(result, entry.values)
 	return result, nil
 }
 
-func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
+func (c *MemoryCache) Set(_ context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	k := c.key(tenantID, version)
+	k := c.key(tenantID, configVersion, schemaVersion)
 
 	// If key already exists, just update it (no new order entry).
 	if _, exists := c.entries[k]; !exists {
@@ -77,9 +76,7 @@ func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, val
 
 	// Copy values to prevent external mutation.
 	copied := make(map[string]string, len(values))
-	for ck, v := range values {
-		copied[ck] = v
-	}
+	maps.Copy(copied, values)
 
 	c.entries[k] = memoryCacheEntry{
 		values:    copied,

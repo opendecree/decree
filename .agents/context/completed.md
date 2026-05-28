@@ -206,3 +206,13 @@ Separate `stress/` Go module (`github.com/opendecree/decree/stress`, build tag `
 `internal/ui/` package with `//go:embed dist` exposes `ui.FS`. Placeholder `dist/index.html` committed; real assets copied by `make ui` (runs `npm ci + npm run build` in `../decree-ui`, copies output into `dist/`). Built `assets/` directory excluded from git.
 
 `server.WithUI(fs.FS)` option adds SPA handler at `/admin/` with client-side routing fallback (`spaHandler`). `top` ServeMux created when either `openAPISpec` or `uiFS` is present. `ENABLE_UI=1` env var activates it; `fs.Sub(ui.FS, "dist")` resolves the subpath before passing to the option. `gatewayOptionsBuild.HasUI` bool for testability. Two new unit tests (`TestBuildGatewayOptions_UIWired`, `TestBuildGatewayOptions_UIAbsent`).
+
+## Cache: Stale-Read Window Fix + Schema Version in Cache Key (#431)
+
+Two bugs fixed together:
+
+- **Double invalidation** — `cache.Invalidate(ctx, tenantID)` now fires *before* `RunInTx` (pre-commit) and again after the tx commits (existing post-commit). The pre-commit call closes the stale-read window where a `GetConfig` reader could observe committed data while the cache still holds the pre-write value.
+- **Schema version in cache key** — `ConfigCache.Get/Set` now take `schemaVersion int32`. Cache key is `config:{tenantID}:v{configVersion}:sv{schemaVersion}`. Schema changes (e.g. a field becoming sensitive) now cause a cache miss rather than serving stale redacted/unredacted values. Requires `GetTenantByID` in the `GetConfig` fan-out (parallel with `GetLatestConfigVersion`) to provide `SchemaVersion` without an extra sequential call.
+- **Regression test** — `TestSetField_PreCommitInvalidationClosesStaleWindow` asserts `Invalidate` is called exactly twice per successful `SetField`.
+
+Pre-commit invalidation fires on all four write paths: `SetField`, `SetFields`, `RollbackToVersion`, `ImportConfig`.

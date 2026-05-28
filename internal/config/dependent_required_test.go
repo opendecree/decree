@@ -77,6 +77,7 @@ func TestSetField_DependentRequired_TriggerSetWithoutDependent_Rejected(t *testi
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 	}, nil)
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:  tenantID1,
@@ -288,6 +289,7 @@ func TestRollbackToVersion_DependentRequired_Rejected(t *testing.T) {
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 	}, nil).Once()
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -319,6 +321,7 @@ func TestImportConfig_DependentRequired_Rejected(t *testing.T) {
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 	}, nil)
+	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	yamlContent := []byte(`
 spec_version: "v1"
