@@ -75,9 +75,10 @@ ui:
 ## lint: Run all linters (Go + protobuf + migrations)
 lint: lint-go lint-proto lint-migrations
 
-## lint-go: Run golangci-lint
+## lint-go: Run golangci-lint (linters + formatter)
 lint-go:
 	golangci-lint run ./...
+	golangci-lint fmt --diff
 
 ## lint-migrations: Check migrations for blocking CREATE INDEX (requires CONCURRENTLY or suppression annotation)
 lint-migrations:
