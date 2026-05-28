@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -24,6 +27,7 @@ type Gateway struct {
 	httpServer *http.Server
 	conn       *grpc.ClientConn
 	logger     *slog.Logger
+	serveTLS   bool
 }
 
 // NewGateway creates a new HTTP gateway that proxies to the given gRPC address.
@@ -44,6 +48,35 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 	}
 	if o.tls != nil && o.insecure {
 		return nil, errors.New("WithGatewayTLS and WithGatewayInsecure are mutually exclusive")
+	}
+
+	// Refuse to expose a plaintext HTTP listener on a non-loopback address unless
+	// the caller explicitly acknowledges a TLS-terminating proxy is in front or
+	// TLS is configured on the gateway listener itself.
+	listenerAddr := fmt.Sprintf(":%s", httpPort)
+	if o.serverTLS == nil && !o.plaintextTerminator && !isLoopbackAddr(listenerAddr) {
+		return nil, fmt.Errorf(
+			"refusing to serve plaintext HTTP on %s (non-loopback); "+
+				"use WithGatewayServerTLS for HTTPS, or WithGatewayPlaintextTerminator "+
+				"to acknowledge a TLS-terminating proxy is in front",
+			listenerAddr,
+		)
+	}
+
+	// Build gateway-listener TLS config when WithGatewayServerTLS is set.
+	var serverTLSCfg *tls.Config
+	if o.serverTLS != nil {
+		if _, err := tls.LoadX509KeyPair(o.serverTLS.CertFile, o.serverTLS.KeyFile); err != nil {
+			return nil, fmt.Errorf("build gateway server TLS: %w", err)
+		}
+		minVer := tlsMinVersion()
+		serverTLSCfg = &tls.Config{
+			GetCertificate: certLoader(o.serverTLS.CertFile, o.serverTLS.KeyFile),
+			MinVersion:     minVer,
+		}
+		if minVer == tls.VersionTLS12 {
+			serverTLSCfg.CipherSuites = tls12CipherSuites
+		}
 	}
 
 	recvCap := o.maxRecvMsgBytes
@@ -140,22 +173,35 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 	}
 
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%s", httpPort),
-		Handler: handler,
+		Addr:              listenerAddr,
+		Handler:           handler,
+		TLSConfig:         serverTLSCfg,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	return &Gateway{
 		httpServer: httpServer,
 		conn:       conn,
 		logger:     o.logger,
+		serveTLS:   serverTLSCfg != nil,
 	}, nil
 }
 
 // Serve starts the HTTP gateway. Blocks until stopped.
 func (g *Gateway) Serve(ctx context.Context) error {
 	g.logger.InfoContext(ctx, "HTTP gateway listening", "port", strings.TrimPrefix(g.httpServer.Addr, ":"))
-	err := g.httpServer.ListenAndServe()
-	if err == http.ErrServerClosed {
+	var err error
+	if g.serveTLS {
+		// Empty cert/key: GetCertificate on TLSConfig handles every handshake.
+		err = g.httpServer.ListenAndServeTLS("", "")
+	} else {
+		err = g.httpServer.ListenAndServe()
+	}
+	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
@@ -255,6 +301,24 @@ func spaHandler(fsys fs.FS) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// isLoopbackAddr reports whether addr (host:port) resolves to a loopback
+// interface. An empty host (all-interfaces) is not loopback. Port "0"
+// (ephemeral, used in tests) is treated as loopback-safe.
+func isLoopbackAddr(addr string) bool {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if port == "0" {
+		return true
+	}
+	if host == "" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // swaggerUIPage is a self-contained HTML page that renders the OpenAPI spec

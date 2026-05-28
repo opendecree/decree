@@ -366,3 +366,85 @@ func TestRejectAuthHeadersMiddleware_CaseInsensitive(t *testing.T) {
 	})).ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
+
+func TestNewGateway_HTTPServerTimeoutsSet(t *testing.T) {
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, gw)
+
+	s := gw.httpServer
+	assert.Equal(t, 10*time.Second, s.ReadHeaderTimeout)
+	assert.Equal(t, 30*time.Second, s.ReadTimeout)
+	assert.Equal(t, 60*time.Second, s.WriteTimeout)
+	assert.Equal(t, 120*time.Second, s.IdleTimeout)
+	assert.Equal(t, 1<<20, s.MaxHeaderBytes)
+}
+
+func TestNewGateway_RefusesPlaintextNonLoopback(t *testing.T) {
+	// Port "8080" binds to 0.0.0.0 — all-interfaces, not loopback.
+	_, err := NewGateway(context.Background(), "8080", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to serve plaintext HTTP")
+}
+
+func TestNewGateway_PlaintextTerminatorAllowsNonLoopback(t *testing.T) {
+	gw, err := NewGateway(context.Background(), "8080", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+		WithGatewayPlaintextTerminator(),
+	)
+	require.NoError(t, err)
+	assert.NotNil(t, gw)
+	gw.Shutdown(context.Background())
+}
+
+func TestNewGateway_ServerTLSEnablesHTTPS(t *testing.T) {
+	dir := t.TempDir()
+	bundle := genCertBundle(t, "localhost", false)
+	_, certFile, keyFile := bundle.writeFiles(t, dir, "gw")
+
+	gw, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+		WithGatewayServerTLS(&TLSConfig{CertFile: certFile, KeyFile: keyFile}),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, gw)
+	assert.True(t, gw.serveTLS)
+	assert.NotNil(t, gw.httpServer.TLSConfig)
+	assert.NotNil(t, gw.httpServer.TLSConfig.GetCertificate)
+}
+
+func TestNewGateway_ServerTLSRejectsBadCert(t *testing.T) {
+	_, err := NewGateway(context.Background(), "0", "localhost:9090",
+		WithGatewayLogger(slog.Default()),
+		WithGatewayInsecure(),
+		WithGatewayServerTLS(&TLSConfig{CertFile: "/nonexistent/cert.pem", KeyFile: "/nonexistent/key.pem"}),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "build gateway server TLS")
+}
+
+func TestIsLoopbackAddr(t *testing.T) {
+	tests := []struct {
+		addr     string
+		loopback bool
+	}{
+		{":0", true},     // ephemeral — test port
+		{":8080", false}, // all-interfaces
+		{"127.0.0.1:8080", true},
+		{"::1:8080", false},       // invalid host:port but won't panic
+		{"localhost:8080", false}, // DNS name, not an IP
+	}
+	for _, tt := range tests {
+		t.Run(tt.addr, func(t *testing.T) {
+			assert.Equal(t, tt.loopback, isLoopbackAddr(tt.addr))
+		})
+	}
+}
