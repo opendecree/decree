@@ -2,10 +2,12 @@ package cache
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	miniredis "github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,13 +36,13 @@ func TestNewRedisCache(t *testing.T) {
 
 func TestRedisCache_Key(t *testing.T) {
 	c := &RedisCache{prefix: "config:"}
-	require.Equal(t, "config:tenant-1:v7:sv3", c.key("tenant-1", 7, 3))
-	require.Equal(t, "config:t:v0:sv0", c.key("t", 0, 0))
+	require.Equal(t, "config:{tenant-1}:v7:sv3", c.key("tenant-1", 7, 3))
+	require.Equal(t, "config:{t}:v0:sv0", c.key("t", 0, 0))
 }
 
-func TestRedisCache_TenantPattern(t *testing.T) {
+func TestRedisCache_IndexKey(t *testing.T) {
 	c := &RedisCache{prefix: "config:"}
-	require.Equal(t, "config:tenant-1:*", c.tenantPattern("tenant-1"))
+	require.Equal(t, "config-idx:{tenant-1}", c.indexKey("tenant-1"))
 }
 
 // --- miniredis integration tests ---
@@ -206,6 +208,85 @@ func TestRedisCache_KeyCollisionAcrossTenants(t *testing.T) {
 	gotB, err = c.Get(ctx, "tenant-b", 1, 0)
 	require.NoError(t, err)
 	assert.Equal(t, "b", gotB["x"])
+}
+
+func TestRedisCache_Invalidate_EmptyTenantIsNoOp(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	require.NoError(t, c.Invalidate(context.Background(), "no-such-tenant"))
+}
+
+func TestRedisCache_Invalidate_IndexCleanedUp(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 2, 0, map[string]string{"b": "2"}, time.Minute))
+
+	members, err := c.client.SMembers(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	require.Len(t, members, 2, "index should hold both version keys before invalidation")
+
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	n, err := c.client.Exists(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n, "index must be deleted after invalidation")
+}
+
+func TestRedisCache_Invalidate_StaleIndexEntryIsNoOp(t *testing.T) {
+	c, mr := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Second))
+
+	mr.FastForward(2 * time.Second) // data key expired; index still holds the reference
+
+	// Invalidate must succeed even when all indexed keys have already expired.
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	// Index itself is cleaned up.
+	n, err := c.client.Exists(ctx, c.indexKey("t1")).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), n)
+}
+
+func TestRedisCache_Invalidate_SmembersError(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
+
+	mr.Close()
+
+	err := c.Invalidate(ctx, "t1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cache invalidate smembers")
+}
+
+func TestRedisCache_Invalidate_DelError(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
+
+	// Inject an error only for DEL so that SMEMBERS succeeds first.
+	mr.Server().SetPreHook(server.Hook(func(p *server.Peer, cmd string, args ...string) bool {
+		if strings.EqualFold(cmd, "del") {
+			p.WriteError("READONLY forced")
+			return true
+		}
+		return false
+	}))
+
+	err := c.Invalidate(ctx, "t1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cache invalidate del")
 }
 
 // --- RedisIdempotencyCache ---

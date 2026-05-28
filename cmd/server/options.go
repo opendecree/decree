@@ -63,15 +63,13 @@ func buildServerOptions(
 
 // gatewayOptionsBuild mirrors serverOptionsBuild for the HTTP gateway.
 type gatewayOptionsBuild struct {
-	Opts            []server.GatewayOption
-	UseTLS          bool
-	UseInsecure     bool
-	HasUI           bool
-	HasTrustedProxy bool
+	Opts                   []server.GatewayOption
+	UseTLS                 bool
+	UseInsecure            bool
+	HasUI                  bool
+	HasTrustedProxy        bool
+	HasPlaintextTerminator bool
 }
-
-// gatewayOptionsBuild mirrors serverOptionsBuild for the HTTP gateway.
-// HasTrustedProxy is exported so tests can assert the flag was wired.
 
 func buildGatewayOptions(
 	cfg serverConfig,
@@ -89,8 +87,14 @@ func buildGatewayOptions(
 		},
 	}
 	if cfg.InsecureListen {
-		out.Opts = append(out.Opts, server.WithGatewayInsecure())
+		out.Opts = append(out.Opts,
+			server.WithGatewayInsecure(),
+			// INSECURE_LISTEN=1 is already an explicit opt-in for running without
+			// TLS, so acknowledge the plaintext HTTP listener on all interfaces.
+			server.WithGatewayPlaintextTerminator(),
+		)
 		out.UseInsecure = true
+		out.HasPlaintextTerminator = true
 	} else {
 		out.Opts = append(out.Opts, server.WithGatewayTLS(gwTLS))
 		out.UseTLS = true

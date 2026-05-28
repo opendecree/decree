@@ -22,12 +22,18 @@ func NewRedisCache(client *redis.Client) *RedisCache {
 	}
 }
 
+// key returns the Redis key for a tenant's config at a specific config and
+// schema version. The {tenantID} hashtag pins all per-tenant keys to the same
+// cluster hash slot, which is required for the pipeline DEL in Invalidate to
+// work on Redis Cluster.
 func (c *RedisCache) key(tenantID string, configVersion, schemaVersion int32) string {
-	return fmt.Sprintf("%s%s:v%d:sv%d", c.prefix, tenantID, configVersion, schemaVersion)
+	return fmt.Sprintf("%s{%s}:v%d:sv%d", c.prefix, tenantID, configVersion, schemaVersion)
 }
 
-func (c *RedisCache) tenantPattern(tenantID string) string {
-	return fmt.Sprintf("%s%s:*", c.prefix, tenantID)
+// indexKey returns the Redis SET that tracks every version key for a tenant.
+// Shares the same {tenantID} hashtag as key() so both land on the same slot.
+func (c *RedisCache) indexKey(tenantID string) string {
+	return fmt.Sprintf("config-idx:{%s}", tenantID)
 }
 
 func (c *RedisCache) Get(ctx context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
@@ -47,10 +53,12 @@ func (c *RedisCache) Set(ctx context.Context, tenantID string, configVersion, sc
 	if len(values) == 0 {
 		return nil
 	}
-	key := c.key(tenantID, configVersion, schemaVersion)
+	k := c.key(tenantID, configVersion, schemaVersion)
+	idx := c.indexKey(tenantID)
 	pipe := c.client.Pipeline()
-	pipe.HSet(ctx, key, values)
-	pipe.Expire(ctx, key, ttl)
+	pipe.HSet(ctx, k, values)
+	pipe.Expire(ctx, k, ttl)
+	pipe.SAdd(ctx, idx, k)
 	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("cache set: %w", err)
@@ -59,18 +67,18 @@ func (c *RedisCache) Set(ctx context.Context, tenantID string, configVersion, sc
 }
 
 func (c *RedisCache) Invalidate(ctx context.Context, tenantID string) error {
-	iter := c.client.Scan(ctx, 0, c.tenantPattern(tenantID), 100).Iterator()
-	var keys []string
-	for iter.Next(ctx) {
-		keys = append(keys, iter.Val())
+	idx := c.indexKey(tenantID)
+	keys, err := c.client.SMembers(ctx, idx).Result()
+	if err != nil {
+		return fmt.Errorf("cache invalidate smembers: %w", err)
 	}
-	if err := iter.Err(); err != nil {
-		return fmt.Errorf("cache invalidate scan: %w", err)
+	if len(keys) == 0 {
+		return nil
 	}
-	if len(keys) > 0 {
-		if err := c.client.Del(ctx, keys...).Err(); err != nil {
-			return fmt.Errorf("cache invalidate del: %w", err)
-		}
+	// DEL all version keys and the index itself in one call.
+	keys = append(keys, idx)
+	if err := c.client.Del(ctx, keys...).Err(); err != nil {
+		return fmt.Errorf("cache invalidate del: %w", err)
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -221,4 +222,81 @@ func TestGatewayTLSConfig_RequiresCertKeyPair(t *testing.T) {
 	require.Error(t, err)
 	_, err = GatewayTLSConfig{ClientKeyFile: "y"}.ClientCredentials()
 	require.Error(t, err)
+}
+
+func TestTLSConfig_DefaultsTLS13(t *testing.T) {
+	t.Setenv("DECREE_TLS_MIN_VERSION", "")
+	require.Equal(t, uint16(0x0304), tlsMinVersion()) // tls.VersionTLS13
+}
+
+func TestTLSConfig_EnvOverrideTLS12(t *testing.T) {
+	t.Setenv("DECREE_TLS_MIN_VERSION", "TLS12")
+	require.Equal(t, uint16(0x0303), tlsMinVersion()) // tls.VersionTLS12
+}
+
+func TestTLSConfig_EnvOverrideCaseInsensitive(t *testing.T) {
+	t.Setenv("DECREE_TLS_MIN_VERSION", "tls12")
+	require.Equal(t, uint16(0x0303), tlsMinVersion())
+}
+
+func TestTLSConfig_MinVersionTLS13InCredentials(t *testing.T) {
+	t.Setenv("DECREE_TLS_MIN_VERSION", "")
+	dir := t.TempDir()
+	bundle := genCertBundle(t, "localhost", false)
+	_, certFile, keyFile := bundle.writeFiles(t, dir, "srv")
+
+	creds, err := TLSConfig{CertFile: certFile, KeyFile: keyFile}.ServerCredentials()
+	require.NoError(t, err)
+
+	// Dial the TLS server using only TLS 1.2 — must fail because the server
+	// enforces TLS 1.3 as floor.
+	addr, stop := startTLSServer(t, &TLSConfig{CertFile: certFile, KeyFile: keyFile})
+	defer stop()
+	_ = creds
+
+	clientCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		MaxVersion: tls.VersionTLS12,
+		RootCAs:    func() *x509.CertPool { p, _ := loadCAPool(filepath.Join(dir, "srv_ca.pem")); return p }(),
+		ServerName: "localhost",
+	}
+	conn, err := tls.Dial("tcp", addr, clientCfg)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("TLS 1.2 client must not connect to a TLS 1.3-floor server")
+	}
+}
+
+func TestCertHotReload(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write initial cert bundle.
+	b1 := genCertBundle(t, "localhost", false)
+	caFile, certFile, keyFile := b1.writeFiles(t, dir, "srv")
+
+	addr, stop := startTLSServer(t, &TLSConfig{CertFile: certFile, KeyFile: keyFile})
+	defer stop()
+
+	dial := func(caFile string) error {
+		creds, err := GatewayTLSConfig{CAFile: caFile, ServerName: "localhost"}.ClientCredentials()
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		return dialHealth(ctx, addr, grpc.WithTransportCredentials(creds))
+	}
+
+	// Initial cert works.
+	require.NoError(t, dial(caFile))
+
+	// Replace cert+key files with a new bundle signed by a different CA.
+	b2 := genCertBundle(t, "localhost", false)
+	require.NoError(t, os.WriteFile(certFile, b2.leafCertPEM, 0o600))
+	require.NoError(t, os.WriteFile(keyFile, b2.leafKeyPEM, 0o600))
+	newCAFile := filepath.Join(dir, "new_ca.pem")
+	require.NoError(t, os.WriteFile(newCAFile, b2.caCertPEM, 0o600))
+
+	// Old CA no longer validates the new cert.
+	require.Error(t, dial(caFile), "old CA must reject rotated cert")
+	// New CA validates it — server reloaded cert without restart.
+	require.NoError(t, dial(newCAFile), "new CA must accept rotated cert")
 }
