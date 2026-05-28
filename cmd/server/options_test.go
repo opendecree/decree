@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/time/rate"
@@ -116,6 +117,27 @@ func TestBuildServerOptions_ExtraGRPCOpts(t *testing.T) {
 	got := buildServerOptions(cfg, discardLogger(), extra, nil, nil, nil)
 
 	assert.Len(t, got.Opts, 6, "extra grpc opts go inside WithGRPCServerOptions, not as separate options")
+}
+
+func TestBuildServerOptions_DefaultTimeoutWired(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+	cfg.GRPCDefaultTimeout = 30 * time.Second
+
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
+
+	assert.True(t, got.HasDefaultTimeout, "non-zero GRPCDefaultTimeout must be wired")
+	assert.Len(t, got.Opts, 7, "5 base options + Insecure + DefaultTimeout")
+}
+
+func TestBuildServerOptions_DefaultTimeoutAbsent(t *testing.T) {
+	cfg := baseServerCfg()
+	cfg.InsecureListen = true
+
+	got := buildServerOptions(cfg, discardLogger(), nil, nil, nil, nil)
+
+	assert.False(t, got.HasDefaultTimeout, "zero GRPCDefaultTimeout must not produce an option")
+	assert.Len(t, got.Opts, 6)
 }
 
 func TestBuildGatewayOptions_TLS(t *testing.T) {
