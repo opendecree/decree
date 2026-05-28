@@ -834,3 +834,94 @@ func (t *countingWriteTransport) SetField(_ context.Context, _ *SetFieldRequest)
 	}
 	return &SetFieldResponse{}, nil
 }
+
+// --- WriteOption tests ---
+
+func TestSet_WithDescription(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		return r.Description == "why" && r.ValueDescription == "what"
+	}, &SetFieldResponse{}, nil)
+
+	err := client.Set(ctx, "t1", "a", "v", WithDescription("why"), WithValueDescription("what"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSet_WithExpectedChecksum(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		return r.ExpectedChecksum != nil && *r.ExpectedChecksum == "abc"
+	}, &SetFieldResponse{}, nil)
+
+	err := client.Set(ctx, "t1", "a", "v", WithExpectedChecksum("abc"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSetMany_WithValueDescriptionsAndChecksums(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		if len(r.Updates) != 2 {
+			return false
+		}
+		byPath := map[string]FieldUpdate{}
+		for _, u := range r.Updates {
+			byPath[u.FieldPath] = u
+		}
+		aOK := byPath["a"].ValueDescription == "desc-a" &&
+			byPath["a"].ExpectedChecksum != nil && *byPath["a"].ExpectedChecksum == "chk-a"
+		bOK := byPath["b"].ValueDescription == "" && byPath["b"].ExpectedChecksum == nil
+		return aOK && bOK
+	}, &SetFieldsResponse{}, nil)
+
+	err := client.SetMany(ctx, "t1",
+		map[string]string{"a": "1", "b": "2"},
+		"batch",
+		WithValueDescriptions(map[string]string{"a": "desc-a"}),
+		WithFieldChecksums(map[string]string{"a": "chk-a"}),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLockedValue_Set_WithDescription(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{
+		FieldPath: "x", Value: StringVal("old"), Checksum: "chk",
+	}, nil)
+
+	lv, err := client.GetForUpdate(ctx, "t1", "x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		return r.Description == "my reason" && r.ValueDescription == "my val desc" &&
+			r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk"
+	}, &SetFieldResponse{}, nil)
+
+	err = lv.Set(ctx, "new", WithDescription("my reason"), WithValueDescription("my val desc"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

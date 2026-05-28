@@ -14,7 +14,12 @@ import (
 type WriteOption func(*writeOptions)
 
 type writeOptions struct {
-	idempotencyKey string
+	idempotencyKey    string
+	description       string
+	valueDescription  string
+	expectedChecksum  string
+	valueDescriptions map[string]string // per-field value descriptions for batch writes
+	fieldChecksums    map[string]string // per-field expected checksums for batch writes
 }
 
 func applyWriteOptions(opts []WriteOption) writeOptions {
@@ -36,11 +41,42 @@ func WithIdempotencyKey(key string) WriteOption {
 	return func(o *writeOptions) { o.idempotencyKey = key }
 }
 
-// doWrite executes a write operation. Without an idempotency key, the call
-// is made exactly once regardless of retry configuration. With an idempotency
-// key and retry enabled on the client, transient errors trigger retry.
+// WithDescription sets a version-level description explaining why the change was made.
+func WithDescription(desc string) WriteOption {
+	return func(o *writeOptions) { o.description = desc }
+}
+
+// WithValueDescription sets a field-level description explaining what the value means.
+// Retrievable via include_description in read requests.
+func WithValueDescription(desc string) WriteOption {
+	return func(o *writeOptions) { o.valueDescription = desc }
+}
+
+// WithExpectedChecksum makes the write conditional: it succeeds only if the
+// field's current checksum matches the provided value. Returns [ErrChecksumMismatch]
+// on conflict. Use [Client.GetForUpdate] to obtain the current checksum.
+func WithExpectedChecksum(checksum string) WriteOption {
+	return func(o *writeOptions) { o.expectedChecksum = checksum }
+}
+
+// WithValueDescriptions sets per-field value descriptions for batch write operations
+// ([Client.SetMany], [Client.SetManyTyped]). The map key is the field path.
+func WithValueDescriptions(descs map[string]string) WriteOption {
+	return func(o *writeOptions) { o.valueDescriptions = descs }
+}
+
+// WithFieldChecksums sets per-field expected checksums for batch write operations
+// ([Client.SetMany], [Client.SetManyTyped]). The write fails with [ErrChecksumMismatch]
+// if any field's current checksum does not match. The map key is the field path.
+func WithFieldChecksums(checksums map[string]string) WriteOption {
+	return func(o *writeOptions) { o.fieldChecksums = checksums }
+}
+
+// doWrite executes a write operation. Without an idempotency key or expected
+// checksum, the call is made exactly once. With either (both make the write
+// idempotent) and retry enabled on the client, transient errors trigger retry.
 func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) error) error {
-	if wo.idempotencyKey != "" && c.opts.retryEnabled {
+	if (wo.idempotencyKey != "" || wo.expectedChecksum != "") && c.opts.retryEnabled {
 		return retryDo(ctx, c, fn)
 	}
 	return fn(ctx)
@@ -55,12 +91,18 @@ func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx contex
 func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
-		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:       tenantID,
-			FieldPath:      fieldPath,
-			Value:          StringVal(value),
-			IdempotencyKey: wo.idempotencyKey,
-		})
+		req := &SetFieldRequest{
+			TenantID:         tenantID,
+			FieldPath:        fieldPath,
+			Value:            StringVal(value),
+			Description:      wo.description,
+			ValueDescription: wo.valueDescription,
+			IdempotencyKey:   wo.idempotencyKey,
+		}
+		if wo.expectedChecksum != "" {
+			req.ExpectedChecksum = &wo.expectedChecksum
+		}
+		_, err := c.transport.SetField(ctx, req)
 		return err
 	})
 }
@@ -74,12 +116,18 @@ func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opt
 func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
-		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:       tenantID,
-			FieldPath:      fieldPath,
-			Value:          value,
-			IdempotencyKey: wo.idempotencyKey,
-		})
+		req := &SetFieldRequest{
+			TenantID:         tenantID,
+			FieldPath:        fieldPath,
+			Value:            value,
+			Description:      wo.description,
+			ValueDescription: wo.valueDescription,
+			IdempotencyKey:   wo.idempotencyKey,
+		}
+		if wo.expectedChecksum != "" {
+			req.ExpectedChecksum = &wo.expectedChecksum
+		}
+		_, err := c.transport.SetField(ctx, req)
 		return err
 	})
 }
@@ -93,11 +141,16 @@ func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value
 func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
-		_, err := c.transport.SetField(ctx, &SetFieldRequest{
+		req := &SetFieldRequest{
 			TenantID:       tenantID,
 			FieldPath:      fieldPath,
+			Description:    wo.description,
 			IdempotencyKey: wo.idempotencyKey,
-		})
+		}
+		if wo.expectedChecksum != "" {
+			req.ExpectedChecksum = &wo.expectedChecksum
+		}
+		_, err := c.transport.SetField(ctx, req)
 		return err
 	})
 }
@@ -113,11 +166,15 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
 		for path, val := range values {
-			v := StringVal(val)
-			updates = append(updates, FieldUpdate{
-				FieldPath: path,
-				Value:     v,
-			})
+			u := FieldUpdate{
+				FieldPath:        path,
+				Value:            StringVal(val),
+				ValueDescription: wo.valueDescriptions[path],
+			}
+			if chk := wo.fieldChecksums[path]; chk != "" {
+				u.ExpectedChecksum = &chk
+			}
+			updates = append(updates, u)
 		}
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
@@ -140,10 +197,15 @@ func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[s
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
 		for path, v := range values {
-			updates = append(updates, FieldUpdate{
-				FieldPath: path,
-				Value:     v,
-			})
+			u := FieldUpdate{
+				FieldPath:        path,
+				Value:            v,
+				ValueDescription: wo.valueDescriptions[path],
+			}
+			if chk := wo.fieldChecksums[path]; chk != "" {
+				u.ExpectedChecksum = &chk
+			}
+			updates = append(updates, u)
 		}
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
@@ -199,13 +261,16 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 //
 // Because ExpectedChecksum makes this write idempotent, this method respects
 // the client's retry configuration.
-func (lv *LockedValue) Set(ctx context.Context, newValue string) error {
+func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
 	return retryDo(ctx, lv.client, func(ctx context.Context) error {
 		_, err := lv.client.transport.SetField(ctx, &SetFieldRequest{
 			TenantID:         lv.tenantID,
 			FieldPath:        lv.FieldPath,
 			Value:            StringVal(newValue),
 			ExpectedChecksum: &lv.Checksum,
+			Description:      wo.description,
+			ValueDescription: wo.valueDescription,
 		})
 		return err
 	})
