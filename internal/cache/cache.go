@@ -7,15 +7,23 @@ import (
 
 // ConfigCache provides caching for config values (without descriptions).
 type ConfigCache interface {
-	// Get retrieves cached config values for a tenant at a specific config and
-	// schema version. Returns nil, nil on cache miss.
-	Get(ctx context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error)
+	// Get retrieves cached config values for a tenant at a version.
+	// Returns nil, nil on cache miss.
+	Get(ctx context.Context, tenantID string, version int32) (map[string]string, error)
 
-	// Set stores config values for a tenant at a specific config and schema version.
-	Set(ctx context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error
+	// Set stores config values for a tenant at a version.
+	Set(ctx context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error
 
 	// Invalidate removes all cached config for a tenant.
 	Invalidate(ctx context.Context, tenantID string) error
+
+	// SetNegative marks a tenant:version as having no config for the given TTL.
+	// Prevents redundant DB reads when a tenant has no config at a version.
+	SetNegative(ctx context.Context, tenantID string, version int32, ttl time.Duration) error
+
+	// GetNegative reports whether tenant:version is in the negative cache.
+	// Returns (true, nil) on a negative hit; (false, nil) on miss; (false, err) on error.
+	GetNegative(ctx context.Context, tenantID string, version int32) (bool, error)
 }
 
 // IdempotencyCache deduplicates write operations by key.

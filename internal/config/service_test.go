@@ -71,7 +71,7 @@ func TestGetConfig_CacheHit(t *testing.T) {
 		Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("GetTenantByID", ctx, tenantID1).
 		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
-	cache.On("Get", ctx, tenantID1, int32(5), int32(1)).
+	cache.On("Get", ctx, tenantID1, int32(5)).
 		Return(map[string]string{"payments.fee": "0.5"}, nil)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
@@ -91,13 +91,13 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 3}, nil)
-	cache.On("Get", ctx, tenantID1, int32(3), int32(1)).
+	cache.On("Get", ctx, tenantID1, int32(3)).
 		Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 3}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "a.b", Value: strPtr("123")},
 		}, nil)
-	cache.On("Set", ctx, tenantID1, int32(3), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
+	cache.On("Set", ctx, tenantID1, int32(3), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
 	setupNoSensitiveFields(store)
 
@@ -105,7 +105,7 @@ func TestGetConfig_CacheMiss(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Len(t, resp.Config.Values, 1)
-	cache.AssertCalled(t, "Set", ctx, tenantID1, int32(3), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything)
+	cache.AssertCalled(t, "Set", ctx, tenantID1, int32(3), mock.AnythingOfType("map[string]string"), mock.Anything)
 }
 
 func TestGetConfig_IncludeDescriptions_BypassesCache(t *testing.T) {
@@ -910,13 +910,13 @@ func TestGetConfig_RecordsUsage(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	c.On("Get", ctx, tenantID1, int32(1), int32(1)).Return(nil, nil)
+	c.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "a.x", Value: strPtr("1")},
 			{FieldPath: "a.y", Value: strPtr("2")},
 		}, nil)
-	c.On("Set", ctx, tenantID1, int32(1), int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
+	c.On("Set", ctx, tenantID1, int32(1), mock.AnythingOfType("map[string]string"), mock.Anything).
 		Return(nil)
 	setupNoSensitiveFields(store)
 
@@ -991,7 +991,7 @@ func TestGetConfig_CacheHit_RecordsUsage(t *testing.T) {
 		Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("GetTenantByID", ctx, tenantID1).
 		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
-	c.On("Get", ctx, tenantID1, int32(5), int32(1)).
+	c.On("Get", ctx, tenantID1, int32(5)).
 		Return(map[string]string{"a.x": "1", "a.y": "2"}, nil)
 
 	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
@@ -1097,7 +1097,7 @@ func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
 
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	cache.On("Get", ctx, tenantID1, int32(1), int32(1)).Return(nil, nil)
+	cache.On("Get", ctx, tenantID1, int32(1)).Return(nil, nil)
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "app.secret", Value: strPtr("s3cr3t")},
@@ -1105,7 +1105,7 @@ func TestGetConfig_RedactsSensitiveFields(t *testing.T) {
 		}, nil)
 
 	var capturedCacheMap map[string]string
-	cache.On("Set", ctx, tenantID1, int32(1), int32(1), mock.MatchedBy(func(m map[string]string) bool {
+	cache.On("Set", ctx, tenantID1, int32(1), mock.MatchedBy(func(m map[string]string) bool {
 		capturedCacheMap = m
 		return true
 	}), mock.Anything).Return(nil)
@@ -1291,14 +1291,17 @@ func TestConfigService_RequiresAuth(t *testing.T) {
 
 // --- Coverage for new lines added in #431 ---
 
-// TestGetConfig_TenantNotFound covers the GetTenantByID error branch added to
-// the GetConfig fan-out goroutine (service.go:242-244).
+// TestGetConfig_TenantNotFound covers the GetTenantByID error branch in
+// fetchAndCacheConfig → getSensitiveFieldSet (service.go).
 func TestGetConfig_TenantNotFound(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
-		Return(domain.ConfigVersion{Version: 1}, nil).Maybe()
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(nil, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a.b", Value: strPtr("v")}}, nil)
 	store.On("GetTenantByID", mock.Anything, tenantID1).
 		Return(domain.Tenant{}, errors.New("db error"))
 

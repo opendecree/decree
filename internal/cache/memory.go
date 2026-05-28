@@ -18,7 +18,8 @@ const defaultMaxEntries = 10000
 type MemoryCache struct {
 	mu         sync.RWMutex
 	entries    map[string]memoryCacheEntry
-	order      []string // insertion order for eviction
+	negEntries map[string]time.Time // negative-cache: key → expiry
+	order      []string             // insertion order for eviction
 	maxEntries int
 	stopSweep  chan struct{}
 }
@@ -36,6 +37,7 @@ func NewMemoryCache(maxEntries int) *MemoryCache {
 	}
 	c := &MemoryCache{
 		entries:    make(map[string]memoryCacheEntry),
+		negEntries: make(map[string]time.Time),
 		maxEntries: maxEntries,
 		stopSweep:  make(chan struct{}),
 	}
@@ -43,15 +45,15 @@ func NewMemoryCache(maxEntries int) *MemoryCache {
 	return c
 }
 
-func (c *MemoryCache) key(tenantID string, configVersion, schemaVersion int32) string {
-	return fmt.Sprintf("%s:v%d:sv%d", tenantID, configVersion, schemaVersion)
+func (c *MemoryCache) key(tenantID string, version int32) string {
+	return fmt.Sprintf("%s:v%d", tenantID, version)
 }
 
-func (c *MemoryCache) Get(_ context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
+func (c *MemoryCache) Get(_ context.Context, tenantID string, version int32) (map[string]string, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, ok := c.entries[c.key(tenantID, configVersion, schemaVersion)]
+	entry, ok := c.entries[c.key(tenantID, version)]
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil, nil
 	}
@@ -62,11 +64,11 @@ func (c *MemoryCache) Get(_ context.Context, tenantID string, configVersion, sch
 	return result, nil
 }
 
-func (c *MemoryCache) Set(_ context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error {
+func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	k := c.key(tenantID, configVersion, schemaVersion)
+	k := c.key(tenantID, version)
 
 	// If key already exists, just update it (no new order entry).
 	if _, exists := c.entries[k]; !exists {
@@ -95,8 +97,30 @@ func (c *MemoryCache) Invalidate(_ context.Context, tenantID string) error {
 			delete(c.entries, k)
 		}
 	}
+	for k := range c.negEntries {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.negEntries, k)
+		}
+	}
 	c.rebuildOrder()
 	return nil
+}
+
+func (c *MemoryCache) SetNegative(_ context.Context, tenantID string, version int32, ttl time.Duration) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.negEntries[c.key(tenantID, version)] = time.Now().Add(ttl)
+	return nil
+}
+
+func (c *MemoryCache) GetNegative(_ context.Context, tenantID string, version int32) (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	exp, ok := c.negEntries[c.key(tenantID, version)]
+	if !ok || time.Now().After(exp) {
+		return false, nil
+	}
+	return true, nil
 }
 
 // Len returns the number of entries in the cache.
@@ -195,6 +219,11 @@ func (c *MemoryCache) sweep() {
 	for k, e := range c.entries {
 		if now.After(e.expiresAt) {
 			delete(c.entries, k)
+		}
+	}
+	for k, exp := range c.negEntries {
+		if now.After(exp) {
+			delete(c.negEntries, k)
 		}
 	}
 	c.rebuildOrder()

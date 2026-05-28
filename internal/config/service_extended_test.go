@@ -162,7 +162,7 @@ func TestGetConfig_ByTenantName(t *testing.T) {
 	// Return a cached result so we skip the DB path
 	store.On("GetTenantByID", mock.Anything, tenantID1).Return(domain.Tenant{ID: tenantID1, SchemaVersion: 0}, nil)
 	cached := map[string]string{"key": "val"}
-	cache.On("Get", mock.Anything, tenantID1, int32(1), int32(0)).Return(cached, nil)
+	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: "acme"})
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestGetConfig_ByTenantUUID(t *testing.T) {
 	}, nil)
 	store.On("GetTenantByID", mock.Anything, tenantID1).Return(domain.Tenant{ID: tenantID1, SchemaVersion: 0}, nil)
 	cached := map[string]string{"key": "val"}
-	cache.On("Get", mock.Anything, tenantID1, int32(1), int32(0)).Return(cached, nil)
+	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
 
 	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
 	require.NoError(t, err)

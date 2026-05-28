@@ -21,10 +21,10 @@ import (
 func TestRedisCache_SetEmptyValuesIsNoOp(t *testing.T) {
 	c := &RedisCache{client: nil, prefix: "config:"}
 
-	err := c.Set(context.Background(), "t1", 1, 0, map[string]string{}, time.Minute)
+	err := c.Set(context.Background(), "t1", 1, map[string]string{}, time.Minute)
 	require.NoError(t, err)
 
-	err = c.Set(context.Background(), "t1", 1, 0, nil, time.Minute)
+	err = c.Set(context.Background(), "t1", 1, nil, time.Minute)
 	require.NoError(t, err)
 }
 
@@ -36,8 +36,8 @@ func TestNewRedisCache(t *testing.T) {
 
 func TestRedisCache_Key(t *testing.T) {
 	c := &RedisCache{prefix: "config:"}
-	require.Equal(t, "config:{tenant-1}:v7:sv3", c.key("tenant-1", 7, 3))
-	require.Equal(t, "config:{t}:v0:sv0", c.key("t", 0, 0))
+	require.Equal(t, "config:{tenant-1}:v7", c.key("tenant-1", 7))
+	require.Equal(t, "config:{t}:v0", c.key("t", 0))
 }
 
 func TestRedisCache_IndexKey(t *testing.T) {
@@ -62,16 +62,16 @@ func TestRedisCache_GetSet_Happy(t *testing.T) {
 	c, _ := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1", "b": "2"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1", "b": "2"}, time.Minute))
 
-	got, err := c.Get(ctx, "t1", 1, 0)
+	got, err := c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"a": "1", "b": "2"}, got)
 }
 
 func TestRedisCache_GetMiss(t *testing.T) {
 	c, _ := newTestRedisCache(t)
-	got, err := c.Get(context.Background(), "t1", 1, 0)
+	got, err := c.Get(context.Background(), "t1", 1)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
@@ -80,63 +80,39 @@ func TestRedisCache_Invalidate_Happy(t *testing.T) {
 	c, _ := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "t1", 2, 0, map[string]string{"b": "2"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "t2", 1, 0, map[string]string{"c": "3"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 2, map[string]string{"b": "2"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t2", 1, map[string]string{"c": "3"}, time.Minute))
 
 	require.NoError(t, c.Invalidate(ctx, "t1"))
 
-	got, err := c.Get(ctx, "t1", 1, 0)
+	got, err := c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 
-	got, err = c.Get(ctx, "t1", 2, 0)
+	got, err = c.Get(ctx, "t1", 2)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 
 	// t2 must not be affected by t1 invalidation.
-	got, err = c.Get(ctx, "t2", 1, 0)
+	got, err = c.Get(ctx, "t2", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "3", got["c"])
-}
-
-func TestRedisCache_SchemaVersionIsolation(t *testing.T) {
-	c, _ := newTestRedisCache(t)
-	ctx := context.Background()
-
-	// Same configVersion, different schemaVersions → separate cache entries.
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"x": "sv0"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "t1", 1, 1, map[string]string{"x": "sv1"}, time.Minute))
-
-	got0, err := c.Get(ctx, "t1", 1, 0)
-	require.NoError(t, err)
-	assert.Equal(t, "sv0", got0["x"])
-
-	got1, err := c.Get(ctx, "t1", 1, 1)
-	require.NoError(t, err)
-	assert.Equal(t, "sv1", got1["x"])
-
-	// Invalidate clears all schema versions for the tenant.
-	require.NoError(t, c.Invalidate(ctx, "t1"))
-	got0, _ = c.Get(ctx, "t1", 1, 0)
-	got1, _ = c.Get(ctx, "t1", 1, 1)
-	assert.Nil(t, got0)
-	assert.Nil(t, got1)
 }
 
 func TestRedisCache_TTLBoundary(t *testing.T) {
 	c, mr := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Second))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Second))
 
-	got, err := c.Get(ctx, "t1", 1, 0)
+	got, err := c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	require.NotNil(t, got, "entry should exist before TTL expires")
 
 	mr.FastForward(2 * time.Second)
 
-	got, err = c.Get(ctx, "t1", 1, 0)
+	got, err = c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	assert.Nil(t, got, "entry should be gone after TTL expires")
 }
@@ -153,7 +129,7 @@ func TestRedisCache_RedisDownMidGet(t *testing.T) {
 
 	mr.Close()
 
-	_, err := c.Get(ctx, "t1", 1, 0)
+	_, err := c.Get(ctx, "t1", 1)
 	require.Error(t, err)
 }
 
@@ -162,23 +138,23 @@ func TestRedisCache_StaleAfterRollback(t *testing.T) {
 	ctx := context.Background()
 
 	// v1 active, then v2 deployed.
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"fee": "0.01"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "t1", 2, 0, map[string]string{"fee": "0.02"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"fee": "0.01"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 2, map[string]string{"fee": "0.02"}, time.Minute))
 
 	// Rollback: invalidate the entire tenant to clear stale v2 data.
 	require.NoError(t, c.Invalidate(ctx, "t1"))
 
-	got, err := c.Get(ctx, "t1", 2, 0)
+	got, err := c.Get(ctx, "t1", 2)
 	require.NoError(t, err)
 	assert.Nil(t, got, "stale v2 must be evicted after rollback")
 
-	got, err = c.Get(ctx, "t1", 1, 0)
+	got, err = c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	assert.Nil(t, got, "v1 also evicted; repopulated on next read-through")
 
 	// Re-warm cache with rolled-back version.
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"fee": "0.01"}, time.Minute))
-	got, err = c.Get(ctx, "t1", 1, 0)
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"fee": "0.01"}, time.Minute))
+	got, err = c.Get(ctx, "t1", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "0.01", got["fee"])
 }
@@ -187,25 +163,25 @@ func TestRedisCache_KeyCollisionAcrossTenants(t *testing.T) {
 	c, _ := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "tenant-a", 1, 0, map[string]string{"x": "a"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "tenant-b", 1, 0, map[string]string{"x": "b"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "tenant-a", 1, map[string]string{"x": "a"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "tenant-b", 1, map[string]string{"x": "b"}, time.Minute))
 
-	gotA, err := c.Get(ctx, "tenant-a", 1, 0)
+	gotA, err := c.Get(ctx, "tenant-a", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "a", gotA["x"])
 
-	gotB, err := c.Get(ctx, "tenant-b", 1, 0)
+	gotB, err := c.Get(ctx, "tenant-b", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "b", gotB["x"])
 
 	// Invalidating tenant-a must not touch tenant-b.
 	require.NoError(t, c.Invalidate(ctx, "tenant-a"))
 
-	gotA, err = c.Get(ctx, "tenant-a", 1, 0)
+	gotA, err = c.Get(ctx, "tenant-a", 1)
 	require.NoError(t, err)
 	assert.Nil(t, gotA)
 
-	gotB, err = c.Get(ctx, "tenant-b", 1, 0)
+	gotB, err = c.Get(ctx, "tenant-b", 1)
 	require.NoError(t, err)
 	assert.Equal(t, "b", gotB["x"])
 }
@@ -219,8 +195,8 @@ func TestRedisCache_Invalidate_IndexCleanedUp(t *testing.T) {
 	c, _ := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
-	require.NoError(t, c.Set(ctx, "t1", 2, 0, map[string]string{"b": "2"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 2, map[string]string{"b": "2"}, time.Minute))
 
 	members, err := c.client.SMembers(ctx, c.indexKey("t1")).Result()
 	require.NoError(t, err)
@@ -237,7 +213,7 @@ func TestRedisCache_Invalidate_StaleIndexEntryIsNoOp(t *testing.T) {
 	c, mr := newTestRedisCache(t)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Second))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Second))
 
 	mr.FastForward(2 * time.Second) // data key expired; index still holds the reference
 
@@ -257,7 +233,7 @@ func TestRedisCache_Invalidate_SmembersError(t *testing.T) {
 	c := NewRedisCache(client)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
 
 	mr.Close()
 
@@ -273,7 +249,7 @@ func TestRedisCache_Invalidate_DelError(t *testing.T) {
 	c := NewRedisCache(client)
 	ctx := context.Background()
 
-	require.NoError(t, c.Set(ctx, "t1", 1, 0, map[string]string{"a": "1"}, time.Minute))
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
 
 	// Inject an error only for DEL so that SMEMBERS succeeds first.
 	mr.Server().SetPreHook(server.Hook(func(p *server.Peer, cmd string, args ...string) bool {
@@ -287,6 +263,84 @@ func TestRedisCache_Invalidate_DelError(t *testing.T) {
 	err := c.Invalidate(ctx, "t1")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "cache invalidate del")
+}
+
+// --- Negative cache ---
+
+func TestRedisCache_NegKey(t *testing.T) {
+	c := &RedisCache{prefix: "config:"}
+	require.Equal(t, "config:{tenant-1}:neg:v3", c.negKey("tenant-1", 3))
+}
+
+func TestRedisCache_NegativeCache_Miss(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	neg, err := c.GetNegative(context.Background(), "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "miss before any SetNegative")
+}
+
+func TestRedisCache_NegativeCache_SetAndGet(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.True(t, neg)
+}
+
+func TestRedisCache_NegativeCache_TTLExpiry(t *testing.T) {
+	c, mr := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Second))
+	mr.FastForward(2 * time.Second)
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "expired negative entry must report miss")
+}
+
+func TestRedisCache_NegativeCache_InvalidateClears(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t1", 2, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t2", 1, time.Minute))
+
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	neg, _ := c.GetNegative(ctx, "t1", 1)
+	assert.False(t, neg, "t1:v1 neg must be cleared")
+	neg, _ = c.GetNegative(ctx, "t1", 2)
+	assert.False(t, neg, "t1:v2 neg must be cleared")
+
+	neg, _ = c.GetNegative(ctx, "t2", 1)
+	assert.True(t, neg, "t2 must be unaffected")
+}
+
+func TestRedisCache_NegativeCache_RedisDownOnSet(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	mr.Close()
+
+	err := c.SetNegative(context.Background(), "t1", 1, time.Minute)
+	require.Error(t, err)
+}
+
+func TestRedisCache_NegativeCache_RedisDownOnGet(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	mr.Close()
+
+	_, err := c.GetNegative(context.Background(), "t1", 1)
+	require.Error(t, err)
 }
 
 // --- RedisIdempotencyCache ---

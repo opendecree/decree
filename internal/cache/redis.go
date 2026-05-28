@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,12 +23,11 @@ func NewRedisCache(client *redis.Client) *RedisCache {
 	}
 }
 
-// key returns the Redis key for a tenant's config at a specific config and
-// schema version. The {tenantID} hashtag pins all per-tenant keys to the same
-// cluster hash slot, which is required for the pipeline DEL in Invalidate to
-// work on Redis Cluster.
-func (c *RedisCache) key(tenantID string, configVersion, schemaVersion int32) string {
-	return fmt.Sprintf("%s{%s}:v%d:sv%d", c.prefix, tenantID, configVersion, schemaVersion)
+// key returns the Redis key for a tenant's config at a specific version.
+// The {tenantID} hashtag pins all per-tenant keys to the same cluster slot,
+// which is required for the pipeline DEL in Invalidate to work on Redis Cluster.
+func (c *RedisCache) key(tenantID string, version int32) string {
+	return fmt.Sprintf("%s{%s}:v%d", c.prefix, tenantID, version)
 }
 
 // indexKey returns the Redis SET that tracks every version key for a tenant.
@@ -36,8 +36,15 @@ func (c *RedisCache) indexKey(tenantID string) string {
 	return fmt.Sprintf("config-idx:{%s}", tenantID)
 }
 
-func (c *RedisCache) Get(ctx context.Context, tenantID string, configVersion, schemaVersion int32) (map[string]string, error) {
-	result, err := c.client.HGetAll(ctx, c.key(tenantID, configVersion, schemaVersion)).Result()
+// negKey returns the Redis key for a negative-cache entry.
+// Uses the same {tenantID} hashtag so it lands on the same cluster slot as
+// the version keys and the index, enabling atomic pipeline operations.
+func (c *RedisCache) negKey(tenantID string, version int32) string {
+	return fmt.Sprintf("%s{%s}:neg:v%d", c.prefix, tenantID, version)
+}
+
+func (c *RedisCache) Get(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
+	result, err := c.client.HGetAll(ctx, c.key(tenantID, version)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("cache get: %w", err)
 	}
@@ -47,13 +54,13 @@ func (c *RedisCache) Get(ctx context.Context, tenantID string, configVersion, sc
 	return result, nil
 }
 
-func (c *RedisCache) Set(ctx context.Context, tenantID string, configVersion, schemaVersion int32, values map[string]string, ttl time.Duration) error {
+func (c *RedisCache) Set(ctx context.Context, tenantID string, version int32, values map[string]string, ttl time.Duration) error {
 	// Redis HSET rejects zero field/value pairs; skip the call. There is nothing
 	// to cache, and a subsequent Get will correctly report a miss.
 	if len(values) == 0 {
 		return nil
 	}
-	k := c.key(tenantID, configVersion, schemaVersion)
+	k := c.key(tenantID, version)
 	idx := c.indexKey(tenantID)
 	pipe := c.client.Pipeline()
 	pipe.HSet(ctx, k, values)
@@ -81,6 +88,29 @@ func (c *RedisCache) Invalidate(ctx context.Context, tenantID string) error {
 		return fmt.Errorf("cache invalidate del: %w", err)
 	}
 	return nil
+}
+
+func (c *RedisCache) SetNegative(ctx context.Context, tenantID string, version int32, ttl time.Duration) error {
+	nk := c.negKey(tenantID, version)
+	idx := c.indexKey(tenantID)
+	pipe := c.client.Pipeline()
+	pipe.Set(ctx, nk, 1, ttl)
+	pipe.SAdd(ctx, idx, nk)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("cache set negative: %w", err)
+	}
+	return nil
+}
+
+func (c *RedisCache) GetNegative(ctx context.Context, tenantID string, version int32) (bool, error) {
+	err := c.client.Get(ctx, c.negKey(tenantID, version)).Err()
+	if errors.Is(err, redis.Nil) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("cache get negative: %w", err)
+	}
+	return true, nil
 }
 
 // RedisIdempotencyCache implements IdempotencyCache using Redis SET NX.

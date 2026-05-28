@@ -58,7 +58,7 @@ func TestNewService_WithGuard_AllowAll(t *testing.T) {
 		Return(domain.Tenant{ID: tenantID1}, nil)
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
-	c.On("Get", mock.Anything, tenantID1, int32(1), int32(0)).
+	c.On("Get", mock.Anything, tenantID1, int32(1)).
 		Return(map[string]string{}, nil)
 	setupNoSensitiveFields(store)
 
