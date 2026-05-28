@@ -361,28 +361,6 @@ func TestBuildSchemaDef(t *testing.T) {
 	}
 }
 
-func TestFieldTypeName(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"FIELD_TYPE_STRING", "string"},
-		{"FIELD_TYPE_INT", "integer"},
-		{"FIELD_TYPE_NUMBER", "number"},
-		{"FIELD_TYPE_BOOL", "bool"},
-		{"FIELD_TYPE_TIME", "time"},
-		{"FIELD_TYPE_DURATION", "duration"},
-		{"FIELD_TYPE_URL", "url"},
-		{"FIELD_TYPE_JSON", "json"},
-		{"UNKNOWN", "UNKNOWN"},
-	}
-	for _, tt := range tests {
-		if got := fieldTypeName(tt.input); got != tt.want {
-			t.Errorf("fieldTypeName(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestConvertConstraints(t *testing.T) {
 	min := float64(1)
 	max := float64(10)

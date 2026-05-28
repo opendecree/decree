@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/opendecree/decree/sdk/tools/internal/fieldtype"
 )
 
 // Schema is the input to documentation generation.
@@ -345,24 +347,9 @@ func formatFloat(f float64) string {
 	return fmt.Sprintf("%g", f)
 }
 
-// protoTypeToShort maps proto enum names to YAML short names.
-var protoTypeToShort = map[string]string{
-	"FIELD_TYPE_INT":      "integer",
-	"FIELD_TYPE_NUMBER":   "number",
-	"FIELD_TYPE_STRING":   "string",
-	"FIELD_TYPE_BOOL":     "bool",
-	"FIELD_TYPE_TIME":     "time",
-	"FIELD_TYPE_DURATION": "duration",
-	"FIELD_TYPE_URL":      "url",
-	"FIELD_TYPE_JSON":     "json",
-}
-
 // FieldTypeName returns the human-readable short name for a proto field type
 // enum name (e.g., "FIELD_TYPE_STRING" → "string"). Returns the input
 // unchanged if not recognized.
 func FieldTypeName(protoName string) string {
-	if short, ok := protoTypeToShort[protoName]; ok {
-		return short
-	}
-	return protoName
+	return fieldtype.Name(protoName)
 }
