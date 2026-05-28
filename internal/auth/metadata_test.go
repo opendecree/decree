@@ -311,8 +311,8 @@ func TestMetadata_TenantResolverErrorSanitised(t *testing.T) {
 	var logBuf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	resolver := func(_ context.Context, _ string) (string, error) {
-		return "", errors.New("pq: relation \"tenants\" does not exist")
+	resolver := func(_ context.Context, _ []string) (map[string]string, error) {
+		return nil, errors.New("pq: relation \"tenants\" does not exist")
 	}
 	interceptor := NewMetadataInterceptor(resolver, WithMetadataLogger(logger))
 	unary := interceptor.UnaryInterceptor()
@@ -334,6 +334,48 @@ func TestMetadata_TenantResolverErrorSanitised(t *testing.T) {
 	logged := logBuf.String()
 	assert.Contains(t, logged, "tenant resolution failed")
 	assert.Contains(t, logged, "pq: relation")
+}
+
+func TestMetadata_TenantResolverBatchedSingleCall(t *testing.T) {
+	calls := 0
+	resolver := func(_ context.Context, ids []string) (map[string]string, error) {
+		calls++
+		result := make(map[string]string, len(ids))
+		for _, id := range ids {
+			result[id] = "00000000-0000-0000-0000-00000000000" + id[len(id)-1:]
+		}
+		return result, nil
+	}
+	interceptor := NewMetadataInterceptor(resolver)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "admin@example.com",
+		"x-role":      "admin",
+		"x-tenant-id": "slug-a,slug-b,slug-c",
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls, "resolver must be called exactly once for multiple tenant IDs")
+}
+
+func TestMetadata_TenantResolverMissingResult(t *testing.T) {
+	resolver := func(_ context.Context, ids []string) (map[string]string, error) {
+		// Return a map missing one of the requested IDs.
+		return map[string]string{ids[0]: "some-uuid"}, nil
+	}
+	interceptor := NewMetadataInterceptor(resolver)
+	unary := interceptor.UnaryInterceptor()
+
+	ctx := ctxWithMetadata(map[string]string{
+		"x-subject":   "admin@example.com",
+		"x-role":      "admin",
+		"x-tenant-id": "slug-a,slug-b",
+	})
+	_, err := unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/test.Service/Method"}, noopHandler)
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	assert.Equal(t, "failed to resolve tenant", status.Convert(err).Message())
 }
 
 func TestMetadata_UnknownRoleSanitised(t *testing.T) {
