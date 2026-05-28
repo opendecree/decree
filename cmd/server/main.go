@@ -515,6 +515,7 @@ type serverConfig struct {
 	EnableReflection            bool
 	EnableUI                    bool
 	GatewayTrustedProxy         bool
+	GRPCDefaultTimeout          time.Duration // 0 = disabled
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
@@ -617,6 +618,7 @@ func loadConfig() serverConfig {
 		EnableReflection:            getEnv("ENABLE_REFLECTION", "") == "1",
 		EnableUI:                    getEnv("ENABLE_UI", "") == "1",
 		GatewayTrustedProxy:         getEnv("DECREE_GATEWAY_TRUSTED_PROXY", "") == "1",
+		GRPCDefaultTimeout:          parseEnvDuration("GRPC_DEFAULT_TIMEOUT", 0),
 	}
 }
 

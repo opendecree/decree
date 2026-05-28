@@ -20,6 +20,7 @@ type serverOptionsBuild struct {
 	HasPreAuthLimiter bool
 	HasRateLimiter    bool
 	HasReflection     bool
+	HasDefaultTimeout bool
 }
 
 func buildServerOptions(
@@ -57,6 +58,10 @@ func buildServerOptions(
 	if cfg.EnableReflection {
 		out.Opts = append(out.Opts, server.WithReflection())
 		out.HasReflection = true
+	}
+	if cfg.GRPCDefaultTimeout > 0 {
+		out.Opts = append(out.Opts, server.WithDefaultTimeout(cfg.GRPCDefaultTimeout))
+		out.HasDefaultTimeout = true
 	}
 	return out
 }

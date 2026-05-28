@@ -455,6 +455,130 @@ func pollReflection(ctx context.Context, conn *grpc.ClientConn) error {
 	}
 }
 
+// slowServiceDesc registers a unary RPC and a bidirectional streaming RPC that
+// each block until their context is done. The unary handler threads through the
+// gRPC interceptor chain; the stream handler blocks on ss.Context() (the
+// framework applies stream interceptors before invoking the handler).
+var slowServiceDesc = grpc.ServiceDesc{
+	ServiceName: "test.Slow",
+	HandlerType: (*any)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Wait",
+			Handler: func(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+				in := &wrapperspb.BytesValue{}
+				if err := dec(in); err != nil {
+					return nil, err
+				}
+				inner := func(ctx context.Context, _ any) (any, error) {
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				if interceptor == nil {
+					return inner(ctx, in)
+				}
+				info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/test.Slow/Wait"}
+				return interceptor(ctx, in, info, inner)
+			},
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName: "WaitStream",
+			Handler: func(_ any, ss grpc.ServerStream) error {
+				<-ss.Context().Done()
+				return ss.Context().Err()
+			},
+			ClientStreams: true,
+			ServerStreams: true,
+		},
+	},
+}
+
+func startTimeoutTestServer(t *testing.T, defaultTimeout time.Duration) (*grpc.ClientConn, func()) {
+	t.Helper()
+	opts := []Option{
+		WithLogger(slog.Default()),
+		WithInsecure(),
+	}
+	if defaultTimeout > 0 {
+		opts = append(opts, WithDefaultTimeout(defaultTimeout))
+	}
+	srv, err := New("0", &noopInterceptor{}, opts...)
+	require.NoError(t, err)
+	srv.grpcServer.RegisterService(&slowServiceDesc, struct{}{})
+
+	addr := srv.listener.Addr().String()
+	go func() { _ = srv.Serve(context.Background()) }()
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	cleanup := func() {
+		_ = conn.Close()
+		srv.GracefulStop(context.Background())
+	}
+	return conn, cleanup
+}
+
+func TestDefaultTimeout_Stream_AppliedWhenClientSendsNoDeadline(t *testing.T) {
+	conn, cleanup := startTimeoutTestServer(t, 100*time.Millisecond)
+	defer cleanup()
+
+	desc := &grpc.StreamDesc{StreamName: "WaitStream", ClientStreams: true, ServerStreams: true}
+	stream, err := conn.NewStream(context.Background(), desc, "/test.Slow/WaitStream")
+	require.NoError(t, err)
+
+	out := &wrapperspb.BytesValue{}
+	err = stream.RecvMsg(out)
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+}
+
+func TestDefaultTimeout_AppliedWhenClientSendsNoDeadline(t *testing.T) {
+	conn, cleanup := startTimeoutTestServer(t, 100*time.Millisecond)
+	defer cleanup()
+
+	// No deadline on the client context — server default should fire.
+	out := &wrapperspb.BytesValue{}
+	err := conn.Invoke(context.Background(), "/test.Slow/Wait", wrapperspb.Bytes([]byte{}), out)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+}
+
+func TestDefaultTimeout_NotAppliedWhenClientHasDeadline(t *testing.T) {
+	// Server default is long (1 s); client deadline is short (50 ms).
+	// Client deadline must win — we must not replace an existing deadline.
+	conn, cleanup := startTimeoutTestServer(t, time.Second)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	out := &wrapperspb.BytesValue{}
+	err := conn.Invoke(ctx, "/test.Slow/Wait", wrapperspb.Bytes([]byte{}), out)
+
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+}
+
+func TestDefaultTimeout_DisabledWhenNotSet(t *testing.T) {
+	// No WithDefaultTimeout — server must not impose any deadline.
+	conn, cleanup := startTimeoutTestServer(t, 0)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	out := &wrapperspb.BytesValue{}
+	err := conn.Invoke(ctx, "/test.Slow/Wait", wrapperspb.Bytes([]byte{}), out)
+
+	// The client's own 200 ms deadline fires; server imposed nothing extra.
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
+}
+
 func TestReflection_DisabledByDefault_ReturnsUnimplemented(t *testing.T) {
 	conn, cleanup := startReflectionTestServer(t, false)
 	defer cleanup()
