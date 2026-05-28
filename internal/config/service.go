@@ -31,22 +31,25 @@ import (
 	"github.com/opendecree/decree/internal/validation"
 )
 
-// dependentRequiredError wraps a CheckDependentRequired error returned
-// from inside a transaction so the outer status mapping can distinguish a
-// validation violation (InvalidArgument) from a generic tx failure
-// (Internal).
-type dependentRequiredError struct{ err error }
+// crossFieldErrorKind distinguishes the two classes of cross-field validation
+// failure that both map to codes.InvalidArgument at the gRPC boundary.
+type crossFieldErrorKind int
 
-func (e *dependentRequiredError) Error() string { return e.err.Error() }
-func (e *dependentRequiredError) Unwrap() error { return e.err }
+const (
+	crossFieldKindDependentRequired crossFieldErrorKind = iota
+	crossFieldKindValidation
+)
 
-// validationError wraps one-or-more CEL rule failures aggregated by
-// celpkg.Eval. Peer to dependentRequiredError — both map to
-// codes.InvalidArgument at the gRPC boundary via mapCrossFieldErr.
-type validationError struct{ err error }
+// crossFieldError wraps a validation failure raised inside a transaction so
+// the outer status mapping (mapDependentRequiredErr) can distinguish a rule
+// violation (InvalidArgument) from a generic tx failure (Internal).
+type crossFieldError struct {
+	kind crossFieldErrorKind
+	err  error
+}
 
-func (e *validationError) Error() string { return e.err.Error() }
-func (e *validationError) Unwrap() error { return e.err }
+func (e *crossFieldError) Error() string { return e.err.Error() }
+func (e *crossFieldError) Unwrap() error { return e.err }
 
 const (
 	defaultCacheTTL  = 5 * time.Minute
@@ -539,7 +542,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		return nil, err
 	}
 
-	latestVersion, err := s.getOrCreateVersion(ctx, tenantID)
+	latestVersion, err := s.resolveVersion(ctx, tenantID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -690,7 +693,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		}
 	}
 
-	latestVersion, err := s.getOrCreateVersion(ctx, tenantID)
+	latestVersion, err := s.resolveVersion(ctx, tenantID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1116,7 +1119,7 @@ func (s *Service) ExportConfig(ctx context.Context, req *pb.ExportConfigRequest)
 	}
 
 	// Get schema field types for typed value conversion.
-	fieldTypes, err := s.getFieldTypeMap(ctx, tenantID)
+	fieldTypes, err := s.fieldTypeMap(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -1190,7 +1193,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	}
 
 	// Get schema field types for type-aware parsing.
-	fieldTypes, err := s.getFieldTypeMap(ctx, tenantID)
+	fieldTypes, err := s.fieldTypeMap(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -1219,7 +1222,7 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		}
 	}
 
-	latestVersion, err := s.getOrCreateVersion(ctx, tenantID)
+	latestVersion, err := s.resolveVersion(ctx, tenantID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1395,33 +1398,6 @@ func (s *Service) filterByImportMode(ctx context.Context, tenantID string, lates
 	}
 }
 
-// getFieldTypeMap fetches the tenant's schema fields and builds a map of field path to domain FieldType.
-func (s *Service) getFieldTypeMap(ctx context.Context, tenantID string) (map[string]domain.FieldType, error) {
-	tenant, err := s.store.GetTenantByID(ctx, tenantID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "tenant not found")
-	}
-
-	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
-		SchemaID: tenant.SchemaID,
-		Version:  tenant.SchemaVersion,
-	})
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to get schema version")
-	}
-
-	fields, err := s.store.GetSchemaFields(ctx, sv.ID)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to get schema fields")
-	}
-
-	result := make(map[string]domain.FieldType, len(fields))
-	for _, f := range fields {
-		result[f.Path] = f.FieldType
-	}
-	return result, nil
-}
-
 // getSensitiveFieldSet returns a set of field paths that are marked sensitive
 // for the tenant's current schema version.
 func (s *Service) getSensitiveFieldSetFromTenant(ctx context.Context, tenant domain.Tenant) (map[string]bool, error) {
@@ -1463,17 +1439,6 @@ func (s *Service) resolveVersion(ctx context.Context, tenantID string, requested
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return 0, nil // No versions yet.
-		}
-		return 0, status.Error(codes.Internal, "failed to get latest version")
-	}
-	return latest.Version, nil
-}
-
-func (s *Service) getOrCreateVersion(ctx context.Context, tenantID string) (int32, error) {
-	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return 0, nil
 		}
 		return 0, status.Error(codes.Internal, "failed to get latest version")
 	}
@@ -1597,9 +1562,9 @@ func (s *Service) fetchDependentRequiredRules(ctx context.Context, tenantID stri
 // snapshot to avoid a second tx round-trip; the read is bound to `tx` so
 // MVCC sees the writes staged earlier in this transaction.
 //
-// Returns *dependentRequiredError or *validationError on rule failure so
-// the outer RunInTx caller can map to codes.InvalidArgument; returns a
-// wrapped store error verbatim on snapshot-read failure.
+// Returns *crossFieldError on rule failure so the outer RunInTx caller can
+// map to codes.InvalidArgument; returns a wrapped store error verbatim on
+// snapshot-read failure.
 //
 // No-op when both depRules and the tenant's CEL programs are empty.
 func (s *Service) enforceCrossFieldInTx(
@@ -1630,7 +1595,7 @@ func (s *Service) enforceCrossFieldInTx(
 			}
 		}
 		if err := schema.CheckDependentRequired(depRules, present); err != nil {
-			return &dependentRequiredError{err: err}
+			return &crossFieldError{kind: crossFieldKindDependentRequired, err: err}
 		}
 	}
 	if hasCEL {
@@ -1660,7 +1625,7 @@ func (s *Service) enforceCrossFieldInTx(
 				"tenant", tenantID, "version", version, "error", soft)
 		}
 		if len(failed) > 0 {
-			return &validationError{err: aggregatedFailureError(failed)}
+			return &crossFieldError{kind: crossFieldKindValidation, err: aggregatedFailureError(failed)}
 		}
 	}
 	return nil
@@ -1678,17 +1643,12 @@ func (s *Service) enforceDependentRequiredInTx(ctx context.Context, tx Store, te
 }
 
 // mapDependentRequiredErr converts a tx error into the right gRPC status:
-// InvalidArgument when the error wraps *dependentRequiredError or
-// *validationError, the caller's fallback otherwise. Use after RunInTx
-// returns.
+// InvalidArgument when the error wraps *crossFieldError, the caller's
+// fallback otherwise. Use after RunInTx returns.
 func mapDependentRequiredErr(err error, fallback func() error) error {
-	var dre *dependentRequiredError
-	if errors.As(err, &dre) {
-		return status.Errorf(codes.InvalidArgument, "%v", dre.err)
-	}
-	var ve *validationError
-	if errors.As(err, &ve) {
-		return status.Errorf(codes.InvalidArgument, "%v", ve.err)
+	var cfe *crossFieldError
+	if errors.As(err, &cfe) {
+		return status.Errorf(codes.InvalidArgument, "%v", cfe.err)
 	}
 	return fallback()
 }
