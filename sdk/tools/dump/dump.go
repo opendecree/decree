@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/tools/internal/fieldtype"
 	"github.com/opendecree/decree/sdk/tools/seed"
 )
 
@@ -109,25 +110,6 @@ func Marshal(f *seed.File) ([]byte, error) {
 
 // --- Helpers ---
 
-// protoTypeToShort maps proto enum names to YAML short names.
-var protoTypeToShort = map[string]string{
-	"FIELD_TYPE_INT":      "integer",
-	"FIELD_TYPE_NUMBER":   "number",
-	"FIELD_TYPE_STRING":   "string",
-	"FIELD_TYPE_BOOL":     "bool",
-	"FIELD_TYPE_TIME":     "time",
-	"FIELD_TYPE_DURATION": "duration",
-	"FIELD_TYPE_URL":      "url",
-	"FIELD_TYPE_JSON":     "json",
-}
-
-func fieldTypeName(protoName string) string {
-	if short, ok := protoTypeToShort[protoName]; ok {
-		return short
-	}
-	return protoName
-}
-
 func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 	def := seed.SchemaDef{
 		Name:        s.Name,
@@ -138,7 +120,7 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 
 	for _, f := range s.Fields {
 		fd := seed.FieldDef{
-			Type:        fieldTypeName(f.Type),
+			Type:        fieldtype.Name(f.Type),
 			Description: f.Description,
 			Default:     f.Default,
 			Nullable:    f.Nullable,

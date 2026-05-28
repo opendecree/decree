@@ -416,29 +416,23 @@ func timeToProto(t *time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(*t)
 }
 
+// protoTypeNames maps proto FieldType enum values to their short string names.
+// Mirrors the canonical string-keyed table in sdk/tools/internal/fieldtype.
+var protoTypeNames = map[pb.FieldType]string{
+	pb.FieldType_FIELD_TYPE_INT:      "integer",
+	pb.FieldType_FIELD_TYPE_NUMBER:   "number",
+	pb.FieldType_FIELD_TYPE_STRING:   "string",
+	pb.FieldType_FIELD_TYPE_BOOL:     "bool",
+	pb.FieldType_FIELD_TYPE_TIME:     "time",
+	pb.FieldType_FIELD_TYPE_DURATION: "duration",
+	pb.FieldType_FIELD_TYPE_URL:      "url",
+	pb.FieldType_FIELD_TYPE_JSON:     "json",
+}
+
 // fieldTypeToString converts a proto FieldType enum to its string representation
 // as used in the adminclient SDK.
 func fieldTypeToString(ft pb.FieldType) string {
-	switch ft {
-	case pb.FieldType_FIELD_TYPE_INT:
-		return "integer"
-	case pb.FieldType_FIELD_TYPE_STRING:
-		return "string"
-	case pb.FieldType_FIELD_TYPE_TIME:
-		return "time"
-	case pb.FieldType_FIELD_TYPE_DURATION:
-		return "duration"
-	case pb.FieldType_FIELD_TYPE_URL:
-		return "url"
-	case pb.FieldType_FIELD_TYPE_JSON:
-		return "json"
-	case pb.FieldType_FIELD_TYPE_NUMBER:
-		return "number"
-	case pb.FieldType_FIELD_TYPE_BOOL:
-		return "bool"
-	default:
-		return ""
-	}
+	return protoTypeNames[ft]
 }
 
 // stringToFieldType converts a string type name to the proto FieldType enum.
