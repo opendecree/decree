@@ -111,6 +111,12 @@ func isAuthDenied(err error) bool {
 	if errors.Is(err, configclient.ErrPermissionDenied) {
 		return true
 	}
+	// adminclient SDK maps codes.NotFound → adminclient.ErrNotFound (a plain sentinel,
+	// not a gRPC status). Accept it as an auth denial: tenant-scoped RPCs return
+	// NotFound for access denials to prevent slug enumeration (decree#454).
+	if errors.Is(err, adminclient.ErrNotFound) {
+		return true
+	}
 	st, ok := status.FromError(err)
 	if !ok {
 		return false
