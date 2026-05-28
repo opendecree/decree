@@ -73,6 +73,7 @@ type SetFieldRequest struct {
 	Value            *TypedValue // nil sets the field to null
 	ExpectedChecksum *string
 	Description      string
+	ValueDescription string
 	IdempotencyKey   string
 }
 
@@ -84,6 +85,7 @@ type FieldUpdate struct {
 	FieldPath        string
 	Value            *TypedValue // nil sets the field to null
 	ExpectedChecksum *string
+	ValueDescription string
 }
 
 // SetFieldsRequest is the input for [Transport.SetFields].
