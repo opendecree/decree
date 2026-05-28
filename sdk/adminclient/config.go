@@ -4,6 +4,23 @@ import (
 	"context"
 )
 
+// ListConfigVersionsPage returns a single page of config versions for a tenant, newest first.
+// pageSize must be positive. pageToken is the cursor from a previous call; pass "" for the first page.
+// Returns the page contents and the next page token (empty string when no more pages remain).
+// Memory usage is bounded to one page at a time.
+func (c *Client) ListConfigVersionsPage(ctx context.Context, tenantID string, pageSize int32, pageToken string) ([]*Version, string, error) {
+	if c.config == nil {
+		return nil, "", ErrServiceNotConfigured
+	}
+	resp, err := retry(ctx, c, func(ctx context.Context) (*ListVersionsResponse, error) {
+		return c.config.ListVersions(ctx, tenantID, pageSize, pageToken)
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return resp.Versions, resp.NextPageToken, nil
+}
+
 // ListConfigVersions returns all config versions for a tenant, newest first.
 // Auto-paginates through all results.
 func (c *Client) ListConfigVersions(ctx context.Context, tenantID string) ([]*Version, error) {

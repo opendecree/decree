@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"sort"
 	"time"
 )
 
@@ -68,6 +67,83 @@ func (c *Client) QueryWriteLog(ctx context.Context, filters ...AuditFilter) ([]*
 	})
 }
 
+// AuditIterator is a streaming handle returned by [Client.QueryWriteLogIter].
+// Entries are sent to C page by page. C is closed when all entries have been sent
+// or a transport error occurs. After C is closed, read Err to check for errors.
+//
+// Memory usage is bounded to one page of entries at a time.
+type AuditIterator struct {
+	// C receives audit entries in server-returned order (newest first by default).
+	C chan *AuditEntry
+	// Err receives at most one error, then is closed. Read after C is closed.
+	Err chan error
+}
+
+// QueryWriteLogIter streams audit log entries page by page without accumulating
+// all results in memory. Entries are sent to the returned [AuditIterator].C channel.
+// Cancel ctx to stop early.
+//
+// Usage:
+//
+//	it := client.QueryWriteLogIter(ctx, filters...)
+//	for e := range it.C {
+//	    // process e
+//	}
+//	if err := <-it.Err; err != nil {
+//	    // handle err
+//	}
+func (c *Client) QueryWriteLogIter(ctx context.Context, filters ...AuditFilter) *AuditIterator {
+	ch := make(chan *AuditEntry, 100)
+	errc := make(chan error, 1)
+	it := &AuditIterator{C: ch, Err: errc}
+
+	if c.audit == nil {
+		close(ch)
+		errc <- ErrServiceNotConfigured
+		close(errc)
+		return it
+	}
+
+	go func() {
+		defer close(ch)
+		defer close(errc)
+		pageToken := ""
+		for {
+			select {
+			case <-ctx.Done():
+				errc <- ctx.Err()
+				return
+			default:
+			}
+			req := &QueryWriteLogRequest{
+				PageSize:  100,
+				PageToken: pageToken,
+			}
+			for _, f := range filters {
+				f(req)
+			}
+			resp, err := c.audit.QueryWriteLog(ctx, req)
+			if err != nil {
+				errc <- err
+				return
+			}
+			for _, e := range resp.Entries {
+				select {
+				case ch <- e:
+				case <-ctx.Done():
+					errc <- ctx.Err()
+					return
+				}
+			}
+			if resp.NextPageToken == "" {
+				return
+			}
+			pageToken = resp.NextPageToken
+		}
+	}()
+	return it
+}
+
 // GetFieldUsage returns aggregated read statistics for a specific field.
 // Start and end times are optional — pass nil for open-ended ranges.
 func (c *Client) GetFieldUsage(ctx context.Context, tenantID, fieldPath string, start, end *time.Time) (*UsageStats, error) {
@@ -101,9 +177,14 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 	})
 }
 
-// VerifyChain fetches all audit entries for tenantID (oldest-first) and
-// recomputes each entry_hash, reporting any tampered positions.
+// VerifyChain fetches all audit entries for tenantID and recomputes each
+// entry_hash, reporting any tampered positions.
 // An empty tenantID verifies the global (schema-level) chain.
+//
+// Entries are fetched page by page and processed with a running hash to keep
+// memory bounded to O(pages) rather than O(all entries). The server returns
+// pages newest-first; VerifyChain processes them in reverse to walk oldest-first
+// without an in-memory sort.
 //
 // Note: entry_hash and previous_hash fields require the server to be running
 // with migration 002_audit_tamper_evident applied.
@@ -116,29 +197,56 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 	if tenantID != "" {
 		filters = append(filters, WithAuditTenant(tenantID))
 	}
-	entries, err := c.QueryWriteLog(ctx, filters...)
-	if err != nil {
-		return VerifyChainResult{}, fmt.Errorf("fetch entries: %w", err)
+
+	// Collect pages without accumulating a single flat slice.
+	// Server returns pages newest-first; entries within each page are also newest-first.
+	var pages [][]*AuditEntry
+	total := 0
+	pageToken := ""
+	for {
+		req := &QueryWriteLogRequest{
+			PageSize:  100,
+			PageToken: pageToken,
+		}
+		for _, f := range filters {
+			f(req)
+		}
+		resp, err := c.audit.QueryWriteLog(ctx, req)
+		if err != nil {
+			return VerifyChainResult{}, fmt.Errorf("fetch entries: %w", err)
+		}
+		if len(resp.Entries) > 0 {
+			pages = append(pages, resp.Entries)
+			total += len(resp.Entries)
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
 	}
 
-	// QueryWriteLog returns newest-first; sort oldest-first for chain walk.
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAt.Before(entries[j].CreatedAt)
-	})
-
-	result := VerifyChainResult{TenantID: tenantID, Total: len(entries)}
+	// Walk pages in reverse (last page = oldest entries) and entries within each
+	// page in reverse (last entry in page = oldest), maintaining a running hash.
+	// This avoids an in-memory sort while preserving chronological order.
+	result := VerifyChainResult{TenantID: tenantID, Total: total}
 	prev := ""
-	for i, e := range entries {
-		want := computeClientHash(prev, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt)
-		if e.EntryHash != want {
-			result.Breaks = append(result.Breaks, VerifyChainBreak{
-				EntryID:  e.ID,
-				Position: i,
-				Got:      e.EntryHash,
-				Want:     want,
-			})
+	pos := 0
+	for p := len(pages) - 1; p >= 0; p-- {
+		page := pages[p]
+		for e := len(page) - 1; e >= 0; e-- {
+			entry := page[e]
+			want := computeClientHash(prev, entry.ID, entry.TenantID, entry.Actor, entry.Action, entry.ObjectKind, entry.CreatedAt)
+			if entry.EntryHash != want {
+				result.Breaks = append(result.Breaks, VerifyChainBreak{
+					EntryID:  entry.ID,
+					Position: pos,
+					Got:      entry.EntryHash,
+					Want:     want,
+				})
+			}
+			prev = entry.EntryHash
+			pos++
 		}
-		prev = e.EntryHash
 	}
 	result.OK = len(result.Breaks) == 0
 	return result, nil

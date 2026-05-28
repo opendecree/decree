@@ -38,6 +38,23 @@ func (c *Client) GetSchemaVersion(ctx context.Context, id string, version int32)
 	})
 }
 
+// ListSchemasPage returns a single page of schemas.
+// pageSize must be positive. pageToken is the cursor from a previous call; pass "" for the first page.
+// Returns the page contents and the next page token (empty string when no more pages remain).
+// Memory usage is bounded to one page at a time.
+func (c *Client) ListSchemasPage(ctx context.Context, pageSize int32, pageToken string) ([]*Schema, string, error) {
+	if c.schema == nil {
+		return nil, "", ErrServiceNotConfigured
+	}
+	resp, err := retry(ctx, c, func(ctx context.Context) (*ListSchemasResponse, error) {
+		return c.schema.ListSchemas(ctx, pageSize, pageToken)
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return resp.Schemas, resp.NextPageToken, nil
+}
+
 // ListSchemas returns all schemas, auto-paginating through all results.
 func (c *Client) ListSchemas(ctx context.Context) ([]*Schema, error) {
 	if c.schema == nil {

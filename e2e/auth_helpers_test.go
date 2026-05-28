@@ -86,11 +86,17 @@ func scopedClients(t *testing.T, conn *grpc.ClientConn, role roleName, tenantIDs
 	}
 }
 
-// isAuthDenied reports whether err is a gRPC status with PermissionDenied
-// or Unauthenticated — the two codes the auth layer surfaces. NotFound,
-// InvalidArgument, and other domain errors do NOT count: matrix 1 cares
-// only about whether the auth gate fired, not whether the request was
-// otherwise valid.
+// isAuthDenied reports whether err is a gRPC status that indicates an auth
+// gate fired. The auth layer surfaces:
+//   - codes.Unauthenticated — no valid credentials
+//   - codes.PermissionDenied — role or non-tenant-scoped access denied
+//   - codes.NotFound — tenant-scoped access denied, collapsed from
+//     PermissionDenied to prevent slug enumeration (see decree#454)
+//
+// InvalidArgument and other domain errors do NOT count: matrices care only
+// about whether the auth gate fired, not whether the request was otherwise
+// valid. In the tenant-access matrices the fixture always creates the target
+// tenant, so NotFound can only mean the access check fired (not a real miss).
 //
 // It also treats configclient.ErrPermissionDenied as an auth denial.
 // The configclient SDK maps codes.PermissionDenied to ErrPermissionDenied
@@ -105,11 +111,17 @@ func isAuthDenied(err error) bool {
 	if errors.Is(err, configclient.ErrPermissionDenied) {
 		return true
 	}
+	// adminclient SDK maps codes.NotFound → adminclient.ErrNotFound (a plain sentinel,
+	// not a gRPC status). Accept it as an auth denial: tenant-scoped RPCs return
+	// NotFound for access denials to prevent slug enumeration (decree#454).
+	if errors.Is(err, adminclient.ErrNotFound) {
+		return true
+	}
 	st, ok := status.FromError(err)
 	if !ok {
 		return false
 	}
-	return st.Code() == codes.PermissionDenied || st.Code() == codes.Unauthenticated
+	return st.Code() == codes.PermissionDenied || st.Code() == codes.Unauthenticated || st.Code() == codes.NotFound
 }
 
 // matrixFixture is a shared schema + tenant used by matrix cells that need
