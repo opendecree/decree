@@ -37,9 +37,10 @@ func (c *RedisCache) indexKey(tenantID string) string {
 }
 
 // negKey returns the Redis key for a negative-cache entry.
-// Uses the same tenant:* prefix so Invalidate clears it automatically.
+// Uses the same {tenantID} hashtag so it lands on the same cluster slot as
+// the version keys and the index, enabling atomic pipeline operations.
 func (c *RedisCache) negKey(tenantID string, version int32) string {
-	return fmt.Sprintf("%s%s:neg:v%d", c.prefix, tenantID, version)
+	return fmt.Sprintf("%s{%s}:neg:v%d", c.prefix, tenantID, version)
 }
 
 func (c *RedisCache) Get(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
@@ -90,7 +91,12 @@ func (c *RedisCache) Invalidate(ctx context.Context, tenantID string) error {
 }
 
 func (c *RedisCache) SetNegative(ctx context.Context, tenantID string, version int32, ttl time.Duration) error {
-	if err := c.client.Set(ctx, c.negKey(tenantID, version), 1, ttl).Err(); err != nil {
+	nk := c.negKey(tenantID, version)
+	idx := c.indexKey(tenantID)
+	pipe := c.client.Pipeline()
+	pipe.Set(ctx, nk, 1, ttl)
+	pipe.SAdd(ctx, idx, nk)
+	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("cache set negative: %w", err)
 	}
 	return nil

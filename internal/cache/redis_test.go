@@ -265,6 +265,84 @@ func TestRedisCache_Invalidate_DelError(t *testing.T) {
 	require.ErrorContains(t, err, "cache invalidate del")
 }
 
+// --- Negative cache ---
+
+func TestRedisCache_NegKey(t *testing.T) {
+	c := &RedisCache{prefix: "config:"}
+	require.Equal(t, "config:{tenant-1}:neg:v3", c.negKey("tenant-1", 3))
+}
+
+func TestRedisCache_NegativeCache_Miss(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	neg, err := c.GetNegative(context.Background(), "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "miss before any SetNegative")
+}
+
+func TestRedisCache_NegativeCache_SetAndGet(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.True(t, neg)
+}
+
+func TestRedisCache_NegativeCache_TTLExpiry(t *testing.T) {
+	c, mr := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Second))
+	mr.FastForward(2 * time.Second)
+
+	neg, err := c.GetNegative(ctx, "t1", 1)
+	require.NoError(t, err)
+	assert.False(t, neg, "expired negative entry must report miss")
+}
+
+func TestRedisCache_NegativeCache_InvalidateClears(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t1", 2, time.Minute))
+	require.NoError(t, c.SetNegative(ctx, "t2", 1, time.Minute))
+
+	require.NoError(t, c.Invalidate(ctx, "t1"))
+
+	neg, _ := c.GetNegative(ctx, "t1", 1)
+	assert.False(t, neg, "t1:v1 neg must be cleared")
+	neg, _ = c.GetNegative(ctx, "t1", 2)
+	assert.False(t, neg, "t1:v2 neg must be cleared")
+
+	neg, _ = c.GetNegative(ctx, "t2", 1)
+	assert.True(t, neg, "t2 must be unaffected")
+}
+
+func TestRedisCache_NegativeCache_RedisDownOnSet(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	mr.Close()
+
+	err := c.SetNegative(context.Background(), "t1", 1, time.Minute)
+	require.Error(t, err)
+}
+
+func TestRedisCache_NegativeCache_RedisDownOnGet(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	mr.Close()
+
+	_, err := c.GetNegative(context.Background(), "t1", 1)
+	require.Error(t, err)
+}
+
 // --- RedisIdempotencyCache ---
 
 func newTestRedisIdempotencyCache(t *testing.T) (*RedisIdempotencyCache, *miniredis.Miniredis) {
