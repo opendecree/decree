@@ -43,9 +43,10 @@ const (
 	maxRoleLen    = 64
 )
 
-// TenantResolver resolves a tenant identifier (UUID or name slug) to a UUID.
-// Used by MetadataInterceptor to normalize x-tenant-id header values.
-type TenantResolver func(ctx context.Context, idOrName string) (string, error)
+// TenantResolver batch-resolves tenant identifiers (UUID or name slug) to UUIDs.
+// The returned map must contain an entry for every input ID.
+// Used by MetadataInterceptor to normalize x-tenant-id header values in one query.
+type TenantResolver func(ctx context.Context, ids []string) (map[string]string, error)
 
 // MetadataInterceptor extracts identity from gRPC metadata headers
 // instead of JWT tokens. Used when JWT auth is disabled.
@@ -163,7 +164,7 @@ func (m *MetadataInterceptor) extractClaims(ctx context.Context) (context.Contex
 	}
 
 	// Parse tenant IDs — comma-separated in x-tenant-id header.
-	// If a resolver is configured, slugs are resolved to UUIDs.
+	// If a resolver is configured, all IDs are resolved in a single call.
 	rawTenantID := firstMetadataValue(md, headerTenantID)
 	if len(rawTenantID) > maxHeaderLen {
 		return nil, status.Errorf(codes.InvalidArgument, "%s header exceeds %d bytes", headerTenantID, maxHeaderLen)
@@ -179,15 +180,22 @@ func (m *MetadataInterceptor) extractClaims(ctx context.Context) (context.Contex
 			if id == "" {
 				continue
 			}
-			if m.resolveTenant != nil {
-				resolved, err := m.resolveTenant(ctx, id)
-				if err != nil {
-					m.logger.WarnContext(ctx, "metadata auth: tenant resolution failed", "tenant", id, "error", err)
+			tenantIDs = append(tenantIDs, id)
+		}
+		if m.resolveTenant != nil && len(tenantIDs) > 0 {
+			resolved, err := m.resolveTenant(ctx, tenantIDs)
+			if err != nil {
+				m.logger.WarnContext(ctx, "metadata auth: tenant resolution failed", "error", err)
+				return nil, status.Error(codes.InvalidArgument, "failed to resolve tenant")
+			}
+			for i, id := range tenantIDs {
+				r, ok := resolved[id]
+				if !ok {
+					m.logger.WarnContext(ctx, "metadata auth: tenant not found", "tenant", id)
 					return nil, status.Error(codes.InvalidArgument, "failed to resolve tenant")
 				}
-				id = resolved
+				tenantIDs[i] = r
 			}
-			tenantIDs = append(tenantIDs, id)
 		}
 	}
 	if role != RoleSuperAdmin && len(tenantIDs) == 0 {

@@ -382,7 +382,15 @@ func run() int {
 	}
 	if srv.IsServiceEnabled("audit") {
 		auditSvc := audit.NewService(auditStoreVal, logger, func(ctx context.Context, idOrName string) (string, error) {
-			return tenantResolver(schemaStoreVal)(ctx, idOrName)
+			resolved, err := tenantResolver(schemaStoreVal)(ctx, []string{idOrName})
+			if err != nil {
+				return "", err
+			}
+			r, ok := resolved[idOrName]
+			if !ok {
+				return "", fmt.Errorf("tenant not found: %s", idOrName)
+			}
+			return r, nil
 		})
 		pb.RegisterAuditServiceServer(srv.GRPCServer(), auditSvc)
 		srv.SetServiceHealthy("centralconfig.v1.AuditService")
@@ -519,17 +527,29 @@ type serverConfig struct {
 }
 
 // tenantResolver creates an auth.TenantResolver from a schema store.
-// Resolves tenant name slugs to UUIDs so x-tenant-id headers accept both.
+// UUIDs pass through; name slugs are resolved in a single batch query.
 func tenantResolver(store schema.Store) auth.TenantResolver {
-	return func(ctx context.Context, idOrName string) (string, error) {
-		if domain.IsUUID(idOrName) {
-			return idOrName, nil
+	return func(ctx context.Context, ids []string) (map[string]string, error) {
+		result := make(map[string]string, len(ids))
+		var slugs []string
+		for _, id := range ids {
+			if domain.IsUUID(id) {
+				result[id] = id
+			} else {
+				slugs = append(slugs, id)
+			}
 		}
-		tenant, err := store.GetTenantByName(ctx, idOrName)
+		if len(slugs) == 0 {
+			return result, nil
+		}
+		tenants, err := store.GetTenantsByNames(ctx, slugs)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return tenant.ID, nil
+		for _, t := range tenants {
+			result[t.Name] = t.ID
+		}
+		return result, nil
 	}
 }
 

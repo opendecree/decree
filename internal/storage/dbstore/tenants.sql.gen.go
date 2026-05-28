@@ -134,6 +134,39 @@ func (q *Queries) GetTenantByName(ctx context.Context, name string) (Tenant, err
 	return i, err
 }
 
+const getTenantsByNames = `-- name: GetTenantsByNames :many
+SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
+WHERE name = ANY($1::text[]) AND deleted_at IS NULL
+`
+
+func (q *Queries) GetTenantsByNames(ctx context.Context, names []string) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, getTenantsByNames, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Tenant{}
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.SchemaID,
+			&i.SchemaVersion,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenants = `-- name: ListTenants :many
 SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
 WHERE deleted_at IS NULL
