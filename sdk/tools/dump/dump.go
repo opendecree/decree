@@ -110,7 +110,6 @@ func Marshal(f *seed.File) ([]byte, error) {
 
 // --- Helpers ---
 
-
 func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 	def := seed.SchemaDef{
 		Name:        s.Name,
