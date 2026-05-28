@@ -27,6 +27,62 @@ import (
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
+func TestGetConfig_NegativeCacheHit(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{}
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+
+	c := cache.NewMemoryCache(0)
+	defer c.Stop()
+	ctx := auth.WithoutAuth(context.Background())
+	require.NoError(t, c.SetNegative(ctx, tenantID1, 1, time.Minute))
+
+	pub := &mockPublisher{}
+	sub := &mockSubscriber{}
+	svc := NewService(store, c, pub, sub, WithLogger(testLogger))
+
+	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+
+	require.NoError(t, err)
+	assert.Empty(t, resp.Config.Values, "negative cache hit must return empty values")
+	store.AssertNotCalled(t, "GetFullConfigAtVersion")
+}
+
+func TestGetConfig_EmptyConfig_SetsNegativeCache(t *testing.T) {
+	t.Parallel()
+
+	store := &mockStore{}
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
+		TenantID: tenantID1,
+		Version:  1,
+	}).Return([]GetFullConfigAtVersionRow{}, nil)
+	setupNoSensitiveFields(store)
+
+	c := cache.NewMemoryCache(0)
+	defer c.Stop()
+	ctx := auth.WithoutAuth(context.Background())
+
+	pub := &mockPublisher{}
+	sub := &mockSubscriber{}
+	svc := NewService(store, c, pub, sub, WithLogger(testLogger))
+
+	// First call: cache miss → DB fetch (empty) → sets negative cache.
+	resp, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Config.Values)
+
+	// Second call: served from negative cache — DB must not be called again.
+	resp2, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.NoError(t, err)
+	assert.Empty(t, resp2.Config.Values)
+
+	store.AssertNumberOfCalls(t, "GetFullConfigAtVersion", 1)
+}
+
 func TestGetConfig_SingleflightDeduplicatesDBFetches(t *testing.T) {
 	t.Parallel()
 

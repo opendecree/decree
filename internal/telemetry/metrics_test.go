@@ -21,12 +21,20 @@ func TestCacheMetrics_NilSafe(t *testing.T) {
 	var m *CacheMetrics
 	m.Hit(context.Background())
 	m.Miss(context.Background())
+	m.SingleflightDedup(context.Background())
+	m.NegativeHit(context.Background())
 }
 
 func TestCacheMetrics_Hit_Miss(t *testing.T) {
 	m := NewCacheMetrics(Config{Enabled: true, MetricsCache: true})
 	m.Hit(context.Background())
 	m.Miss(context.Background())
+}
+
+func TestCacheMetrics_SingleflightDedup_NegativeHit(t *testing.T) {
+	m := NewCacheMetrics(Config{Enabled: true, MetricsCache: true})
+	m.SingleflightDedup(context.Background())
+	m.NegativeHit(context.Background())
 }
 
 func TestNewConfigMetrics_Disabled(t *testing.T) {
