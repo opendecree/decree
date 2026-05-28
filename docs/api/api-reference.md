@@ -1231,7 +1231,11 @@ bypasses the cache and reads directly from the database.
 | ListVersions | [ListVersionsRequest](#centralconfig-v1-ListVersionsRequest) | [ListVersionsResponse](#centralconfig-v1-ListVersionsResponse) | ListVersions returns config version history for a tenant (newest first). |
 | GetVersion | [GetVersionRequest](#centralconfig-v1-GetVersionRequest) | [GetVersionResponse](#centralconfig-v1-GetVersionResponse) | GetVersion retrieves metadata for a specific config version. |
 | RollbackToVersion | [RollbackToVersionRequest](#centralconfig-v1-RollbackToVersionRequest) | [RollbackToVersionResponse](#centralconfig-v1-RollbackToVersionResponse) | RollbackToVersion creates a new version with the same values as the target version. This does not delete intermediate versions — it creates a new version that copies the target&#39;s values. |
-| Subscribe | [SubscribeRequest](#centralconfig-v1-SubscribeRequest) | [SubscribeResponse](#centralconfig-v1-SubscribeResponse) stream | Subscribe opens a server-streaming connection that pushes ConfigChange events whenever the tenant&#39;s configuration is modified. The stream remains open until the client disconnects or the server shuts down. |
+| Subscribe | [SubscribeRequest](#centralconfig-v1-SubscribeRequest) | [SubscribeResponse](#centralconfig-v1-SubscribeResponse) stream | Subscribe opens a server-streaming connection that pushes ConfigChange events whenever the tenant&#39;s configuration is modified.
+
+Stream lifetime: - Client disconnect: stream ends immediately. - Server closes with OK status: the server-side pub/sub backend restarted (e.g. Redis reconnect). Clients MUST reconnect with exponential backoff; an OK close does NOT indicate the subscription is permanently gone. - Server closes with error status: treat as a transient failure and reconnect with backoff.
+
+Use the configwatcher package for a high-level client that handles reconnection automatically. |
 | ExportConfig | [ExportConfigRequest](#centralconfig-v1-ExportConfigRequest) | [ExportConfigResponse](#centralconfig-v1-ExportConfigResponse) | ExportConfig serializes a tenant&#39;s configuration to YAML. |
 | ImportConfig | [ImportConfigRequest](#centralconfig-v1-ImportConfigRequest) | [ImportConfigResponse](#centralconfig-v1-ImportConfigResponse) | ImportConfig applies configuration values from YAML. |
 
