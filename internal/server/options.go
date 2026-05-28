@@ -2,6 +2,7 @@ package server
 
 import (
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc"
 )
@@ -20,6 +21,7 @@ type options struct {
 	preAuthLimiter   GRPCInterceptor // optional; runs before auth (unauthenticated flood protection)
 	rateLimiter      GRPCInterceptor // optional; runs after auth
 	enableReflection bool
+	defaultTimeout   time.Duration // optional; applied when client sends no deadline
 }
 
 // WithLogger sets the server logger. Defaults to slog.Default() when unset.
@@ -80,4 +82,10 @@ func WithRateLimiter(rl GRPCInterceptor) Option {
 // local dev or tooling environments (grpcurl, grpc-gateway introspection).
 func WithReflection() Option {
 	return func(o *options) { o.enableReflection = true }
+}
+
+// WithDefaultTimeout sets a server-side deadline applied to every request
+// whose client did not supply one. Zero or negative disables the feature.
+func WithDefaultTimeout(d time.Duration) Option {
+	return func(o *options) { o.defaultTimeout = d }
 }

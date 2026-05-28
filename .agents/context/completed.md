@@ -216,3 +216,7 @@ Two bugs fixed together:
 - **Regression test** — `TestSetField_PreCommitInvalidationClosesStaleWindow` asserts `Invalidate` is called exactly twice per successful `SetField`.
 
 Pre-commit invalidation fires on all four write paths: `SetField`, `SetFields`, `RollbackToVersion`, `ImportConfig`.
+
+## Per-Call Default Timeout (#458)
+
+`server.WithDefaultTimeout(d time.Duration)` option adds a server-side deadline interceptor. When a client sends no deadline, the interceptor wraps the context with `context.WithTimeout(ctx, d)` before passing it to the handler chain. Existing client deadlines are left untouched. Enabled via `GRPC_DEFAULT_TIMEOUT` env var (e.g. `30s`); zero value disables. Interceptor runs immediately after the recovery interceptor so the deadline covers auth, rate limiting, and all handlers. `timeoutStream` wraps `grpc.ServerStream` with the deadline context for streaming RPCs.
