@@ -100,6 +100,19 @@ func TestRedisCache_Invalidate_Happy(t *testing.T) {
 	assert.Equal(t, "3", got["c"])
 }
 
+// TestRedisCache_Set_KeyHasTTL guards against regression where EXPIRE is
+// skipped or decoupled from HSET, leaving a persistent (TTL-less) key.
+func TestRedisCache_Set_KeyHasTTL(t *testing.T) {
+	c, _ := newTestRedisCache(t)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+
+	ttl, err := c.client.TTL(ctx, c.key("t1", 1)).Result()
+	require.NoError(t, err)
+	assert.Positive(t, ttl, "key must have a TTL set atomically with HSET")
+}
+
 func TestRedisCache_TTLBoundary(t *testing.T) {
 	c, mr := newTestRedisCache(t)
 	ctx := context.Background()
