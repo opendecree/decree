@@ -455,9 +455,10 @@ func pollReflection(ctx context.Context, conn *grpc.ClientConn) error {
 	}
 }
 
-// slowServiceDesc registers a unary RPC that blocks until its context is done.
-// The handler threads through the gRPC interceptor chain so that server-side
-// interceptors (including the default-timeout interceptor) are exercised.
+// slowServiceDesc registers a unary RPC and a bidirectional streaming RPC that
+// each block until their context is done. The unary handler threads through the
+// gRPC interceptor chain; the stream handler blocks on ss.Context() (the
+// framework applies stream interceptors before invoking the handler).
 var slowServiceDesc = grpc.ServiceDesc{
 	ServiceName: "test.Slow",
 	HandlerType: (*any)(nil),
@@ -479,6 +480,17 @@ var slowServiceDesc = grpc.ServiceDesc{
 				info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/test.Slow/Wait"}
 				return interceptor(ctx, in, info, inner)
 			},
+		},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName: "WaitStream",
+			Handler: func(_ any, ss grpc.ServerStream) error {
+				<-ss.Context().Done()
+				return ss.Context().Err()
+			},
+			ClientStreams: true,
+			ServerStreams: true,
 		},
 	},
 }
@@ -507,6 +519,20 @@ func startTimeoutTestServer(t *testing.T, defaultTimeout time.Duration) (*grpc.C
 		srv.GracefulStop(context.Background())
 	}
 	return conn, cleanup
+}
+
+func TestDefaultTimeout_Stream_AppliedWhenClientSendsNoDeadline(t *testing.T) {
+	conn, cleanup := startTimeoutTestServer(t, 100*time.Millisecond)
+	defer cleanup()
+
+	desc := &grpc.StreamDesc{StreamName: "WaitStream", ClientStreams: true, ServerStreams: true}
+	stream, err := conn.NewStream(context.Background(), desc, "/test.Slow/WaitStream")
+	require.NoError(t, err)
+
+	out := &wrapperspb.BytesValue{}
+	err = stream.RecvMsg(out)
+	require.Error(t, err)
+	assert.Equal(t, codes.DeadlineExceeded, status.Code(err))
 }
 
 func TestDefaultTimeout_AppliedWhenClientSendsNoDeadline(t *testing.T) {
