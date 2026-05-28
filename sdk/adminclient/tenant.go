@@ -28,6 +28,28 @@ func (c *Client) GetTenant(ctx context.Context, id string) (*Tenant, error) {
 	})
 }
 
+// ListTenantsPage returns a single page of tenants, optionally filtered by schema ID.
+// Pass an empty schemaID to list all tenants. pageSize must be positive.
+// pageToken is the cursor from a previous call; pass "" for the first page.
+// Returns the page contents and the next page token (empty string when no more pages remain).
+// Memory usage is bounded to one page at a time.
+func (c *Client) ListTenantsPage(ctx context.Context, schemaID string, pageSize int32, pageToken string) ([]*Tenant, string, error) {
+	if c.schema == nil {
+		return nil, "", ErrServiceNotConfigured
+	}
+	var schemaFilter *string
+	if schemaID != "" {
+		schemaFilter = &schemaID
+	}
+	resp, err := retry(ctx, c, func(ctx context.Context) (*ListTenantsResponse, error) {
+		return c.schema.ListTenants(ctx, schemaFilter, pageSize, pageToken)
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return resp.Tenants, resp.NextPageToken, nil
+}
+
 // ListTenants returns all tenants, optionally filtered by schema ID.
 // Pass an empty schemaID to list all tenants. Auto-paginates through all results.
 func (c *Client) ListTenants(ctx context.Context, schemaID string) ([]*Tenant, error) {
