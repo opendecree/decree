@@ -112,6 +112,9 @@ func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFie
 	if req.Description != "" {
 		protoReq.Description = &req.Description
 	}
+	if req.ValueDescription != "" {
+		protoReq.ValueDescription = &req.ValueDescription
+	}
 	if req.IdempotencyKey != "" {
 		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
@@ -129,11 +132,15 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 	}
 	updates := make([]*pb.FieldUpdate, len(req.Updates))
 	for i, u := range req.Updates {
-		updates[i] = &pb.FieldUpdate{
+		fu := &pb.FieldUpdate{
 			FieldPath:        u.FieldPath,
 			Value:            typedValueToProto(u.Value),
 			ExpectedChecksum: u.ExpectedChecksum,
 		}
+		if u.ValueDescription != "" {
+			fu.ValueDescription = &u.ValueDescription
+		}
+		updates[i] = fu
 	}
 	protoReq := &pb.SetFieldsRequest{
 		TenantId: req.TenantID,
