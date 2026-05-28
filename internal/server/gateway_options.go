@@ -9,16 +9,18 @@ import (
 type GatewayOption func(*gatewayOptions)
 
 type gatewayOptions struct {
-	logger          *slog.Logger
-	openAPISpec     []byte
-	uiFS            fs.FS
-	maxRecvMsgBytes int
-	maxSendMsgBytes int
-	tls             *GatewayTLSConfig
-	insecure        bool
-	trustedProxy    bool
-	corsOrigins     []string
-	docsProtected   bool
+	logger              *slog.Logger
+	openAPISpec         []byte
+	uiFS                fs.FS
+	maxRecvMsgBytes     int
+	maxSendMsgBytes     int
+	tls                 *GatewayTLSConfig
+	serverTLS           *TLSConfig
+	insecure            bool
+	trustedProxy        bool
+	corsOrigins         []string
+	docsProtected       bool
+	plaintextTerminator bool
 }
 
 // WithGatewayLogger sets the gateway logger. Defaults to slog.Default() when unset.
@@ -88,4 +90,20 @@ func WithGatewayDocsProtected() GatewayOption {
 // Set DECREE_GATEWAY_TRUSTED_PROXY=1 to enable at runtime.
 func WithGatewayTrustedProxy() GatewayOption {
 	return func(o *gatewayOptions) { o.trustedProxy = true }
+}
+
+// WithGatewayServerTLS enables HTTPS on the gateway's inbound HTTP listener.
+// The gateway serves TLS-terminated HTTPS to clients, independent of the
+// outbound gRPC dial configuration (WithGatewayTLS / WithGatewayInsecure).
+// Certificates are reloaded from disk on every TLS handshake.
+func WithGatewayServerTLS(cfg *TLSConfig) GatewayOption {
+	return func(o *gatewayOptions) { o.serverTLS = cfg }
+}
+
+// WithGatewayPlaintextTerminator acknowledges that a trusted TLS-terminating
+// proxy sits in front of the gateway so that plaintext HTTP on a non-loopback
+// address is intentional. Without this option, NewGateway rejects plaintext
+// binds on all-interface addresses to prevent accidental public exposure.
+func WithGatewayPlaintextTerminator() GatewayOption {
+	return func(o *gatewayOptions) { o.plaintextTerminator = true }
 }

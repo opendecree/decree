@@ -139,8 +139,9 @@ func TestBuildGatewayOptions_Insecure(t *testing.T) {
 
 	assert.False(t, got.UseTLS)
 	assert.True(t, got.UseInsecure)
+	assert.True(t, got.HasPlaintextTerminator, "InsecureListen must wire PlaintextTerminator")
 	assert.False(t, got.HasUI)
-	assert.Len(t, got.Opts, 5, "4 base options + Insecure option")
+	assert.Len(t, got.Opts, 6, "4 base options + Insecure + PlaintextTerminator")
 }
 
 func TestBuildGatewayOptions_UIWired(t *testing.T) {
@@ -151,7 +152,7 @@ func TestBuildGatewayOptions_UIWired(t *testing.T) {
 	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil, fs.FS(testFS))
 
 	assert.True(t, got.HasUI, "non-nil uiFS must be wired into the option slice")
-	assert.Len(t, got.Opts, 6, "4 base options + Insecure + UI")
+	assert.Len(t, got.Opts, 7, "4 base options + Insecure + PlaintextTerminator + UI")
 }
 
 func TestBuildGatewayOptions_UIAbsent(t *testing.T) {
@@ -161,5 +162,5 @@ func TestBuildGatewayOptions_UIAbsent(t *testing.T) {
 	got := buildGatewayOptions(cfg, discardLogger(), []byte(`{}`), nil, nil)
 
 	assert.False(t, got.HasUI, "nil uiFS must not produce a WithUI option")
-	assert.Len(t, got.Opts, 5)
+	assert.Len(t, got.Opts, 6)
 }
