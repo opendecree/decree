@@ -33,6 +33,17 @@ func (m *mockCache) Invalidate(ctx context.Context, tenantID string) error {
 	return args.Error(0)
 }
 
+// SetNegative and GetNegative are no-ops in the test mock; existing tests don't
+// exercise negative-cache paths. Tests that need control over negative caching
+// use the real MemoryCache.
+func (m *mockCache) SetNegative(_ context.Context, _ string, _ int32, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockCache) GetNegative(_ context.Context, _ string, _ int32) (bool, error) {
+	return false, nil
+}
+
 // mockPublisher implements pubsub.Publisher for testing.
 type mockPublisher struct {
 	mock.Mock

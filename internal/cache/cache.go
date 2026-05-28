@@ -16,6 +16,14 @@ type ConfigCache interface {
 
 	// Invalidate removes all cached config for a tenant.
 	Invalidate(ctx context.Context, tenantID string) error
+
+	// SetNegative marks a tenant:version as having no config for the given TTL.
+	// Prevents redundant DB reads when a tenant has no config at a version.
+	SetNegative(ctx context.Context, tenantID string, version int32, ttl time.Duration) error
+
+	// GetNegative reports whether tenant:version is in the negative cache.
+	// Returns (true, nil) on a negative hit; (false, nil) on miss; (false, err) on error.
+	GetNegative(ctx context.Context, tenantID string, version int32) (bool, error)
 }
 
 // IdempotencyCache deduplicates write operations by key.

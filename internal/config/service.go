@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/google/cel-go/cel"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,7 +49,8 @@ func (e *validationError) Error() string { return e.err.Error() }
 func (e *validationError) Unwrap() error { return e.err }
 
 const (
-	defaultCacheTTL = 5 * time.Minute
+	defaultCacheTTL  = 5 * time.Minute
+	negativeCacheTTL = 30 * time.Second
 
 	// getFieldsConcurrency caps in-flight per-field reads in GetFields.
 	// Bounded so a large FieldPaths request cannot exhaust the DB pool.
@@ -119,6 +122,7 @@ type Service struct {
 	pb.UnimplementedConfigServiceServer
 	store            Store
 	cache            cache.ConfigCache
+	sfGroup          singleflight.Group
 	idempotencyCache cache.IdempotencyCache
 	publisher        pubsub.Publisher
 	subscriber       pubsub.Subscriber
@@ -241,8 +245,8 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 		return nil, err
 	}
 
-	// If descriptions not requested, try cache.
 	if !req.IncludeDescriptions {
+		// Positive cache.
 		if cached, err := s.cache.Get(ctx, tenantID, version); err == nil && cached != nil {
 			s.cacheMetrics.Hit(ctx)
 			values := make([]*pb.ConfigValue, 0, len(cached))
@@ -261,10 +265,46 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 				Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
 			}, nil
 		}
+		// Negative cache: tenant has no config at this version.
+		if neg, _ := s.cache.GetNegative(ctx, tenantID, version); neg {
+			s.cacheMetrics.NegativeHit(ctx)
+			return &pb.GetConfigResponse{
+				Config: &pb.Config{TenantId: tenantID, Version: version},
+			}, nil
+		}
 		s.cacheMetrics.Miss(ctx)
+
+		// Singleflight: collapse concurrent DB fetches on cache miss to one.
+		sfKey := tenantID + ":" + strconv.FormatInt(int64(version), 10)
+		resultI, err, shared := s.sfGroup.Do(sfKey, func() (any, error) {
+			return s.fetchAndCacheConfig(ctx, tenantID, version)
+		})
+		if err != nil {
+			return nil, err
+		}
+		if shared {
+			s.cacheMetrics.SingleflightDedup(ctx)
+		}
+		cacheMap := resultI.(map[string]string)
+
+		values := make([]*pb.ConfigValue, 0, len(cacheMap))
+		paths := make([]string, 0, len(cacheMap))
+		for path, val := range cacheMap {
+			v := val
+			values = append(values, &pb.ConfigValue{
+				FieldPath: path,
+				Value:     stringToTypedValue(&v, lookupFieldType(types, path)),
+				Checksum:  computeChecksum(val),
+			})
+			paths = append(paths, path)
+		}
+		s.recorder.RecordReads(tenantID, paths, s.actorPtr(ctx))
+		return &pb.GetConfigResponse{
+			Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
+		}, nil
 	}
 
-	// Fetch from DB.
+	// IncludeDescriptions = true: always fetch from DB, no cache.
 	rows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID,
 		Version:  version,
@@ -279,7 +319,6 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 	}
 
 	values := make([]*pb.ConfigValue, 0, len(rows))
-	cacheMap := make(map[string]string, len(rows))
 	for _, row := range rows {
 		displayValue := redactIfSensitive(sensitiveFields[row.FieldPath], derefString(row.Value))
 		cv := &pb.ConfigValue{
@@ -287,30 +326,55 @@ func (s *Service) GetConfig(ctx context.Context, req *pb.GetConfigRequest) (*pb.
 			Value:     stringToTypedValue(&displayValue, lookupFieldType(types, row.FieldPath)),
 			Checksum:  derefString(row.Checksum),
 		}
-		if req.IncludeDescriptions && row.Description != nil {
+		if row.Description != nil {
 			cv.Description = row.Description
 		}
 		values = append(values, cv)
-		cacheMap[row.FieldPath] = displayValue
 	}
 
-	// Populate cache (values only, no descriptions).
-	if !req.IncludeDescriptions {
-		if err := s.cache.Set(ctx, tenantID, version, cacheMap, defaultCacheTTL); err != nil {
-			s.logger.WarnContext(ctx, "failed to populate cache", "error", err)
-		}
-	}
-
-	// Record usage for all returned fields.
 	paths := make([]string, 0, len(values))
 	for _, v := range values {
 		paths = append(paths, v.FieldPath)
 	}
 	s.recorder.RecordReads(tenantID, paths, s.actorPtr(ctx))
-
 	return &pb.GetConfigResponse{
 		Config: &pb.Config{TenantId: tenantID, Version: version, Values: values},
 	}, nil
+}
+
+// fetchAndCacheConfig fetches config values from the DB for tenantID at version,
+// populates the positive or negative cache, and returns the redacted value map.
+// It is the singleflight work function — concurrent callers share one DB fetch.
+func (s *Service) fetchAndCacheConfig(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
+	rows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
+		TenantID: tenantID,
+		Version:  version,
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get config")
+	}
+
+	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheMap := make(map[string]string, len(rows))
+	for _, row := range rows {
+		cacheMap[row.FieldPath] = redactIfSensitive(sensitiveFields[row.FieldPath], derefString(row.Value))
+	}
+
+	if len(cacheMap) == 0 {
+		if err := s.cache.SetNegative(ctx, tenantID, version, negativeCacheTTL); err != nil {
+			s.logger.WarnContext(ctx, "failed to set negative cache", "error", err)
+		}
+	} else {
+		if err := s.cache.Set(ctx, tenantID, version, cacheMap, defaultCacheTTL); err != nil {
+			s.logger.WarnContext(ctx, "failed to populate cache", "error", err)
+		}
+	}
+
+	return cacheMap, nil
 }
 
 func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.GetFieldResponse, error) {

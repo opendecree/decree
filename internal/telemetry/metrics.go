@@ -14,8 +14,10 @@ const meterName = "decree"
 
 // CacheMetrics records cache hit/miss counters.
 type CacheMetrics struct {
-	hits   metric.Int64Counter
-	misses metric.Int64Counter
+	hits              metric.Int64Counter
+	misses            metric.Int64Counter
+	singleflightDedup metric.Int64Counter
+	negativeHits      metric.Int64Counter
 }
 
 // NewCacheMetrics creates cache metrics. Returns nil if not enabled.
@@ -28,7 +30,11 @@ func NewCacheMetrics(cfg Config) *CacheMetrics {
 		metric.WithDescription("Number of cache hits"))
 	misses, _ := meter.Int64Counter("config.cache.misses",
 		metric.WithDescription("Number of cache misses"))
-	return &CacheMetrics{hits: hits, misses: misses}
+	sfDedup, _ := meter.Int64Counter("cache_singleflight_dedup_total",
+		metric.WithDescription("Number of GetConfig calls that shared a singleflight DB fetch"))
+	negHits, _ := meter.Int64Counter("cache_negative_hits_total",
+		metric.WithDescription("Number of GetConfig calls served from the negative cache (tenant has no config at version)"))
+	return &CacheMetrics{hits: hits, misses: misses, singleflightDedup: sfDedup, negativeHits: negHits}
 }
 
 // Hit records a cache hit.
@@ -42,6 +48,20 @@ func (m *CacheMetrics) Hit(ctx context.Context) {
 func (m *CacheMetrics) Miss(ctx context.Context) {
 	if m != nil {
 		m.misses.Add(ctx, 1)
+	}
+}
+
+// SingleflightDedup records a GetConfig call that shared a singleflight DB fetch.
+func (m *CacheMetrics) SingleflightDedup(ctx context.Context) {
+	if m != nil {
+		m.singleflightDedup.Add(ctx, 1)
+	}
+}
+
+// NegativeHit records a GetConfig call served from the negative cache.
+func (m *CacheMetrics) NegativeHit(ctx context.Context) {
+	if m != nil {
+		m.negativeHits.Add(ctx, 1)
 	}
 }
 
