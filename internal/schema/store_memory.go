@@ -383,6 +383,26 @@ func (m *MemoryStore) GetTenantByName(_ context.Context, name string) (domain.Te
 	return domain.Tenant{}, domain.ErrNotFound
 }
 
+func (m *MemoryStore) GetTenantsByNames(_ context.Context, names []string) ([]domain.Tenant, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	nameSet := make(map[string]struct{}, len(names))
+	for _, n := range names {
+		nameSet[n] = struct{}{}
+	}
+	var result []domain.Tenant
+	for _, t := range m.tenants {
+		if t.DeletedAt != nil {
+			continue
+		}
+		if _, ok := nameSet[t.Name]; ok {
+			result = append(result, t)
+		}
+	}
+	return result, nil
+}
+
 func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]domain.Tenant, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

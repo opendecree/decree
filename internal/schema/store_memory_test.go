@@ -223,6 +223,22 @@ func TestMemoryStore_TenantCRUD(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// GetTenantsByNames — batch lookup.
+	batch, err := store.GetTenantsByNames(ctx, []string{"acme", "globex"})
+	require.NoError(t, err)
+	assert.Len(t, batch, 2)
+
+	// Partial match (one known, one unknown) returns only the found tenants.
+	partial, err := store.GetTenantsByNames(ctx, []string{"acme", "unknown"})
+	require.NoError(t, err)
+	assert.Len(t, partial, 1)
+	assert.Equal(t, tenant.ID, partial[0].ID)
+
+	// Empty input returns empty slice.
+	empty, err := store.GetTenantsByNames(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+
 	list, err := store.ListTenants(ctx, ListTenantsParams{Limit: 10, Offset: 0})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)

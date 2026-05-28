@@ -441,6 +441,14 @@ func (s *PGStore) GetTenantByName(ctx context.Context, name string) (domain.Tena
 	return tenantFromDB(row), nil
 }
 
+func (s *PGStore) GetTenantsByNames(ctx context.Context, names []string) ([]domain.Tenant, error) {
+	rows, err := s.read.GetTenantsByNames(ctx, names)
+	if err != nil {
+		return nil, err
+	}
+	return tenantsFromDB(rows), nil
+}
+
 func (s *PGStore) ListTenants(ctx context.Context, arg ListTenantsParams) ([]domain.Tenant, error) {
 	if arg.AllowedTenantIDs != nil {
 		pgIDs, err := stringsToUUIDs(arg.AllowedTenantIDs)

@@ -9,6 +9,10 @@ SELECT * FROM tenants WHERE id = $1 AND deleted_at IS NULL;
 -- name: GetTenantByName :one
 SELECT * FROM tenants WHERE name = $1 AND deleted_at IS NULL;
 
+-- name: GetTenantsByNames :many
+SELECT * FROM tenants
+WHERE name = ANY(@names::text[]) AND deleted_at IS NULL;
+
 -- name: ListTenants :many
 SELECT * FROM tenants
 WHERE deleted_at IS NULL
