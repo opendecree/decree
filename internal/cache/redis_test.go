@@ -2,10 +2,12 @@ package cache
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	miniredis "github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -222,6 +224,45 @@ func TestRedisCache_Invalidate_StaleIndexEntryIsNoOp(t *testing.T) {
 	n, err := c.client.Exists(ctx, c.indexKey("t1")).Result()
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), n)
+}
+
+func TestRedisCache_Invalidate_SmembersError(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+
+	mr.Close()
+
+	err := c.Invalidate(ctx, "t1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cache invalidate smembers")
+}
+
+func TestRedisCache_Invalidate_DelError(t *testing.T) {
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: 0})
+	t.Cleanup(func() { _ = client.Close() })
+	c := NewRedisCache(client)
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
+
+	// Inject an error only for DEL so that SMEMBERS succeeds first.
+	mr.Server().SetPreHook(server.Hook(func(p *server.Peer, cmd string, args ...string) bool {
+		if strings.EqualFold(cmd, "del") {
+			p.WriteError("READONLY forced")
+			return true
+		}
+		return false
+	}))
+
+	err := c.Invalidate(ctx, "t1")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "cache invalidate del")
 }
 
 // --- RedisIdempotencyCache ---
