@@ -25,10 +25,9 @@ func encodeVersionOffset(offset int32) string { return pagination.EncodePageToke
 // --- GetFields ---
 
 func TestGetFields_Success(t *testing.T) {
-	svc, store, cache, _ := newTestService()
+	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
-	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	val := "hello"
@@ -47,10 +46,9 @@ func TestGetFields_Success(t *testing.T) {
 }
 
 func TestGetFields_SkipsMissing(t *testing.T) {
-	svc, store, cache, _ := newTestService()
+	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
-	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 
@@ -72,10 +70,9 @@ func TestGetFields_InvalidTenantID(t *testing.T) {
 // request order regardless of completion order. Per-path mock matchers let us
 // assert each value lands in the right slot.
 func TestGetFields_PreservesOrder(t *testing.T) {
-	svc, store, cache, _ := newTestService()
+	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
-	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	paths := []string{"a.one", "a.two", "a.three", "a.four", "a.five"}
@@ -100,10 +97,9 @@ func TestGetFields_PreservesOrder(t *testing.T) {
 // TestGetFields_MixedMissingAndPresent verifies that NotFound rows are
 // dropped while present rows retain their request order.
 func TestGetFields_MixedMissingAndPresent(t *testing.T) {
-	svc, store, cache, _ := newTestService()
+	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
-	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	present := "x"
@@ -130,10 +126,9 @@ func TestGetFields_MixedMissingAndPresent(t *testing.T) {
 // TestGetFields_PropagatesError verifies a non-NotFound store error
 // surfaces as Internal and aborts the group.
 func TestGetFields_PropagatesError(t *testing.T) {
-	svc, store, cache, _ := newTestService()
+	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
-	cache.On("Get", mock.Anything, tenantID1, mock.Anything).Return(nil, nil)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	val := "ok"
 	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{
@@ -165,6 +160,7 @@ func TestGetConfig_ByTenantName(t *testing.T) {
 		TenantID: tenantID1, Version: 1,
 	}, nil)
 	// Return a cached result so we skip the DB path
+	store.On("GetTenantByID", mock.Anything, tenantID1).Return(domain.Tenant{ID: tenantID1, SchemaVersion: 0}, nil)
 	cached := map[string]string{"key": "val"}
 	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
 
@@ -182,6 +178,7 @@ func TestGetConfig_ByTenantUUID(t *testing.T) {
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{
 		TenantID: tenantID1, Version: 1,
 	}, nil)
+	store.On("GetTenantByID", mock.Anything, tenantID1).Return(domain.Tenant{ID: tenantID1, SchemaVersion: 0}, nil)
 	cached := map[string]string{"key": "val"}
 	cache.On("Get", mock.Anything, tenantID1, int32(1)).Return(cached, nil)
 
@@ -238,7 +235,7 @@ func TestSetFields_InvalidTenantID(t *testing.T) {
 
 func TestSetFields_ChecksumMismatch(t *testing.T) {
 	// Exercises the per-field checksum loop inside the SetFields transaction.
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	storedChecksum := "actual-stored"
@@ -253,6 +250,7 @@ func TestSetFields_ChecksumMismatch(t *testing.T) {
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
 		Return(GetConfigValueAtVersionRow{Value: strPtr("old"), Checksum: &storedChecksum}, nil)
 	setupNoSensitiveFields(store)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
 		TenantId: tenantID1,
@@ -270,7 +268,7 @@ func TestSetFields_ChecksumMismatch(t *testing.T) {
 }
 
 func TestSetFields_VersionConflictReturnsAborted(t *testing.T) {
-	svc, store, _, _ := newTestService()
+	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
 	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
@@ -279,6 +277,7 @@ func TestSetFields_VersionConflictReturnsAborted(t *testing.T) {
 	setupNoSensitiveFields(store)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
 		TenantId: tenantID1,

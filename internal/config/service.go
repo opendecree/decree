@@ -555,6 +555,12 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
 	}
 
+	// Pre-commit cache invalidation narrows the stale-read window between tx
+	// commit and the post-commit invalidation below.
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
+		s.logger.WarnContext(ctx, "failed to pre-invalidate cache before SetField", "error", err)
+	}
+
 	// Transaction: version + value + audit + dependentRequired check.
 	// Re-reading the latest version inside the tx and verifying the checksum
 	// there closes the TOCTOU window: concurrent writers must serialise through
@@ -712,6 +718,11 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Pre-commit cache invalidation narrows the stale-read window.
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
+		s.logger.WarnContext(ctx, "failed to pre-invalidate cache before SetFields", "error", err)
 	}
 
 	// Transaction: version + all values + all audit entries + dependentRequired check.
@@ -903,6 +914,11 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
+	}
+
+	// Pre-commit cache invalidation narrows the stale-read window.
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
+		s.logger.WarnContext(ctx, "failed to pre-invalidate cache before RollbackToVersion", "error", err)
 	}
 
 	// Transaction: new version + copied values + audit + dependentRequired check.
@@ -1257,6 +1273,11 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		return nil, status.Error(codes.Internal, "failed to load dependentRequired rules")
 	}
 
+	// Pre-commit cache invalidation narrows the stale-read window.
+	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
+		s.logger.WarnContext(ctx, "failed to pre-invalidate cache before ImportConfig", "error", err)
+	}
+
 	// Transaction: version + all values + audit entries + dependentRequired check.
 	var newVersion domain.ConfigVersion
 	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
@@ -1403,11 +1424,7 @@ func (s *Service) getFieldTypeMap(ctx context.Context, tenantID string) (map[str
 
 // getSensitiveFieldSet returns a set of field paths that are marked sensitive
 // for the tenant's current schema version.
-func (s *Service) getSensitiveFieldSet(ctx context.Context, tenantID string) (map[string]bool, error) {
-	tenant, err := s.store.GetTenantByID(ctx, tenantID)
-	if err != nil {
-		return nil, status.Error(codes.NotFound, "tenant not found")
-	}
+func (s *Service) getSensitiveFieldSetFromTenant(ctx context.Context, tenant domain.Tenant) (map[string]bool, error) {
 	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
 		SchemaID: tenant.SchemaID,
 		Version:  tenant.SchemaVersion,
@@ -1426,6 +1443,14 @@ func (s *Service) getSensitiveFieldSet(ctx context.Context, tenantID string) (ma
 		}
 	}
 	return result, nil
+}
+
+func (s *Service) getSensitiveFieldSet(ctx context.Context, tenantID string) (map[string]bool, error) {
+	tenant, err := s.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return nil, status.Error(codes.NotFound, "tenant not found")
+	}
+	return s.getSensitiveFieldSetFromTenant(ctx, tenant)
 }
 
 // --- Helpers ---

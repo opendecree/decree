@@ -301,6 +301,7 @@ func TestChecksumGuardedWrites_ChecksumMismatchInTx(t *testing.T) {
 		Return(GetConfigValueAtVersionRow{Value: strPtr("newer"), Checksum: &differentChecksum}, nil).Once()
 
 	setupNoSensitiveFields(store)
+	c.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:         tenantID1,
@@ -339,6 +340,7 @@ func TestChecksumGuardedWrites_VersionConflictReturnsAborted(t *testing.T) {
 	// fails immediately with ErrVersionConflict (simulating the UNIQUE collision).
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
+	c.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 
 	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
 		TenantId:  tenantID1,

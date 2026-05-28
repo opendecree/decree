@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -59,9 +60,7 @@ func (c *MemoryCache) Get(_ context.Context, tenantID string, version int32) (ma
 
 	// Return a copy to prevent mutation.
 	result := make(map[string]string, len(entry.values))
-	for k, v := range entry.values {
-		result[k] = v
-	}
+	maps.Copy(result, entry.values)
 	return result, nil
 }
 
@@ -79,9 +78,7 @@ func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, val
 
 	// Copy values to prevent external mutation.
 	copied := make(map[string]string, len(values))
-	for ck, v := range values {
-		copied[ck] = v
-	}
+	maps.Copy(copied, values)
 
 	c.entries[k] = memoryCacheEntry{
 		values:    copied,
