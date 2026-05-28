@@ -65,8 +65,18 @@ type ConfigServiceClient interface {
 	// copies the target's values.
 	RollbackToVersion(ctx context.Context, in *RollbackToVersionRequest, opts ...grpc.CallOption) (*RollbackToVersionResponse, error)
 	// Subscribe opens a server-streaming connection that pushes ConfigChange events
-	// whenever the tenant's configuration is modified. The stream remains open until
-	// the client disconnects or the server shuts down.
+	// whenever the tenant's configuration is modified.
+	//
+	// Stream lifetime:
+	//   - Client disconnect: stream ends immediately.
+	//   - Server closes with OK status: the server-side pub/sub backend restarted
+	//     (e.g. Redis reconnect). Clients MUST reconnect with exponential backoff;
+	//     an OK close does NOT indicate the subscription is permanently gone.
+	//   - Server closes with error status: treat as a transient failure and reconnect
+	//     with backoff.
+	//
+	// Use the configwatcher package for a high-level client that handles reconnection
+	// automatically.
 	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeResponse], error)
 	// ExportConfig serializes a tenant's configuration to YAML.
 	ExportConfig(ctx context.Context, in *ExportConfigRequest, opts ...grpc.CallOption) (*ExportConfigResponse, error)
@@ -234,8 +244,18 @@ type ConfigServiceServer interface {
 	// copies the target's values.
 	RollbackToVersion(context.Context, *RollbackToVersionRequest) (*RollbackToVersionResponse, error)
 	// Subscribe opens a server-streaming connection that pushes ConfigChange events
-	// whenever the tenant's configuration is modified. The stream remains open until
-	// the client disconnects or the server shuts down.
+	// whenever the tenant's configuration is modified.
+	//
+	// Stream lifetime:
+	//   - Client disconnect: stream ends immediately.
+	//   - Server closes with OK status: the server-side pub/sub backend restarted
+	//     (e.g. Redis reconnect). Clients MUST reconnect with exponential backoff;
+	//     an OK close does NOT indicate the subscription is permanently gone.
+	//   - Server closes with error status: treat as a transient failure and reconnect
+	//     with backoff.
+	//
+	// Use the configwatcher package for a high-level client that handles reconnection
+	// automatically.
 	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[SubscribeResponse]) error
 	// ExportConfig serializes a tenant's configuration to YAML.
 	ExportConfig(context.Context, *ExportConfigRequest) (*ExportConfigResponse, error)

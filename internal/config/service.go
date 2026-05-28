@@ -1064,6 +1064,8 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 			return nil
 		case event, ok := <-events:
 			if !ok {
+				// Pub/sub channel closed (e.g. Redis reconnect). Return nil (OK status)
+				// so clients receive a clean stream-end and know to reconnect with backoff.
 				return nil
 			}
 
