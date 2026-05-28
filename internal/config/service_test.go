@@ -1288,3 +1288,217 @@ func TestConfigService_RequiresAuth(t *testing.T) {
 	err = svc.Subscribe(&pb.SubscribeRequest{}, stream)
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
+
+// --- Coverage for new lines added in #431 ---
+
+// TestGetConfig_TenantNotFound covers the GetTenantByID error branch added to
+// the GetConfig fan-out goroutine (service.go:242-244).
+func TestGetConfig_TenantNotFound(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil).Maybe()
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{}, errors.New("db error"))
+
+	_, err := svc.GetConfig(ctx, &pb.GetConfigRequest{TenantId: tenantID1})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestSetField_PreInvalidateFails_WriteProceeds covers the WarnContext branch
+// when pre-commit cache invalidation fails in SetField (service.go:503-505).
+// The write must still succeed even when the pre-commit invalidation fails.
+func TestSetField_PreInvalidateFails_WriteProceeds(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	// Pre-commit fails, post-commit succeeds — write must not be blocked.
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+	setupNoSensitiveFields(store)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "payments.fee",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), resp.ConfigVersion.Version)
+	cache.AssertNumberOfCalls(t, "Invalidate", 2)
+}
+
+// TestSetFields_PreInvalidateFails_WriteProceeds covers the WarnContext branch
+// when pre-commit cache invalidation fails in SetFields (service.go:667-669).
+func TestSetFields_PreInvalidateFails_WriteProceeds(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.Anything).
+		Return(domain.ConfigVersion{ID: versionID2, Version: 2}, nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	store.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
+	pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	setupNoSensitiveFields(store)
+
+	resp, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "app.name", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "test"}}},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), resp.ConfigVersion.Version)
+	cache.AssertNumberOfCalls(t, "Invalidate", 2)
+}
+
+// TestRollbackToVersion_PreInvalidateFails_WriteProceeds covers the WarnContext
+// branch when pre-commit cache invalidation fails in RollbackToVersion
+// (service.go:863-865).
+func TestRollbackToVersion_PreInvalidateFails_WriteProceeds(t *testing.T) {
+	svc, store, cache, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil)
+	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
+	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
+
+	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
+		TenantId: tenantID1,
+		Version:  2,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
+	cache.AssertNumberOfCalls(t, "Invalidate", 2)
+}
+
+// TestImportConfig_PreInvalidateFails_WriteProceeds covers the WarnContext
+// branch when pre-commit cache invalidation fails in ImportConfig
+// (service.go:1220-1222).
+func TestImportConfig_PreInvalidateFails_WriteProceeds(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`
+spec_version: "v1"
+values:
+  payments.fee:
+    value: 0.05
+`)
+
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{{Path: "payments.fee", FieldType: domain.FieldTypeNumber}}, nil)
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 2}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID20, TenantID: tenantID1, Version: 3, CreatedBy: "unknown"}, nil)
+	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.Anything).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	resp, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int32(3), resp.ConfigVersion.Version)
+	cache.AssertNumberOfCalls(t, "Invalidate", 2)
+}
+
+// TestSetField_SensitiveFields_TenantNotFound covers the GetTenantByID error
+// path in getSensitiveFieldSet (service.go:1393-1395). The SetField must
+// propagate the NotFound status.
+func TestSetField_SensitiveFields_TenantNotFound(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{}, errors.New("db error"))
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "payments.fee",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestSetField_SensitiveFields_SchemaVersionError covers the GetSchemaVersion
+// error path in getSensitiveFieldSetFromTenant (service.go:1375-1377).
+func TestSetField_SensitiveFields_SchemaVersionError(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{}, errors.New("db error"))
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "payments.fee",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// TestSetField_SensitiveFields_SchemaFieldsError covers the GetSchemaFields
+// error path in getSensitiveFieldSetFromTenant (service.go:1379-1381).
+func TestSetField_SensitiveFields_SchemaFieldsError(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField(nil), errors.New("db error"))
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "payments.fee",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "0.5"}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
