@@ -357,6 +357,25 @@ func TestSchemaService_RequiresAuth(t *testing.T) {
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 }
 
+// --- Tenant enumeration protection (issue #454) ---
+
+func TestGetTenant_CrossTenantReturnsNotFound(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	// Admin scoped to testTenantID; looks up testOtherTenantID.
+	// Must get NotFound (not PermissionDenied) to prevent slug enumeration.
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testOtherTenantID).
+		Return(domain.Tenant{ID: testOtherTenantID, Name: "other"}, nil)
+
+	_, err := svc.GetTenant(ctx, &pb.GetTenantRequest{Id: testOtherTenantID})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+	store.AssertExpectations(t)
+}
+
 // --- Cross-tenant write rejection (issue #422) ---
 
 const testOtherTenantID = "00000000-0000-0000-0000-000000000099"
@@ -373,6 +392,7 @@ func TestLockField_CrossTenantRejected(t *testing.T) {
 	store := &mockStore{}
 	svc := NewService(store, WithLogger(testLogger))
 	// Admin scoped to testTenantID; tries to lock a field on testOtherTenantID.
+	// Returns NotFound (not PermissionDenied) to prevent slug enumeration.
 	ctx := adminCtxWithTenants(testTenantID)
 
 	store.On("GetTenantByID", ctx, testOtherTenantID).
@@ -384,7 +404,7 @@ func TestLockField_CrossTenantRejected(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 	store.AssertExpectations(t)
 }
 
@@ -402,7 +422,7 @@ func TestUnlockField_CrossTenantRejected(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 	store.AssertExpectations(t)
 }
 
@@ -417,7 +437,7 @@ func TestUpdateTenant_CrossTenantRejected(t *testing.T) {
 	_, err := svc.UpdateTenant(ctx, &pb.UpdateTenantRequest{Id: testOtherTenantID})
 
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 	store.AssertExpectations(t)
 }
 
@@ -432,7 +452,7 @@ func TestDeleteTenant_CrossTenantRejected(t *testing.T) {
 	_, err := svc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: testOtherTenantID})
 
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 	store.AssertExpectations(t)
 }
 

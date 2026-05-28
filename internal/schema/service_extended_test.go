@@ -414,7 +414,7 @@ func TestLockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 		FieldPath: "app.fee",
 	})
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
@@ -427,7 +427,7 @@ func TestUnlockField_DeniedForOutOfScopeAdmin(t *testing.T) {
 		FieldPath: "app.fee",
 	})
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
@@ -437,7 +437,7 @@ func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
 
 	_, err := svc.ListFieldLocks(outOfScopeAdminCtx(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
 	require.Error(t, err)
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 // --- UpdateTenant ---

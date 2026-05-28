@@ -8,7 +8,10 @@ package e2e
 //
 //   - in-scope caller (admin role, tenant in x-tenant-id) is allowed
 //   - out-of-scope caller (admin role, tenant NOT in x-tenant-id) is denied
-//     with codes.PermissionDenied
+//     (codes.NotFound or codes.PermissionDenied — see isAuthDenied)
+//
+// Tenant-scoped RPCs surface NotFound (not PermissionDenied) for access
+// denials to prevent slug enumeration (decree#454). isAuthDenied accepts both.
 //
 // This is the regression net for "someone added a new write RPC and
 // forgot to call auth.CheckTenantAccess at the top of the handler."
