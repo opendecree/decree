@@ -446,8 +446,12 @@ type SetFieldRequest struct {
 	// Value-level description explaining what this specific value means.
 	// Retrievable via include_description in read requests.
 	ValueDescription *string `protobuf:"bytes,6,opt,name=value_description,json=valueDescription,proto3,oneof" json:"value_description,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Idempotency key for safe retries. When set, the server deduplicates
+	// writes with the same key within a 24-hour window. Use the SDK's
+	// WithIdempotencyKey option to set this field and enable retry.
+	IdempotencyKey *string `protobuf:"bytes,7,opt,name=idempotency_key,json=idempotencyKey,proto3,oneof" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SetFieldRequest) Reset() {
@@ -522,6 +526,13 @@ func (x *SetFieldRequest) GetValueDescription() string {
 	return ""
 }
 
+func (x *SetFieldRequest) GetIdempotencyKey() string {
+	if x != nil && x.IdempotencyKey != nil {
+		return *x.IdempotencyKey
+	}
+	return ""
+}
+
 type SetFieldResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The newly created config version.
@@ -577,9 +588,13 @@ type SetFieldsRequest struct {
 	// CONFIG_MAX_LIST_LEN). Exceeds returns InvalidArgument.
 	Updates []*FieldUpdate `protobuf:"bytes,2,rep,name=updates,proto3" json:"updates,omitempty"`
 	// Version-level description explaining why these changes were made.
-	Description   *string `protobuf:"bytes,3,opt,name=description,proto3,oneof" json:"description,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Description *string `protobuf:"bytes,3,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	// Idempotency key for safe retries. When set, the server deduplicates
+	// writes with the same key within a 24-hour window. Use the SDK's
+	// WithIdempotencyKey option to set this field and enable retry.
+	IdempotencyKey *string `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3,oneof" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SetFieldsRequest) Reset() {
@@ -629,6 +644,13 @@ func (x *SetFieldsRequest) GetUpdates() []*FieldUpdate {
 func (x *SetFieldsRequest) GetDescription() string {
 	if x != nil && x.Description != nil {
 		return *x.Description
+	}
+	return ""
+}
+
+func (x *SetFieldsRequest) GetIdempotencyKey() string {
+	if x != nil && x.IdempotencyKey != nil {
+		return *x.IdempotencyKey
 	}
 	return ""
 }
@@ -1451,7 +1473,7 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\n" +
 	"\b_version\"J\n" +
 	"\x11GetFieldsResponse\x125\n" +
-	"\x06values\x18\x01 \x03(\v2\x1d.centralconfig.v1.ConfigValueR\x06values\"\xc8\x02\n" +
+	"\x06values\x18\x01 \x03(\v2\x1d.centralconfig.v1.ConfigValueR\x06values\"\x8a\x03\n" +
 	"\x0fSetFieldRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
 	"\n" +
@@ -1459,17 +1481,21 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\x05value\x18\x03 \x01(\v2\x1c.centralconfig.v1.TypedValueR\x05value\x120\n" +
 	"\x11expected_checksum\x18\x04 \x01(\tH\x00R\x10expectedChecksum\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\x05 \x01(\tH\x01R\vdescription\x88\x01\x01\x120\n" +
-	"\x11value_description\x18\x06 \x01(\tH\x02R\x10valueDescription\x88\x01\x01B\x14\n" +
+	"\x11value_description\x18\x06 \x01(\tH\x02R\x10valueDescription\x88\x01\x01\x12,\n" +
+	"\x0fidempotency_key\x18\a \x01(\tH\x03R\x0eidempotencyKey\x88\x01\x01B\x14\n" +
 	"\x12_expected_checksumB\x0e\n" +
 	"\f_descriptionB\x14\n" +
-	"\x12_value_description\"Z\n" +
+	"\x12_value_descriptionB\x12\n" +
+	"\x10_idempotency_key\"Z\n" +
 	"\x10SetFieldResponse\x12F\n" +
-	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"\x9f\x01\n" +
+	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"\xe1\x01\n" +
 	"\x10SetFieldsRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x127\n" +
 	"\aupdates\x18\x02 \x03(\v2\x1d.centralconfig.v1.FieldUpdateR\aupdates\x12%\n" +
-	"\vdescription\x18\x03 \x01(\tH\x00R\vdescription\x88\x01\x01B\x0e\n" +
-	"\f_description\"[\n" +
+	"\vdescription\x18\x03 \x01(\tH\x00R\vdescription\x88\x01\x01\x12,\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tH\x01R\x0eidempotencyKey\x88\x01\x01B\x0e\n" +
+	"\f_descriptionB\x12\n" +
+	"\x10_idempotency_key\"[\n" +
 	"\x11SetFieldsResponse\x12F\n" +
 	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"\xf0\x01\n" +
 	"\vFieldUpdate\x12\x1d\n" +

@@ -214,8 +214,8 @@ func TestSetFields_Success(t *testing.T) {
 	store.On("CreateConfigVersion", mock.Anything, mock.Anything).Return(domain.ConfigVersion{
 		ID: versionID2, Version: 2, CreatedAt: time.Now(),
 	}, nil)
-	store.On("SetConfigValue", mock.Anything, mock.Anything).Return(nil)
-	store.On("InsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	store.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
 	setupNoSensitiveFields(store)

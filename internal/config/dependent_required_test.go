@@ -213,8 +213,8 @@ func TestSetFields_DependentRequired_AggregateCheck(t *testing.T) {
 		Return(domain.ConfigVersion{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1}, nil)
-	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil).Twice()
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).
+		Return(nil)
 	// Snapshot reflects both writes — trigger AND dependent set together.
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
@@ -223,8 +223,8 @@ func TestSetFields_DependentRequired_AggregateCheck(t *testing.T) {
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 		{FieldPath: "payments.refund_window", Value: strPtr("30s")},
 	}, nil)
-	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
-		Return(nil).Twice()
+	store.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).
+		Return(nil)
 	svc.cache.(*mockCache).On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	svc.publisher.(*mockPublisher).On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
 		Return(nil)
@@ -280,8 +280,7 @@ func TestRollbackToVersion_DependentRequired_Rejected(t *testing.T) {
 		Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil)
+	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
 	// Post-rollback snapshot mirrors the target — same violation.
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
@@ -311,10 +310,8 @@ func TestImportConfig_DependentRequired_Rejected(t *testing.T) {
 		Return(domain.ConfigVersion{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
-		Return(nil).Maybe()
+	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.Anything).Return(nil).Maybe()
 	// Post-import snapshot: trigger set, dependent absent.
 	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,

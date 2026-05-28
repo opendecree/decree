@@ -183,3 +183,49 @@ func TestRedisCache_KeyCollisionAcrossTenants(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "b", gotB["x"])
 }
+
+// --- RedisIdempotencyCache ---
+
+func newTestRedisIdempotencyCache(t *testing.T) (*RedisIdempotencyCache, *miniredis.Miniredis) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	return NewRedisIdempotencyCache(client), mr
+}
+
+func TestRedisIdempotencyCache_FirstClaimReturnsTrue(t *testing.T) {
+	c, _ := newTestRedisIdempotencyCache(t)
+	first, err := c.Claim(context.Background(), "k1", time.Minute)
+	require.NoError(t, err)
+	assert.True(t, first)
+}
+
+func TestRedisIdempotencyCache_SecondClaimReturnsFalse(t *testing.T) {
+	c, _ := newTestRedisIdempotencyCache(t)
+	ctx := context.Background()
+	first, _ := c.Claim(ctx, "k1", time.Minute)
+	require.True(t, first)
+	second, err := c.Claim(ctx, "k1", time.Minute)
+	require.NoError(t, err)
+	assert.False(t, second)
+}
+
+func TestRedisIdempotencyCache_ExpiredKeyAllowsReclaim(t *testing.T) {
+	c, mr := newTestRedisIdempotencyCache(t)
+	ctx := context.Background()
+	_, _ = c.Claim(ctx, "k1", time.Second)
+	mr.FastForward(2 * time.Second)
+	again, err := c.Claim(ctx, "k1", time.Minute)
+	require.NoError(t, err)
+	assert.True(t, again)
+}
+
+func TestRedisIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
+	c, _ := newTestRedisIdempotencyCache(t)
+	ctx := context.Background()
+	a, _ := c.Claim(ctx, "a", time.Minute)
+	b, _ := c.Claim(ctx, "b", time.Minute)
+	assert.True(t, a)
+	assert.True(t, b)
+}

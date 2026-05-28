@@ -462,8 +462,7 @@ func TestRollbackToVersion_Success(t *testing.T) {
 		Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil)
+	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
 	cache.On("Invalidate", ctx, tenantID1).Return(nil)
 	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
 
@@ -474,8 +473,7 @@ func TestRollbackToVersion_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
-	// Should copy 2 values.
-	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
 }
 
 func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
@@ -570,10 +568,12 @@ values:
 		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID20, TenantID: tenantID1, Version: 3, CreatedBy: "unknown"}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).
-		Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).
-		Return(nil)
+	store.On("BulkSetConfigValues", ctx, mock.MatchedBy(func(args []SetConfigValueParams) bool {
+		return len(args) == 2
+	})).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.MatchedBy(func(args []InsertAuditWriteLogParams) bool {
+		return len(args) == 2
+	})).Return(nil)
 	cache.On("Invalidate", ctx, tenantID1).Return(nil)
 	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
 
@@ -584,8 +584,8 @@ values:
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(3), resp.ConfigVersion.Version)
-	store.AssertNumberOfCalls(t, "SetConfigValue", 2)
-	store.AssertNumberOfCalls(t, "InsertAuditWriteLog", 2)
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
+	store.AssertCalled(t, "BulkInsertAuditWriteLog", ctx, mock.Anything)
 	cache.AssertCalled(t, "Invalidate", ctx, tenantID1)
 }
 
@@ -737,8 +737,12 @@ values:
 
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID20, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	store.On("BulkSetConfigValues", ctx, mock.MatchedBy(func(args []SetConfigValueParams) bool {
+		return len(args) == 1
+	})).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.MatchedBy(func(args []InsertAuditWriteLogParams) bool {
+		return len(args) == 1
+	})).Return(nil)
 	cache.On("Invalidate", ctx, tenantID1).Return(nil)
 	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
 
@@ -751,7 +755,7 @@ values:
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), resp.ConfigVersion.Version)
 	// Only app.other should be set (app.name skipped — same value)
-	store.AssertNumberOfCalls(t, "SetConfigValue", 1)
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
 }
 
 func TestImportConfig_DefaultsMode_SkipsExistingValues(t *testing.T) {
@@ -794,8 +798,12 @@ values:
 	newVersionID := versionID20
 	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: newVersionID, TenantID: tenantID1, Version: 2, CreatedBy: "unknown"}, nil)
-	store.On("SetConfigValue", ctx, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	store.On("BulkSetConfigValues", ctx, mock.MatchedBy(func(args []SetConfigValueParams) bool {
+		return len(args) == 1
+	})).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.MatchedBy(func(args []InsertAuditWriteLogParams) bool {
+		return len(args) == 1
+	})).Return(nil)
 	cache := &mockCache{}
 	pub := &mockPublisher{}
 	svc.cache = cache
@@ -811,7 +819,7 @@ values:
 
 	require.NoError(t, err)
 	// Only app.missing should be set
-	store.AssertNumberOfCalls(t, "SetConfigValue", 1)
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
 }
 
 // --- Usage Recording ---

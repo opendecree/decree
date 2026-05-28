@@ -24,6 +24,7 @@ type PGStore struct {
 	writePool *pgxpool.Pool
 	write     *dbstore.Queries
 	read      *dbstore.Queries
+	tx        pgx.Tx // non-nil when bound to a transaction
 }
 
 // NewPGStore creates a new PostgreSQL-backed config store.
@@ -60,6 +61,7 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 		writePool: s.writePool,
 		write:     txQueries,
 		read:      txQueries,
+		tx:        tx,
 	}
 
 	if err := fn(txStore); err != nil {
@@ -308,6 +310,114 @@ func (s *PGStore) GetFieldLocks(ctx context.Context, tenantID string) ([]domain.
 		result[i] = fieldLockFromDB(r)
 	}
 	return result, nil
+}
+
+// batcher returns the BatchSender appropriate for the current context:
+// the active transaction when inside RunInTx, otherwise the write pool.
+func (s *PGStore) batcher() interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+} {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.writePool
+}
+
+const bulkSetConfigValueSQL = `INSERT INTO config_values (config_version_id, field_path, value, checksum, description) VALUES ($1, $2, $3, $4, $5)`
+
+func (s *PGStore) BulkSetConfigValues(ctx context.Context, args []SetConfigValueParams) error {
+	if len(args) == 0 {
+		return nil
+	}
+	batch := &pgx.Batch{}
+	for _, a := range args {
+		cvUUID, err := pgconv.StringToUUID(a.ConfigVersionID)
+		if err != nil {
+			return err
+		}
+		batch.Queue(bulkSetConfigValueSQL, cvUUID, a.FieldPath, a.Value, a.Checksum, a.Description)
+	}
+	br := s.batcher().SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	for range args {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("bulk set config value: %w", err)
+		}
+	}
+	return br.Close()
+}
+
+const bulkInsertAuditWriteLogSQL = `INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at, chain_epoch) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+
+func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAuditWriteLogParams) error {
+	if len(args) == 0 {
+		return nil
+	}
+	tenantUUID, err := pgconv.StringToUUID(args[0].TenantID)
+	if err != nil {
+		return err
+	}
+
+	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("get last audit hash: %w", err)
+	}
+
+	type row struct {
+		id        pgtype.UUID
+		kind      string
+		now       pgtype.Timestamptz
+		entryHash string
+		prevHash  string
+		arg       InsertAuditWriteLogParams
+	}
+	rows := make([]row, len(args))
+	for i, arg := range args {
+		id, err := configGenUUID()
+		if err != nil {
+			return err
+		}
+		kind := arg.ObjectKind
+		if kind == "" {
+			kind = "field"
+		}
+		now := time.Now().Truncate(time.Microsecond)
+		hash := audit.ComputeEntryHash(audit.ChainInput{
+			PreviousHash: prevHash,
+			ID:           pgconv.UUIDToString(id),
+			TenantID:     arg.TenantID,
+			Actor:        arg.Actor,
+			Action:       arg.Action,
+			ObjectKind:   kind,
+			CreatedAt:    now,
+		})
+		rows[i] = row{
+			id:        id,
+			kind:      kind,
+			now:       pgconv.TimeToTimestamptz(now),
+			entryHash: hash,
+			prevHash:  prevHash,
+			arg:       arg,
+		}
+		prevHash = hash
+	}
+
+	batch := &pgx.Batch{}
+	for _, r := range rows {
+		batch.Queue(bulkInsertAuditWriteLogSQL,
+			r.id, tenantUUID, r.arg.Actor, r.arg.Action,
+			r.arg.FieldPath, r.arg.OldValue, r.arg.NewValue, r.arg.ConfigVersion,
+			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(0),
+		)
+	}
+	br := s.batcher().SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	for range rows {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("bulk insert audit log: %w", err)
+		}
+	}
+	return br.Close()
 }
 
 // Audit.

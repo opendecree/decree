@@ -175,3 +175,41 @@ func TestMemoryCache_UpdateExistingDoesNotGrow(t *testing.T) {
 	got, _ = c.Get(ctx, "t2", 1)
 	assert.Equal(t, "2", got["a"])
 }
+
+// --- MemoryIdempotencyCache ---
+
+func TestMemoryIdempotencyCache_FirstClaimReturnsTrue(t *testing.T) {
+	c := NewMemoryIdempotencyCache()
+	first, err := c.Claim(context.Background(), "k1", time.Minute)
+	require.NoError(t, err)
+	assert.True(t, first)
+}
+
+func TestMemoryIdempotencyCache_SecondClaimReturnsFalse(t *testing.T) {
+	c := NewMemoryIdempotencyCache()
+	ctx := context.Background()
+	first, _ := c.Claim(ctx, "k1", time.Minute)
+	require.True(t, first)
+	second, err := c.Claim(ctx, "k1", time.Minute)
+	require.NoError(t, err)
+	assert.False(t, second)
+}
+
+func TestMemoryIdempotencyCache_ExpiredKeyAllowsReclaim(t *testing.T) {
+	c := NewMemoryIdempotencyCache()
+	ctx := context.Background()
+	_, _ = c.Claim(ctx, "k1", time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+	again, err := c.Claim(ctx, "k1", time.Minute)
+	require.NoError(t, err)
+	assert.True(t, again)
+}
+
+func TestMemoryIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
+	c := NewMemoryIdempotencyCache()
+	ctx := context.Background()
+	a, _ := c.Claim(ctx, "a", time.Minute)
+	b, _ := c.Claim(ctx, "b", time.Minute)
+	assert.True(t, a)
+	assert.True(t, b)
+}

@@ -112,6 +112,9 @@ func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFie
 	if req.Description != "" {
 		protoReq.Description = &req.Description
 	}
+	if req.IdempotencyKey != "" {
+		protoReq.IdempotencyKey = &req.IdempotencyKey
+	}
 	_, err = t.rpc.SetField(ctx, protoReq)
 	if err != nil {
 		return nil, mapConfigError(err)
@@ -138,6 +141,9 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 	}
 	if req.Description != "" {
 		protoReq.Description = &req.Description
+	}
+	if req.IdempotencyKey != "" {
+		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
 	_, err = t.rpc.SetFields(ctx, protoReq)
 	if err != nil {

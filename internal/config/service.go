@@ -52,19 +52,23 @@ const (
 	// getFieldsConcurrency caps in-flight per-field reads in GetFields.
 	// Bounded so a large FieldPaths request cannot exhaust the DB pool.
 	getFieldsConcurrency = 16
+
+	// idempotencyKeyTTL is the deduplication window for write idempotency keys.
+	idempotencyKeyTTL = 24 * time.Hour
 )
 
 // Option configures a Service.
 type Option func(*serviceOptions)
 
 type serviceOptions struct {
-	logger       *slog.Logger
-	cacheMetrics *telemetry.CacheMetrics
-	metrics      *telemetry.ConfigMetrics
-	validators   *validation.ValidatorFactory
-	recorder     *audit.UsageRecorder
-	guard        authz.Guard
-	limits       Limits
+	logger           *slog.Logger
+	cacheMetrics     *telemetry.CacheMetrics
+	metrics          *telemetry.ConfigMetrics
+	validators       *validation.ValidatorFactory
+	recorder         *audit.UsageRecorder
+	guard            authz.Guard
+	limits           Limits
+	idempotencyCache cache.IdempotencyCache
 }
 
 // WithLogger sets the service logger. Defaults to slog.Default() when unset.
@@ -104,20 +108,27 @@ func WithLimits(l Limits) Option {
 	return func(o *serviceOptions) { o.limits = l }
 }
 
+// WithIdempotencyCache wires a cache for write deduplication. Nil disables
+// idempotency key handling (writes are not deduplicated).
+func WithIdempotencyCache(c cache.IdempotencyCache) Option {
+	return func(o *serviceOptions) { o.idempotencyCache = c }
+}
+
 // Service implements the ConfigService gRPC server.
 type Service struct {
 	pb.UnimplementedConfigServiceServer
-	store        Store
-	cache        cache.ConfigCache
-	publisher    pubsub.Publisher
-	subscriber   pubsub.Subscriber
-	logger       *slog.Logger
-	cacheMetrics *telemetry.CacheMetrics
-	metrics      *telemetry.ConfigMetrics
-	validators   *validation.ValidatorFactory
-	recorder     *audit.UsageRecorder
-	guard        authz.Guard
-	limits       Limits
+	store            Store
+	cache            cache.ConfigCache
+	idempotencyCache cache.IdempotencyCache
+	publisher        pubsub.Publisher
+	subscriber       pubsub.Subscriber
+	logger           *slog.Logger
+	cacheMetrics     *telemetry.CacheMetrics
+	metrics          *telemetry.ConfigMetrics
+	validators       *validation.ValidatorFactory
+	recorder         *audit.UsageRecorder
+	guard            authz.Guard
+	limits           Limits
 }
 
 // NewService creates a new ConfigService. The four required dependencies
@@ -136,17 +147,18 @@ func NewService(store Store, cache cache.ConfigCache, publisher pubsub.Publisher
 		)
 	}
 	return &Service{
-		store:        store,
-		cache:        cache,
-		publisher:    publisher,
-		subscriber:   subscriber,
-		logger:       o.logger,
-		cacheMetrics: o.cacheMetrics,
-		metrics:      o.metrics,
-		validators:   o.validators,
-		recorder:     o.recorder,
-		guard:        o.guard,
-		limits:       o.limits,
+		store:            store,
+		cache:            cache,
+		idempotencyCache: o.idempotencyCache,
+		publisher:        publisher,
+		subscriber:       subscriber,
+		logger:           o.logger,
+		cacheMetrics:     o.cacheMetrics,
+		metrics:          o.metrics,
+		validators:       o.validators,
+		recorder:         o.recorder,
+		guard:            o.guard,
+		limits:           o.limits,
 	}
 }
 
@@ -447,6 +459,15 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 		return nil, err
 	}
 
+	if key := req.GetIdempotencyKey(); key != "" && s.idempotencyCache != nil {
+		first, idemErr := s.idempotencyCache.Claim(ctx, tenantID+":"+key, idempotencyKeyTTL)
+		if idemErr != nil {
+			s.logger.WarnContext(ctx, "idempotency cache unavailable, proceeding without dedup", "error", idemErr)
+		} else if !first {
+			return &pb.SetFieldResponse{}, nil
+		}
+	}
+
 	actor := s.getActor(ctx)
 
 	// Pre-transaction validation (schema/lock checks only).
@@ -566,6 +587,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		return nil, err
 	}
 
+	if key := req.GetIdempotencyKey(); key != "" && s.idempotencyCache != nil {
+		first, idemErr := s.idempotencyCache.Claim(ctx, tenantID+":"+key, idempotencyKeyTTL)
+		if idemErr != nil {
+			s.logger.WarnContext(ctx, "idempotency cache unavailable, proceeding without dedup", "error", idemErr)
+		} else if !first {
+			return &pb.SetFieldsResponse{}, nil
+		}
+	}
+
 	actor := s.getActor(ctx)
 
 	// Fetch field locks once for the tenant and memoize in context so that each
@@ -647,22 +677,21 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 			return fmt.Errorf("create config version: %w", txErr)
 		}
 
+		cvParams := make([]SetConfigValueParams, len(req.Updates))
+		auditParams := make([]InsertAuditWriteLogParams, len(req.Updates))
 		for i, update := range req.Updates {
 			updateValStr := typedValueToString(update.Value)
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+			cvParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       update.FieldPath,
 				Value:           updateValStr,
 				Checksum:        checksumPtr(updateValStr),
 				Description:     ptrString(update.GetValueDescription()),
-			}); txErr != nil {
-				return fmt.Errorf("set config value %s: %w", update.FieldPath, txErr)
 			}
-
 			newValueStr := typedValueToString(update.Value)
 			redactedNew := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], derefString(newValueStr))
 			redactedOld := redactIfSensitive(sensitiveFieldsMulti[update.FieldPath], changes[i].oldValue)
-			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			auditParams[i] = InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "set_field",
@@ -671,9 +700,13 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 				OldValue:      ptrString(redactedOld),
 				NewValue:      ptrString(redactedNew),
 				ConfigVersion: &newVersion.Version,
-			}); txErr != nil {
-				return fmt.Errorf("insert audit log for %s: %w", update.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, cvParams); txErr != nil {
+			return fmt.Errorf("bulk set config values: %w", txErr)
+		}
+		if txErr = tx.BulkInsertAuditWriteLog(ctx, auditParams); txErr != nil {
+			return fmt.Errorf("bulk insert audit log: %w", txErr)
 		}
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)
@@ -822,16 +855,18 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 			return fmt.Errorf("create rollback version: %w", txErr)
 		}
 
-		for _, row := range targetRows {
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+		rollbackParams := make([]SetConfigValueParams, len(targetRows))
+		for i, row := range targetRows {
+			rollbackParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       row.FieldPath,
 				Value:           row.Value,
 				Checksum:        row.Checksum,
 				Description:     row.Description,
-			}); txErr != nil {
-				return fmt.Errorf("copy field %s: %w", row.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, rollbackParams); txErr != nil {
+			return fmt.Errorf("bulk copy fields: %w", txErr)
 		}
 
 		if txErr = s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules); txErr != nil {
@@ -1172,20 +1207,19 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 			return fmt.Errorf("create config version: %w", txErr)
 		}
 
+		importCVParams := make([]SetConfigValueParams, len(values))
+		importAuditParams := make([]InsertAuditWriteLogParams, len(values))
 		for i, v := range values {
 			importValStr := strPtr(v.Value)
-			if txErr = tx.SetConfigValue(ctx, SetConfigValueParams{
+			importCVParams[i] = SetConfigValueParams{
 				ConfigVersionID: newVersion.ID,
 				FieldPath:       v.FieldPath,
 				Value:           importValStr,
 				Checksum:        checksumPtr(importValStr),
 				Description:     v.Description,
-			}); txErr != nil {
-				return fmt.Errorf("set config value %s: %w", v.FieldPath, txErr)
 			}
-
 			isSensitive := sensitiveFields[v.FieldPath]
-			if txErr = tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			importAuditParams[i] = InsertAuditWriteLogParams{
 				TenantID:      tenantID,
 				Actor:         actor,
 				Action:        "import",
@@ -1194,9 +1228,13 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 				OldValue:      ptrString(redactIfSensitive(isSensitive, changes[i].oldValue)),
 				NewValue:      strPtr(redactIfSensitive(isSensitive, v.Value)),
 				ConfigVersion: &newVersion.Version,
-			}); txErr != nil {
-				return fmt.Errorf("insert audit log for %s: %w", v.FieldPath, txErr)
 			}
+		}
+		if txErr = tx.BulkSetConfigValues(ctx, importCVParams); txErr != nil {
+			return fmt.Errorf("bulk set config values: %w", txErr)
+		}
+		if txErr = tx.BulkInsertAuditWriteLog(ctx, importAuditParams); txErr != nil {
+			return fmt.Errorf("bulk insert audit log: %w", txErr)
 		}
 
 		return s.enforceDependentRequiredInTx(ctx, tx, tenantID, newVersion.Version, depRules)

@@ -3,9 +3,11 @@ package configclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 // --- Mock transport ---
@@ -706,4 +708,129 @@ func TestSetNull_Success(t *testing.T) {
 	if err := client.SetNull(ctx, "t1", "retries"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+// --- Write retry semantics ---
+
+func TestSet_NoRetryEvenWithRetryEnabled(t *testing.T) {
+	calls := 0
+	tr := &mockTransport{}
+	client := New(tr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+
+	tr.on("SetField", func(args ...any) bool {
+		calls++
+		return true
+	}, (*SetFieldResponse)(nil), &RetryableError{Err: fmt.Errorf("unavailable")})
+
+	err := client.Set(ctx, "t1", "a", "v")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if calls != 1 {
+		t.Errorf("Set must not retry without idempotency key: got %d calls, want 1", calls)
+	}
+}
+
+func TestSetMany_NoRetryEvenWithRetryEnabled(t *testing.T) {
+	calls := 0
+	tr := &mockTransport{}
+	client := New(tr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+
+	tr.on("SetFields", func(args ...any) bool {
+		calls++
+		return true
+	}, (*SetFieldsResponse)(nil), &RetryableError{Err: fmt.Errorf("unavailable")})
+
+	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if calls != 1 {
+		t.Errorf("SetMany must not retry without idempotency key: got %d calls, want 1", calls)
+	}
+}
+
+func TestSet_RetriesWithIdempotencyKey(t *testing.T) {
+	ctx := context.Background()
+	tr := &countingWriteTransport{failUntil: 2}
+	client := New(tr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+
+	err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("key-123"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tr.calls != 3 {
+		t.Errorf("Set with idempotency key should retry: got %d calls, want 3", tr.calls)
+	}
+}
+
+func TestSet_IdempotencyKeyPassedToTransport(t *testing.T) {
+	var gotKey string
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		gotKey = r.IdempotencyKey
+		return true
+	}, &SetFieldResponse{}, nil)
+
+	if err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("my-key")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotKey != "my-key" {
+		t.Errorf("got idempotency key %q, want %q", gotKey, "my-key")
+	}
+}
+
+func TestSetMany_IdempotencyKeyPassedToTransport(t *testing.T) {
+	var gotKey string
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		gotKey = r.IdempotencyKey
+		return true
+	}, &SetFieldsResponse{}, nil)
+
+	if err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithIdempotencyKey("batch-key")); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotKey != "batch-key" {
+		t.Errorf("got idempotency key %q, want %q", gotKey, "batch-key")
+	}
+}
+
+// countingWriteTransport is a minimal Transport that fails the first N SetField
+// calls with a RetryableError and succeeds thereafter.
+type countingWriteTransport struct {
+	mockTransport
+	failUntil int
+	calls     int
+}
+
+func (t *countingWriteTransport) SetField(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+	t.calls++
+	if t.calls <= t.failUntil {
+		return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+	}
+	return &SetFieldResponse{}, nil
 }

@@ -5,15 +5,61 @@ import (
 	"time"
 )
 
+// WriteOption configures a single write operation.
+//
+// Write operations (Set, SetMany, etc.) do not retry by default because
+// they are not idempotent without an idempotency key — a retry after a
+// transient error could apply the write twice. Use [WithIdempotencyKey]
+// to opt in to safe retry.
+type WriteOption func(*writeOptions)
+
+type writeOptions struct {
+	idempotencyKey string
+}
+
+func applyWriteOptions(opts []WriteOption) writeOptions {
+	var wo writeOptions
+	for _, o := range opts {
+		o(&wo)
+	}
+	return wo
+}
+
+// WithIdempotencyKey attaches an idempotency key to a write operation.
+// When set, the server deduplicates writes with the same key within a
+// 24-hour window, making the write safe to retry on transient errors.
+// If the client was created with [WithRetry], retry is enabled for this call.
+//
+// The key must be unique per logical write; use a UUID or similarly
+// collision-resistant value. Keys are scoped to the tenant.
+func WithIdempotencyKey(key string) WriteOption {
+	return func(o *writeOptions) { o.idempotencyKey = key }
+}
+
+// doWrite executes a write operation. Without an idempotency key, the call
+// is made exactly once regardless of retry configuration. With an idempotency
+// key and retry enabled on the client, transient errors trigger retry.
+func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) error) error {
+	if wo.idempotencyKey != "" && c.opts.retryEnabled {
+		return retryDo(ctx, c, fn)
+	}
+	return fn(ctx)
+}
+
 // Set writes a single configuration value as a string.
 // Creates a new config version atomically.
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
-func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
+//
+// By default, Set does not retry on transient errors. Use [WithIdempotencyKey]
+// to opt in to safe retry with server-side deduplication.
+func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
+	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:  tenantID,
-			FieldPath: fieldPath,
-			Value:     StringVal(value),
+			TenantID:       tenantID,
+			FieldPath:      fieldPath,
+			Value:          StringVal(value),
+			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
 	})
@@ -22,12 +68,17 @@ func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string) err
 // SetTyped writes a single typed configuration value.
 // Creates a new config version atomically.
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
-func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
+//
+// By default, SetTyped does not retry on transient errors. Use [WithIdempotencyKey]
+// to opt in to safe retry with server-side deduplication.
+func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
+	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:  tenantID,
-			FieldPath: fieldPath,
-			Value:     value,
+			TenantID:       tenantID,
+			FieldPath:      fieldPath,
+			Value:          value,
+			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
 	})
@@ -36,11 +87,16 @@ func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value
 // SetNull sets a configuration field to null.
 // Creates a new config version atomically.
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
-func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
+//
+// By default, SetNull does not retry on transient errors. Use [WithIdempotencyKey]
+// to opt in to safe retry with server-side deduplication.
+func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
+	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:  tenantID,
-			FieldPath: fieldPath,
+			TenantID:       tenantID,
+			FieldPath:      fieldPath,
+			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
 	})
@@ -49,8 +105,12 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string) error 
 // SetMany writes multiple configuration values atomically in a single version.
 // The description is optional — pass an empty string to omit it.
 // Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
-func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
+//
+// By default, SetMany does not retry on transient errors. Use [WithIdempotencyKey]
+// to opt in to safe retry with server-side deduplication.
+func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
+	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
 		for path, val := range values {
 			v := StringVal(val)
@@ -60,9 +120,10 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 			})
 		}
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
-			TenantID:    tenantID,
-			Updates:     updates,
-			Description: description,
+			TenantID:       tenantID,
+			Updates:        updates,
+			Description:    description,
+			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
 	})
@@ -71,8 +132,12 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 // SetManyTyped writes multiple typed configuration values atomically in a single
 // version. The description is optional — pass an empty string to omit it.
 // Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
-func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
+//
+// By default, SetManyTyped does not retry on transient errors. Use [WithIdempotencyKey]
+// to opt in to safe retry with server-side deduplication.
+func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) error {
+	wo := applyWriteOptions(opts)
+	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		updates := make([]FieldUpdate, 0, len(values))
 		for path, v := range values {
 			updates = append(updates, FieldUpdate{
@@ -81,9 +146,10 @@ func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[s
 			})
 		}
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
-			TenantID:    tenantID,
-			Updates:     updates,
-			Description: description,
+			TenantID:       tenantID,
+			Updates:        updates,
+			Description:    description,
+			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
 	})
@@ -130,6 +196,9 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 // Set writes a new value for this field, but only if the value has not been
 // modified since the [LockedValue] was obtained via [Client.GetForUpdate].
 // Returns [ErrChecksumMismatch] if the value was changed by another writer.
+//
+// Because ExpectedChecksum makes this write idempotent, this method respects
+// the client's retry configuration.
 func (lv *LockedValue) Set(ctx context.Context, newValue string) error {
 	return retryDo(ctx, lv.client, func(ctx context.Context) error {
 		_, err := lv.client.transport.SetField(ctx, &SetFieldRequest{
@@ -163,37 +232,30 @@ func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateF
 // --- Type-specific setters ---
 
 // SetInt writes an integer configuration value.
-func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64) error {
-	return c.setTyped(ctx, tenantID, fieldPath, IntVal(value))
+func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64, opts ...WriteOption) error {
+	return c.setTyped(ctx, tenantID, fieldPath, IntVal(value), opts...)
 }
 
 // SetFloat writes a floating-point configuration value.
-func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64) error {
-	return c.setTyped(ctx, tenantID, fieldPath, FloatVal(value))
+func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64, opts ...WriteOption) error {
+	return c.setTyped(ctx, tenantID, fieldPath, FloatVal(value), opts...)
 }
 
 // SetBool writes a boolean configuration value.
-func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool) error {
-	return c.setTyped(ctx, tenantID, fieldPath, BoolVal(value))
+func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool, opts ...WriteOption) error {
+	return c.setTyped(ctx, tenantID, fieldPath, BoolVal(value), opts...)
 }
 
 // SetTime writes a timestamp configuration value.
-func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time) error {
-	return c.setTyped(ctx, tenantID, fieldPath, TimeVal(value))
+func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time, opts ...WriteOption) error {
+	return c.setTyped(ctx, tenantID, fieldPath, TimeVal(value), opts...)
 }
 
 // SetDuration writes a duration configuration value.
-func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration) error {
-	return c.setTyped(ctx, tenantID, fieldPath, DurationVal(value))
+func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration, opts ...WriteOption) error {
+	return c.setTyped(ctx, tenantID, fieldPath, DurationVal(value), opts...)
 }
 
-func (c *Client) setTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue) error {
-	return retryDo(ctx, c, func(ctx context.Context) error {
-		_, err := c.transport.SetField(ctx, &SetFieldRequest{
-			TenantID:  tenantID,
-			FieldPath: fieldPath,
-			Value:     value,
-		})
-		return err
-	})
+func (c *Client) setTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) error {
+	return c.SetTyped(ctx, tenantID, fieldPath, value, opts...)
 }

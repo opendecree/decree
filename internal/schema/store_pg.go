@@ -22,6 +22,7 @@ type PGStore struct {
 	writePool *pgxpool.Pool
 	write     *dbstore.Queries
 	read      *dbstore.Queries
+	tx        pgx.Tx // non-nil when bound to a transaction
 }
 
 // NewPGStore creates a new PostgreSQL-backed schema store.
@@ -51,6 +52,7 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 		writePool: s.writePool,
 		write:     txQueries,
 		read:      txQueries,
+		tx:        tx,
 	}
 
 	if err := fn(txStore); err != nil {
@@ -295,6 +297,97 @@ func (s *PGStore) GetSchemaFields(ctx context.Context, schemaVersionID string) (
 	result := make([]domain.SchemaField, len(rows))
 	for i, r := range rows {
 		result[i] = schemaFieldFromDB(r)
+	}
+	return result, nil
+}
+
+// batcher returns the BatchSender appropriate for the current context:
+// the active transaction when inside RunInTx, otherwise the write pool.
+func (s *PGStore) batcher() interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+} {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.writePool
+}
+
+const bulkCreateSchemaFieldSQL = `INSERT INTO schema_fields (
+	schema_version_id, path, field_type, constraints, nullable, deprecated,
+	redirect_to, default_value, description, title, example, examples,
+	external_docs, tags, format, read_only, write_once, sensitive
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+RETURNING id, schema_version_id, path, field_type, constraints, nullable, deprecated,
+	redirect_to, default_value, description, title, example, examples,
+	external_docs, tags, format, read_only, write_once, sensitive`
+
+func (s *PGStore) BulkCreateSchemaFields(ctx context.Context, args []CreateSchemaFieldParams) ([]domain.SchemaField, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+	batch := &pgx.Batch{}
+	for _, a := range args {
+		svID, err := pgconv.StringToUUID(a.SchemaVersionID)
+		if err != nil {
+			return nil, err
+		}
+		batch.Queue(bulkCreateSchemaFieldSQL,
+			svID, a.Path, dbstore.FieldType(a.FieldType),
+			a.Constraints, a.Nullable, a.Deprecated,
+			a.RedirectTo, a.DefaultValue, a.Description,
+			a.Title, a.Example, a.Examples, a.ExternalDocs,
+			a.Tags, a.Format, a.ReadOnly, a.WriteOnce, a.Sensitive,
+		)
+	}
+	br := s.batcher().SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	result := make([]domain.SchemaField, 0, len(args))
+	for range args {
+		row := br.QueryRow()
+		var f dbstore.SchemaField
+		if err := row.Scan(
+			&f.ID, &f.SchemaVersionID, &f.Path, &f.FieldType,
+			&f.Constraints, &f.Nullable, &f.Deprecated,
+			&f.RedirectTo, &f.DefaultValue, &f.Description,
+			&f.Title, &f.Example, &f.Examples, &f.ExternalDocs,
+			&f.Tags, &f.Format, &f.ReadOnly, &f.WriteOnce, &f.Sensitive,
+		); err != nil {
+			return nil, fmt.Errorf("bulk create schema field: %w", err)
+		}
+		result = append(result, schemaFieldFromDB(f))
+	}
+	return result, br.Close()
+}
+
+func (s *PGStore) GetSchemaFieldsByVersionIDs(ctx context.Context, versionIDs []string) ([]domain.SchemaField, error) {
+	pgIDs, err := stringsToUUIDs(versionIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.GetSchemaFieldsByVersionIDs(ctx, pgIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.SchemaField, len(rows))
+	for i, r := range rows {
+		result[i] = schemaFieldFromDB(r)
+	}
+	return result, nil
+}
+
+func (s *PGStore) GetLatestSchemaVersionsBatch(ctx context.Context, schemaIDs []string) ([]domain.SchemaVersion, error) {
+	pgIDs, err := stringsToUUIDs(schemaIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.GetLatestSchemaVersionsBatch(ctx, pgIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.SchemaVersion, len(rows))
+	for i, r := range rows {
+		result[i] = schemaVersionFromDB(r)
 	}
 	return result, nil
 }

@@ -118,6 +118,7 @@ type Store interface {
 
 	// Config values.
 	SetConfigValue(ctx context.Context, arg SetConfigValueParams) error
+	BulkSetConfigValues(ctx context.Context, args []SetConfigValueParams) error
 	GetConfigValues(ctx context.Context, configVersionID string) ([]domain.ConfigValue, error)
 	GetConfigValueAtVersion(ctx context.Context, arg GetConfigValueAtVersionParams) (GetConfigValueAtVersionRow, error)
 	GetFullConfigAtVersion(ctx context.Context, arg GetFullConfigAtVersionParams) ([]GetFullConfigAtVersionRow, error)
@@ -136,4 +137,5 @@ type Store interface {
 
 	// Audit.
 	InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error
+	BulkInsertAuditWriteLog(ctx context.Context, args []InsertAuditWriteLogParams) error
 }

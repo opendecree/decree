@@ -71,9 +71,24 @@ func (m *mockStore) CreateSchemaField(ctx context.Context, arg CreateSchemaField
 	return args.Get(0).(domain.SchemaField), args.Error(1)
 }
 
+func (m *mockStore) BulkCreateSchemaFields(ctx context.Context, arg []CreateSchemaFieldParams) ([]domain.SchemaField, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]domain.SchemaField), args.Error(1)
+}
+
 func (m *mockStore) GetSchemaFields(ctx context.Context, schemaVersionID string) ([]domain.SchemaField, error) {
 	args := m.Called(ctx, schemaVersionID)
 	return args.Get(0).([]domain.SchemaField), args.Error(1)
+}
+
+func (m *mockStore) GetSchemaFieldsByVersionIDs(ctx context.Context, versionIDs []string) ([]domain.SchemaField, error) {
+	args := m.Called(ctx, versionIDs)
+	return args.Get(0).([]domain.SchemaField), args.Error(1)
+}
+
+func (m *mockStore) GetLatestSchemaVersionsBatch(ctx context.Context, schemaIDs []string) ([]domain.SchemaVersion, error) {
+	args := m.Called(ctx, schemaIDs)
+	return args.Get(0).([]domain.SchemaVersion), args.Error(1)
 }
 
 func (m *mockStore) DeleteSchemaField(ctx context.Context, arg DeleteSchemaFieldParams) error {
