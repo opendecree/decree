@@ -62,7 +62,9 @@ func (c *RedisCache) Set(ctx context.Context, tenantID string, version int32, va
 	}
 	k := c.key(tenantID, version)
 	idx := c.indexKey(tenantID)
-	pipe := c.client.Pipeline()
+	// TxPipeline wraps commands in MULTI/EXEC so HSET + EXPIRE are atomic;
+	// a crash between the two cannot leave a TTL-less key.
+	pipe := c.client.TxPipeline()
 	pipe.HSet(ctx, k, values)
 	pipe.Expire(ctx, k, ttl)
 	pipe.SAdd(ctx, idx, k)
