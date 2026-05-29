@@ -176,6 +176,23 @@ func TestMemoryCache_UpdateExistingDoesNotGrow(t *testing.T) {
 	assert.Equal(t, "2", got["a"])
 }
 
+func TestMemoryCache_WithSweepInterval_SweepsOnSchedule(t *testing.T) {
+	interval := 50 * time.Millisecond
+	c := NewMemoryCache(0, WithSweepInterval(interval))
+	defer c.Stop()
+	ctx := context.Background()
+
+	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Millisecond))
+	require.NoError(t, c.Set(ctx, "t2", 1, map[string]string{"a": "2"}, time.Hour))
+
+	// Wait long enough for at least one sweep (interval + max jitter = 55ms).
+	time.Sleep(200 * time.Millisecond)
+
+	assert.Equal(t, 1, c.Len(), "expired entry should be swept by background goroutine")
+	got, _ := c.Get(ctx, "t2", 1)
+	assert.Equal(t, "2", got["a"], "live entry must remain")
+}
+
 // --- MemoryIdempotencyCache ---
 
 func TestMemoryIdempotencyCache_FirstClaimReturnsTrue(t *testing.T) {
