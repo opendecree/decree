@@ -142,6 +142,7 @@ func computeChecksum(fields []*pb.SchemaField) string {
 			h.Write(data)
 		}
 	}
+	// Truncate to 16 hex chars (64 bits): sufficient for collision detection, not cryptographic.
 	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }
 
