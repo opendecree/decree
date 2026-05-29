@@ -24,12 +24,15 @@ func Init(ctx context.Context, cfg Config) (shutdown func(context.Context) error
 		return func(context.Context) error { return nil }, nil
 	}
 
+	// Build the custom resource schemaless: it carries attributes but no schema
+	// URL, so resource.Merge never hits a schema-URL conflict with
+	// resource.Default(). Default()'s schema URL tracks the SDK's bundled
+	// semconv version and changes on every otel bump (e.g. 1.40 -> 1.41), so
+	// pinning a matching semconv.SchemaURL here is fragile. Merge adopts
+	// Default's schema URL for the result.
 	res, err := resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(serviceName),
-		),
+		resource.NewSchemaless(semconv.ServiceName(serviceName)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create otel resource: %w", err)
