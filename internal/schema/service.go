@@ -849,9 +849,24 @@ func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequ
 		return nil, err
 	}
 
-	locks, err := s.store.GetFieldLocks(ctx, tenant.ID)
+	pageSize := pagination.ClampPageSize(req.PageSize, 50, 200)
+
+	offset, err := pagination.DecodePageToken(req.PageToken)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid page token")
+	}
+
+	locks, err := s.store.ListFieldLocks(ctx, tenant.ID, ListFieldLocksParams{
+		Limit:  pageSize + 1,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to list field locks")
+	}
+
+	nextToken := pagination.NextPageToken(pageSize, int32(len(locks)), offset)
+	if int32(len(locks)) > pageSize {
+		locks = locks[:pageSize]
 	}
 
 	pbLocks := make([]*pb.FieldLock, 0, len(locks))
@@ -860,7 +875,8 @@ func (s *Service) ListFieldLocks(ctx context.Context, req *pb.ListFieldLocksRequ
 	}
 
 	return &pb.ListFieldLocksResponse{
-		Locks: pbLocks,
+		Locks:         pbLocks,
+		NextPageToken: nextToken,
 	}, nil
 }
 

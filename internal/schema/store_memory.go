@@ -531,6 +531,16 @@ func (m *MemoryStore) GetFieldLocks(_ context.Context, tenantID string) ([]domai
 	return result, nil
 }
 
+func (m *MemoryStore) ListFieldLocks(_ context.Context, tenantID string, arg ListFieldLocksParams) ([]domain.TenantFieldLock, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	locks := m.fieldLocks[tenantID]
+	all := make([]domain.TenantFieldLock, len(locks))
+	copy(all, locks)
+	return paginate(all, int(arg.Offset), int(arg.Limit)), nil
+}
+
 // paginate applies offset and limit to a sorted slice.
 func paginate[T any](items []T, offset, limit int) []T {
 	if offset >= len(items) {

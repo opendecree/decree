@@ -590,6 +590,30 @@ func (s *PGStore) GetFieldLocks(ctx context.Context, tenantID string) ([]domain.
 	return result, nil
 }
 
+func (s *PGStore) ListFieldLocks(ctx context.Context, tenantID string, arg ListFieldLocksParams) ([]domain.TenantFieldLock, error) {
+	pgID, err := pgconv.StringToUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.read.ListFieldLocks(ctx, dbstore.ListFieldLocksParams{
+		TenantID: pgID,
+		Limit:    arg.Limit,
+		Offset:   arg.Offset,
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.TenantFieldLock, len(rows))
+	for i, r := range rows {
+		result[i] = domain.TenantFieldLock{
+			TenantID:     pgconv.UUIDToString(r.TenantID),
+			FieldPath:    r.FieldPath,
+			LockedValues: r.LockedValues,
+		}
+	}
+	return result, nil
+}
+
 // --- DB → domain conversion helpers ---
 
 func schemaFromDB(r dbstore.Schema) domain.Schema {

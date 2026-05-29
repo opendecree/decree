@@ -1045,6 +1045,21 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "pageSize",
+            "description": "Maximum number of locks to return. Defaults to 50, max 200.",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "pageToken",
+            "description": "Pagination token from a previous ListFieldLocksResponse.",
+            "in": "query",
+            "required": false,
+            "type": "string"
           }
         ],
         "tags": [
@@ -2181,7 +2196,11 @@
             "type": "object",
             "$ref": "#/definitions/v1FieldLock"
           },
-          "description": "All active field locks for the tenant."
+          "description": "Active field locks for the tenant (up to page_size)."
+        },
+        "nextPageToken": {
+          "type": "string",
+          "description": "Token for the next page; empty when no more results."
         }
       }
     },

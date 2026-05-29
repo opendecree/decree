@@ -564,6 +564,8 @@ func local_request_SchemaService_UnlockField_0(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
+var filter_SchemaService_ListFieldLocks_0 = &utilities.DoubleArray{Encoding: map[string]int{"tenant_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
 func request_SchemaService_ListFieldLocks_0(ctx context.Context, marshaler runtime.Marshaler, client SchemaServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq ListFieldLocksRequest
@@ -580,6 +582,12 @@ func request_SchemaService_ListFieldLocks_0(ctx context.Context, marshaler runti
 	protoReq.TenantId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "tenant_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SchemaService_ListFieldLocks_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := client.ListFieldLocks(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -598,6 +606,12 @@ func local_request_SchemaService_ListFieldLocks_0(ctx context.Context, marshaler
 	protoReq.TenantId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "tenant_id", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_SchemaService_ListFieldLocks_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.ListFieldLocks(ctx, &protoReq)
 	return msg, metadata, err
