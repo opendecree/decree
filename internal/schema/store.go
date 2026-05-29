@@ -40,6 +40,12 @@ type ListSchemasParams struct {
 	Offset int32
 }
 
+// ListFieldLocksParams contains pagination parameters for listing field locks.
+type ListFieldLocksParams struct {
+	Limit  int32
+	Offset int32
+}
+
 // CreateSchemaFieldParams contains parameters for creating a schema field.
 type CreateSchemaFieldParams struct {
 	SchemaVersionID string
@@ -182,4 +188,5 @@ type Store interface {
 	CreateFieldLock(ctx context.Context, arg CreateFieldLockParams) error
 	DeleteFieldLock(ctx context.Context, arg DeleteFieldLockParams) error
 	GetFieldLocks(ctx context.Context, tenantID string) ([]domain.TenantFieldLock, error)
+	ListFieldLocks(ctx context.Context, tenantID string, arg ListFieldLocksParams) ([]domain.TenantFieldLock, error)
 }

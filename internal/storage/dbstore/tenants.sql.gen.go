@@ -167,6 +167,39 @@ func (q *Queries) GetTenantsByNames(ctx context.Context, names []string) ([]Tena
 	return items, nil
 }
 
+const listFieldLocks = `-- name: ListFieldLocks :many
+SELECT tenant_id, field_path, locked_values FROM tenant_field_locks
+WHERE tenant_id = $1
+ORDER BY field_path
+LIMIT $2 OFFSET $3
+`
+
+type ListFieldLocksParams struct {
+	TenantID pgtype.UUID `json:"tenant_id"`
+	Limit    int32       `json:"limit"`
+	Offset   int32       `json:"offset"`
+}
+
+func (q *Queries) ListFieldLocks(ctx context.Context, arg ListFieldLocksParams) ([]TenantFieldLock, error) {
+	rows, err := q.db.Query(ctx, listFieldLocks, arg.TenantID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TenantFieldLock{}
+	for rows.Next() {
+		var i TenantFieldLock
+		if err := rows.Scan(&i.TenantID, &i.FieldPath, &i.LockedValues); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenants = `-- name: ListTenants :many
 SELECT id, name, schema_id, schema_version, created_at, updated_at, deleted_at FROM tenants
 WHERE deleted_at IS NULL

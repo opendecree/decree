@@ -342,6 +342,40 @@ func TestMemoryStore_FieldLocks(t *testing.T) {
 	assert.True(t, errors.Is(err, domain.ErrNotFound))
 }
 
+func TestMemoryStore_ListFieldLocks_Pagination(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "lock-page-test"})
+	require.NoError(t, err)
+	tenant, err := store.CreateTenant(ctx, CreateTenantParams{
+		Name: "lock-pager", SchemaID: s.ID, SchemaVersion: 1,
+	})
+	require.NoError(t, err)
+
+	for _, path := range []string{"a.x", "b.y", "c.z"} {
+		require.NoError(t, store.CreateFieldLock(ctx, CreateFieldLockParams{TenantID: tenant.ID, FieldPath: path}))
+	}
+
+	// First page.
+	page1, err := store.ListFieldLocks(ctx, tenant.ID, ListFieldLocksParams{Limit: 2, Offset: 0})
+	require.NoError(t, err)
+	assert.Len(t, page1, 2)
+	assert.Equal(t, "a.x", page1[0].FieldPath)
+	assert.Equal(t, "b.y", page1[1].FieldPath)
+
+	// Second page.
+	page2, err := store.ListFieldLocks(ctx, tenant.ID, ListFieldLocksParams{Limit: 2, Offset: 2})
+	require.NoError(t, err)
+	assert.Len(t, page2, 1)
+	assert.Equal(t, "c.z", page2[0].FieldPath)
+
+	// Offset past end.
+	empty, err := store.ListFieldLocks(ctx, tenant.ID, ListFieldLocksParams{Limit: 2, Offset: 10})
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+}
+
 func TestMemoryStore_Pagination(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

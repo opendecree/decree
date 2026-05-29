@@ -63,3 +63,9 @@ WHERE tenant_id = $1 AND field_path = $2;
 SELECT * FROM tenant_field_locks
 WHERE tenant_id = $1
 ORDER BY field_path;
+
+-- name: ListFieldLocks :many
+SELECT * FROM tenant_field_locks
+WHERE tenant_id = $1
+ORDER BY field_path
+LIMIT $2 OFFSET $3;

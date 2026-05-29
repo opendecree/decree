@@ -323,11 +323,20 @@ message UnlockFieldResponse {}
 message ListFieldLocksRequest {
   // Tenant ID (UUID).
   string tenant_id = 1;
+
+  // Maximum number of locks to return. Defaults to 50, max 200.
+  int32 page_size = 2;
+
+  // Pagination token from a previous ListFieldLocksResponse.
+  string page_token = 3;
 }
 
 message ListFieldLocksResponse {
-  // All active field locks for the tenant.
+  // Active field locks for the tenant (up to page_size).
   repeated FieldLock locks = 1;
+
+  // Token for the next page; empty when no more results.
+  string next_page_token = 2;
 }
 
 // --- Import/export ---

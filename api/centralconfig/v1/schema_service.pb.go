@@ -1342,7 +1342,11 @@ func (*UnlockFieldResponse) Descriptor() ([]byte, []int) {
 type ListFieldLocksRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Tenant ID (UUID).
-	TenantId      string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// Maximum number of locks to return. Defaults to 50, max 200.
+	PageSize int32 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// Pagination token from a previous ListFieldLocksResponse.
+	PageToken     string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1384,10 +1388,26 @@ func (x *ListFieldLocksRequest) GetTenantId() string {
 	return ""
 }
 
+func (x *ListFieldLocksRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListFieldLocksRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
 type ListFieldLocksResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// All active field locks for the tenant.
-	Locks         []*FieldLock `protobuf:"bytes,1,rep,name=locks,proto3" json:"locks,omitempty"`
+	// Active field locks for the tenant (up to page_size).
+	Locks []*FieldLock `protobuf:"bytes,1,rep,name=locks,proto3" json:"locks,omitempty"`
+	// Token for the next page; empty when no more results.
+	NextPageToken string `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1427,6 +1447,13 @@ func (x *ListFieldLocksResponse) GetLocks() []*FieldLock {
 		return x.Locks
 	}
 	return nil
+}
+
+func (x *ListFieldLocksResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
 }
 
 type ExportSchemaRequest struct {
@@ -1736,11 +1763,15 @@ const file_centralconfig_v1_schema_service_proto_rawDesc = "" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1d\n" +
 	"\n" +
 	"field_path\x18\x02 \x01(\tR\tfieldPath\"\x15\n" +
-	"\x13UnlockFieldResponse\"4\n" +
+	"\x13UnlockFieldResponse\"p\n" +
 	"\x15ListFieldLocksRequest\x12\x1b\n" +
-	"\ttenant_id\x18\x01 \x01(\tR\btenantId\"K\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1b\n" +
+	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\"s\n" +
 	"\x16ListFieldLocksResponse\x121\n" +
-	"\x05locks\x18\x01 \x03(\v2\x1b.centralconfig.v1.FieldLockR\x05locks\"\x89\x01\n" +
+	"\x05locks\x18\x01 \x03(\v2\x1b.centralconfig.v1.FieldLockR\x05locks\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x89\x01\n" +
 	"\x13ExportSchemaRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\aversion\x18\x02 \x01(\x05H\x00R\aversion\x88\x01\x01\x12&\n" +
