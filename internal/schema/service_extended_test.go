@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -380,7 +381,7 @@ func TestListFieldLocks_Success(t *testing.T) {
 	svc := NewService(store, WithLogger(testLogger))
 
 	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
-	store.On("GetFieldLocks", mock.Anything, testTenantID).Return([]domain.TenantFieldLock{
+	store.On("ListFieldLocks", mock.Anything, testTenantID, mock.AnythingOfType("schema.ListFieldLocksParams")).Return([]domain.TenantFieldLock{
 		{TenantID: testTenantID, FieldPath: "app.fee"},
 	}, nil)
 
@@ -388,6 +389,7 @@ func TestListFieldLocks_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, resp.Locks, 1)
 	assert.Equal(t, "app.fee", resp.Locks[0].FieldPath)
+	assert.Empty(t, resp.NextPageToken)
 }
 
 // otherTenantID is a tenant id distinct from testTenantID, used to scope
@@ -438,6 +440,59 @@ func TestListFieldLocks_DeniedForOutOfScopeAdmin(t *testing.T) {
 	_, err := svc.ListFieldLocks(outOfScopeAdminCtx(), &pb.ListFieldLocksRequest{TenantId: testTenantID})
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestListFieldLocks_Pagination_NextToken(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+
+	// Return pageSize+1 rows so the service knows there's a next page.
+	locks := make([]domain.TenantFieldLock, 3)
+	for i := range locks {
+		locks[i] = domain.TenantFieldLock{TenantID: testTenantID, FieldPath: fmt.Sprintf("app.field%d", i)}
+	}
+	store.On("ListFieldLocks", mock.Anything, testTenantID, ListFieldLocksParams{Limit: 3, Offset: 0}).Return(locks, nil)
+
+	resp, err := svc.ListFieldLocks(auth.WithoutAuth(context.Background()), &pb.ListFieldLocksRequest{
+		TenantId: testTenantID,
+		PageSize: 2,
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Locks, 2)
+	assert.NotEmpty(t, resp.NextPageToken)
+}
+
+func TestListFieldLocks_Pagination_LastPage(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+
+	locks := []domain.TenantFieldLock{
+		{TenantID: testTenantID, FieldPath: "app.fee"},
+	}
+	store.On("ListFieldLocks", mock.Anything, testTenantID, mock.AnythingOfType("schema.ListFieldLocksParams")).Return(locks, nil)
+
+	resp, err := svc.ListFieldLocks(auth.WithoutAuth(context.Background()), &pb.ListFieldLocksRequest{
+		TenantId: testTenantID,
+		PageSize: 2,
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.Locks, 1)
+	assert.Empty(t, resp.NextPageToken)
+}
+
+func TestListFieldLocks_InvalidPageToken(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	store.On("GetTenantByID", mock.Anything, testTenantID).Return(testTenant(), nil)
+
+	_, err := svc.ListFieldLocks(auth.WithoutAuth(context.Background()), &pb.ListFieldLocksRequest{
+		TenantId:  testTenantID,
+		PageToken: "not-a-valid-token",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 // --- UpdateTenant ---

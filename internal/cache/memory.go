@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"maps"
@@ -37,8 +38,9 @@ func WithSweepInterval(d time.Duration) MemoryCacheOption {
 type MemoryCache struct {
 	mu            sync.RWMutex
 	entries       map[string]memoryCacheEntry
-	negEntries    map[string]time.Time // negative-cache: key → expiry
-	order         []string             // insertion order for eviction
+	negEntries    map[string]time.Time     // negative-cache: key → expiry
+	lru           *list.List               // front = oldest, back = newest
+	lruIndex      map[string]*list.Element // key → list element for O(1) removal
 	maxEntries    int
 	sweepInterval time.Duration
 	stopSweep     chan struct{}
@@ -62,6 +64,8 @@ func NewMemoryCache(maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
 	c := &MemoryCache{
 		entries:       make(map[string]memoryCacheEntry),
 		negEntries:    make(map[string]time.Time),
+		lru:           list.New(),
+		lruIndex:      make(map[string]*list.Element),
 		maxEntries:    maxEntries,
 		sweepInterval: cfg.sweepInterval,
 		stopSweep:     make(chan struct{}),
@@ -95,10 +99,10 @@ func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, val
 
 	k := c.key(tenantID, version)
 
-	// If key already exists, just update it (no new order entry).
+	// If key already exists, just update it (no new LRU entry).
 	if _, exists := c.entries[k]; !exists {
 		c.evictIfNeeded()
-		c.order = append(c.order, k)
+		c.lruIndex[k] = c.lru.PushBack(k)
 	}
 
 	// Copy values to prevent external mutation.
@@ -119,7 +123,7 @@ func (c *MemoryCache) Invalidate(_ context.Context, tenantID string) error {
 	prefix := tenantID + ":"
 	for k := range c.entries {
 		if strings.HasPrefix(k, prefix) {
-			delete(c.entries, k)
+			c.deleteEntry(k)
 		}
 	}
 	for k := range c.negEntries {
@@ -127,7 +131,6 @@ func (c *MemoryCache) Invalidate(_ context.Context, tenantID string) error {
 			delete(c.negEntries, k)
 		}
 	}
-	c.rebuildOrder()
 	return nil
 }
 
@@ -160,6 +163,15 @@ func (c *MemoryCache) Stop() {
 	close(c.stopSweep)
 }
 
+// deleteEntry removes an entry and its LRU tracking. Caller must hold mu.
+func (c *MemoryCache) deleteEntry(k string) {
+	delete(c.entries, k)
+	if elem, ok := c.lruIndex[k]; ok {
+		c.lru.Remove(elem)
+		delete(c.lruIndex, k)
+	}
+}
+
 // evictIfNeeded removes entries when at capacity. Caller must hold mu.
 func (c *MemoryCache) evictIfNeeded() {
 	if len(c.entries) < c.maxEntries {
@@ -170,33 +182,17 @@ func (c *MemoryCache) evictIfNeeded() {
 	now := time.Now()
 	for k, e := range c.entries {
 		if now.After(e.expiresAt) {
-			delete(c.entries, k)
+			c.deleteEntry(k)
 		}
 	}
 	if len(c.entries) < c.maxEntries {
-		c.rebuildOrder()
 		return
 	}
 
-	// Still full: evict oldest.
-	for _, k := range c.order {
-		if _, exists := c.entries[k]; exists {
-			delete(c.entries, k)
-			break
-		}
+	// Still full: evict oldest (front of LRU list).
+	if front := c.lru.Front(); front != nil {
+		c.deleteEntry(front.Value.(string))
 	}
-	c.rebuildOrder()
-}
-
-// rebuildOrder rebuilds the order slice from existing entries. Caller must hold mu.
-func (c *MemoryCache) rebuildOrder() {
-	cleaned := c.order[:0]
-	for _, k := range c.order {
-		if _, exists := c.entries[k]; exists {
-			cleaned = append(cleaned, k)
-		}
-	}
-	c.order = cleaned
 }
 
 // MemoryIdempotencyCache implements IdempotencyCache with an in-memory map.
@@ -247,7 +243,7 @@ func (c *MemoryCache) sweep() {
 	now := time.Now()
 	for k, e := range c.entries {
 		if now.After(e.expiresAt) {
-			delete(c.entries, k)
+			c.deleteEntry(k)
 		}
 	}
 	for k, exp := range c.negEntries {
@@ -255,5 +251,4 @@ func (c *MemoryCache) sweep() {
 			delete(c.negEntries, k)
 		}
 	}
-	c.rebuildOrder()
 }

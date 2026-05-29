@@ -155,3 +155,8 @@ func (m *mockStore) GetFieldLocks(ctx context.Context, tenantID string) ([]domai
 	args := m.Called(ctx, tenantID)
 	return args.Get(0).([]domain.TenantFieldLock), args.Error(1)
 }
+
+func (m *mockStore) ListFieldLocks(ctx context.Context, tenantID string, arg ListFieldLocksParams) ([]domain.TenantFieldLock, error) {
+	args := m.Called(ctx, tenantID, arg)
+	return args.Get(0).([]domain.TenantFieldLock), args.Error(1)
+}
