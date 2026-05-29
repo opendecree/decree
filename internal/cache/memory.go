@@ -4,24 +4,44 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math/rand/v2"
 	"strings"
 	"sync"
 	"time"
 )
 
-const defaultMaxEntries = 10000
+const (
+	defaultMaxEntries    = 10000
+	defaultSweepInterval = time.Minute
+)
+
+// MemoryCacheOption configures optional MemoryCache settings.
+type MemoryCacheOption func(*memoryCacheConfig)
+
+type memoryCacheConfig struct {
+	sweepInterval time.Duration
+}
+
+// WithSweepInterval sets the base interval between background sweep passes.
+// Each pass adds ±10% jitter to prevent synchronized sweeps across instances.
+func WithSweepInterval(d time.Duration) MemoryCacheOption {
+	return func(cfg *memoryCacheConfig) {
+		cfg.sweepInterval = d
+	}
+}
 
 // MemoryCache implements ConfigCache using an in-memory map with TTL and
 // bounded size. When the cache is full, expired entries are evicted first,
 // then the oldest entry is removed. A background goroutine periodically
 // sweeps expired entries.
 type MemoryCache struct {
-	mu         sync.RWMutex
-	entries    map[string]memoryCacheEntry
-	negEntries map[string]time.Time // negative-cache: key → expiry
-	order      []string             // insertion order for eviction
-	maxEntries int
-	stopSweep  chan struct{}
+	mu            sync.RWMutex
+	entries       map[string]memoryCacheEntry
+	negEntries    map[string]time.Time // negative-cache: key → expiry
+	order         []string             // insertion order for eviction
+	maxEntries    int
+	sweepInterval time.Duration
+	stopSweep     chan struct{}
 }
 
 type memoryCacheEntry struct {
@@ -31,15 +51,20 @@ type memoryCacheEntry struct {
 
 // NewMemoryCache creates a new in-memory config cache.
 // maxEntries sets the upper bound on cached entries (0 uses default of 10000).
-func NewMemoryCache(maxEntries int) *MemoryCache {
+func NewMemoryCache(maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
 	if maxEntries <= 0 {
 		maxEntries = defaultMaxEntries
 	}
+	cfg := memoryCacheConfig{sweepInterval: defaultSweepInterval}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	c := &MemoryCache{
-		entries:    make(map[string]memoryCacheEntry),
-		negEntries: make(map[string]time.Time),
-		maxEntries: maxEntries,
-		stopSweep:  make(chan struct{}),
+		entries:       make(map[string]memoryCacheEntry),
+		negEntries:    make(map[string]time.Time),
+		maxEntries:    maxEntries,
+		sweepInterval: cfg.sweepInterval,
+		stopSweep:     make(chan struct{}),
 	}
 	go c.sweepLoop()
 	return c
@@ -197,15 +222,19 @@ func (c *MemoryIdempotencyCache) Claim(_ context.Context, key string, ttl time.D
 	return true, nil
 }
 
-// sweepLoop periodically removes expired entries.
+// sweepLoop periodically removes expired entries. Each iteration adds ±10%
+// jitter to the configured interval to prevent synchronized sweeps when many
+// instances share the same configuration.
 func (c *MemoryCache) sweepLoop() {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
 	for {
+		half := c.sweepInterval / 10
+		jitter := time.Duration(rand.Int64N(int64(2*half))) - half
+		timer := time.NewTimer(c.sweepInterval + jitter)
 		select {
-		case <-ticker.C:
+		case <-timer.C:
 			c.sweep()
 		case <-c.stopSweep:
+			timer.Stop()
 			return
 		}
 	}
