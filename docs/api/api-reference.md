@@ -1501,6 +1501,8 @@ Imported versions are created as drafts (unpublished) unless auto_publish is tru
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | tenant_id | [string](#string) |  | Tenant ID (UUID). |
+| page_size | [int32](#int32) |  | Maximum number of locks to return. Defaults to 50, max 200. |
+| page_token | [string](#string) |  | Pagination token from a previous ListFieldLocksResponse. |
 
 
 
@@ -1515,7 +1517,8 @@ Imported versions are created as drafts (unpublished) unless auto_publish is tru
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| locks | [FieldLock](#centralconfig-v1-FieldLock) | repeated | All active field locks for the tenant. |
+| locks | [FieldLock](#centralconfig-v1-FieldLock) | repeated | Active field locks for the tenant (up to page_size). |
+| next_page_token | [string](#string) |  | Token for the next page; empty when no more results. |
 
 
 
