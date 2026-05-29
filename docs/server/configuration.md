@@ -50,6 +50,7 @@ TLS is **required by default** for the gRPC server and the gateway-to-gRPC dial.
 | `TLS_GATEWAY_SERVER_NAME` | SNI / verification hostname the gateway expects on the upstream gRPC certificate. | dial address host | No |
 | `TLS_GATEWAY_CLIENT_CERT_FILE` | Client certificate the gateway presents to the upstream gRPC server (when the server requires mTLS). | -- | No |
 | `TLS_GATEWAY_CLIENT_KEY_FILE` | Private key for `TLS_GATEWAY_CLIENT_CERT_FILE`. Must be set together with the cert file. | -- | No |
+| `DECREE_TLS_MIN_VERSION` | Minimum TLS version. Set to `TLS12` to allow TLS 1.2 clients (enables an explicit cipher suite allowlist; see below). Default is `TLS13`. | `TLS13` | No |
 
 Example (TLS, no mTLS):
 
@@ -69,6 +70,74 @@ TLS_CLIENT_CA_FILE=/etc/decree/tls/clients-ca.crt
 TLS_GATEWAY_CLIENT_CERT_FILE=/etc/decree/tls/gateway.crt
 TLS_GATEWAY_CLIENT_KEY_FILE=/etc/decree/tls/gateway.key
 ```
+
+### mTLS Setup
+
+Mutual TLS (mTLS) lets the server authenticate clients by certificate in addition to the usual server-to-client authentication. This is the strongest transport-layer auth posture: no valid client cert, no connection.
+
+**1. Create a CA, server cert, and client cert**
+
+```bash
+# CA
+openssl req -x509 -newkey rsa:4096 -keyout ca.key -out ca.crt \
+  -days 3650 -nodes -subj "/CN=decree-ca"
+
+# Server cert (include localhost SAN so the internal gateway dial works)
+openssl req -newkey rsa:4096 -keyout server.key -out server.csr \
+  -nodes -subj "/CN=decree.example.com" \
+  -addext "subjectAltName=DNS:decree.example.com,DNS:localhost,IP:127.0.0.1"
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out server.crt -days 365 \
+  -extfile <(printf "subjectAltName=DNS:decree.example.com,DNS:localhost,IP:127.0.0.1")
+
+# Client cert (for the built-in HTTP/JSON gateway)
+openssl req -newkey rsa:4096 -keyout gateway.key -out gateway.csr \
+  -nodes -subj "/CN=decree-gateway"
+openssl x509 -req -in gateway.csr -CA ca.crt -CAkey ca.key \
+  -CAcreateserial -out gateway.crt -days 365
+```
+
+**2. Start the server with mTLS**
+
+```bash
+TLS_CERT_FILE=/etc/decree/tls/server.crt
+TLS_KEY_FILE=/etc/decree/tls/server.key
+TLS_CLIENT_CA_FILE=/etc/decree/tls/ca.crt        # require client certs signed by this CA
+TLS_GATEWAY_CA_FILE=/etc/decree/tls/ca.crt        # gateway trusts the server cert
+TLS_GATEWAY_CLIENT_CERT_FILE=/etc/decree/tls/gateway.crt
+TLS_GATEWAY_CLIENT_KEY_FILE=/etc/decree/tls/gateway.key
+```
+
+**3. Verify with grpcurl**
+
+```bash
+grpcurl \
+  -cacert ca.crt \
+  -cert gateway.crt \
+  -key  gateway.key \
+  localhost:9090 grpc.health.v1.Health/Check
+```
+
+A successful response (`{"status":"SERVING"}`) confirms both the server cert and the client cert are accepted.
+
+**Cert rotation.** The server reloads `TLS_CERT_FILE` / `TLS_KEY_FILE` from disk on every TLS handshake, so cert rotation requires no restart. Replace the files and the next handshake picks up the new cert. `TLS_CLIENT_CA_FILE` is also reloaded per handshake, so rotating the client CA requires no restart either.
+
+### TLS 1.2 Compatibility
+
+By default the server requires TLS 1.3. Set `DECREE_TLS_MIN_VERSION=TLS12` to accept TLS 1.2 clients. When TLS 1.2 is enabled, the server applies an explicit cipher suite allowlist that restricts to ECDHE key exchange and AEAD encryption — RC4, CBC, and static-RSA suites are excluded.
+
+Allowed TLS 1.2 cipher suites:
+
+| Cipher suite | Key exchange | Encryption |
+|---|---|---|
+| `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256` | ECDHE | AES-128-GCM |
+| `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256` | ECDHE | AES-128-GCM |
+| `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384` | ECDHE | AES-256-GCM |
+| `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384` | ECDHE | AES-256-GCM |
+| `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` | ECDHE | ChaCha20-Poly1305 |
+| `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256` | ECDHE | ChaCha20-Poly1305 |
+
+TLS 1.3 cipher suites are not listed because Go's TLS 1.3 implementation negotiates them automatically and ignores any application-level allowlist.
 
 ### Gateway TLS and the localhost SAN requirement
 
