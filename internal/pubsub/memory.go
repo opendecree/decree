@@ -70,7 +70,7 @@ func (ps *MemoryPubSub) Publish(_ context.Context, event ConfigChangeEvent) erro
 		default:
 			ps.logger.Debug("pubsub: dropped event — subscriber channel full",
 				"tenant_id", event.TenantID,
-				"field_path", event.FieldPath,
+				"change_count", len(event.Changes),
 			)
 			if ps.dropsOK {
 				ps.drops.Add(context.Background(), 1)

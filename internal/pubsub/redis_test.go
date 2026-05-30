@@ -61,13 +61,14 @@ func TestRedisPubSub_PublishSubscribe_Happy(t *testing.T) {
 	require.NoError(t, err)
 	defer cancel()
 
-	event := ConfigChangeEvent{TenantID: "t1", FieldPath: "app.fee", NewValue: "0.02"}
+	event := ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "app.fee", NewValue: "0.02"}}}
 	require.NoError(t, pub.Publish(ctx, event))
 
 	select {
 	case got := <-ch:
-		assert.Equal(t, "app.fee", got.FieldPath)
-		assert.Equal(t, "0.02", got.NewValue)
+		require.Len(t, got.Changes, 1)
+		assert.Equal(t, "app.fee", got.Changes[0].FieldPath)
+		assert.Equal(t, "0.02", got.Changes[0].NewValue)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for event")
 	}
@@ -87,7 +88,7 @@ func TestRedisPubSub_TenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 	defer cancel2()
 
-	require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", FieldPath: "a"}))
+	require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "a"}}}))
 
 	select {
 	case <-ch1:
@@ -114,7 +115,7 @@ func TestRedisPubSub_SlowSubscriber(t *testing.T) {
 	// Publish several messages without reading; the 64-slot buffer absorbs them.
 	const n = 5
 	for range n {
-		require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", FieldPath: "x"}))
+		require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "x"}}}))
 	}
 
 	// Slow consumer reads all messages after a delay.
@@ -175,11 +176,12 @@ func TestRedisPubSub_DuplicateDeliverySemantics(t *testing.T) {
 	require.NoError(t, err)
 	defer cancel()
 
-	require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", FieldPath: "x"}))
+	require.NoError(t, pub.Publish(ctx, ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "x"}}}))
 
 	select {
 	case got := <-ch:
-		assert.Equal(t, "x", got.FieldPath)
+		require.Len(t, got.Changes, 1)
+		assert.Equal(t, "x", got.Changes[0].FieldPath)
 	case <-time.After(time.Second):
 		t.Fatal("no event received")
 	}
