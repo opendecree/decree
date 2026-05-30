@@ -14,9 +14,7 @@ import (
 var benchEvent = ConfigChangeEvent{
 	TenantID:  "bench-t1",
 	Version:   1,
-	FieldPath: "app.rate_limit",
-	OldValue:  "100",
-	NewValue:  "200",
+	Changes:   []FieldChange{{FieldPath: "app.rate_limit", OldValue: "100", NewValue: "200"}},
 	ChangedBy: "bench",
 	ChangedAt: time.Now(),
 }

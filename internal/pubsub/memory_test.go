@@ -33,9 +33,7 @@ func TestMemoryPubSub_PublishSubscribe(t *testing.T) {
 	event := ConfigChangeEvent{
 		TenantID:  "t1",
 		Version:   1,
-		FieldPath: "app.fee",
-		OldValue:  "0.01",
-		NewValue:  "0.02",
+		Changes:   []FieldChange{{FieldPath: "app.fee", OldValue: "0.01", NewValue: "0.02"}},
 		ChangedBy: "admin",
 		ChangedAt: time.Now(),
 	}
@@ -43,8 +41,9 @@ func TestMemoryPubSub_PublishSubscribe(t *testing.T) {
 
 	select {
 	case got := <-ch:
-		assert.Equal(t, "app.fee", got.FieldPath)
-		assert.Equal(t, "0.02", got.NewValue)
+		require.Len(t, got.Changes, 1)
+		assert.Equal(t, "app.fee", got.Changes[0].FieldPath)
+		assert.Equal(t, "0.02", got.Changes[0].NewValue)
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("expected event")
 	}
@@ -59,7 +58,7 @@ func TestMemoryPubSub_TenantIsolation(t *testing.T) {
 	ch2, cancel2, _ := ps.Subscribe(ctx, "t2")
 	defer cancel2()
 
-	require.NoError(t, ps.Publish(ctx, ConfigChangeEvent{TenantID: "t1", FieldPath: "a"}))
+	require.NoError(t, ps.Publish(ctx, ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "a"}}}))
 
 	select {
 	case <-ch1:
@@ -83,7 +82,7 @@ func TestMemoryPubSub_MultipleSubscribers(t *testing.T) {
 	ch2, cancel2, _ := ps.Subscribe(ctx, "t1")
 	defer cancel2()
 
-	require.NoError(t, ps.Publish(ctx, ConfigChangeEvent{TenantID: "t1", FieldPath: "a"}))
+	require.NoError(t, ps.Publish(ctx, ConfigChangeEvent{TenantID: "t1", Changes: []FieldChange{{FieldPath: "a"}}}))
 
 	select {
 	case <-ch1:
@@ -138,7 +137,7 @@ func TestMemoryPubSub_DropCounter(t *testing.T) {
 
 	// Overflow the 64-deep buffer.
 	for i := range 70 {
-		_ = ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1", FieldPath: "a", Version: int32(i)})
+		_ = ps.Publish(context.Background(), ConfigChangeEvent{TenantID: "t1", Version: int32(i), Changes: []FieldChange{{FieldPath: "a"}}})
 	}
 	assert.Greater(t, counter.n.Load(), int64(0))
 }
@@ -147,7 +146,7 @@ func TestMemoryPubSub_PayloadTooLarge(t *testing.T) {
 	ps := NewMemoryPubSub()
 	big := ConfigChangeEvent{
 		TenantID: "t1",
-		NewValue: strings.Repeat("x", MaxPayloadBytes+1),
+		Changes:  []FieldChange{{NewValue: strings.Repeat("x", MaxPayloadBytes+1)}},
 	}
 	err := ps.Publish(context.Background(), big)
 	assert.ErrorIs(t, err, ErrPayloadTooLarge)

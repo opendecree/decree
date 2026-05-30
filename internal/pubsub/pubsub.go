@@ -19,8 +19,8 @@
 // # Payload size
 //
 // Publishers reject events whose serialised size exceeds MaxPayloadBytes.
-// Callers storing large values should keep OldValue/NewValue short and fetch
-// the full value by (TenantID, FieldPath, Version) from the config store.
+// Callers storing large values should keep FieldChange.OldValue/NewValue short
+// and fetch the full value by (TenantID, FieldPath, Version) from the config store.
 package pubsub
 
 import (
@@ -37,17 +37,23 @@ const MaxPayloadBytes = 65536
 // ErrPayloadTooLarge is returned by Publish when the serialised event exceeds MaxPayloadBytes.
 var ErrPayloadTooLarge = errors.New("pubsub: event payload exceeds maximum size")
 
-// ConfigChangeEvent represents a change to a config value.
+// FieldChange holds the per-field data for a single field within a batched event.
+type FieldChange struct {
+	FieldPath string `json:"field_path"`
+	OldValue  string `json:"old_value"`
+	NewValue  string `json:"new_value"`
+}
+
+// ConfigChangeEvent represents one or more config-value changes committed in a single version.
+// Changes always contains at least one entry; single-field RPCs produce a one-element slice.
 type ConfigChangeEvent struct {
-	EventID   string    `json:"event_id"` // UUID v4, unique per event
-	Seq       int64     `json:"seq"`      // monotonic per-publisher sequence
-	TenantID  string    `json:"tenant_id"`
-	Version   int32     `json:"version"`
-	FieldPath string    `json:"field_path"`
-	OldValue  string    `json:"old_value"`
-	NewValue  string    `json:"new_value"`
-	ChangedBy string    `json:"changed_by"`
-	ChangedAt time.Time `json:"changed_at"`
+	EventID   string        `json:"event_id"` // UUID v4, unique per event
+	Seq       int64         `json:"seq"`      // monotonic per-publisher sequence
+	TenantID  string        `json:"tenant_id"`
+	Version   int32         `json:"version"`
+	Changes   []FieldChange `json:"changes"`
+	ChangedBy string        `json:"changed_by"`
+	ChangedAt time.Time     `json:"changed_at"`
 }
 
 // Publisher publishes config change events.
