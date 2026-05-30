@@ -334,6 +334,79 @@ func TestWatcher_NullField(t *testing.T) {
 	_ = w.Close()
 }
 
+func TestWatcher_TypeFlipMidStream(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sub := newMockSubscription(ctx)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "payments.fee", Value: configclient.FloatVal(0.025)},
+				},
+			}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
+	}
+
+	fee := w.Float("payments.fee", 0.01)
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := fee.Get(); got != 0.025 {
+		t.Errorf("initial: got %v, want %v", got, 0.025)
+	}
+
+	// Simulate type flip: server sends a string value for a float field.
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "payments.fee",
+		OldValue:  configclient.FloatVal(0.025),
+		NewValue:  configclient.StringVal("not-a-number"),
+	})
+
+	time.Sleep(20 * time.Millisecond)
+
+	// Watcher must use the default value, not crash.
+	if got := fee.Get(); got != 0.01 {
+		t.Errorf("after type flip: got %v, want default %v", got, 0.01)
+	}
+	_, ok := fee.GetWithNull()
+	if ok {
+		t.Error("expected field to be marked as not-set after type flip")
+	}
+
+	// Stream must still be alive: subsequent valid update must apply.
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "payments.fee",
+		OldValue:  configclient.StringVal("not-a-number"),
+		NewValue:  configclient.FloatVal(0.1),
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	if got := fee.Get(); got != 0.1 {
+		t.Errorf("after recovery: got %v, want %v", got, 0.1)
+	}
+
+	cancel()
+	_ = w.Close()
+}
+
 func TestWatcher_ReconnectSnapshotTimeout(t *testing.T) {
 	// Verify that a slow loadSnapshot during reconnect times out and does not
 	// stall the reconnect loop indefinitely.
