@@ -19,6 +19,19 @@ WHERE ($1::UUID IS NULL OR tenant_id = $1)
 ORDER BY created_at DESC
 LIMIT $6 OFFSET $7;
 
+-- name: QueryAuditWriteLogKeyset :many
+SELECT * FROM audit_write_log
+WHERE ($1::UUID IS NULL OR tenant_id = $1)
+  AND (NULLIF($2::TEXT, '') IS NULL OR actor = $2)
+  AND (NULLIF($3::TEXT, '') IS NULL OR field_path = $3)
+  AND ($4::TIMESTAMPTZ IS NULL OR created_at >= $4)
+  AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5)
+  AND ($7::TIMESTAMPTZ IS NULL
+       OR created_at < $7
+       OR (created_at = $7 AND id < $8::UUID))
+ORDER BY created_at DESC, id DESC
+LIMIT $6;
+
 -- name: GetAuditWriteLogOrdered :many
 SELECT * FROM audit_write_log
 WHERE tenant_id IS NOT DISTINCT FROM $1

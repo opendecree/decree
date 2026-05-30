@@ -19,11 +19,29 @@ WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
 
+-- name: ListTenantsKeyset :many
+SELECT * FROM tenants
+WHERE deleted_at IS NULL
+  AND ($2::TIMESTAMPTZ IS NULL
+       OR created_at < $2
+       OR (created_at = $2 AND id < $3::UUID))
+ORDER BY created_at DESC, id DESC
+LIMIT $1;
+
 -- name: ListTenantsByIDs :many
 SELECT * FROM tenants
 WHERE id = ANY(@allowed_ids::uuid[]) AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: ListTenantsByIDsKeyset :many
+SELECT * FROM tenants
+WHERE id = ANY(@allowed_ids::uuid[]) AND deleted_at IS NULL
+  AND ($2::TIMESTAMPTZ IS NULL
+       OR created_at < $2
+       OR (created_at = $2 AND id < $3::UUID))
+ORDER BY created_at DESC, id DESC
+LIMIT $1;
 
 -- name: ListTenantsBySchema :many
 SELECT * FROM tenants
@@ -31,11 +49,29 @@ WHERE schema_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: ListTenantsBySchemaKeyset :many
+SELECT * FROM tenants
+WHERE schema_id = $1 AND deleted_at IS NULL
+  AND ($3::TIMESTAMPTZ IS NULL
+       OR created_at < $3
+       OR (created_at = $3 AND id < $4::UUID))
+ORDER BY created_at DESC, id DESC
+LIMIT $2;
+
 -- name: ListTenantsBySchemaAndIDs :many
 SELECT * FROM tenants
 WHERE schema_id = $1 AND id = ANY(@allowed_ids::uuid[]) AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: ListTenantsBySchemaAndIDsKeyset :many
+SELECT * FROM tenants
+WHERE schema_id = $1 AND id = ANY(@allowed_ids::uuid[]) AND deleted_at IS NULL
+  AND ($3::TIMESTAMPTZ IS NULL
+       OR created_at < $3
+       OR (created_at = $3 AND id < $4::UUID))
+ORDER BY created_at DESC, id DESC
+LIMIT $2;
 
 -- name: UpdateTenantName :one
 UPDATE tenants SET name = $2, updated_at = now()

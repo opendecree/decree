@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -90,7 +91,8 @@ type CreateTenantParams struct {
 // ListTenantsParams contains pagination and filtering parameters for listing tenants.
 type ListTenantsParams struct {
 	Limit            int32
-	Offset           int32
+	Offset           int32 // used when Cursor is nil and a v1 token was provided
+	Cursor           *pagination.PageCursor
 	AllowedTenantIDs []string // When non-nil, only return tenants with these IDs.
 }
 
@@ -98,7 +100,8 @@ type ListTenantsParams struct {
 type ListTenantsBySchemaParams struct {
 	SchemaID         string
 	Limit            int32
-	Offset           int32
+	Offset           int32 // used when Cursor is nil and a v1 token was provided
+	Cursor           *pagination.PageCursor
 	AllowedTenantIDs []string // When non-nil, only return tenants with these IDs.
 }
 

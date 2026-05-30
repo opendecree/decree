@@ -455,10 +455,41 @@ func (s *PGStore) ListTenants(ctx context.Context, arg ListTenantsParams) ([]dom
 		if err != nil {
 			return nil, err
 		}
+		if arg.Cursor != nil {
+			cursorUUID, uuidErr := pgconv.StringToUUID(arg.Cursor.ID)
+			if uuidErr != nil {
+				return nil, uuidErr
+			}
+			rows, err := s.read.ListTenantsByIDsKeyset(ctx, dbstore.ListTenantsByIDsKeysetParams{
+				Limit:      arg.Limit,
+				Column2:    pgconv.TimeToTimestamptz(arg.Cursor.Time),
+				Column3:    cursorUUID,
+				AllowedIds: pgIDs,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return tenantsFromDB(rows), nil
+		}
 		rows, err := s.read.ListTenantsByIDs(ctx, dbstore.ListTenantsByIDsParams{
 			Limit:      arg.Limit,
 			Offset:     arg.Offset,
 			AllowedIds: pgIDs,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return tenantsFromDB(rows), nil
+	}
+	if arg.Cursor != nil {
+		cursorUUID, err := pgconv.StringToUUID(arg.Cursor.ID)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := s.read.ListTenantsKeyset(ctx, dbstore.ListTenantsKeysetParams{
+			Limit:   arg.Limit,
+			Column2: pgconv.TimeToTimestamptz(arg.Cursor.Time),
+			Column3: cursorUUID,
 		})
 		if err != nil {
 			return nil, err
@@ -485,11 +516,44 @@ func (s *PGStore) ListTenantsBySchema(ctx context.Context, arg ListTenantsBySche
 		if err != nil {
 			return nil, err
 		}
+		if arg.Cursor != nil {
+			cursorUUID, uuidErr := pgconv.StringToUUID(arg.Cursor.ID)
+			if uuidErr != nil {
+				return nil, uuidErr
+			}
+			rows, err := s.read.ListTenantsBySchemaAndIDsKeyset(ctx, dbstore.ListTenantsBySchemaAndIDsKeysetParams{
+				SchemaID:   schemaID,
+				Limit:      arg.Limit,
+				Column3:    pgconv.TimeToTimestamptz(arg.Cursor.Time),
+				Column4:    cursorUUID,
+				AllowedIds: pgIDs,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return tenantsFromDB(rows), nil
+		}
 		rows, err := s.read.ListTenantsBySchemaAndIDs(ctx, dbstore.ListTenantsBySchemaAndIDsParams{
 			SchemaID:   schemaID,
 			Limit:      arg.Limit,
 			Offset:     arg.Offset,
 			AllowedIds: pgIDs,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return tenantsFromDB(rows), nil
+	}
+	if arg.Cursor != nil {
+		cursorUUID, err := pgconv.StringToUUID(arg.Cursor.ID)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := s.read.ListTenantsBySchemaKeyset(ctx, dbstore.ListTenantsBySchemaKeysetParams{
+			SchemaID: schemaID,
+			Limit:    arg.Limit,
+			Column3:  pgconv.TimeToTimestamptz(arg.Cursor.Time),
+			Column4:  cursorUUID,
 		})
 		if err != nil {
 			return nil, err

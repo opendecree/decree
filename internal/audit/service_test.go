@@ -179,6 +179,47 @@ func TestQueryWriteLog_ZeroPageSize(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestQueryWriteLog_KeysetPagination(t *testing.T) {
+	svc, store := newTestService()
+	ctx := superadminCtx()
+
+	now := time.Now().Truncate(time.Microsecond)
+	entry := domain.AuditWriteLog{
+		ID:        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		TenantID:  "22222222-2222-2222-2222-222222222222",
+		Actor:     "admin",
+		Action:    "set_field",
+		CreatedAt: now,
+	}
+	// First page: empty token → KindFirst → Cursor nil in params.
+	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
+		return p.Cursor == nil && p.Offset == 0 && p.Limit == 2
+	})).Return([]domain.AuditWriteLog{entry, entry}, nil).Once()
+
+	resp, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{PageSize: 1})
+	require.NoError(t, err)
+	require.Len(t, resp.Entries, 1)
+	require.NotEmpty(t, resp.NextPageToken, "expected cursor token for full page")
+
+	// Next page token must decode as KindCursor.
+	kind, _, _, err := pagination.DecodeTokenKind(resp.NextPageToken)
+	require.NoError(t, err)
+	assert.Equal(t, pagination.KindCursor, kind)
+
+	// Second page: cursor token → Cursor set in params.
+	store.On("QueryAuditWriteLog", ctx, mock.MatchedBy(func(p QueryWriteLogParams) bool {
+		return p.Cursor != nil && p.Limit == 2
+	})).Return([]domain.AuditWriteLog{}, nil).Once()
+
+	resp2, err := svc.QueryWriteLog(ctx, &pb.QueryWriteLogRequest{
+		PageSize:  1,
+		PageToken: resp.NextPageToken,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, resp2.Entries)
+	assert.Empty(t, resp2.NextPageToken)
+}
+
 // --- GetFieldUsage ---
 
 func TestGetFieldUsage_Success(t *testing.T) {
