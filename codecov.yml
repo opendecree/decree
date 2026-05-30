@@ -8,14 +8,23 @@ coverage:
       default:
         target: 80%
 
+# Exclusion decisions are documented in scripts/check-coverage.sh (COVERAGE_EXCLUDES).
+# Keep this list in sync with that file.
 ignore:
-  - "cmd/decree"
+  # Process bootstrap — not unit-testable
   - "cmd/server/main.go"
+  # Generated code (proto, sqlc)
   - "api/centralconfig/**"
   - "internal/storage/dbstore/**"
+  # PG store implementations — thin wrappers, covered by e2e tests only
   - "internal/audit/store_pg.go"
   - "internal/config/store_pg.go"
   - "internal/schema/store_pg.go"
+  # Redis wrappers — thin wrappers, covered by e2e tests only
+  - "internal/cache/redis.go"
+  - "internal/pubsub/redis.go"
+  # gRPC transport (borderline; ratchet floor is 8%, Codecov-ignored intentionally)
   - "sdk/grpctransport/**"
+  # Non-code
   - "cmd/server/openapi.json"
   - "docs/**"

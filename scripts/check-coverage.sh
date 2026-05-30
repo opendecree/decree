@@ -13,11 +13,22 @@ set -euo pipefail
 
 THRESHOLDS_FILE="coverage-thresholds.json"
 
-# Files excluded from coverage: generated code (sqlc, protobuf) and thin
-# wrappers over external dependencies (Redis, PostgreSQL) that are covered
-# by e2e tests rather than unit tests. Keeping these in the weighted total
-# drowns out real signal from the hand-written, unit-testable code.
-COVERAGE_EXCLUDES='(\.gen\.go|/cache/redis\.go|/pubsub/redis\.go|/config/store_pg\.go|/schema/store_pg\.go):'
+# Canonical exclude list for coverage tooling.
+# codecov.yml ignore section must mirror these decisions (see comment there).
+#
+# Excluded categories and rationale:
+#   *.gen.go                     — sqlc/protobuf generated code, not hand-written
+#   /cache/redis.go              — thin Redis wrapper, covered by e2e only
+#   /pubsub/redis.go             — thin Redis wrapper, covered by e2e only
+#   /audit/store_pg.go           — thin PG store wrapper, covered by e2e only
+#   /config/store_pg.go          — thin PG store wrapper, covered by e2e only
+#   /schema/store_pg.go          — thin PG store wrapper, covered by e2e only
+#
+# Intentionally NOT excluded:
+#   telemetry/                   — counted by both ratchet and Codecov (boilerplate, but measurable)
+#   cmd/decree                   — 86%+ coverage, tracked in ratchet and Codecov
+#   sdk/grpctransport            — ratchet floor 8%; excluded from Codecov patch/project (defensible)
+COVERAGE_EXCLUDES='(\.gen\.go|/cache/redis\.go|/pubsub/redis\.go|/audit/store_pg\.go|/config/store_pg\.go|/schema/store_pg\.go):'
 
 # Module → test pattern pairs.
 declare -A MODULES=(
