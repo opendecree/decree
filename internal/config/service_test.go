@@ -1196,8 +1196,9 @@ func TestSetField_PublishRedactsSensitiveField(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, redactedSentinel, capturedEvent.OldValue)
-	assert.Equal(t, redactedSentinel, capturedEvent.NewValue)
+	require.Len(t, capturedEvent.Changes, 1)
+	assert.Equal(t, redactedSentinel, capturedEvent.Changes[0].OldValue)
+	assert.Equal(t, redactedSentinel, capturedEvent.Changes[0].NewValue)
 }
 
 func TestExportConfig_RedactsSensitiveFields(t *testing.T) {

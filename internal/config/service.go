@@ -636,10 +636,11 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
-	s.publishChange(ctx, tenantID, newVersion.Version, req.FieldPath,
-		redactIfSensitive(sensitiveFields[req.FieldPath], oldValue),
-		redactIfSensitive(sensitiveFields[req.FieldPath], typedValueToDisplayString(req.Value)),
-		actor)
+	s.publishChanges(ctx, tenantID, newVersion.Version, []pubsub.FieldChange{{
+		FieldPath: req.FieldPath,
+		OldValue:  redactIfSensitive(sensitiveFields[req.FieldPath], oldValue),
+		NewValue:  redactIfSensitive(sensitiveFields[req.FieldPath], typedValueToDisplayString(req.Value)),
+	}}, actor)
 
 	s.metrics.RecordWrite(ctx, tenantID, "set_field")
 	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
@@ -805,12 +806,15 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
-	for _, ch := range changes {
-		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath,
-			redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.oldValue),
-			redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.newValue),
-			actor)
+	fieldChanges := make([]pubsub.FieldChange, len(changes))
+	for i, ch := range changes {
+		fieldChanges[i] = pubsub.FieldChange{
+			FieldPath: ch.fieldPath,
+			OldValue:  redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.oldValue),
+			NewValue:  redactIfSensitive(sensitiveFieldsMulti[ch.fieldPath], ch.newValue),
+		}
 	}
+	s.publishChanges(ctx, tenantID, newVersion.Version, fieldChanges, actor)
 
 	s.metrics.RecordWrite(ctx, tenantID, "set_fields")
 	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
@@ -1077,25 +1081,26 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 				continue
 			}
 
-			// Filter by field paths if specified.
-			if len(filterPaths) > 0 {
-				if _, ok := filterPaths[event.FieldPath]; !ok {
-					continue
+			// Expand batched changes into individual gRPC messages, filtering as needed.
+			for _, fc := range event.Changes {
+				if len(filterPaths) > 0 {
+					if _, ok := filterPaths[fc.FieldPath]; !ok {
+						continue
+					}
 				}
-			}
-
-			if err := stream.Send(&pb.SubscribeResponse{
-				Change: &pb.ConfigChange{
-					TenantId:  event.TenantID,
-					Version:   event.Version,
-					FieldPath: event.FieldPath,
-					OldValue:  stringToTypedValue(ptrString(event.OldValue), lookupFieldType(types, event.FieldPath)),
-					NewValue:  stringToTypedValue(strPtr(event.NewValue), lookupFieldType(types, event.FieldPath)),
-					ChangedBy: event.ChangedBy,
-					ChangedAt: timestamppb.New(event.ChangedAt),
-				},
-			}); err != nil {
-				return err
+				if err := stream.Send(&pb.SubscribeResponse{
+					Change: &pb.ConfigChange{
+						TenantId:  event.TenantID,
+						Version:   event.Version,
+						FieldPath: fc.FieldPath,
+						OldValue:  stringToTypedValue(ptrString(fc.OldValue), lookupFieldType(types, fc.FieldPath)),
+						NewValue:  stringToTypedValue(strPtr(fc.NewValue), lookupFieldType(types, fc.FieldPath)),
+						ChangedBy: event.ChangedBy,
+						ChangedAt: timestamppb.New(event.ChangedAt),
+					},
+				}); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -1342,12 +1347,15 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 	if err := s.cache.Invalidate(ctx, tenantID); err != nil {
 		s.logger.WarnContext(ctx, "failed to invalidate cache", "error", err)
 	}
-	for _, ch := range changes {
-		s.publishChange(ctx, tenantID, newVersion.Version, ch.fieldPath,
-			redactIfSensitive(sensitiveFields[ch.fieldPath], ch.oldValue),
-			redactIfSensitive(sensitiveFields[ch.fieldPath], ch.newValue),
-			actor)
+	importChanges := make([]pubsub.FieldChange, len(changes))
+	for i, ch := range changes {
+		importChanges[i] = pubsub.FieldChange{
+			FieldPath: ch.fieldPath,
+			OldValue:  redactIfSensitive(sensitiveFields[ch.fieldPath], ch.oldValue),
+			NewValue:  redactIfSensitive(sensitiveFields[ch.fieldPath], ch.newValue),
+		}
 	}
+	s.publishChanges(ctx, tenantID, newVersion.Version, importChanges, actor)
 
 	s.metrics.RecordWrite(ctx, tenantID, "import")
 	s.metrics.RecordVersion(ctx, tenantID, int64(newVersion.Version))
@@ -1765,13 +1773,11 @@ func lookupFieldType(types map[string]domain.FieldType, fieldPath string) domain
 	return domain.FieldTypeString
 }
 
-func (s *Service) publishChange(ctx context.Context, tenantID string, version int32, fieldPath, oldValue, newValue, actor string) {
+func (s *Service) publishChanges(ctx context.Context, tenantID string, version int32, changes []pubsub.FieldChange, actor string) {
 	event := pubsub.ConfigChangeEvent{
 		TenantID:  tenantID,
 		Version:   version,
-		FieldPath: fieldPath,
-		OldValue:  oldValue,
-		NewValue:  newValue,
+		Changes:   changes,
 		ChangedBy: actor,
 		ChangedAt: time.Now(),
 	}
