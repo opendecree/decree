@@ -15,6 +15,7 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/auth"
 	"github.com/opendecree/decree/internal/cache"
+	"github.com/opendecree/decree/internal/pubsub"
 	celpkg "github.com/opendecree/decree/internal/schema/cel"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
@@ -134,12 +135,14 @@ func TestCelArtifactsTenantBinding(t *testing.T) {
 	assert.Equal(t, "acme", tb.Name)
 }
 
-func TestPublishChange_PublishErrorIsSwallowed(t *testing.T) {
+func TestPublishChanges_PublishErrorIsSwallowed(t *testing.T) {
 	svc, _, _, pub := newTestService()
 	pub.On("Publish", mock.Anything, mock.Anything).Return(errors.New("broker down"))
 	// A publish failure must not panic — it is logged and ignored.
 	assert.NotPanics(t, func() {
-		svc.publishChange(context.Background(), tenantID1, 1, "a.b", "old", "new", "alice")
+		svc.publishChanges(context.Background(), tenantID1, 1,
+			[]pubsub.FieldChange{{FieldPath: "a.b", OldValue: "old", NewValue: "new"}},
+			"alice")
 	})
 	pub.AssertExpectations(t)
 }

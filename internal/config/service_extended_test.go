@@ -196,6 +196,126 @@ func TestGetConfig_TenantNameNotFound(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+// --- Batch publish ---
+
+// TestSetField_PublishesOneEvent verifies that a single-field update emits
+// exactly one pubsub event carrying a one-element Changes slice.
+func TestSetField_PublishesOneEvent(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.Anything).Return(domain.ConfigVersion{
+		ID: versionID2, Version: 2, CreatedAt: time.Now(),
+	}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.Anything).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	setupNoSensitiveFields(store)
+
+	var captured pubsub.ConfigChangeEvent
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
+		Run(func(args mock.Arguments) {
+			captured = args.Get(1).(pubsub.ConfigChangeEvent)
+		}).
+		Return(nil)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.name",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "hello"}},
+	})
+	require.NoError(t, err)
+
+	pub.AssertNumberOfCalls(t, "Publish", 1)
+	require.Len(t, captured.Changes, 1)
+	assert.Equal(t, "app.name", captured.Changes[0].FieldPath)
+	assert.Equal(t, "hello", captured.Changes[0].NewValue)
+}
+
+// TestSetFields_PublishesOneEventWithAllChanges verifies that a multi-field
+// update emits exactly one pubsub event carrying all changes in order.
+func TestSetFields_PublishesOneEventWithAllChanges(t *testing.T) {
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.Anything).Return(domain.ConfigVersion{
+		ID: versionID2, Version: 2, CreatedAt: time.Now(),
+	}, nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	store.On("BulkInsertAuditWriteLog", mock.Anything, mock.Anything).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	setupNoSensitiveFields(store)
+
+	var captured pubsub.ConfigChangeEvent
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).
+		Run(func(args mock.Arguments) {
+			captured = args.Get(1).(pubsub.ConfigChangeEvent)
+		}).
+		Return(nil)
+
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "app.name", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "v1"}}},
+			{FieldPath: "app.port", Value: &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 9090}}},
+		},
+	})
+	require.NoError(t, err)
+
+	// Exactly one publish for two field changes.
+	pub.AssertNumberOfCalls(t, "Publish", 1)
+	require.Len(t, captured.Changes, 2)
+	assert.Equal(t, "app.name", captured.Changes[0].FieldPath)
+	assert.Equal(t, "app.port", captured.Changes[1].FieldPath)
+}
+
+// TestSubscribe_BatchEventExpandedToPerFieldMessages verifies that a single
+// batched pubsub event with multiple fields fans out to one gRPC message per field.
+func TestSubscribe_BatchEventExpandedToPerFieldMessages(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent, 1)
+	cancel := func() {}
+
+	ctx, ctxCancel := context.WithCancel(auth.WithoutAuth(context.Background()))
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	now := time.Now()
+	ch <- pubsub.ConfigChangeEvent{
+		TenantID: tenantID1,
+		Version:  3,
+		Changes: []pubsub.FieldChange{
+			{FieldPath: "app.name", OldValue: "old", NewValue: "new"},
+			{FieldPath: "app.port", OldValue: "8080", NewValue: "9090"},
+		},
+		ChangedBy: "admin",
+		ChangedAt: now,
+	}
+	close(ch)
+
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
+	require.NoError(t, err)
+
+	// One pubsub event with two fields → two gRPC messages.
+	require.Len(t, stream.sent, 2)
+	assert.Equal(t, "app.name", stream.sent[0].Change.FieldPath)
+	assert.Equal(t, int32(3), stream.sent[0].Change.Version)
+	assert.Equal(t, "app.port", stream.sent[1].Change.FieldPath)
+	assert.Equal(t, int32(3), stream.sent[1].Change.Version)
+
+	ctxCancel()
+}
+
 // --- SetFields ---
 
 func TestSetFields_Success(t *testing.T) {
@@ -466,18 +586,14 @@ func TestSubscribe_ForwardsEvents(t *testing.T) {
 	ch <- pubsub.ConfigChangeEvent{
 		TenantID:  tenantID1,
 		Version:   1,
-		FieldPath: "app.name",
-		OldValue:  "",
-		NewValue:  "hello",
+		Changes:   []pubsub.FieldChange{{FieldPath: "app.name", OldValue: "", NewValue: "hello"}},
 		ChangedBy: "admin",
 		ChangedAt: now,
 	}
 	ch <- pubsub.ConfigChangeEvent{
 		TenantID:  tenantID1,
 		Version:   2,
-		FieldPath: "app.port",
-		OldValue:  "8080",
-		NewValue:  "9090",
+		Changes:   []pubsub.FieldChange{{FieldPath: "app.port", OldValue: "8080", NewValue: "9090"}},
 		ChangedBy: "admin",
 		ChangedAt: now,
 	}
@@ -514,9 +630,9 @@ func TestSubscribe_FiltersByFieldPaths(t *testing.T) {
 		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
 
 	now := time.Now()
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, FieldPath: "app.name", NewValue: "v1", ChangedAt: now}
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 2, FieldPath: "app.port", NewValue: "9090", ChangedAt: now}
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 3, FieldPath: "app.name", NewValue: "v2", ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, Changes: []pubsub.FieldChange{{FieldPath: "app.name", NewValue: "v1"}}, ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 2, Changes: []pubsub.FieldChange{{FieldPath: "app.port", NewValue: "9090"}}, ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 3, Changes: []pubsub.FieldChange{{FieldPath: "app.name", NewValue: "v2"}}, ChangedAt: now}
 	close(ch)
 
 	err := svc.Subscribe(&pb.SubscribeRequest{
@@ -568,7 +684,7 @@ func TestSubscribe_SendError(t *testing.T) {
 	sub.On("Subscribe", mock.Anything, tenantID1).
 		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
 
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, FieldPath: "x", NewValue: "y", ChangedAt: time.Now()}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 1, Changes: []pubsub.FieldChange{{FieldPath: "x", NewValue: "y"}}, ChangedAt: time.Now()}
 	close(ch)
 
 	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1}, stream)
@@ -700,8 +816,8 @@ func TestSubscribe_WatermarkDeduplicatesReplayedVersions(t *testing.T) {
 	setupNoSensitiveFields(store)
 
 	// Pubsub delivers version 4 (duplicate of replay) and version 5 (new).
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 4, FieldPath: "app.name", NewValue: "v4-dup", ChangedAt: now}
-	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 5, FieldPath: "app.name", NewValue: "v5", ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 4, Changes: []pubsub.FieldChange{{FieldPath: "app.name", NewValue: "v4-dup"}}, ChangedAt: now}
+	ch <- pubsub.ConfigChangeEvent{TenantID: tenantID1, Version: 5, Changes: []pubsub.FieldChange{{FieldPath: "app.name", NewValue: "v5"}}, ChangedAt: now}
 	close(ch)
 
 	startVersion := int32(3)
