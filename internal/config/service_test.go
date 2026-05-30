@@ -482,6 +482,69 @@ func TestGetField_NotFound(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+func TestSetField_VersionConflictRetried(t *testing.T) {
+	// First tx attempt returns ErrVersionConflict; second attempt succeeds.
+	// The retry must be transparent — caller sees success, not codes.Aborted.
+	svc, store, cache, pub := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	// Pre-tx + 2 tx attempts = 3 total GetLatestConfigVersion calls.
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	setupNoSensitiveFields(store)
+
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict).Once()
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil).Once()
+
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.env",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "prod"}},
+	})
+
+	require.NoError(t, err, "single version conflict must be retried transparently")
+	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
+	store.AssertNumberOfCalls(t, "CreateConfigVersion", 2)
+}
+
+func TestSetField_VersionConflictExhausted(t *testing.T) {
+	// All 4 attempts (initial + 3 retries) return ErrVersionConflict.
+	// The service must return codes.Aborted, not codes.Internal.
+	svc, store, cache, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+	setupNoSensitiveFields(store)
+
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "app.env",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "prod"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.Aborted, status.Code(err))
+	store.AssertNumberOfCalls(t, "CreateConfigVersion", 4) // initial + 3 retries
+}
+
 // --- RollbackToVersion ---
 
 func TestRollbackToVersion_Success(t *testing.T) {
@@ -517,6 +580,7 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	// GetLatestConfigVersion is now called inside the tx per attempt (4 total).
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
@@ -528,7 +592,34 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during rollback must return Aborted, not Internal")
+	assert.Equal(t, codes.Aborted, status.Code(err), "version conflict during rollback must return Aborted after retry budget exhausted")
+	store.AssertNumberOfCalls(t, "CreateConfigVersion", 4)
+}
+
+func TestRollbackToVersion_VersionConflictRetried(t *testing.T) {
+	// First attempt gets ErrVersionConflict; second attempt succeeds.
+	svc, store, cache, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{}, ErrVersionConflict).Once()
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil).Once()
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+
+	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
+		TenantId: tenantID1,
+		Version:  2,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
+	store.AssertNumberOfCalls(t, "CreateConfigVersion", 2)
 }
 
 // --- ExportConfig ---

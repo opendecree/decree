@@ -570,7 +570,7 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	// the UNIQUE(tenant_id, version) constraint on CreateConfigVersion, so at
 	// most one writer succeeds per version slot.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
+	if err := s.runInTxWithRetry(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
 		if txErr != nil {
@@ -733,7 +733,7 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	// Checksums are verified inside the tx after re-reading the latest version so
 	// concurrent writes cannot bypass the check (TOCTOU fix for #417).
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
+	if err := s.runInTxWithRetry(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
 		var txErr error
 		txLockedVersion, txErr := txLatestVersion(ctx, tx, tenantID)
 		if txErr != nil {
@@ -908,11 +908,6 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		return nil, status.Error(codes.NotFound, "target version not found or empty")
 	}
 
-	latest, err := s.store.GetLatestConfigVersion(ctx, tenantID)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to get latest version")
-	}
-
 	desc := fmt.Sprintf("Rollback to version %d", req.Version)
 	if req.Description != nil {
 		desc = *req.Description
@@ -930,11 +925,14 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 
 	// Transaction: new version + copied values + audit + dependentRequired check.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
-		var txErr error
+	if err := s.runInTxWithRetry(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
+		txVersion, txErr := txLatestVersion(ctx, tx, tenantID)
+		if txErr != nil {
+			return txErr
+		}
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
-			Version:     latest.Version + 1,
+			Version:     txVersion + 1,
 			Description: &desc,
 			CreatedBy:   actor,
 		})
@@ -1290,11 +1288,14 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 
 	// Transaction: version + all values + audit entries + dependentRequired check.
 	var newVersion domain.ConfigVersion
-	if err := s.store.RunInTx(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
-		var txErr error
+	if err := s.runInTxWithRetry(storage.WithTenantID(ctx, tenantID), func(tx Store) error {
+		txVersion, txErr := txLatestVersion(ctx, tx, tenantID)
+		if txErr != nil {
+			return txErr
+		}
 		newVersion, txErr = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
 			TenantID:    tenantID,
-			Version:     latestVersion + 1,
+			Version:     txVersion + 1,
 			Description: &desc,
 			CreatedBy:   actor,
 		})
@@ -1499,6 +1500,34 @@ func txLatestVersion(ctx context.Context, tx Store, tenantID string) (int32, err
 		return 0, status.Error(codes.Internal, "failed to get latest version")
 	}
 	return latest.Version, nil
+}
+
+var versionConflictBackoffs = []time.Duration{
+	time.Millisecond,
+	5 * time.Millisecond,
+	25 * time.Millisecond,
+}
+
+// retryOnVersionConflict calls fn up to 4 times (initial + 3 retries) backing
+// off on ErrVersionConflict between each attempt. Any other error returns
+// immediately. Returns ErrVersionConflict only when all attempts are exhausted.
+func retryOnVersionConflict(fn func() error) error {
+	for _, d := range versionConflictBackoffs {
+		err := fn()
+		if !errors.Is(err, ErrVersionConflict) {
+			return err
+		}
+		time.Sleep(d)
+	}
+	return fn()
+}
+
+// runInTxWithRetry wraps store.RunInTx with automatic retry on
+// ErrVersionConflict. See retryOnVersionConflict for the retry budget.
+func (s *Service) runInTxWithRetry(ctx context.Context, fn func(Store) error) error {
+	return retryOnVersionConflict(func() error {
+		return s.store.RunInTx(ctx, fn)
+	})
 }
 
 // checkChecksumAtVersion verifies that the stored checksum for fieldPath at
