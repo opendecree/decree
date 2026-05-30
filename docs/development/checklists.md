@@ -26,7 +26,7 @@ Standard development workflow checklists.
 - [ ] Generated docs are up to date: `make docs` produces no diff
 - [ ] OpenAPI spec in sync: `cmd/server/openapi.json` matches `docs/api/openapi.swagger.json`
 - [ ] Coverage didn't drop — if it did, add tests or adjust threshold with justification
-- [ ] Update coverage badge if changed: `./scripts/coverage.sh` (server), update README badge
+- [ ] Coverage didn't drop — check Codecov PR comment for patch/project numbers
 - [ ] Agent context updated if relevant (`.agents/context/`)
 - [ ] PR description includes Summary, Test plan
 - [ ] No TODO/FIXME introduced without a corresponding GitHub issue
@@ -52,8 +52,8 @@ Standard development workflow checklists.
 - [ ] Supply-chain pins valid: `./scripts/check-supply-chain-pins.sh`
 - [ ] Docker images build and run: `INSECURE_LISTEN=1 STORAGE_BACKEND=memory` smoke test
 - [ ] Coverage ratchet passes
-- [ ] Coverage badge is accurate: `./scripts/coverage.sh` matches README badge
-- [ ] Go SDK coverage up to date: `go test -cover ./sdk/...` matches README badge
+- [ ] Coverage ratchet passes: `./scripts/check-coverage.sh`
+- [ ] Codecov badge in README reflects current state (auto-updated by Codecov)
 - [ ] Changelog/highlights drafted for release notes
 
 ## Release Tag Process

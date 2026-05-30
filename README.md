@@ -439,17 +439,17 @@ Generate client stubs in any language from BSR, or use the official SDKs:
 
 ## Test Coverage
 
-Coverage badges reflect **business logic only** — infrastructure wrappers that are tested at the integration/e2e level are excluded from the calculation:
+The [Codecov badge](https://codecov.io/gh/opendecree/decree) reflects business logic coverage. CI also enforces a per-module coverage ratchet via `scripts/check-coverage.sh` — absolute floors defined in `coverage-thresholds.json` that can only move up.
+
+Both Codecov and the ratchet exclude the same categories of infrastructure code:
 
 | Excluded | Reason |
 |----------|--------|
-| `store_pg.go` | PostgreSQL store implementations — thin DB wrappers, tested via e2e |
-| `redis.go` | Redis cache/pubsub implementations — thin wrappers, tested via e2e |
-| `storage/dbstore/` | sqlc-generated query code |
-| `storage/postgres.go` | Interface definitions only |
-| `telemetry/` | OpenTelemetry provider wiring boilerplate |
+| `*/store_pg.go` | PostgreSQL store implementations — thin DB wrappers, tested via e2e |
+| `cache/redis.go`, `pubsub/redis.go` | Redis wrappers — thin wrappers, tested via e2e |
+| `*.gen.go`, `internal/storage/dbstore/` | sqlc/protobuf-generated code |
 
-Run `./scripts/coverage.sh` to calculate the server coverage, or `./scripts/coverage.sh -v` for a per-function breakdown.
+The exclude list is documented in `scripts/check-coverage.sh` (`COVERAGE_EXCLUDES`).
 
 ---
 

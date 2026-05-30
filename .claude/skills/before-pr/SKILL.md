@@ -20,7 +20,7 @@ Run the "Before PR" checklist from `docs/development/checklists.md`. Assumes `/p
 
 ## Batch 3 (review checks)
 
-- **Coverage**: run `./scripts/coverage.sh` and compare badge value to what's in README — if they differ, warn
+- **Coverage**: run `./scripts/check-coverage.sh --profile ...` (or note if CI will run it) — warn if any module is below threshold; Codecov badge auto-updates after merge
 - **Agent context**: check if any open milestone has issues being closed by this branch (`Closes #N` in commit messages) — if so, remind to update `.agents/context/` if relevant
 - **CLI commands**: if any `cobra.Command` was added in the diff, verify it has `Short` and `Long` fields
 
@@ -33,7 +33,7 @@ Format as a checklist:
 ✓ No new env vars (or all documented)
 ✓ Generated docs up to date
 ✓ OpenAPI in sync
-✓ Coverage badge accurate
+✓ Coverage ratchet passes
 ✓ Agent context reviewed
 ✓ CLI commands have descriptions
 ```
