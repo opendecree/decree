@@ -12,11 +12,10 @@ Optional extra: `pip install opendecree[otel]`. Constructor flag `otel=True` wir
 
 ### Go SDKs (`decree`)
 
-Docs-only — users pass their own `grpc.ClientConn`, add OTel interceptors themselves:
+Docs-only — users pass their own `grpc.ClientConn`, add OTel via stats handler (preferred over deprecated interceptor API):
 ```go
 conn, _ := grpc.NewClient(target,
-    grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
-    grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+    grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 )
 ```
 

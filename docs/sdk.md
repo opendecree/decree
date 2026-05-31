@@ -37,3 +37,26 @@ Reusable power tools for config management — importable as Go packages for int
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/tools](https://pkg.go.dev/github.com/opendecree/decree/sdk/tools)
 
 Packages: `diff` (config version diffing), `docgen` (schema → markdown), `validate` (offline YAML validation), `seed` (bootstrap from YAML), `dump` (full tenant backup). Offline tools have zero gRPC/proto dependencies.
+
+## OpenTelemetry instrumentation (Go)
+
+The Go SDKs accept a `grpc.ClientConn` that callers construct themselves. Wire an OTel interceptor at connection time:
+
+```go
+import (
+    "go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+    "google.golang.org/grpc"
+    "github.com/opendecree/decree/sdk/configclient"
+)
+
+conn, err := grpc.NewClient(
+    "localhost:9090",
+    grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+)
+// conn is passed to the SDK client
+client := configclient.New(conn, ...)
+```
+
+`otelgrpc.NewClientHandler()` uses the stats handler API (preferred over deprecated interceptors) and records spans for every RPC. The same pattern applies to `adminclient` and the watcher's underlying connection.
+
+Install: `go get go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc`
