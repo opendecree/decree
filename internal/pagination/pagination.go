@@ -3,11 +3,24 @@
 // Two token formats are supported:
 //   - v1: offset-based (legacy, backward-compat)
 //   - v2: keyset cursor encoding (created_at unix-ns + entry UUID)
+//
+// # Server-side iteration pattern (Go 1.23+, server module only)
+//
+// Use [Iter] to range over all items from a paginated store query without
+// writing an explicit token-loop.  SDK code must NOT use Iter — the SDK floor
+// is Go 1.22 where iter.Seq is unavailable.
+//
+//	for item, err := range pagination.Iter(ctx, fetchPage) {
+//	    if err != nil { return err }
+//	    // process item
+//	}
 package pagination
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
+	"iter"
 	"strconv"
 	"strings"
 	"time"
@@ -141,4 +154,38 @@ func NextPageToken(pageSize, resultCount, currentOffset int32) string {
 		return ""
 	}
 	return EncodePageToken(currentOffset + pageSize)
+}
+
+// Iter returns an iterator that yields every item across all pages of a
+// paginated data source.  fetch is called once per page; it receives the
+// current opaque page token (empty string for the first page) and returns
+// the page items, the next token, and any error.  An empty next token
+// signals the last page.
+//
+// Server-side use only — requires Go 1.23+.  Do not use in SDK packages
+// whose go.mod floor is Go 1.22.
+//
+// Callers may break out early; fetch is not called for subsequent pages
+// after a break.
+func Iter[T any](ctx context.Context, fetch func(ctx context.Context, pageToken string) ([]T, string, error)) iter.Seq2[T, error] {
+	return func(yield func(T, error) bool) {
+		token := ""
+		for {
+			items, next, err := fetch(ctx, token)
+			if err != nil {
+				var zero T
+				yield(zero, err)
+				return
+			}
+			for _, item := range items {
+				if !yield(item, nil) {
+					return
+				}
+			}
+			if next == "" {
+				return
+			}
+			token = next
+		}
+	}
 }

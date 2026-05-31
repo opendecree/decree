@@ -1,7 +1,9 @@
 package pagination
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"testing"
 	"time"
 )
@@ -226,5 +228,86 @@ func TestNextCursorToken_NoMore(t *testing.T) {
 	}
 	if token := NextCursorToken(10, 5, ts, "some-id"); token != "" {
 		t.Errorf("expected empty token for partial page, got %q", token)
+	}
+}
+
+// --- Iter ---
+
+func TestIter_FullIteration(t *testing.T) {
+	// Three pages of two items each (pageSize=2, store returns 2+1 to signal more).
+	pages := [][]int{
+		{1, 2, 3}, // fetch returns 3 to indicate "has next"; Iter trims to 2
+		{3, 4, 3}, // same pattern
+		{5, 6},    // last page: exactly 2 items, no next token
+	}
+	call := 0
+	fetch := func(_ context.Context, token string) ([]int, string, error) {
+		page := pages[call]
+		call++
+		const pageSize = int32(2)
+		next := NextPageToken(pageSize, int32(len(page)), 0)
+		if int32(len(page)) > pageSize {
+			page = page[:pageSize]
+		}
+		return page, next, nil
+	}
+
+	var got []int
+	for v, err := range Iter(context.Background(), fetch) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got = append(got, v)
+	}
+	want := []int{1, 2, 3, 4, 5, 6}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("index %d: got %d, want %d", i, got[i], want[i])
+		}
+	}
+}
+
+func TestIter_EarlyBreak(t *testing.T) {
+	fetchCalls := 0
+	fetch := func(_ context.Context, _ string) ([]int, string, error) {
+		fetchCalls++
+		return []int{fetchCalls * 10, fetchCalls*10 + 1}, EncodePageToken(int32(fetchCalls * 2)), nil
+	}
+
+	var got []int
+	for v, err := range Iter(context.Background(), fetch) {
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got = append(got, v)
+		if len(got) == 3 {
+			break
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 items after break, got %d", len(got))
+	}
+	// Only two pages should have been fetched (items 10,11 then 20 breaks mid-page).
+	if fetchCalls > 2 {
+		t.Errorf("expected ≤2 fetch calls after early break, got %d", fetchCalls)
+	}
+}
+
+func TestIter_FetchError(t *testing.T) {
+	sentinel := errors.New("store down")
+	fetch := func(_ context.Context, _ string) ([]int, string, error) {
+		return nil, "", sentinel
+	}
+
+	var gotErr error
+	for _, err := range Iter(context.Background(), fetch) {
+		gotErr = err
+		break
+	}
+	if !errors.Is(gotErr, sentinel) {
+		t.Errorf("got %v, want %v", gotErr, sentinel)
 	}
 }
