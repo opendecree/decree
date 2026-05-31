@@ -24,7 +24,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 # Module list for multi-module operations.
 SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools
 
-.PHONY: all generate generate-proto generate-sqlc test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc deps test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -88,6 +88,11 @@ lint-migrations:
 ## buf breaking is skipped in git worktrees (Docker cannot traverse worktree .git files).
 lint-proto: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) sh -c 'buf lint && ([ -f .git ] || buf breaking --against ".git#branch=main")'
+
+## deps: Download Go module dependencies across all modules
+deps:
+	go mod download ./...
+	@for mod in api $(SDK_MODULES) cmd/decree; do (cd $$mod && go mod download ./...) || exit 1; done
 
 ## test: Run unit tests across all modules
 test:

@@ -1,0 +1,54 @@
+{
+  "name": "OpenDecree",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.25"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "forwardPorts": [8080, 9090, 5432, 6379, 16686],
+  "portsAttributes": {
+    "8080": { "label": "HTTP/REST API", "onAutoForward": "notify" },
+    "9090": { "label": "gRPC API", "onAutoForward": "notify" },
+    "5432": { "label": "PostgreSQL", "onAutoForward": "silent" },
+    "6379": { "label": "Redis", "onAutoForward": "silent" },
+    "16686": { "label": "Jaeger UI", "onAutoForward": "silent" }
+  },
+  "otherPortsAttributes": { "onAutoForward": "silent" },
+
+  "remoteEnv": {
+    "DB_WRITE_URL": "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable",
+    "DB_READ_URL": "postgres://centralconfig:localdev@postgres:5432/centralconfig?sslmode=disable",
+    "REDIS_URL": "redis://redis:6379"
+  },
+
+  "onCreateCommand": ".devcontainer/setup-tools.sh",
+  "postCreateCommand": "make deps && make test",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "bufbuild.vscode-buf",
+        "ms-python.python"
+      ],
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        "go.testFlags": ["-race"]
+      }
+    }
+  }
+}
