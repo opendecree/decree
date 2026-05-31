@@ -220,3 +220,19 @@ Pre-commit invalidation fires on all four write paths: `SetField`, `SetFields`, 
 ## Per-Call Default Timeout (#458)
 
 `server.WithDefaultTimeout(d time.Duration)` option adds a server-side deadline interceptor. When a client sends no deadline, the interceptor wraps the context with `context.WithTimeout(ctx, d)` before passing it to the handler chain. Existing client deadlines are left untouched. Enabled via `GRPC_DEFAULT_TIMEOUT` env var (e.g. `30s`); zero value disables. Interceptor runs immediately after the recovery interceptor so the deadline covers auth, rate limiting, and all handlers. `timeoutStream` wraps `grpc.ServerStream` with the deadline context for streaming RPCs.
+
+## decree-ui: Beta Readiness Milestone (9 issues, closed 2026-05-31)
+
+All 9 issues in the decree-ui "Beta Readiness" milestone shipped. Key work:
+
+- **Layout modes** — `full`, `single-tenant`, `single-schema`, `config-only`, `embed` modes. Each selects a different shell (Layout with sidebar, ConfigOnlyLayout header-only, EmbedLayout chrome-free). `LAYOUT_MODE` + `TENANT_ID` env vars control behavior at runtime via Docker entrypoint injection (`window.__DECREE_UI_CONFIG__`).
+- **Config-only mode** (#11) — header-only layout for non-technical admins. Landing page IS the config editor. No sidebar, no nav chrome. `VITE_HIDE_DEBUG` hides the auth bar.
+- **Single-tenant UX polish** (#13) — sidebar shows contextual nav (Config, History, Audit Log, Usage); no Home link; no "Back to tenants" breadcrumb; landing page redirects to config editor. Sidebar footer shows version number, Docs link, and "Powered by OpenDecree". Field descriptions prominent, paths secondary, type badges neutral gray in product modes (`single-tenant` / `config-only`).
+- **TypedInput** — per-type inputs (bool toggle, URL, duration, JSON textarea, numeric, string). Constraints displayed as tooltips.
+- **Field locking** — lock/unlock buttons with visual indicator; locked fields disabled in edit mode.
+- **Config history + rollback** — SlideOver panel, version list, one-click rollback with confirmation.
+- **Pending changes bar** — sticky bottom bar with field-level undo, description field, apply/reset.
+- **Audit log + usage pages** — per-tenant audit trail and usage stats pages.
+- **TENANT_ID_FILE / SCHEMA_ID_FILE** (#74) — file-based ID injection for Docker Compose demos where IDs are written dynamically by a seed container.
+- **Playwright e2e tests** — full stack test against Docker Compose (config edit, rollback, dark mode, history).
+- **`__APP_VERSION__`** — Vite `define` injects `package.json` version at build time; exposed in sidebar footer.
