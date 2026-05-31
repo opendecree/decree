@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -15,7 +16,8 @@ type QueryWriteLogParams struct {
 	StartTime *time.Time
 	EndTime   *time.Time
 	Limit     int32
-	Offset    int32
+	Offset    int32 // used when Cursor is nil and a v1 token was provided
+	Cursor    *pagination.PageCursor
 }
 
 // InsertAuditWriteLogParams contains parameters for inserting an audit log entry.

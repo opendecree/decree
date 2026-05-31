@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -775,6 +776,85 @@ func TestMemoryStore_GetLatestSchemaVersionsBatch(t *testing.T) {
 	none, err := store.GetLatestSchemaVersionsBatch(ctx, nil)
 	require.NoError(t, err)
 	assert.Empty(t, none)
+}
+
+func TestMemoryStore_ListTenants_KeysetCursor(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "keyset-test"})
+	require.NoError(t, err)
+
+	// Create 4 tenants. The memory store uses time.Now() so each insertion is
+	// chronologically distinct enough for ordering.
+	tA, err := store.CreateTenant(ctx, CreateTenantParams{Name: "alpha", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	tB, err := store.CreateTenant(ctx, CreateTenantParams{Name: "beta", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	tC, err := store.CreateTenant(ctx, CreateTenantParams{Name: "gamma", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	tD, err := store.CreateTenant(ctx, CreateTenantParams{Name: "delta", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+
+	// Page 1: limit=2, no cursor — newest two (delta, gamma).
+	page1, err := store.ListTenants(ctx, ListTenantsParams{Limit: 2, Cursor: nil})
+	require.NoError(t, err)
+	require.Len(t, page1, 2)
+	assert.Equal(t, tD.ID, page1[0].ID)
+	assert.Equal(t, tC.ID, page1[1].ID)
+
+	// Build cursor from last item on page 1.
+	cur := &pagination.PageCursor{Time: page1[1].CreatedAt, ID: page1[1].ID}
+
+	// Page 2: limit=1 with cursor — triggers cursor limit-trim since 2 items (beta, alpha) remain.
+	page2, err := store.ListTenants(ctx, ListTenantsParams{Limit: 1, Cursor: cur})
+	require.NoError(t, err)
+	require.Len(t, page2, 1)
+	assert.Equal(t, tB.ID, page2[0].ID)
+
+	// Advance cursor past beta.
+	cur2 := &pagination.PageCursor{Time: page2[0].CreatedAt, ID: page2[0].ID}
+
+	// Page 3: limit=2 with cursor — only alpha remains.
+	page3, err := store.ListTenants(ctx, ListTenantsParams{Limit: 2, Cursor: cur2})
+	require.NoError(t, err)
+	require.Len(t, page3, 1)
+	assert.Equal(t, tA.ID, page3[0].ID)
+
+	// Cursor past last item — empty.
+	cur3 := &pagination.PageCursor{Time: page3[0].CreatedAt, ID: page3[0].ID}
+	page4, err := store.ListTenants(ctx, ListTenantsParams{Limit: 2, Cursor: cur3})
+	require.NoError(t, err)
+	assert.Empty(t, page4)
+}
+
+func TestMemoryStore_ListTenantsBySchema_KeysetCursor(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "keyset-schema-test"})
+	require.NoError(t, err)
+
+	tA, err := store.CreateTenant(ctx, CreateTenantParams{Name: "alpha", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	tB, err := store.CreateTenant(ctx, CreateTenantParams{Name: "beta", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+	tC, err := store.CreateTenant(ctx, CreateTenantParams{Name: "gamma", SchemaID: s.ID, SchemaVersion: 1})
+	require.NoError(t, err)
+
+	// Page 1 — most recent two.
+	page1, err := store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{SchemaID: s.ID, Limit: 2})
+	require.NoError(t, err)
+	require.Len(t, page1, 2)
+	assert.Equal(t, tC.ID, page1[0].ID)
+	assert.Equal(t, tB.ID, page1[1].ID)
+
+	// Page 2 using cursor.
+	cur := &pagination.PageCursor{Time: page1[1].CreatedAt, ID: page1[1].ID}
+	page2, err := store.ListTenantsBySchema(ctx, ListTenantsBySchemaParams{SchemaID: s.ID, Limit: 2, Cursor: cur})
+	require.NoError(t, err)
+	require.Len(t, page2, 1)
+	assert.Equal(t, tA.ID, page2[0].ID)
 }
 
 // Verify MemoryStore implements Store at compile time.

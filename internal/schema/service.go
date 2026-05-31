@@ -591,13 +591,18 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 	}
 	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
 
-	offset, err := pagination.DecodePageToken(req.PageToken)
+	kind, offset, cursor, err := pagination.DecodeTokenKind(req.PageToken)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
 	// Push tenant access filtering into the store so pagination is correct.
 	allowedIDs := auth.AllowedTenantIDs(ctx)
+
+	var cursorPtr *pagination.PageCursor
+	if kind == pagination.KindCursor {
+		cursorPtr = &cursor
+	}
 
 	var tenants []domain.Tenant
 
@@ -609,12 +614,14 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 			SchemaID:         *req.SchemaId,
 			Limit:            pageSize + 1,
 			Offset:           offset,
+			Cursor:           cursorPtr,
 			AllowedTenantIDs: allowedIDs,
 		})
 	} else {
 		tenants, err = s.store.ListTenants(ctx, ListTenantsParams{
 			Limit:            pageSize + 1,
 			Offset:           offset,
+			Cursor:           cursorPtr,
 			AllowedTenantIDs: allowedIDs,
 		})
 	}
@@ -622,7 +629,13 @@ func (s *Service) ListTenants(ctx context.Context, req *pb.ListTenantsRequest) (
 		return nil, status.Error(codes.Internal, "failed to list tenants")
 	}
 
-	nextToken := pagination.NextPageToken(pageSize, int32(len(tenants)), offset)
+	var nextToken string
+	if kind == pagination.KindOffset {
+		nextToken = pagination.NextPageToken(pageSize, int32(len(tenants)), offset)
+	} else if int32(len(tenants)) > pageSize {
+		last := tenants[pageSize-1]
+		nextToken = pagination.EncodeCursorToken(pagination.PageCursor{Time: last.CreatedAt, ID: last.ID})
+	}
 	if int32(len(tenants)) > pageSize {
 		tenants = tenants[:pageSize]
 	}

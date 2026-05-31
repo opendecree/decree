@@ -75,15 +75,21 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 	}
 	pageSize := pagination.ClampPageSize(req.PageSize, 50, 500)
 
-	offset, err := pagination.DecodePageToken(req.PageToken)
+	kind, offset, cursor, err := pagination.DecodeTokenKind(req.PageToken)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid page token")
 	}
 
 	params := QueryWriteLogParams{
-		Limit:  pageSize + 1,
-		Offset: offset,
+		Limit: pageSize + 1,
 	}
+	switch kind {
+	case pagination.KindOffset:
+		params.Offset = offset
+	case pagination.KindCursor:
+		params.Cursor = &cursor
+	}
+
 	if req.TenantId != nil {
 		resolved, err := s.resolveTenantID(ctx, *req.TenantId)
 		if err != nil {
@@ -117,7 +123,13 @@ func (s *Service) QueryWriteLog(ctx context.Context, req *pb.QueryWriteLogReques
 		return nil, status.Error(codes.Internal, "failed to query audit log")
 	}
 
-	nextToken := pagination.NextPageToken(pageSize, int32(len(entries)), offset)
+	var nextToken string
+	if kind == pagination.KindOffset {
+		nextToken = pagination.NextPageToken(pageSize, int32(len(entries)), offset)
+	} else if int32(len(entries)) > pageSize {
+		last := entries[pageSize-1]
+		nextToken = pagination.EncodeCursorToken(pagination.PageCursor{Time: last.CreatedAt, ID: last.ID})
+	}
 	if int32(len(entries)) > pageSize {
 		entries = entries[:pageSize]
 	}

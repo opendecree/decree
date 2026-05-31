@@ -138,16 +138,33 @@ func (s *MemoryStore) QueryAuditWriteLog(_ context.Context, arg QueryWriteLogPar
 		filtered = append(filtered, e)
 	}
 
-	// Sort by CreatedAt DESC.
+	// Sort by CreatedAt DESC, ID DESC.
 	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].CreatedAt.Equal(filtered[j].CreatedAt) {
+			return filtered[i].ID > filtered[j].ID
+		}
 		return filtered[i].CreatedAt.After(filtered[j].CreatedAt)
 	})
 
-	// Apply offset and limit.
-	if int(arg.Offset) >= len(filtered) {
-		return nil, nil
+	if arg.Cursor != nil {
+		// Keyset: find rows that come after the cursor in (created_at DESC, id DESC) order.
+		cur := arg.Cursor
+		var after []domain.AuditWriteLog
+		for _, e := range filtered {
+			if e.CreatedAt.Before(cur.Time) ||
+				(e.CreatedAt.Equal(cur.Time) && e.ID < cur.ID) {
+				after = append(after, e)
+			}
+		}
+		filtered = after
+	} else {
+		// Offset-based (backward compat).
+		if int(arg.Offset) >= len(filtered) {
+			return nil, nil
+		}
+		filtered = filtered[arg.Offset:]
 	}
-	filtered = filtered[arg.Offset:]
+
 	if arg.Limit > 0 && int(arg.Limit) < len(filtered) {
 		filtered = filtered[:arg.Limit]
 	}
