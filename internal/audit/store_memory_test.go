@@ -2,12 +2,14 @@ package audit
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -221,6 +223,42 @@ func TestMemoryStore_GetUnusedFields_ReturnsEmpty(t *testing.T) {
 	paths, err := s.GetUnusedFields(ctx, GetUnusedFieldsParams{TenantID: "t1", Since: time.Now()})
 	require.NoError(t, err)
 	assert.Empty(t, paths)
+}
+
+func TestMemoryStore_QueryWriteLog_KeysetCursor(t *testing.T) {
+	ctx := context.Background()
+	s := newTestMemoryStore()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 3; i++ {
+		s.AddWriteLog(domain.AuditWriteLog{
+			ID:        fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1),
+			TenantID:  "t1",
+			Action:    "set_field",
+			CreatedAt: base.Add(time.Duration(i) * time.Hour),
+		})
+	}
+
+	// Page 1: no cursor, newest first (IDs: 3, 2, 1 → created_at desc).
+	page1, err := s.QueryAuditWriteLog(ctx, QueryWriteLogParams{TenantID: "t1", Limit: 2})
+	require.NoError(t, err)
+	require.Len(t, page1, 2)
+	assert.True(t, page1[0].CreatedAt.After(page1[1].CreatedAt), "first page not in desc order")
+
+	// Build cursor from last entry on page 1.
+	cur := &pagination.PageCursor{Time: page1[1].CreatedAt, ID: page1[1].ID}
+
+	// Page 2: should return only the oldest entry.
+	page2, err := s.QueryAuditWriteLog(ctx, QueryWriteLogParams{TenantID: "t1", Limit: 2, Cursor: cur})
+	require.NoError(t, err)
+	require.Len(t, page2, 1)
+	assert.True(t, page2[0].CreatedAt.Before(page1[1].CreatedAt))
+
+	// Cursor past last → empty.
+	cur2 := &pagination.PageCursor{Time: page2[0].CreatedAt, ID: page2[0].ID}
+	page3, err := s.QueryAuditWriteLog(ctx, QueryWriteLogParams{TenantID: "t1", Limit: 2, Cursor: cur2})
+	require.NoError(t, err)
+	assert.Empty(t, page3)
 }
 
 func TestMemoryStore_InterfaceCompliance(t *testing.T) {

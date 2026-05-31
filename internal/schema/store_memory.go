@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/opendecree/decree/internal/pagination"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
 
@@ -417,9 +418,7 @@ func (m *MemoryStore) ListTenants(_ context.Context, arg ListTenantsParams) ([]d
 		}
 		all = append(all, t)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
-
-	return paginate(all, int(arg.Offset), int(arg.Limit)), nil
+	return paginateTenants(all, arg.Cursor, int(arg.Offset), int(arg.Limit)), nil
 }
 
 func (m *MemoryStore) ListTenantsBySchema(_ context.Context, arg ListTenantsBySchemaParams) ([]domain.Tenant, error) {
@@ -436,9 +435,7 @@ func (m *MemoryStore) ListTenantsBySchema(_ context.Context, arg ListTenantsBySc
 		}
 		filtered = append(filtered, t)
 	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID < filtered[j].ID })
-
-	return paginate(filtered, int(arg.Offset), int(arg.Limit)), nil
+	return paginateTenants(filtered, arg.Cursor, int(arg.Offset), int(arg.Limit)), nil
 }
 
 func (m *MemoryStore) UpdateTenantName(_ context.Context, arg UpdateTenantNameParams) (domain.Tenant, error) {
@@ -551,4 +548,34 @@ func paginate[T any](items []T, offset, limit int) []T {
 		items = items[:limit]
 	}
 	return items
+}
+
+// paginateTenants sorts tenants by (created_at DESC, id DESC) and applies
+// either keyset cursor or offset pagination, then enforces the limit.
+func paginateTenants(tenants []domain.Tenant, cursor *pagination.PageCursor, offset, limit int) []domain.Tenant {
+	sort.Slice(tenants, func(i, j int) bool {
+		if tenants[i].CreatedAt.Equal(tenants[j].CreatedAt) {
+			return tenants[i].ID > tenants[j].ID
+		}
+		return tenants[i].CreatedAt.After(tenants[j].CreatedAt)
+	})
+
+	if cursor != nil {
+		var after []domain.Tenant
+		for _, t := range tenants {
+			if t.CreatedAt.Before(cursor.Time) ||
+				(t.CreatedAt.Equal(cursor.Time) && t.ID < cursor.ID) {
+				after = append(after, t)
+			}
+		}
+		tenants = after
+	} else {
+		tenants = paginate(tenants, offset, limit)
+		return tenants
+	}
+
+	if limit > 0 && limit < len(tenants) {
+		tenants = tenants[:limit]
+	}
+	return tenants
 }

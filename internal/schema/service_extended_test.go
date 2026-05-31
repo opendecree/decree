@@ -320,6 +320,42 @@ func TestListTenants_All(t *testing.T) {
 	assert.Len(t, resp.Tenants, 1)
 }
 
+func TestListTenants_KeysetPagination(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+
+	t1 := testTenant()
+	t1.ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	t1.CreatedAt = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// First page: empty token → Cursor nil.
+	store.On("ListTenants", mock.Anything, mock.MatchedBy(func(p ListTenantsParams) bool {
+		return p.Cursor == nil && p.Limit == 2
+	})).Return([]domain.Tenant{t1, t1}, nil).Once()
+
+	resp, err := svc.ListTenants(auth.WithoutAuth(context.Background()), &pb.ListTenantsRequest{PageSize: 1})
+	require.NoError(t, err)
+	require.Len(t, resp.Tenants, 1)
+	require.NotEmpty(t, resp.NextPageToken, "expected cursor token for full page")
+
+	kind, _, _, err := pagination.DecodeTokenKind(resp.NextPageToken)
+	require.NoError(t, err)
+	assert.Equal(t, pagination.KindCursor, kind)
+
+	// Second page: cursor token → Cursor set.
+	store.On("ListTenants", mock.Anything, mock.MatchedBy(func(p ListTenantsParams) bool {
+		return p.Cursor != nil && p.Limit == 2
+	})).Return([]domain.Tenant{}, nil).Once()
+
+	resp2, err := svc.ListTenants(auth.WithoutAuth(context.Background()), &pb.ListTenantsRequest{
+		PageSize:  1,
+		PageToken: resp.NextPageToken,
+	})
+	require.NoError(t, err)
+	assert.Empty(t, resp2.Tenants)
+	assert.Empty(t, resp2.NextPageToken)
+}
+
 // --- DeleteTenant ---
 
 func TestDeleteTenant_Success(t *testing.T) {

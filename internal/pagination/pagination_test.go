@@ -3,6 +3,7 @@ package pagination
 import (
 	"encoding/base64"
 	"testing"
+	"time"
 )
 
 func TestDecodePageToken_Empty(t *testing.T) {
@@ -132,5 +133,98 @@ func TestNextPageToken(t *testing.T) {
 	}
 	if offset != 100 {
 		t.Errorf("got offset %d, want 100", offset)
+	}
+}
+
+func TestDecodeTokenKind_Empty(t *testing.T) {
+	kind, offset, cur, err := DecodeTokenKind("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if kind != KindFirst {
+		t.Errorf("got kind %v, want KindFirst", kind)
+	}
+	if offset != 0 {
+		t.Errorf("got offset %d, want 0", offset)
+	}
+	_ = cur
+}
+
+func TestDecodeTokenKind_V1Offset(t *testing.T) {
+	token := EncodePageToken(42)
+	kind, offset, _, err := DecodeTokenKind(token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if kind != KindOffset {
+		t.Errorf("got kind %v, want KindOffset", kind)
+	}
+	if offset != 42 {
+		t.Errorf("got offset %d, want 42", offset)
+	}
+}
+
+func TestDecodeTokenKind_V2Cursor(t *testing.T) {
+	ts := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	token := EncodeCursorToken(PageCursor{Time: ts, ID: id})
+
+	kind, _, cur, err := DecodeTokenKind(token)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if kind != KindCursor {
+		t.Errorf("got kind %v, want KindCursor", kind)
+	}
+	if !cur.Time.Equal(ts) {
+		t.Errorf("got time %v, want %v", cur.Time, ts)
+	}
+	if cur.ID != id {
+		t.Errorf("got id %q, want %q", cur.ID, id)
+	}
+}
+
+func TestDecodeTokenKind_Invalid(t *testing.T) {
+	tests := []string{
+		"not-base64!!!",
+		"aW52YWxpZA==", // "invalid"
+		base64.StdEncoding.EncodeToString([]byte("v3:something")),   // unknown version
+		base64.StdEncoding.EncodeToString([]byte("v2:abc:some-id")), // non-numeric ns
+		base64.StdEncoding.EncodeToString([]byte("v2:123:")),        // empty id
+	}
+	for _, token := range tests {
+		_, _, _, err := DecodeTokenKind(token)
+		if err == nil {
+			t.Errorf("DecodeTokenKind(%q): expected error, got nil", token)
+		}
+	}
+}
+
+func TestNextCursorToken_HasMore(t *testing.T) {
+	ts := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+	token := NextCursorToken(10, 11, ts, id)
+	if token == "" {
+		t.Fatal("expected non-empty cursor token")
+	}
+	kind, _, cur, err := DecodeTokenKind(token)
+	if err != nil {
+		t.Fatalf("DecodeTokenKind: %v", err)
+	}
+	if kind != KindCursor {
+		t.Errorf("got kind %v, want KindCursor", kind)
+	}
+	if !cur.Time.Equal(ts) {
+		t.Errorf("got time %v, want %v", cur.Time, ts)
+	}
+}
+
+func TestNextCursorToken_NoMore(t *testing.T) {
+	ts := time.Now()
+	if token := NextCursorToken(10, 10, ts, "some-id"); token != "" {
+		t.Errorf("expected empty token for exact page, got %q", token)
+	}
+	if token := NextCursorToken(10, 5, ts, "some-id"); token != "" {
+		t.Errorf("expected empty token for partial page, got %q", token)
 	}
 }

@@ -172,15 +172,34 @@ func (s *PGStore) QueryAuditWriteLog(ctx context.Context, arg QueryWriteLogParam
 		}
 	}
 
-	rows, err := s.read.QueryAuditWriteLog(ctx, dbstore.QueryAuditWriteLogParams{
-		Column1: tenantUUID,
-		Column2: arg.Actor,
-		Column3: arg.FieldPath,
-		Column4: pgconv.OptionalTimeToTimestamptz(arg.StartTime),
-		Column5: pgconv.OptionalTimeToTimestamptz(arg.EndTime),
-		Limit:   arg.Limit,
-		Offset:  arg.Offset,
-	})
+	var rows []dbstore.AuditWriteLog
+	var err error
+	if arg.Cursor != nil {
+		cursorUUID, uuidErr := pgconv.StringToUUID(arg.Cursor.ID)
+		if uuidErr != nil {
+			return nil, uuidErr
+		}
+		rows, err = s.read.QueryAuditWriteLogKeyset(ctx, dbstore.QueryAuditWriteLogKeysetParams{
+			Column1: tenantUUID,
+			Column2: arg.Actor,
+			Column3: arg.FieldPath,
+			Column4: pgconv.OptionalTimeToTimestamptz(arg.StartTime),
+			Column5: pgconv.OptionalTimeToTimestamptz(arg.EndTime),
+			Limit:   arg.Limit,
+			Column7: pgconv.TimeToTimestamptz(arg.Cursor.Time),
+			Column8: cursorUUID,
+		})
+	} else {
+		rows, err = s.read.QueryAuditWriteLog(ctx, dbstore.QueryAuditWriteLogParams{
+			Column1: tenantUUID,
+			Column2: arg.Actor,
+			Column3: arg.FieldPath,
+			Column4: pgconv.OptionalTimeToTimestamptz(arg.StartTime),
+			Column5: pgconv.OptionalTimeToTimestamptz(arg.EndTime),
+			Limit:   arg.Limit,
+			Offset:  arg.Offset,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
