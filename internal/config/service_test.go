@@ -655,6 +655,47 @@ func TestRollbackToVersion_VersionConflictRetried(t *testing.T) {
 	store.AssertNumberOfCalls(t, "CreateConfigVersion", 2)
 }
 
+func TestRollbackToVersion_LockedField_ReturnsFailedPrecondition(t *testing.T) {
+	// FieldLockGuard bypasses superadmin, so use an admin ctx with tenant access.
+	svc, store, _, _ := newTestService()
+	ctx := auth.ContextWithClaims(context.Background(), &auth.Claims{
+		Role:      auth.RoleAdmin,
+		TenantIDs: []string{tenantID1},
+	})
+
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "payments.fee", Value: strPtr("0.5")}}, nil)
+	store.On("GetFieldLocks", mock.Anything, tenantID1).
+		Return([]domain.TenantFieldLock{{TenantID: tenantID1, FieldPath: "payments.fee"}}, nil)
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{TenantId: tenantID1, Version: 2})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err), "rollback to a locked field must return FailedPrecondition")
+}
+
+func TestRollbackToVersion_InvalidValue_ReturnsInvalidArgument(t *testing.T) {
+	// Restore a value that violates the schema constraint (integer > max).
+	svc, store := newTestServiceWithValidation()
+	ctx := superadminCtx()
+
+	constraintsJSON := []byte(`{"min":0,"max":10}`)
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "app.retries", Value: strPtr("99")}}, nil)
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.retries", FieldType: domain.FieldTypeInteger, Constraints: constraintsJSON},
+		}, nil)
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{TenantId: tenantID1, Version: 2})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err), "rollback with a value exceeding max constraint must return InvalidArgument")
+}
+
 // --- ExportConfig ---
 
 func TestExportConfig_Success(t *testing.T) {
