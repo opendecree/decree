@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opendecree/decree/sdk/adminclient"
 )
 
 // --- Command structure ---
@@ -76,7 +78,7 @@ func TestLockCommand_HasSubcommands(t *testing.T) {
 }
 
 func TestAuditCommand_HasSubcommands(t *testing.T) {
-	expected := []string{"query", "usage", "unused"}
+	expected := []string{"query", "usage", "unused", "verify"}
 	names := make([]string, 0, len(expected))
 	for _, cmd := range auditCmd.Commands() {
 		names = append(names, cmd.Name())
@@ -85,6 +87,65 @@ func TestAuditCommand_HasSubcommands(t *testing.T) {
 		if !slices.Contains(names, exp) {
 			t.Errorf("missing audit subcommand: %s", exp)
 		}
+	}
+}
+
+// --- audit verify exit code ---
+
+func TestPrintVerifyResult_OK(t *testing.T) {
+	var buf bytes.Buffer
+	result := adminclient.VerifyChainResult{OK: true, Total: 5}
+	err := printVerifyResult(&buf, result)
+	if err != nil {
+		t.Errorf("expected nil error for intact chain, got %v", err)
+	}
+	if !strings.Contains(buf.String(), "OK") {
+		t.Errorf("expected output to contain %q, got %q", "OK", buf.String())
+	}
+}
+
+func TestPrintVerifyResult_BrokenChain(t *testing.T) {
+	var buf bytes.Buffer
+	result := adminclient.VerifyChainResult{
+		OK:    false,
+		Total: 3,
+		Breaks: []adminclient.VerifyChainBreak{
+			{Position: 2, EntryID: "entry-abc", Got: "badhash", Want: "goodhash"},
+		},
+	}
+	err := printVerifyResult(&buf, result)
+	if err == nil {
+		t.Fatal("expected non-nil error for broken chain, got nil")
+	}
+	if !strings.Contains(err.Error(), "break") {
+		t.Errorf("expected error to mention breaks, got %q", err.Error())
+	}
+	out := buf.String()
+	if !strings.Contains(out, "FAIL") {
+		t.Errorf("expected output to contain %q, got %q", "FAIL", out)
+	}
+	if !strings.Contains(out, "entry-abc") {
+		t.Errorf("expected output to contain entry ID %q, got %q", "entry-abc", out)
+	}
+}
+
+func TestPrintVerifyResult_TablePrintedBeforeError(t *testing.T) {
+	// Ensure the table is printed even when breaks are found (non-zero exit must
+	// not suppress output).
+	var buf bytes.Buffer
+	result := adminclient.VerifyChainResult{
+		OK:    false,
+		Total: 1,
+		Breaks: []adminclient.VerifyChainBreak{
+			{Position: 1, EntryID: "id-1", Got: "aaa", Want: "bbb"},
+		},
+	}
+	err := printVerifyResult(&buf, result)
+	if err == nil {
+		t.Fatal("expected error for broken chain")
+	}
+	if buf.Len() == 0 {
+		t.Error("expected table output before error, got empty buffer")
 	}
 }
 
