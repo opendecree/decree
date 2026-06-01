@@ -109,8 +109,8 @@ func TestComputeEntryHash_Epoch1_PayloadSensitivity(t *testing.T) {
 	mutate(func(m *ChainInput) { m.NewValue = nil })
 	mutate(func(m *ChainInput) { m.ConfigVersion = i32Ptr(99) })
 	mutate(func(m *ChainInput) { m.ConfigVersion = nil })
-	mutate(func(m *ChainInput) { m.Metadata = []byte(`{"k":"changed"}`) })
-	mutate(func(m *ChainInput) { m.Metadata = nil })
+	// Metadata is excluded from epoch-1 hash (PG JSONB normalizes bytes on storage).
+	// _ = m.Metadata  // retained in struct for future use.
 }
 
 func TestComputeEntryHash_Epoch1_NilVsEmpty(t *testing.T) {

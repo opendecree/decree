@@ -64,12 +64,9 @@ func ComputeEntryHash(in ChainInput) string {
 	writeNullableStr(h, in.OldValue)
 	writeNullableStr(h, in.NewValue)
 	writeNullableI32(h, in.ConfigVersion)
-	if len(in.Metadata) == 0 {
-		_, _ = h.Write([]byte{0x00})
-	} else {
-		_, _ = h.Write([]byte{0x01})
-		_, _ = fmt.Fprint(h, hex.EncodeToString(in.Metadata))
-	}
+	// Metadata is intentionally excluded from epoch-1: PG JSONB normalizes
+	// the byte representation on storage, causing the raw bytes to differ
+	// between write time (from json.Marshal) and read time (from PG text output).
 	return hex.EncodeToString(h.Sum(nil))
 }
 
