@@ -575,6 +575,19 @@ func TestRollbackToVersion_Success(t *testing.T) {
 	store.AssertCalled(t, "BulkSetConfigValues", mock.Anything, mock.Anything)
 }
 
+func TestRollbackToVersion_FieldLocksError_ReturnsInternal(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock(nil), errors.New("db down"))
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{TenantId: tenantID1, Version: 2})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
 func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
