@@ -155,11 +155,52 @@ func (s *PGStore) GetAuditWriteLogOrdered(ctx context.Context, tenantID string) 
 	if err != nil {
 		return nil, err
 	}
-	result := make([]domain.AuditWriteLog, len(rows))
+	entries := make([]domain.AuditWriteLog, len(rows))
 	for i, r := range rows {
-		result[i] = auditWriteLogFromDB(r)
+		entries[i] = auditWriteLogFromDB(r)
 	}
-	return result, nil
+	// Traverse the chain via previous_hash links to get insertion order.
+	// Ordering by (created_at, id) is ambiguous when two entries share the
+	// same microsecond timestamp (possible in fast environments). The
+	// previous_hash field encodes the canonical insertion order regardless
+	// of clock precision.
+	return sortByChain(entries), nil
+}
+
+// sortByChain reorders entries by following the previous_hash linked list,
+// returning them root-first (empty previous_hash) → leaf.
+// Falls back to the original slice if the chain is malformed (e.g. forked
+// or disconnected), so VerifyChain still reports the breaks.
+func sortByChain(entries []domain.AuditWriteLog) []domain.AuditWriteLog {
+	if len(entries) <= 1 {
+		return entries
+	}
+	// Build a map: previous_hash → entry.
+	byPrev := make(map[string]domain.AuditWriteLog, len(entries))
+	for _, e := range entries {
+		byPrev[e.PreviousHash] = e
+	}
+	// Start from the root (the entry whose previous_hash is "").
+	root, ok := byPrev[""]
+	if !ok {
+		return entries // malformed chain — fall back
+	}
+	ordered := make([]domain.AuditWriteLog, 0, len(entries))
+	current := root
+	seen := make(map[string]bool, len(entries))
+	for !seen[current.EntryHash] {
+		ordered = append(ordered, current)
+		seen[current.EntryHash] = true
+		next, hasNext := byPrev[current.EntryHash]
+		if !hasNext {
+			break
+		}
+		current = next
+	}
+	if len(ordered) != len(entries) {
+		return entries // disconnected chain — fall back
+	}
+	return ordered
 }
 
 func (s *PGStore) QueryAuditWriteLog(ctx context.Context, arg QueryWriteLogParams) ([]domain.AuditWriteLog, error) {

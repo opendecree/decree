@@ -1,7 +1,7 @@
 {
-  "cmd/decree": 85.7,
+  "cmd/decree": 86.1,
   "internal": 88.5,
-  "sdk/adminclient": 97.9,
+  "sdk/adminclient": 97.7,
   "sdk/configclient": 87.1,
   "sdk/configwatcher": 90.9,
   "sdk/grpctransport": 8.0,
