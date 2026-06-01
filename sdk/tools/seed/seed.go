@@ -428,11 +428,13 @@ func marshalSchemaYAML(f *File) ([]byte, error) {
 		SpecVersion string              `yaml:"spec_version"`
 		Name        string              `yaml:"name"`
 		Description string              `yaml:"description,omitempty"`
+		Info        *SchemaInfoDef      `yaml:"info,omitempty"`
 		Fields      map[string]FieldDef `yaml:"fields"`
 	}{
 		SpecVersion: "v1",
 		Name:        f.Schema.Name,
 		Description: f.Schema.Description,
+		Info:        f.Schema.Info,
 		Fields:      f.Schema.Fields,
 	}
 	return yaml.Marshal(doc)
