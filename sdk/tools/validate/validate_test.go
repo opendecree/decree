@@ -104,6 +104,14 @@ values:
 values:
   timeout:
     value: 123`, "timeout", "expected duration"},
+		{"time gets invalid string", `spec_version: "v1"
+values:
+  start_time:
+    value: "not-a-time"`, "start_time", "invalid time value"},
+		{"duration gets invalid string", `spec_version: "v1"
+values:
+  timeout:
+    value: "not-a-duration"`, "timeout", "invalid duration value"},
 	}
 
 	for _, tt := range tests {

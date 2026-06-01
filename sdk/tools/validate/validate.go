@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -349,17 +350,29 @@ func validateBool(result *Result, path string, value any) {
 }
 
 func validateStringType(result *Result, path string, value any, typeName string) {
-	if _, ok := value.(string); !ok {
+	s, ok := value.(string)
+	if !ok {
 		result.add(path, fmt.Sprintf("expected %s (string), got %T", typeName, value))
+		return
+	}
+	if typeName == "time" {
+		if _, err := time.Parse(time.RFC3339, s); err != nil {
+			result.add(path, fmt.Sprintf("invalid time value %q: must be RFC3339 format", s))
+		}
 	}
 }
 
 func validateDuration(result *Result, path string, value any, _ *ConstraintsDef) {
-	if _, ok := value.(string); !ok {
+	s, ok := value.(string)
+	if !ok {
 		result.add(path, fmt.Sprintf("expected duration (string), got %T", value))
+		return
+	}
+	if _, err := time.ParseDuration(s); err != nil {
+		result.add(path, fmt.Sprintf("invalid duration value %q: %v", s, err))
 	}
 	// Numeric constraints on duration are validated server-side after parsing;
-	// offline validation only checks the type.
+	// offline validation only checks the type and syntax.
 }
 
 func validateURL(result *Result, path string, value any) {
