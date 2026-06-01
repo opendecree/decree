@@ -2,9 +2,9 @@ package adminclient
 
 import (
 	"context"
-	"math"
-	"math/rand/v2"
 	"time"
+
+	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
 
 // RetryConfig configures automatic retry with exponential backoff.
@@ -45,56 +45,26 @@ func (c RetryConfig) withDefaults() RetryConfig {
 // retry executes fn with retries if retry is enabled. Otherwise calls fn once.
 // Only idempotent operations (reads: List*, Get*) should be wrapped with retry.
 func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (T, error)) (T, error) {
-	if !c.opts.retryEnabled {
-		return fn(ctx)
-	}
-
-	cfg := c.opts.retry
-	var zero T
-	var lastErr error
-
-	for attempt := range cfg.MaxAttempts {
-		result, err := fn(ctx)
-		if err == nil {
-			return result, nil
-		}
-		lastErr = err
-		if !cfg.RetryableCheck(err) {
-			return zero, err
-		}
-		if attempt == cfg.MaxAttempts-1 {
-			break
-		}
-
-		if ctx.Err() != nil {
-			return zero, ctx.Err()
-		}
-
-		backoff := backoffDuration(attempt, cfg.InitialBackoff, cfg.MaxBackoff, cfg.Jitter)
-		select {
-		case <-ctx.Done():
-			return zero, ctx.Err()
-		case <-time.After(backoff):
-		}
-	}
-
-	return zero, lastErr
+	return sdkretry.Run(ctx, c.opts.retryEnabled, toSharedConfig(c.opts.retry), fn)
 }
 
 // retryDo executes fn with retries if retry is enabled, for void operations.
 func retryDo(ctx context.Context, c *Client, fn func(ctx context.Context) error) error {
-	_, err := retry(ctx, c, func(ctx context.Context) (struct{}, error) {
-		return struct{}{}, fn(ctx)
-	})
-	return err
+	return sdkretry.RunDo(ctx, c.opts.retryEnabled, toSharedConfig(c.opts.retry), fn)
 }
 
 // backoffDuration computes exponential backoff with optional jitter.
+// Exposed for tests.
 func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
-	backoff := time.Duration(float64(initial) * math.Pow(2, float64(attempt)))
-	backoff = min(backoff, max)
-	if jitter && backoff > 0 {
-		backoff = time.Duration(rand.Int64N(int64(backoff)))
+	return sdkretry.BackoffDuration(attempt, initial, max, jitter)
+}
+
+func toSharedConfig(c RetryConfig) sdkretry.Config {
+	return sdkretry.Config{
+		MaxAttempts:    c.MaxAttempts,
+		InitialBackoff: c.InitialBackoff,
+		MaxBackoff:     c.MaxBackoff,
+		Jitter:         c.Jitter,
+		RetryableCheck: c.RetryableCheck,
 	}
-	return backoff
 }
