@@ -3,11 +3,16 @@ package grpctransport_test
 import (
 	"context"
 	"errors"
+	"net"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/opendecree/decree/sdk/configclient"
 	"github.com/opendecree/decree/sdk/grpctransport"
 )
 
@@ -78,5 +83,55 @@ func TestBuildConfig_WithTokenSource_ErrorPropagates(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("unexpected construction error: %v", err)
+	}
+}
+
+// TestInsecureConn_WithBearerToken_RPCRejected verifies that gRPC refuses to send
+// a bearer token over a plaintext (insecure) connection at RPC call time.
+//
+// bearerToken.RequireTransportSecurity() returns true, so gRPC must return an
+// error containing "transport security" before the RPC leaves the client.
+func TestInsecureConn_WithBearerToken_RPCRejected(t *testing.T) {
+	// Start an in-process gRPC server using bufconn (no TLS).
+	const bufSize = 1 << 20
+	lis := bufconn.Listen(bufSize)
+	srv := grpc.NewServer()
+	pb.RegisterConfigServiceServer(srv, &pb.UnimplementedConfigServiceServer{})
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(func() { srv.Stop(); lis.Close() })
+
+	// Dial with insecure credentials (no TLS).
+	clientConn, err := grpc.NewClient(
+		"passthrough:///bufconn",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return lis.DialContext(ctx)
+		}),
+	)
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+	t.Cleanup(func() { clientConn.Close() })
+
+	transport, err := grpctransport.NewConfigTransport(clientConn,
+		grpctransport.WithBearerToken("super-secret-jwt"),
+	)
+	if err != nil {
+		t.Fatalf("NewConfigTransport: %v", err)
+	}
+
+	// The RPC must fail because PerRPCCredentials with RequireTransportSecurity=true
+	// refuses to attach credentials to a plaintext connection.
+	_, rpcErr := transport.GetField(context.Background(), &configclient.GetFieldRequest{
+		TenantID:  "tenant-1",
+		FieldPath: "a",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected RPC to fail on insecure connection with bearer token, got nil error")
+	}
+	// gRPC returns: "transport: cannot send secure credentials on an insecure connection"
+	errMsg := rpcErr.Error()
+	if !strings.Contains(errMsg, "insecure connection") && !strings.Contains(errMsg, "transport security") {
+		t.Errorf("expected error to mention insecure connection or transport security; got: %v", rpcErr)
 	}
 }
