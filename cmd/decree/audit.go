@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -113,30 +114,7 @@ Requires migration 002_audit_tamper_evident to be applied.`,
 			return err
 		}
 
-		if result.OK {
-			fmt.Printf("OK — %d entries, chain intact\n", result.Total)
-			return nil
-		}
-
-		fmt.Printf("FAIL — %d breaks in %d entries\n", len(result.Breaks), result.Total)
-		rows := tableRows([]string{"POSITION", "ENTRY_ID", "GOT", "WANT"})
-		for _, b := range result.Breaks {
-			got := b.Got
-			want := b.Want
-			if len(got) > 12 {
-				got = got[:12] + "…"
-			}
-			if len(want) > 12 {
-				want = want[:12] + "…"
-			}
-			rows = append(rows, []string{
-				fmt.Sprintf("%d", b.Position),
-				b.EntryID,
-				got,
-				want,
-			})
-		}
-		return printOutput(rows)
+		return printVerifyResult(cmd.OutOrStdout(), result)
 	},
 }
 
@@ -175,6 +153,38 @@ var auditUnusedCmd = &cobra.Command{
 		}
 		return printOutput(rows)
 	},
+}
+
+// printVerifyResult writes the chain-verification outcome to w and returns a
+// non-nil error when breaks are found so that the CLI exits non-zero.
+func printVerifyResult(w io.Writer, result adminclient.VerifyChainResult) error {
+	if result.OK {
+		fmt.Fprintf(w, "OK — %d entries, chain intact\n", result.Total)
+		return nil
+	}
+
+	fmt.Fprintf(w, "FAIL — %d breaks in %d entries\n", len(result.Breaks), result.Total)
+	rows := tableRows([]string{"POSITION", "ENTRY_ID", "GOT", "WANT"})
+	for _, b := range result.Breaks {
+		got := b.Got
+		want := b.Want
+		if len(got) > 12 {
+			got = got[:12] + "…"
+		}
+		if len(want) > 12 {
+			want = want[:12] + "…"
+		}
+		rows = append(rows, []string{
+			fmt.Sprintf("%d", b.Position),
+			b.EntryID,
+			got,
+			want,
+		})
+	}
+	if err := printTable(w, rows); err != nil {
+		return err
+	}
+	return fmt.Errorf("audit chain broken: %d break(s) found", len(result.Breaks))
 }
 
 // parseDuration extends time.ParseDuration with day support (e.g. "7d").
