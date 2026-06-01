@@ -17,7 +17,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/opendecree/decree/internal/schema"
+	"github.com/opendecree/decree/internal/storage/dbstore"
 	"github.com/opendecree/decree/internal/storage/domain"
+	"github.com/opendecree/decree/internal/storage/pgconv"
 	"github.com/opendecree/decree/internal/storage/pgtest"
 )
 
@@ -350,6 +352,70 @@ func TestConfigPGStore(t *testing.T) {
 		require.True(t, errors.As(deadlockErr, &pgErr), "expected pgconn.PgError, got: %T", deadlockErr)
 		assert.Equal(t, "40P01", pgErr.Code, "expected deadlock error code")
 	})
+}
+
+// TestAuditChainConcurrency verifies that concurrent same-tenant InsertAuditWriteLog
+// calls produce a single linear chain with no forked previous_hash values.
+func TestAuditChainConcurrency(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	store := NewPGStore(pool, pool)
+	schStore := schema.NewPGStore(pool, pool)
+	ctx := context.Background()
+
+	_, _, tenant := setupFixture(t, schStore, t.Name())
+
+	const workers = 5
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	errs := make([]error, workers)
+
+	for i := range workers {
+		i := i
+		go func() {
+			defer wg.Done()
+			errs[i] = store.RunInTx(ctx, func(txStore Store) error {
+				fp := fmt.Sprintf("app.field%d", i)
+				val := fmt.Sprintf("v%d", i)
+				return txStore.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+					TenantID:   tenant.ID,
+					Actor:      "concurrent-writer",
+					Action:     "set_field",
+					ObjectKind: "field",
+					FieldPath:  &fp,
+					NewValue:   &val,
+				})
+			})
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		require.NoError(t, err, "worker %d failed", i)
+	}
+
+	// Read the chain in insertion order and verify it is linear.
+	tenantUUID, err := pgconv.StringToUUID(tenant.ID)
+	require.NoError(t, err)
+	entries, err := dbstore.New(pool).GetAuditWriteLogOrdered(ctx, tenantUUID)
+	require.NoError(t, err)
+	require.Len(t, entries, workers, "expected exactly %d entries", workers)
+
+	// Build a set of all entry_hash values to detect forking:
+	// if two entries share the same previous_hash, the chain is forked.
+	prevHashCount := make(map[string]int, workers)
+	for _, e := range entries {
+		prevHashCount[e.PreviousHash]++
+	}
+	for ph, count := range prevHashCount {
+		assert.Equal(t, 1, count, "previous_hash %q appears %d times — chain is forked", ph, count)
+	}
+
+	// Verify the linked-list structure.
+	assert.Empty(t, entries[0].PreviousHash, "first entry must have empty previous_hash")
+	for i := 1; i < len(entries); i++ {
+		assert.Equal(t, entries[i-1].EntryHash, entries[i].PreviousHash,
+			"entry[%d].PreviousHash must equal entry[%d].EntryHash", i, i-1)
+	}
 }
 
 // TestConnPoolExhaustionBehavior demonstrates pool exhaustion error semantics

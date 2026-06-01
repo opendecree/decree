@@ -72,6 +72,25 @@ func schemaGenUUID() (pgtype.UUID, error) {
 	return id, nil
 }
 
+// acquireChainLock takes a pg_advisory_xact_lock for the given key within the
+// current transaction. The lock is released automatically when the transaction
+// commits or rolls back, serialising concurrent chain-append operations for
+// the same tenant.
+func (s *PGStore) acquireChainLock(ctx context.Context, lockKey string) error {
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+		return nil
+	}
+	// Fallback: no active transaction; the caller must have called this outside
+	// RunInTx, which is unexpected but handled safely.
+	if _, err := s.writePool.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+		return fmt.Errorf("acquire audit chain lock: %w", err)
+	}
+	return nil
+}
+
 // InsertAuditWriteLog writes an admin audit entry, computing the hash chain
 // relative to the last entry for the same tenant (or global chain if tenantID is empty).
 func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
@@ -82,6 +101,16 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		if err != nil {
 			return err
 		}
+	}
+
+	// Serialise all chain operations for this tenant so concurrent
+	// transactions queue up rather than forking the hash chain.
+	lockKey := "audit_chain:" + arg.TenantID
+	if arg.TenantID == "" {
+		lockKey = "audit_chain:global"
+	}
+	if err := s.acquireChainLock(ctx, lockKey); err != nil {
+		return err
 	}
 
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
