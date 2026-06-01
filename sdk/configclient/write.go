@@ -2,6 +2,7 @@ package configclient
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -261,8 +262,21 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 //
 // Because ExpectedChecksum makes this write idempotent, this method respects
 // the client's retry configuration.
+//
+// [WithExpectedChecksum], [WithValueDescriptions], and [WithFieldChecksums] are
+// not applicable to LockedValue.Set and return [ErrInvalidArgument] if supplied.
+// Use [WithIdempotencyKey], [WithDescription], and [WithValueDescription] instead.
 func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	if wo.expectedChecksum != "" {
+		return fmt.Errorf("%w: WithExpectedChecksum is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
+	}
+	if len(wo.valueDescriptions) > 0 {
+		return fmt.Errorf("%w: WithValueDescriptions is not supported on LockedValue.Set; use WithValueDescription for a single field", ErrInvalidArgument)
+	}
+	if len(wo.fieldChecksums) > 0 {
+		return fmt.Errorf("%w: WithFieldChecksums is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
+	}
 	// LockedValue.Set is always safe to retry: the checksum acts as an implicit
 	// idempotency guard. Use retryDo directly to preserve that guarantee.
 	return retryDo(ctx, lv.client, func(ctx context.Context) error {
