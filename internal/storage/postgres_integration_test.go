@@ -61,6 +61,29 @@ func TestDB_Close(t *testing.T) {
 	assert.Error(t, db.WritePool.Ping(ctx))
 }
 
+// TestNewDB_AfterConnectSetsRole verifies that every connection acquired from
+// the pool created by NewDB runs as decree_app (the non-superuser application
+// role), which is required for PostgreSQL Row-Level Security policies to be
+// effective on tables guarded with FORCE ROW LEVEL SECURITY.  This is the
+// central acceptance test for issue #659.
+func TestNewDB_AfterConnectSetsRole(t *testing.T) {
+	connStr := pgtest.ConnStr(t)
+	ctx := context.Background()
+
+	db, err := storage.NewDB(ctx, connStr, "")
+	require.NoError(t, err)
+	t.Cleanup(db.Close)
+
+	conn, err := db.WritePool.Acquire(ctx)
+	require.NoError(t, err)
+	defer conn.Release()
+
+	var role string
+	require.NoError(t, conn.QueryRow(ctx, "SELECT current_role").Scan(&role))
+	assert.Equal(t, "decree_app", role,
+		"every connection in the pool must run as decree_app so RLS policies are enforced")
+}
+
 func TestConnPoolExhaustion(t *testing.T) {
 	connStr := pgtest.ConnStr(t)
 	ctx := context.Background()
