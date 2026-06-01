@@ -32,7 +32,7 @@ func NewAdminConfigTransport(conn grpc.ClientConnInterface, opts ...Option) (*Ad
 }
 
 func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*adminclient.ListVersionsResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string
 		TenantId:  tenantID,
 		PageSize:  pageSize,
 		PageToken: pageToken,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -55,14 +55,14 @@ func (t *AdminConfigTransport) ListVersions(ctx context.Context, tenantID string
 }
 
 func (t *AdminConfigTransport) GetVersion(ctx context.Context, tenantID string, version int32) (*adminclient.Version, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.GetVersion(ctx, &pb.GetVersionRequest{
 		TenantId: tenantID,
 		Version:  version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -70,7 +70,7 @@ func (t *AdminConfigTransport) GetVersion(ctx context.Context, tenantID string, 
 }
 
 func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID string, version int32, description string) (*adminclient.Version, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID s
 	if description != "" {
 		protoReq.Description = &description
 	}
-	resp, err := t.rpc.RollbackToVersion(ctx, protoReq)
+	resp, err := t.rpc.RollbackToVersion(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -89,14 +89,14 @@ func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID s
 }
 
 func (t *AdminConfigTransport) ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.ExportConfig(ctx, &pb.ExportConfigRequest{
 		TenantId: tenantID,
 		Version:  version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -104,7 +104,7 @@ func (t *AdminConfigTransport) ExportConfig(ctx context.Context, tenantID string
 }
 
 func (t *AdminConfigTransport) ImportConfig(ctx context.Context, req *adminclient.ImportConfigRequest) (*adminclient.Version, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (t *AdminConfigTransport) ImportConfig(ctx context.Context, req *adminclien
 	if req.Description != "" {
 		protoReq.Description = &req.Description
 	}
-	resp, err := t.rpc.ImportConfig(ctx, protoReq)
+	resp, err := t.rpc.ImportConfig(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
