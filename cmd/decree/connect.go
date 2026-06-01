@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"google.golang.org/grpc"
 
@@ -13,6 +14,7 @@ import (
 func dialServer() (*grpc.ClientConn, error) {
 	var opts []grpctransport.DialOption
 	if flagInsecure {
+		fmt.Fprintln(os.Stderr, "Warning: --insecure flag is set; connection is not encrypted")
 		opts = append(opts, grpctransport.WithInsecure())
 	}
 	conn, err := grpctransport.Dial(flagServer, opts...)
