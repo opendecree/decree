@@ -340,10 +340,11 @@ func auditEntryFromProto(e *pb.AuditEntry) *adminclient.AuditEntry {
 		return nil
 	}
 	result := &adminclient.AuditEntry{
-		ID:       e.GetId(),
-		TenantID: e.GetTenantId(),
-		Actor:    e.GetActor(),
-		Action:   e.GetAction(),
+		ID:         e.GetId(),
+		TenantID:   e.GetTenantId(),
+		Actor:      e.GetActor(),
+		Action:     e.GetAction(),
+		ChainEpoch: e.GetChainEpoch(),
 	}
 	if e.FieldPath != nil {
 		result.FieldPath = e.GetFieldPath()
@@ -364,6 +365,9 @@ func auditEntryFromProto(e *pb.AuditEntry) *adminclient.AuditEntry {
 	result.ObjectKind = e.GetObjectKind()
 	result.EntryHash = e.GetEntryHash()
 	result.PreviousHash = e.GetPreviousHash()
+	if len(e.GetMetadata()) > 0 {
+		result.Metadata = e.GetMetadata()
+	}
 	return result
 }
 

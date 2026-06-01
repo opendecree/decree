@@ -1735,7 +1735,16 @@ type AuditEntry struct {
 	// SHA-256 hash of this entry's immutable fields, chained to previous_hash.
 	EntryHash string `protobuf:"bytes,11,opt,name=entry_hash,json=entryHash,proto3" json:"entry_hash,omitempty"`
 	// entry_hash of the previous entry in this tenant's chain ("" for the first).
-	PreviousHash  string `protobuf:"bytes,12,opt,name=previous_hash,json=previousHash,proto3" json:"previous_hash,omitempty"`
+	PreviousHash string `protobuf:"bytes,12,opt,name=previous_hash,json=previousHash,proto3" json:"previous_hash,omitempty"`
+	// Hash scheme epoch. 0 = legacy (structural fields only).
+	// 1+ = full payload included in the hash (field_path, old_value, new_value,
+	// config_version, metadata). Clients must use the same epoch when
+	// recomputing entry_hash for verification.
+	ChainEpoch uint64 `protobuf:"varint,13,opt,name=chain_epoch,json=chainEpoch,proto3" json:"chain_epoch,omitempty"`
+	// Arbitrary key-value metadata attached to this audit entry.
+	// Populated by the server when additional context was recorded (e.g. caller IP,
+	// request ID). Empty when no metadata was stored.
+	Metadata      map[string]string `protobuf:"bytes,14,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1852,6 +1861,20 @@ func (x *AuditEntry) GetPreviousHash() string {
 		return x.PreviousHash
 	}
 	return ""
+}
+
+func (x *AuditEntry) GetChainEpoch() uint64 {
+	if x != nil {
+		return x.ChainEpoch
+	}
+	return 0
+}
+
+func (x *AuditEntry) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 // UsageStats represents aggregated read usage statistics for a config field.
@@ -2101,7 +2124,7 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"changed_by\x18\x06 \x01(\tR\tchangedBy\x129\n" +
 	"\n" +
-	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xd9\x03\n" +
+	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xff\x04\n" +
 	"\n" +
 	"AuditEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
@@ -2120,7 +2143,13 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"objectKind\x12\x1d\n" +
 	"\n" +
 	"entry_hash\x18\v \x01(\tR\tentryHash\x12#\n" +
-	"\rprevious_hash\x18\f \x01(\tR\fpreviousHashB\r\n" +
+	"\rprevious_hash\x18\f \x01(\tR\fpreviousHash\x12\x1f\n" +
+	"\vchain_epoch\x18\r \x01(\x04R\n" +
+	"chainEpoch\x12F\n" +
+	"\bmetadata\x18\x0e \x03(\v2*.centralconfig.v1.AuditEntry.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\r\n" +
 	"\v_field_pathB\f\n" +
 	"\n" +
 	"_old_valueB\f\n" +
@@ -2166,7 +2195,7 @@ func file_centralconfig_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_centralconfig_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_centralconfig_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_centralconfig_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_centralconfig_v1_types_proto_goTypes = []any{
 	(FieldType)(0),                 // 0: centralconfig.v1.FieldType
 	(*FieldConstraints)(nil),       // 1: centralconfig.v1.FieldConstraints
@@ -2189,8 +2218,9 @@ var file_centralconfig_v1_types_proto_goTypes = []any{
 	(*UsageStats)(nil),             // 18: centralconfig.v1.UsageStats
 	nil,                            // 19: centralconfig.v1.SchemaField.ExamplesEntry
 	nil,                            // 20: centralconfig.v1.SchemaInfo.LabelsEntry
-	(*timestamppb.Timestamp)(nil),  // 21: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),    // 22: google.protobuf.Duration
+	nil,                            // 21: centralconfig.v1.AuditEntry.MetadataEntry
+	(*timestamppb.Timestamp)(nil),  // 22: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),    // 23: google.protobuf.Duration
 }
 var file_centralconfig_v1_types_proto_depIdxs = []int32{
 	0,  // 0: centralconfig.v1.SchemaField.type:type_name -> centralconfig.v1.FieldType
@@ -2200,28 +2230,29 @@ var file_centralconfig_v1_types_proto_depIdxs = []int32{
 	6,  // 4: centralconfig.v1.SchemaInfo.contact:type_name -> centralconfig.v1.SchemaContact
 	20, // 5: centralconfig.v1.SchemaInfo.labels:type_name -> centralconfig.v1.SchemaInfo.LabelsEntry
 	2,  // 6: centralconfig.v1.Schema.fields:type_name -> centralconfig.v1.SchemaField
-	21, // 7: centralconfig.v1.Schema.created_at:type_name -> google.protobuf.Timestamp
+	22, // 7: centralconfig.v1.Schema.created_at:type_name -> google.protobuf.Timestamp
 	5,  // 8: centralconfig.v1.Schema.info:type_name -> centralconfig.v1.SchemaInfo
 	8,  // 9: centralconfig.v1.Schema.dependent_required:type_name -> centralconfig.v1.DependentRequiredEntry
 	9,  // 10: centralconfig.v1.Schema.validations:type_name -> centralconfig.v1.ValidationRule
-	21, // 11: centralconfig.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
-	21, // 12: centralconfig.v1.Tenant.updated_at:type_name -> google.protobuf.Timestamp
-	21, // 13: centralconfig.v1.TypedValue.time_value:type_name -> google.protobuf.Timestamp
-	22, // 14: centralconfig.v1.TypedValue.duration_value:type_name -> google.protobuf.Duration
+	22, // 11: centralconfig.v1.Tenant.created_at:type_name -> google.protobuf.Timestamp
+	22, // 12: centralconfig.v1.Tenant.updated_at:type_name -> google.protobuf.Timestamp
+	22, // 13: centralconfig.v1.TypedValue.time_value:type_name -> google.protobuf.Timestamp
+	23, // 14: centralconfig.v1.TypedValue.duration_value:type_name -> google.protobuf.Duration
 	12, // 15: centralconfig.v1.ConfigValue.value:type_name -> centralconfig.v1.TypedValue
-	21, // 16: centralconfig.v1.ConfigVersion.created_at:type_name -> google.protobuf.Timestamp
+	22, // 16: centralconfig.v1.ConfigVersion.created_at:type_name -> google.protobuf.Timestamp
 	13, // 17: centralconfig.v1.Config.values:type_name -> centralconfig.v1.ConfigValue
 	12, // 18: centralconfig.v1.ConfigChange.old_value:type_name -> centralconfig.v1.TypedValue
 	12, // 19: centralconfig.v1.ConfigChange.new_value:type_name -> centralconfig.v1.TypedValue
-	21, // 20: centralconfig.v1.ConfigChange.changed_at:type_name -> google.protobuf.Timestamp
-	21, // 21: centralconfig.v1.AuditEntry.created_at:type_name -> google.protobuf.Timestamp
-	21, // 22: centralconfig.v1.UsageStats.last_read_at:type_name -> google.protobuf.Timestamp
-	3,  // 23: centralconfig.v1.SchemaField.ExamplesEntry.value:type_name -> centralconfig.v1.FieldExample
-	24, // [24:24] is the sub-list for method output_type
-	24, // [24:24] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	22, // 20: centralconfig.v1.ConfigChange.changed_at:type_name -> google.protobuf.Timestamp
+	22, // 21: centralconfig.v1.AuditEntry.created_at:type_name -> google.protobuf.Timestamp
+	21, // 22: centralconfig.v1.AuditEntry.metadata:type_name -> centralconfig.v1.AuditEntry.MetadataEntry
+	22, // 23: centralconfig.v1.UsageStats.last_read_at:type_name -> google.protobuf.Timestamp
+	3,  // 24: centralconfig.v1.SchemaField.ExamplesEntry.value:type_name -> centralconfig.v1.FieldExample
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_centralconfig_v1_types_proto_init() }
@@ -2251,7 +2282,7 @@ func file_centralconfig_v1_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_centralconfig_v1_types_proto_rawDesc), len(file_centralconfig_v1_types_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   20,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

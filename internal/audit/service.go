@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -327,10 +328,17 @@ func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 		EntryHash:    e.EntryHash,
 		PreviousHash: e.PreviousHash,
 		CreatedAt:    timestamppb.New(e.CreatedAt),
+		ChainEpoch:   uint64(e.ChainEpoch),
 	}
 	entry.FieldPath = e.FieldPath
 	entry.OldValue = e.OldValue
 	entry.NewValue = e.NewValue
 	entry.ConfigVersion = e.ConfigVersion
+	if len(e.Metadata) > 0 {
+		var m map[string]string
+		if err := json.Unmarshal(e.Metadata, &m); err == nil {
+			entry.Metadata = m
+		}
+	}
 	return entry
 }

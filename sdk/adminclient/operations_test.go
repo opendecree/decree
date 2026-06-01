@@ -857,9 +857,9 @@ func TestVerifyChain_IntactChain(t *testing.T) {
 	t2 := t0.Add(2 * time.Second)
 
 	// Build three entries with correct hashes, newest-first (as server returns them).
-	h0 := computeClientHash("", "id-0", "t1", "actor", "set_field", "field", t0)
-	h1 := computeClientHash(h0, "id-1", "t1", "actor", "set_field", "field", t1)
-	h2 := computeClientHash(h1, "id-2", "t1", "actor", "set_field", "field", t2)
+	h0 := computeClientHash("", &AuditEntry{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t0})
+	h1 := computeClientHash(h0, &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t1})
+	h2 := computeClientHash(h1, &AuditEntry{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t2})
 
 	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		return &QueryWriteLogResponse{
@@ -948,8 +948,9 @@ func TestVerifyChain_GlobalChain(t *testing.T) {
 
 func TestComputeClientHash_Deterministic(t *testing.T) {
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	h1 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
-	h2 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
+	e := &AuditEntry{ID: "id-1", TenantID: "tenant-1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts}
+	h1 := computeClientHash("prev", e)
+	h2 := computeClientHash("prev", e)
 	if h1 != h2 {
 		t.Errorf("hash not deterministic: %q != %q", h1, h2)
 	}
@@ -960,15 +961,96 @@ func TestComputeClientHash_Deterministic(t *testing.T) {
 
 func TestComputeClientHash_Sensitivity(t *testing.T) {
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	base := computeClientHash("", "id-1", "t1", "actor", "set_field", "field", ts)
+	base := computeClientHash("", &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts})
 
-	if computeClientHash("x", "id-1", "t1", "actor", "set_field", "field", ts) == base {
+	if computeClientHash("x", &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts}) == base {
 		t.Error("previousHash change did not change hash")
 	}
-	if computeClientHash("", "id-2", "t1", "actor", "set_field", "field", ts) == base {
+	if computeClientHash("", &AuditEntry{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts}) == base {
 		t.Error("id change did not change hash")
 	}
-	if computeClientHash("", "id-1", "t2", "actor", "set_field", "field", ts) == base {
+	if computeClientHash("", &AuditEntry{ID: "id-1", TenantID: "t2", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts}) == base {
 		t.Error("tenantID change did not change hash")
+	}
+}
+
+func TestComputeClientHash_Epoch0VsEpoch1Differ(t *testing.T) {
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	e0 := &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts, ChainEpoch: 0}
+	e1 := &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: ts, ChainEpoch: 1}
+	h0 := computeClientHash("", e0)
+	h1 := computeClientHash("", e1)
+	if h0 == h1 {
+		t.Error("epoch 0 and epoch 1 should produce different hashes")
+	}
+}
+
+func TestComputeClientHash_Epoch1_PayloadSensitivity(t *testing.T) {
+	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	base := computeClientHash("", &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: ts, ChainEpoch: 1,
+		FieldPath: "app.name", OldValue: "old", NewValue: "new",
+	})
+
+	// Changing FieldPath changes the hash.
+	changed := computeClientHash("", &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: ts, ChainEpoch: 1,
+		FieldPath: "app.other", OldValue: "old", NewValue: "new",
+	})
+	if base == changed {
+		t.Error("FieldPath change did not change epoch-1 hash")
+	}
+
+	// Adding metadata changes the hash.
+	withMeta := computeClientHash("", &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: ts, ChainEpoch: 1,
+		FieldPath: "app.name", OldValue: "old", NewValue: "new",
+		Metadata: map[string]string{"k": "v"},
+	})
+	if base == withMeta {
+		t.Error("metadata change did not change epoch-1 hash")
+	}
+}
+
+func TestVerifyChain_Epoch1_IntactChain(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Second)
+
+	e0 := &AuditEntry{
+		ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t0, ChainEpoch: 1,
+		FieldPath: "app.name", OldValue: "a", NewValue: "b",
+	}
+	e1 := &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t1, ChainEpoch: 1,
+		FieldPath: "app.name", OldValue: "b", NewValue: "c",
+	}
+	h0 := computeClientHash("", e0)
+	h1 := computeClientHash(h0, e1)
+	e0.EntryHash = h0
+	e1.EntryHash = h1
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return &QueryWriteLogResponse{
+			Entries: []*AuditEntry{e1, e0},
+		}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.OK {
+		t.Errorf("expected OK epoch-1 chain, got breaks: %v", result.Breaks)
+	}
+	if result.Total != 2 {
+		t.Errorf("got Total %d, want 2", result.Total)
 	}
 }
