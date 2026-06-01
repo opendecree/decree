@@ -1,15 +1,32 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
-	"google.golang.org/grpc/metadata"
 )
+
+// normalizeStreamErr maps a streaming RPC error to nil when the error is caused
+// by context cancellation (Ctrl-C / SIGTERM), so the CLI exits with code 0.
+// All other errors are returned unchanged.
+func normalizeStreamErr(err error) error {
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	if s, ok := status.FromError(err); ok && s.Code() == codes.Canceled {
+		return nil
+	}
+	return err
+}
 
 // typedValueDisplay returns a human-readable string for a TypedValue.
 func typedValueDisplay(tv *pb.TypedValue) string {
@@ -89,7 +106,7 @@ var watchCmd = &cobra.Command{
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				return err
+				return normalizeStreamErr(err)
 			}
 			c := resp.Change
 			ts := time.Now().Format("15:04:05")

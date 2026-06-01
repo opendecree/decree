@@ -6,12 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/opendecree/decree/internal/storage/dbstore"
 	"github.com/opendecree/decree/internal/storage/domain"
+	"github.com/opendecree/decree/internal/storage/pgconv"
 	"github.com/opendecree/decree/internal/storage/pgtest"
 )
 
@@ -312,4 +315,82 @@ func TestSchemaPGStore(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
+}
+
+// TestSchemaAuditChainConcurrency verifies that concurrent InsertAuditWriteLog
+// calls for the same tenant (via RunInTx) produce a single linear chain.
+func TestSchemaAuditChainConcurrency(t *testing.T) {
+	pool := pgtest.NewPool(t)
+	store := NewPGStore(pool, pool)
+	ctx := context.Background()
+
+	// Create a real tenant so entries are isolated from the global chain.
+	sch, err := store.CreateSchema(ctx, CreateSchemaParams{
+		Name: fmt.Sprintf("concurrency-schema-%s", t.Name()),
+	})
+	require.NoError(t, err)
+
+	sv, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: sch.ID,
+		Version:  1,
+		Checksum: "x",
+	})
+	require.NoError(t, err)
+
+	tenant, err := store.CreateTenant(ctx, CreateTenantParams{
+		Name:          fmt.Sprintf("concurrency-tenant-%s", t.Name()),
+		SchemaID:      sch.ID,
+		SchemaVersion: sv.Version,
+	})
+	require.NoError(t, err)
+
+	const workers = 5
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	errs := make([]error, workers)
+
+	for i := range workers {
+		i := i
+		go func() {
+			defer wg.Done()
+			errs[i] = store.RunInTx(ctx, func(txStore Store) error {
+				newVal := fmt.Sprintf("schema-%d", i)
+				return txStore.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+					TenantID:   tenant.ID,
+					Actor:      "concurrent-writer",
+					Action:     "update_tenant",
+					ObjectKind: "tenant",
+					NewValue:   &newVal,
+				})
+			})
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		require.NoError(t, err, "worker %d failed", i)
+	}
+
+	// Read all chain entries for this tenant and verify linearity.
+	tenantUUID, err := pgconv.StringToUUID(tenant.ID)
+	require.NoError(t, err)
+	entries, err := dbstore.New(pool).GetAuditWriteLogOrdered(ctx, tenantUUID)
+	require.NoError(t, err)
+	require.Len(t, entries, workers, "expected exactly %d entries", workers)
+
+	// No two entries may share the same previous_hash (would indicate a fork).
+	prevHashCount := make(map[string]int, workers)
+	for _, e := range entries {
+		prevHashCount[e.PreviousHash]++
+	}
+	for ph, count := range prevHashCount {
+		assert.Equal(t, 1, count, "previous_hash %q appears %d times — chain is forked", ph, count)
+	}
+
+	// Verify the linked-list structure.
+	assert.Empty(t, entries[0].PreviousHash, "first entry must have empty previous_hash")
+	for i := 1; i < len(entries); i++ {
+		assert.Equal(t, entries[i-1].EntryHash, entries[i].PreviousHash,
+			"entry[%d].PreviousHash must equal entry[%d].EntryHash", i, i-1)
+	}
 }
