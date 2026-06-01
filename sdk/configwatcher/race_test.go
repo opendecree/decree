@@ -143,6 +143,121 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 	_ = w.Close()
 }
 
+// TestWatcher_DoubleStart verifies that calling Start twice is a no-op: the
+// second call returns nil without launching a second subscription loop.
+// Run with: go test -race ./sdk/configwatcher/
+func TestWatcher_DoubleStart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var subscribeCalls int
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(sCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			subscribeCalls++
+			return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: sCtx}, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond, logger: slog.Default()},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
+	}
+
+	_ = w.String("app.name", "default")
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("second Start: %v", err)
+	}
+
+	// Give the loop a moment to call Subscribe (it should only do so once).
+	time.Sleep(20 * time.Millisecond)
+
+	cancel()
+	_ = w.Close()
+
+	if subscribeCalls != 1 {
+		t.Errorf("expected exactly 1 Subscribe call, got %d", subscribeCalls)
+	}
+}
+
+// TestWatcher_StartCloseConcurrent fires Start and Close from separate goroutines
+// simultaneously and verifies no race, panic, or goroutine leak occurs.
+// Run with: go test -race ./sdk/configwatcher/
+func TestWatcher_StartCloseConcurrent(t *testing.T) {
+	const iterations = 200
+
+	for range iterations {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		tr := &mockTransport{
+			getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+				return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+			},
+			subscribeFn: func(sCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+				return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: sCtx}, nil
+			},
+		}
+
+		w := &Watcher{
+			transport: tr,
+			tenantID:  "t1",
+			opts:      options{minBackoff: 5 * time.Millisecond, maxBackoff: 10 * time.Millisecond, logger: slog.Default()},
+			fields:    make(map[string]*fieldEntry),
+			done:      make(chan struct{}),
+		}
+
+		_ = w.String("app.name", "default")
+
+		// ready gates Start and Close to begin at the same instant.
+		ready := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			<-ready
+			_ = w.Start(ctx)
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-ready
+			cancel()
+			_ = w.Close()
+		}()
+
+		close(ready)
+		wg.Wait()
+
+		// If a subscription goroutine was started it must exit because ctx is
+		// cancelled. Allow a short window for it to drain and close w.done.
+		select {
+		case <-w.done:
+			// Loop exited cleanly (or was never started — done is pre-closed
+			// only if subscriptionLoop ran and returned).
+		case <-time.After(200 * time.Millisecond):
+			// done is still open: the goroutine was never launched (Close won
+			// before Start set started=true). This is not a leak.
+			w.mu.RLock()
+			started := w.started
+			w.mu.RUnlock()
+			if started {
+				t.Error("goroutine launched but w.done never closed")
+			}
+		}
+	}
+}
+
 // TestValue_CloseRacesWithUpdate exercises the race between Value.close() and
 // Value.update() that previously caused a "send on closed channel" panic.
 // Run with: go test -race ./sdk/configwatcher/
