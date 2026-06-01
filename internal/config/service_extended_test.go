@@ -164,6 +164,65 @@ func TestGetFields_PropagatesError(t *testing.T) {
 	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
+// --- Sensitive field redaction ---
+
+func TestGetField_SensitiveValueRedacted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	// Field is sensitive — GetTenantByID → GetSchemaVersion → GetSchemaFields returns sensitive=true.
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{ID: tenantID1, SchemaID: "s1", SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, mock.Anything).
+		Return(domain.SchemaVersion{ID: "sv1"}, nil)
+	store.On("GetSchemaFields", mock.Anything, mock.Anything).
+		Return([]domain.SchemaField{{Path: "app.secret", Sensitive: true}}, nil)
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{FieldPath: "app.secret", Value: strPtr("my-token")}, nil)
+
+	resp, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "app.secret"})
+	require.NoError(t, err)
+	assert.Equal(t, redactedSentinel, resp.Value.Value.GetStringValue())
+}
+
+func TestGetField_SensitiveFieldSetError_ReturnsInternal(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{FieldPath: "app.fee", Value: strPtr("1")}, nil)
+	// GetTenantByID fails → getSensitiveFieldSet returns error.
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{}, errors.New("db down"))
+
+	_, err := svc.GetField(ctx, &pb.GetFieldRequest{TenantId: tenantID1, FieldPath: "app.fee"})
+	require.Error(t, err)
+}
+
+func TestGetFields_SensitiveValueRedacted(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{ID: tenantID1, SchemaID: "s1", SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", mock.Anything, mock.Anything).
+		Return(domain.SchemaVersion{ID: "sv1"}, nil)
+	store.On("GetSchemaFields", mock.Anything, mock.Anything).
+		Return([]domain.SchemaField{{Path: "app.secret", Sensitive: true}}, nil)
+
+	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{FieldPath: "app.secret", Value: strPtr("my-token")}, nil)
+
+	resp, err := svc.GetFields(ctx, &pb.GetFieldsRequest{TenantId: tenantID1, FieldPaths: []string{"app.secret"}})
+	require.NoError(t, err)
+	require.Len(t, resp.Values, 1)
+	assert.Equal(t, redactedSentinel, resp.Values[0].Value.GetStringValue())
+}
+
 // --- Slug resolution tests ---
 
 func TestGetConfig_ByTenantName(t *testing.T) {

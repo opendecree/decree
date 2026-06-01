@@ -588,6 +588,23 @@ func TestRollbackToVersion_FieldLocksError_ReturnsInternal(t *testing.T) {
 	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
+func TestRollbackToVersion_ValidateFieldError_ReturnsInvalidArgument(t *testing.T) {
+	// Uses a service with validators so fieldTypeMap is non-nil and validateField
+	// can return an error when a restored value violates a constraint.
+	svc, store := newTestServiceWithValidation()
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
+	// Simulate fieldTypeMap failure: GetTenantByID returns error → fieldTypeMap propagates it.
+	store.On("GetTenantByID", mock.Anything, tenantID1).Return(domain.Tenant{}, errors.New("db down"))
+
+	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{TenantId: tenantID1, Version: 2})
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
 func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
