@@ -5,6 +5,7 @@
 
 - [centralconfig/v1/types.proto](#centralconfig_v1_types-proto)
     - [AuditEntry](#centralconfig-v1-AuditEntry)
+    - [AuditEntry.MetadataEntry](#centralconfig-v1-AuditEntry-MetadataEntry)
     - [Config](#centralconfig-v1-Config)
     - [ConfigChange](#centralconfig-v1-ConfigChange)
     - [ConfigValue](#centralconfig-v1-ConfigValue)
@@ -147,6 +148,24 @@ one or more audit entries atomically with the config change.
 | object_kind | [string](#string) |  | The kind of object affected (&#34;field&#34;, &#34;schema&#34;, &#34;tenant&#34;, or &#34;lock&#34;). |
 | entry_hash | [string](#string) |  | SHA-256 hash of this entry&#39;s immutable fields, chained to previous_hash. |
 | previous_hash | [string](#string) |  | entry_hash of the previous entry in this tenant&#39;s chain (&#34;&#34; for the first). |
+| chain_epoch | [uint64](#uint64) |  | Hash scheme epoch. 0 = legacy (structural fields only). 1&#43; = full payload included in the hash (field_path, old_value, new_value, config_version, metadata). Clients must use the same epoch when recomputing entry_hash for verification. |
+| metadata | [AuditEntry.MetadataEntry](#centralconfig-v1-AuditEntry-MetadataEntry) | repeated | Arbitrary key-value metadata attached to this audit entry. Populated by the server when additional context was recorded (e.g. caller IP, request ID). Empty when no metadata was stored. |
+
+
+
+
+
+
+<a name="centralconfig-v1-AuditEntry-MetadataEntry"></a>
+
+### AuditEntry.MetadataEntry
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| key | [string](#string) |  |  |
+| value | [string](#string) |  |  |
 
 
 
