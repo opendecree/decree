@@ -276,6 +276,10 @@ func validateInteger(result *Result, path string, value any, c *ConstraintsDef) 
 		n = float64(v)
 	case int64:
 		n = float64(v)
+	case uint:
+		n = float64(v)
+	case uint64:
+		n = float64(v)
 	case float64:
 		if v != math.Trunc(v) {
 			result.add(path, fmt.Sprintf("expected integer, got %v", v))
@@ -297,6 +301,10 @@ func validateNumber(result *Result, path string, value any, c *ConstraintsDef) {
 	case int:
 		n = float64(v)
 	case int64:
+		n = float64(v)
+	case uint:
+		n = float64(v)
+	case uint64:
 		n = float64(v)
 	case float64:
 		n = v
@@ -424,6 +432,10 @@ func stringifyForEnum(value any) string {
 		return strconv.Itoa(v)
 	case int64:
 		return strconv.FormatInt(v, 10)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
 	case float64:
 		return formatFloat(v)
 	default:
