@@ -19,7 +19,7 @@ Query the configuration change history and field read usage statistics. Useful f
 ### Options inherited from parent commands
 
 ```
-      --insecure              skip TLS verification (default true)
+      --insecure              disable TLS (plaintext); for local development only
   -o, --output string         output format: table, json, yaml (default "table")
       --role string           actor role (x-role header) (default "superadmin")
       --server string         gRPC server address (default "localhost:9090")

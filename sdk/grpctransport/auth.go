@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/opendecree/decree/sdk/configclient"
@@ -97,28 +99,76 @@ func buildConfig(opts []Option) (config, error) {
 	return cfg, nil
 }
 
-// applyAuth injects authentication metadata into the outgoing gRPC context.
-func applyAuth(ctx context.Context, auth authConfig) (context.Context, error) {
-	md := metadata.MD{}
+// bearerToken implements [credentials.PerRPCCredentials] for a static JWT.
+// RequireTransportSecurity returns true so gRPC refuses to send the token
+// over a plaintext connection.
+type bearerToken struct{ token string }
+
+func (b bearerToken) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + b.token}, nil
+}
+
+func (b bearerToken) RequireTransportSecurity() bool { return true }
+
+// tokenSourceCreds implements [credentials.PerRPCCredentials] for a dynamic
+// token source. The source is called on every RPC so short-lived tokens
+// (OAuth2, expiring JWTs) are always fresh.
+// RequireTransportSecurity returns true so gRPC refuses to send the token
+// over a plaintext connection.
+type tokenSourceCreds struct {
+	source func(context.Context) (string, error)
+}
+
+func (t tokenSourceCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
+	tok, err := t.source(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"authorization": "Bearer " + tok}, nil
+}
+
+func (t tokenSourceCreds) RequireTransportSecurity() bool { return true }
+
+// applyAuth injects authentication metadata into the outgoing gRPC context
+// and returns any per-RPC call options required.
+//
+// For bearer-token and token-source auth, it returns a
+// [grpc.PerRPCCredentials] call option backed by a
+// [credentials.PerRPCCredentials] implementation whose
+// RequireTransportSecurity method returns true — gRPC will refuse to send
+// the credential if the connection is not TLS-protected.
+//
+// For metadata-header auth (x-subject / x-role / x-tenant-id), headers are
+// appended to the existing outgoing metadata so the caller's metadata is
+// preserved.
+func applyAuth(ctx context.Context, auth authConfig) (context.Context, []grpc.CallOption, error) {
 	switch {
 	case auth.tokenSource != nil:
-		tok, err := auth.tokenSource(ctx)
-		if err != nil {
-			return ctx, err
-		}
-		md.Set("authorization", "Bearer "+tok)
+		creds := tokenSourceCreds{source: auth.tokenSource}
+		return ctx, []grpc.CallOption{grpc.PerRPCCredentials(creds)}, nil
 	case auth.bearerToken != "":
-		md.Set("authorization", "Bearer "+auth.bearerToken)
+		creds := bearerToken{token: auth.bearerToken}
+		return ctx, []grpc.CallOption{grpc.PerRPCCredentials(creds)}, nil
 	default:
+		pairs := make([]string, 0, 6)
 		if auth.subject != "" {
-			md.Set("x-subject", auth.subject)
+			pairs = append(pairs, "x-subject", auth.subject)
 		}
 		if auth.role != "" {
-			md.Set("x-role", auth.role)
+			pairs = append(pairs, "x-role", auth.role)
 		}
 		if auth.tenantID != "" {
-			md.Set("x-tenant-id", auth.tenantID)
+			pairs = append(pairs, "x-tenant-id", auth.tenantID)
 		}
+		if len(pairs) > 0 {
+			ctx = metadata.AppendToOutgoingContext(ctx, pairs...)
+		}
+		return ctx, nil, nil
 	}
-	return metadata.NewOutgoingContext(ctx, md), nil
 }
+
+// Compile-time check: both types satisfy credentials.PerRPCCredentials.
+var (
+	_ credentials.PerRPCCredentials = bearerToken{}
+	_ credentials.PerRPCCredentials = tokenSourceCreds{}
+)

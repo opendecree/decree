@@ -32,7 +32,7 @@ func NewConfigTransport(conn grpc.ClientConnInterface, opts ...Option) (*ConfigT
 }
 
 func (t *ConfigTransport) GetField(ctx context.Context, req *configclient.GetFieldRequest) (*configclient.GetFieldResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (t *ConfigTransport) GetField(ctx context.Context, req *configclient.GetFie
 		TenantId:  req.TenantID,
 		FieldPath: req.FieldPath,
 		Version:   req.Version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
@@ -53,14 +53,14 @@ func (t *ConfigTransport) GetField(ctx context.Context, req *configclient.GetFie
 }
 
 func (t *ConfigTransport) GetConfig(ctx context.Context, req *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.GetConfig(ctx, &pb.GetConfigRequest{
 		TenantId: req.TenantID,
 		Version:  req.Version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
@@ -77,7 +77,7 @@ func (t *ConfigTransport) GetConfig(ctx context.Context, req *configclient.GetCo
 }
 
 func (t *ConfigTransport) GetFields(ctx context.Context, req *configclient.GetFieldsRequest) (*configclient.GetFieldsResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (t *ConfigTransport) GetFields(ctx context.Context, req *configclient.GetFi
 		TenantId:   req.TenantID,
 		FieldPaths: req.FieldPaths,
 		Version:    req.Version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
@@ -99,7 +99,7 @@ func (t *ConfigTransport) GetFields(ctx context.Context, req *configclient.GetFi
 }
 
 func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFieldRequest) (*configclient.SetFieldResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFie
 	if req.IdempotencyKey != "" {
 		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
-	_, err = t.rpc.SetField(ctx, protoReq)
+	_, err = t.rpc.SetField(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
@@ -126,7 +126,7 @@ func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFie
 }
 
 func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFieldsRequest) (*configclient.SetFieldsResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +152,7 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 	if req.IdempotencyKey != "" {
 		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
-	_, err = t.rpc.SetFields(ctx, protoReq)
+	_, err = t.rpc.SetFields(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
@@ -160,7 +160,7 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 }
 
 func (t *ConfigTransport) Subscribe(ctx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (t *ConfigTransport) Subscribe(ctx context.Context, req *configclient.Subsc
 		TenantId:     req.TenantID,
 		FieldPaths:   req.FieldPaths,
 		StartVersion: req.StartVersion,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}

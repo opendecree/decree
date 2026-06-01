@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/opendecree/decree/sdk/adminclient"
 	"github.com/opendecree/decree/sdk/configclient"
@@ -12,11 +11,11 @@ import (
 )
 
 func dialServer() (*grpc.ClientConn, error) {
-	var opts []grpc.DialOption
+	var opts []grpctransport.DialOption
 	if flagInsecure {
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		opts = append(opts, grpctransport.WithInsecure())
 	}
-	conn, err := grpc.NewClient(flagServer, opts...)
+	conn, err := grpctransport.Dial(flagServer, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", flagServer, err)
 	}
