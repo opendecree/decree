@@ -61,6 +61,20 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	return tx.Commit(ctx)
 }
 
+func (s *PGStore) schemaDBNow(ctx context.Context) (time.Time, error) {
+	var ts pgtype.Timestamptz
+	var err error
+	if s.tx != nil {
+		err = s.tx.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+	} else {
+		err = s.writePool.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
+	}
+	return ts.Time.Truncate(time.Microsecond), nil
+}
+
 func schemaGenUUID() (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if _, err := rand.Read(id.Bytes[:]); err != nil {
@@ -107,10 +121,10 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		return err
 	}
 
-	// Truncate to microseconds to match PostgreSQL timestamptz precision so
-	// that the hash computed here and the hash recomputed during chain
-	// verification both use the same CreatedAt value.
-	now := time.Now().Truncate(time.Microsecond)
+	now, err := s.schemaDBNow(ctx)
+	if err != nil {
+		return err
+	}
 	hash := audit.ComputeEntryHash(audit.ChainInput{
 		PreviousHash: prevHash,
 		ID:           pgconv.UUIDToString(id),

@@ -147,6 +147,8 @@ one or more audit entries atomically with the config change.
 | object_kind | [string](#string) |  | The kind of object affected (&#34;field&#34;, &#34;schema&#34;, &#34;tenant&#34;, or &#34;lock&#34;). |
 | entry_hash | [string](#string) |  | SHA-256 hash of this entry&#39;s immutable fields, chained to previous_hash. |
 | previous_hash | [string](#string) |  | entry_hash of the previous entry in this tenant&#39;s chain (&#34;&#34; for the first). |
+| chain_epoch | [int32](#int32) |  | Hash scheme epoch. 0 = legacy (structural fields only). 1 = full payload included. Clients must use this value to select the correct hash algorithm when verifying. |
+| metadata | [bytes](#bytes) |  | Opaque key-value metadata attached to this audit entry (JSON-encoded). Included in the epoch-1 hash; clients must include it when recomputing. |
 
 
 

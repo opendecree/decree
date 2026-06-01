@@ -392,7 +392,10 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		if kind == "" {
 			kind = "field"
 		}
-		now := time.Now().Truncate(time.Microsecond)
+		now, err := s.configDBNow(ctx)
+		if err != nil {
+			return err
+		}
 		hash := audit.ComputeEntryHash(audit.ChainInput{
 			PreviousHash:  prevHash,
 			ID:            pgconv.UUIDToString(id),
@@ -439,6 +442,24 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 
 // Audit.
 
+// configDBNow fetches the current timestamp from the database, mirroring the
+// audit store's dbNow pattern. Using the DB clock ensures the timestamp stored
+// in PG round-trips exactly when VerifyChain recomputes the hash, avoiding
+// any sub-microsecond skew from the application server clock.
+func (s *PGStore) configDBNow(ctx context.Context) (time.Time, error) {
+	var ts pgtype.Timestamptz
+	var err error
+	if s.tx != nil {
+		err = s.tx.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+	} else {
+		err = s.writePool.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
+	}
+	return ts.Time.Truncate(time.Microsecond), nil
+}
+
 func configGenUUID() (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if _, err := rand.Read(id.Bytes[:]); err != nil {
@@ -480,10 +501,12 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	if kind == "" {
 		kind = "field"
 	}
-	// Truncate to microseconds to match PostgreSQL timestamptz precision so
-	// that the hash computed here and the hash recomputed during chain
-	// verification both use the same CreatedAt value.
-	now := time.Now().Truncate(time.Microsecond)
+	// Use the DB clock (same pattern as internal/audit/store_pg.go dbNow) so the
+	// timestamp round-trips exactly when VerifyChain recomputes the hash.
+	now, err := s.configDBNow(ctx)
+	if err != nil {
+		return err
+	}
 	hash := audit.ComputeEntryHash(audit.ChainInput{
 		PreviousHash:  prevHash,
 		ID:            pgconv.UUIDToString(id),
