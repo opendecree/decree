@@ -49,15 +49,16 @@ func ComputeEntryHash(in ChainInput) string {
 		return hex.EncodeToString(h.Sum(nil))
 	}
 	// Epoch 1+: structural fields followed by payload fields.
+	// CreatedAt is intentionally excluded from epoch-1 to avoid sub-microsecond
+	// round-trip discrepancies between the app clock and PostgreSQL timestamptz.
 	// Payload fields use a 1-byte presence marker: 0x00=nil, 0x01=non-nil.
-	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00",
 		in.PreviousHash,
 		in.ID,
 		in.TenantID,
 		in.Actor,
 		in.Action,
 		in.ObjectKind,
-		in.CreatedAt.UnixNano(),
 	)
 	writeNullableStr(h, in.FieldPath)
 	writeNullableStr(h, in.OldValue)
