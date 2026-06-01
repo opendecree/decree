@@ -109,8 +109,8 @@ func TestComputeEntryHash_Epoch1_PayloadSensitivity(t *testing.T) {
 	mutate(func(m *ChainInput) { m.NewValue = nil })
 	mutate(func(m *ChainInput) { m.ConfigVersion = i32Ptr(99) })
 	mutate(func(m *ChainInput) { m.ConfigVersion = nil })
-	// Metadata is excluded from epoch-1 hash (PG JSONB normalizes bytes on storage).
-	// _ = m.Metadata  // retained in struct for future use.
+	mutate(func(m *ChainInput) { m.Metadata = []byte(`{"k":"changed"}`) })
+	mutate(func(m *ChainInput) { m.Metadata = nil })
 }
 
 func TestComputeEntryHash_Epoch1_NilVsEmpty(t *testing.T) {
@@ -125,4 +125,38 @@ func TestComputeEntryHash_Epoch1_NilVsEmpty(t *testing.T) {
 
 	// nil and empty string must produce different hashes.
 	assert.NotEqual(t, ComputeEntryHash(withNil), ComputeEntryHash(withEmpty))
+}
+
+// TestComputeEntryHash_Epoch1_MetadataJSONNormalization verifies that Go's
+// compact json.Marshal output and PostgreSQL's JSONB text output (which adds
+// a space after each colon and comma) produce the same hash.  This prevents
+// chain breaks when VerifyChain reads Metadata back from a JSONB column.
+func TestComputeEntryHash_Epoch1_MetadataJSONNormalization(t *testing.T) {
+	base := ChainInput{
+		Epoch: 1, ID: "id-1", Actor: "a", Action: "set_field", ObjectKind: "field",
+		CreatedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	// Go's compact form (no spaces) — written to DB at audit-entry creation time.
+	compact := base
+	compact.Metadata = []byte(`{"name":"sec-audit","schema_id":"abc","schema_version":1}`)
+
+	// PostgreSQL JSONB text form (space after : and ,) — returned by DB on read.
+	pgForm := base
+	pgForm.Metadata = []byte(`{"name": "sec-audit", "schema_id": "abc", "schema_version": 1}`)
+
+	assert.Equal(t, ComputeEntryHash(compact), ComputeEntryHash(pgForm),
+		"compact JSON and PostgreSQL JSONB text output must produce the same hash")
+
+	// A different value must still produce a different hash.
+	different := base
+	different.Metadata = []byte(`{"name":"other"}`)
+	assert.NotEqual(t, ComputeEntryHash(compact), ComputeEntryHash(different))
+
+	// Invalid JSON bytes are hashed unchanged (fallback path).
+	invalidJSON := base
+	invalidJSON.Metadata = []byte(`not-json`)
+	assert.NotPanics(t, func() { ComputeEntryHash(invalidJSON) })
+	// Two calls with the same invalid bytes produce the same hash.
+	assert.Equal(t, ComputeEntryHash(invalidJSON), ComputeEntryHash(invalidJSON))
 }
