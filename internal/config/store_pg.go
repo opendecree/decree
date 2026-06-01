@@ -358,6 +358,13 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		return err
 	}
 
+	// Serialise all chain operations for this tenant so concurrent
+	// transactions queue up rather than forking the hash chain.
+	lockKey := "audit_chain:" + args[0].TenantID
+	if err := s.acquireChainLock(ctx, lockKey); err != nil {
+		return err
+	}
+
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
@@ -439,9 +446,35 @@ func configGenUUID() (pgtype.UUID, error) {
 	return id, nil
 }
 
+// acquireChainLock takes a pg_advisory_xact_lock for the given key within the
+// current transaction. The lock is released automatically when the transaction
+// commits or rolls back, serialising concurrent chain-append operations for
+// the same tenant.
+func (s *PGStore) acquireChainLock(ctx context.Context, lockKey string) error {
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+		return nil
+	}
+	// Fallback: no active transaction; the caller must have called this outside
+	// RunInTx, which is unexpected but handled safely.
+	if _, err := s.writePool.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+		return fmt.Errorf("acquire audit chain lock: %w", err)
+	}
+	return nil
+}
+
 func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteLogParams) error {
 	tenantUUID, err := pgconv.StringToUUID(arg.TenantID)
 	if err != nil {
+		return err
+	}
+
+	// Serialise all chain operations for this tenant so concurrent
+	// transactions queue up rather than forking the hash chain.
+	lockKey := "audit_chain:" + arg.TenantID
+	if err := s.acquireChainLock(ctx, lockKey); err != nil {
 		return err
 	}
 
