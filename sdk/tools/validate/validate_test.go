@@ -1,6 +1,7 @@
 package validate
 
 import (
+	"math"
 	"testing"
 )
 
@@ -457,6 +458,79 @@ values:
 	}
 	if !result.IsValid() {
 		t.Errorf("expected valid (3.0 is a whole number), got: %s", result.Error())
+	}
+}
+
+func TestValidate_Uint64AcceptedByInteger(t *testing.T) {
+	schema := &SchemaFile{
+		SpecVersion: "v1",
+		Name:        "test",
+		Fields: map[string]FieldDef{
+			"count": {Type: "integer"},
+		},
+	}
+	// uint64 value above int64 max (yaml.v3 decodes large integers as uint64).
+	aboveInt64Max := uint64(math.MaxInt64) + 1
+	for _, val := range []any{aboveInt64Max, uint(42)} {
+		config := &ConfigFile{
+			SpecVersion: "v1",
+			Values: map[string]ConfigValueDef{
+				"count": {Value: val},
+			},
+		}
+		result := ValidateParsed(schema, config)
+		if !result.IsValid() {
+			t.Errorf("expected valid for %T(%v), got: %s", val, val, result.Error())
+		}
+	}
+}
+
+func TestValidate_Uint64AcceptedByNumber(t *testing.T) {
+	schema := &SchemaFile{
+		SpecVersion: "v1",
+		Name:        "test",
+		Fields: map[string]FieldDef{
+			"rate": {Type: "number"},
+		},
+	}
+	aboveInt64Max := uint64(math.MaxInt64) + 1
+	for _, val := range []any{aboveInt64Max, uint(99)} {
+		config := &ConfigFile{
+			SpecVersion: "v1",
+			Values: map[string]ConfigValueDef{
+				"rate": {Value: val},
+			},
+		}
+		result := ValidateParsed(schema, config)
+		if !result.IsValid() {
+			t.Errorf("expected valid for %T(%v), got: %s", val, val, result.Error())
+		}
+	}
+}
+
+func TestValidate_Uint64EnumMatch(t *testing.T) {
+	schema := &SchemaFile{
+		SpecVersion: "v1",
+		Name:        "test",
+		Fields: map[string]FieldDef{
+			"level": {
+				Type: "integer",
+				Constraints: &ConstraintsDef{
+					Enum: []string{"9223372036854775808"}, // math.MaxInt64 + 1
+				},
+			},
+		},
+	}
+	aboveInt64Max := uint64(math.MaxInt64) + 1
+	config := &ConfigFile{
+		SpecVersion: "v1",
+		Values: map[string]ConfigValueDef{
+			"level": {Value: aboveInt64Max},
+		},
+	}
+	result := ValidateParsed(schema, config)
+	if !result.IsValid() {
+		t.Errorf("expected enum match for uint64 above int64 max, got: %s", result.Error())
 	}
 }
 
