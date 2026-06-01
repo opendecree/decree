@@ -53,6 +53,8 @@ func mapAdminError(err error) error {
 		return adminclient.ErrAlreadyExists
 	case codes.FailedPrecondition:
 		return adminclient.ErrFailedPrecondition
+	case codes.PermissionDenied:
+		return adminclient.ErrPermissionDenied
 	case codes.InvalidArgument:
 		return adminclient.InvalidArgumentError(st.Message())
 	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:

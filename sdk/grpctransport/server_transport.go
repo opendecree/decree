@@ -25,7 +25,7 @@ func NewServerTransport(conn grpc.ClientConnInterface) *ServerTransport {
 func (t *ServerTransport) GetServerInfo(ctx context.Context) (*adminclient.ServerInfo, error) {
 	resp, err := t.rpc.GetServerInfo(ctx, &pb.GetServerInfoRequest{})
 	if err != nil {
-		return nil, err
+		return nil, mapAdminError(err)
 	}
 	return &adminclient.ServerInfo{
 		Version:  resp.Version,

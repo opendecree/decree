@@ -17,6 +17,10 @@ var (
 	// in the current state (e.g. assigning an unpublished schema to a tenant).
 	ErrFailedPrecondition = errors.New("failed precondition")
 
+	// ErrPermissionDenied is returned when the caller lacks the required
+	// role or tenant access to perform an administrative operation.
+	ErrPermissionDenied = errors.New("permission denied")
+
 	// ErrInvalidArgument is returned when the server rejects a request due to
 	// invalid input (e.g. a malformed regex constraint in a schema import).
 	ErrInvalidArgument = errors.New("invalid argument")

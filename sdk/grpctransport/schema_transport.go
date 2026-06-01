@@ -32,7 +32,7 @@ func NewSchemaTransport(conn grpc.ClientConnInterface, opts ...Option) (*SchemaT
 }
 
 func (t *SchemaTransport) CreateSchema(ctx context.Context, req *adminclient.CreateSchemaRequest) (*adminclient.Schema, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (t *SchemaTransport) CreateSchema(ctx context.Context, req *adminclient.Cre
 	if req.Description != "" {
 		protoReq.Description = &req.Description
 	}
-	resp, err := t.rpc.CreateSchema(ctx, protoReq)
+	resp, err := t.rpc.CreateSchema(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -51,14 +51,14 @@ func (t *SchemaTransport) CreateSchema(ctx context.Context, req *adminclient.Cre
 }
 
 func (t *SchemaTransport) GetSchema(ctx context.Context, id string, version *int32) (*adminclient.Schema, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.GetSchema(ctx, &pb.GetSchemaRequest{
 		Id:      id,
 		Version: version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -66,14 +66,14 @@ func (t *SchemaTransport) GetSchema(ctx context.Context, id string, version *int
 }
 
 func (t *SchemaTransport) ListSchemas(ctx context.Context, pageSize int32, pageToken string) (*adminclient.ListSchemasResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.ListSchemas(ctx, &pb.ListSchemasRequest{
 		PageSize:  pageSize,
 		PageToken: pageToken,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -88,7 +88,7 @@ func (t *SchemaTransport) ListSchemas(ctx context.Context, pageSize int32, pageT
 }
 
 func (t *SchemaTransport) UpdateSchema(ctx context.Context, req *adminclient.UpdateSchemaRequest) (*adminclient.Schema, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (t *SchemaTransport) UpdateSchema(ctx context.Context, req *adminclient.Upd
 	if req.VersionDescription != "" {
 		protoReq.VersionDescription = &req.VersionDescription
 	}
-	resp, err := t.rpc.UpdateSchema(ctx, protoReq)
+	resp, err := t.rpc.UpdateSchema(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -108,14 +108,14 @@ func (t *SchemaTransport) UpdateSchema(ctx context.Context, req *adminclient.Upd
 }
 
 func (t *SchemaTransport) PublishSchema(ctx context.Context, id string, version int32) (*adminclient.Schema, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.PublishSchema(ctx, &pb.PublishSchemaRequest{
 		Id:      id,
 		Version: version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -123,23 +123,23 @@ func (t *SchemaTransport) PublishSchema(ctx context.Context, id string, version 
 }
 
 func (t *SchemaTransport) DeleteSchema(ctx context.Context, id string) error {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return err
 	}
-	_, err = t.rpc.DeleteSchema(ctx, &pb.DeleteSchemaRequest{Id: id})
+	_, err = t.rpc.DeleteSchema(ctx, &pb.DeleteSchemaRequest{Id: id}, callOpts...)
 	return mapAdminError(err)
 }
 
 func (t *SchemaTransport) ExportSchema(ctx context.Context, id string, version *int32) ([]byte, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.ExportSchema(ctx, &pb.ExportSchemaRequest{
 		Id:      id,
 		Version: version,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -147,14 +147,14 @@ func (t *SchemaTransport) ExportSchema(ctx context.Context, id string, version *
 }
 
 func (t *SchemaTransport) ImportSchema(ctx context.Context, yamlContent []byte, autoPublish bool) (*adminclient.Schema, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.ImportSchema(ctx, &pb.ImportSchemaRequest{
 		YamlContent: yamlContent,
 		AutoPublish: autoPublish,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -164,7 +164,7 @@ func (t *SchemaTransport) ImportSchema(ctx context.Context, yamlContent []byte, 
 // --- Tenant methods ---
 
 func (t *SchemaTransport) CreateTenant(ctx context.Context, req *adminclient.CreateTenantRequest) (*adminclient.Tenant, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (t *SchemaTransport) CreateTenant(ctx context.Context, req *adminclient.Cre
 		Name:          req.Name,
 		SchemaId:      req.SchemaID,
 		SchemaVersion: req.SchemaVersion,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -180,11 +180,11 @@ func (t *SchemaTransport) CreateTenant(ctx context.Context, req *adminclient.Cre
 }
 
 func (t *SchemaTransport) GetTenant(ctx context.Context, id string) (*adminclient.Tenant, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := t.rpc.GetTenant(ctx, &pb.GetTenantRequest{Id: id})
+	resp, err := t.rpc.GetTenant(ctx, &pb.GetTenantRequest{Id: id}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -192,7 +192,7 @@ func (t *SchemaTransport) GetTenant(ctx context.Context, id string) (*adminclien
 }
 
 func (t *SchemaTransport) ListTenants(ctx context.Context, schemaID *string, pageSize int32, pageToken string) (*adminclient.ListTenantsResponse, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (t *SchemaTransport) ListTenants(ctx context.Context, schemaID *string, pag
 		SchemaId:  schemaID,
 		PageSize:  pageSize,
 		PageToken: pageToken,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -215,7 +215,7 @@ func (t *SchemaTransport) ListTenants(ctx context.Context, schemaID *string, pag
 }
 
 func (t *SchemaTransport) UpdateTenant(ctx context.Context, req *adminclient.UpdateTenantRequest) (*adminclient.Tenant, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func (t *SchemaTransport) UpdateTenant(ctx context.Context, req *adminclient.Upd
 		Id:            req.ID,
 		Name:          req.Name,
 		SchemaVersion: req.SchemaVersion,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}
@@ -231,18 +231,18 @@ func (t *SchemaTransport) UpdateTenant(ctx context.Context, req *adminclient.Upd
 }
 
 func (t *SchemaTransport) DeleteTenant(ctx context.Context, id string) error {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return err
 	}
-	_, err = t.rpc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: id})
+	_, err = t.rpc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: id}, callOpts...)
 	return mapAdminError(err)
 }
 
 // --- Field lock methods ---
 
 func (t *SchemaTransport) LockField(ctx context.Context, tenantID, fieldPath string, lockedValues []string) error {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return err
 	}
@@ -250,30 +250,30 @@ func (t *SchemaTransport) LockField(ctx context.Context, tenantID, fieldPath str
 		TenantId:     tenantID,
 		FieldPath:    fieldPath,
 		LockedValues: lockedValues,
-	})
+	}, callOpts...)
 	return mapAdminError(err)
 }
 
 func (t *SchemaTransport) UnlockField(ctx context.Context, tenantID, fieldPath string) error {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return err
 	}
 	_, err = t.rpc.UnlockField(ctx, &pb.UnlockFieldRequest{
 		TenantId:  tenantID,
 		FieldPath: fieldPath,
-	})
+	}, callOpts...)
 	return mapAdminError(err)
 }
 
 func (t *SchemaTransport) ListFieldLocks(ctx context.Context, tenantID string) ([]adminclient.FieldLock, error) {
-	ctx, err := applyAuth(ctx, t.auth)
+	ctx, callOpts, err := applyAuth(ctx, t.auth)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := t.rpc.ListFieldLocks(ctx, &pb.ListFieldLocksRequest{
 		TenantId: tenantID,
-	})
+	}, callOpts...)
 	if err != nil {
 		return nil, mapAdminError(err)
 	}

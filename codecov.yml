@@ -11,8 +11,9 @@ coverage:
 # Exclusion decisions are documented in scripts/check-coverage.sh (COVERAGE_EXCLUDES).
 # Keep this list in sync with that file.
 ignore:
-  # Process bootstrap — not unit-testable
+  # Process bootstrap + CLI entry points — not unit-testable
   - "cmd/server/main.go"
+  - "cmd/decree/**"
   # Generated code (proto, sqlc)
   - "api/centralconfig/**"
   - "internal/storage/dbstore/**"
