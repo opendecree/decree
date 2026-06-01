@@ -383,13 +383,19 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		}
 		now := time.Now().Truncate(time.Microsecond)
 		hash := audit.ComputeEntryHash(audit.ChainInput{
-			PreviousHash: prevHash,
-			ID:           pgconv.UUIDToString(id),
-			TenantID:     arg.TenantID,
-			Actor:        arg.Actor,
-			Action:       arg.Action,
-			ObjectKind:   kind,
-			CreatedAt:    now,
+			PreviousHash:  prevHash,
+			ID:            pgconv.UUIDToString(id),
+			TenantID:      arg.TenantID,
+			Actor:         arg.Actor,
+			Action:        arg.Action,
+			ObjectKind:    kind,
+			CreatedAt:     now,
+			Epoch:         1,
+			FieldPath:     arg.FieldPath,
+			OldValue:      arg.OldValue,
+			NewValue:      arg.NewValue,
+			ConfigVersion: arg.ConfigVersion,
+			Metadata:      arg.Metadata,
 		})
 		rows[i] = row{
 			id:        id,
@@ -407,7 +413,7 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		batch.Queue(bulkInsertAuditWriteLogSQL,
 			r.id, tenantUUID, r.arg.Actor, r.arg.Action,
 			r.arg.FieldPath, r.arg.OldValue, r.arg.NewValue, r.arg.ConfigVersion,
-			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(0),
+			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(1),
 		)
 	}
 	br := s.batcher().SendBatch(ctx, batch)
@@ -458,13 +464,19 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	// verification both use the same CreatedAt value.
 	now := time.Now().Truncate(time.Microsecond)
 	hash := audit.ComputeEntryHash(audit.ChainInput{
-		PreviousHash: prevHash,
-		ID:           pgconv.UUIDToString(id),
-		TenantID:     arg.TenantID,
-		Actor:        arg.Actor,
-		Action:       arg.Action,
-		ObjectKind:   kind,
-		CreatedAt:    now,
+		PreviousHash:  prevHash,
+		ID:            pgconv.UUIDToString(id),
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		CreatedAt:     now,
+		Epoch:         1,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -481,6 +493,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
 		CreatedAt:     pgconv.TimeToTimestamptz(now),
+		ChainEpoch:    1,
 	})
 }
 
