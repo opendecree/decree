@@ -98,6 +98,13 @@ func TestGetFieldsFanOut_RunsConcurrently(t *testing.T) {
 	chk := "c1"
 	gs.mockStore.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
 		Return(GetConfigValueAtVersionRow{FieldPath: "a.x", Value: &val, Checksum: &chk}, nil)
+	// getSensitiveFieldSet runs in a third fanout goroutine; satisfy its mocks.
+	gs.mockStore.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{ID: tenantID1, SchemaID: "s1", SchemaVersion: 1}, nil)
+	gs.mockStore.On("GetSchemaVersion", mock.Anything, mock.Anything).
+		Return(domain.SchemaVersion{ID: "sv1"}, nil)
+	gs.mockStore.On("GetSchemaFields", mock.Anything, mock.Anything).
+		Return([]domain.SchemaField{}, nil)
 
 	// Also need the cache and publisher.
 	c := &mockCache{}
