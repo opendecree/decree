@@ -42,11 +42,15 @@ type Watcher struct {
 	tenantID  string
 	opts      options
 
-	mu     sync.RWMutex
-	fields map[string]*fieldEntry // field path → entry
-	closed bool
-	cancel context.CancelFunc
-	done   chan struct{}
+	mu      sync.RWMutex
+	fields  map[string]*fieldEntry // field path → entry
+	closed  bool
+	started bool
+	cancel  context.CancelFunc
+	// cancelReady is closed by Start after w.cancel is assigned, allowing
+	// a concurrent Close to safely wait until cancel is available.
+	cancelReady chan struct{}
+	done        chan struct{}
 }
 
 type fieldEntry struct {
@@ -78,11 +82,12 @@ func New(transport configclient.Transport, tenantID string, opts ...Option) *Wat
 	}
 
 	return &Watcher{
-		transport: transport,
-		tenantID:  tenantID,
-		opts:      o,
-		fields:    make(map[string]*fieldEntry),
-		done:      make(chan struct{}),
+		transport:   transport,
+		tenantID:    tenantID,
+		opts:        o,
+		fields:      make(map[string]*fieldEntry),
+		cancelReady: make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 }
 
@@ -186,15 +191,43 @@ func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func
 // when cancelled, the subscription is terminated and all [Value.Changes] channels
 // are closed.
 //
+// Start is idempotent: a second call returns nil without starting another loop.
+//
 // Fields must be registered (via String, Int, Bool, etc.) before calling Start.
 func (w *Watcher) Start(ctx context.Context) error {
+	w.mu.Lock()
+	if w.started {
+		w.mu.Unlock()
+		return nil
+	}
+	w.started = true
+	// Lazily initialize cancelReady for callers that construct Watcher directly
+	// (e.g. in tests) without going through New.
+	if w.cancelReady == nil {
+		w.cancelReady = make(chan struct{})
+	}
+	w.mu.Unlock()
+
 	version, err := w.loadSnapshot(ctx)
 	if err != nil {
+		// Roll back so the caller can retry.
+		w.mu.Lock()
+		w.started = false
+		w.cancelReady = make(chan struct{}) // reset for next attempt
+		w.mu.Unlock()
 		return err
 	}
 
-	ctx, w.cancel = context.WithCancel(ctx)
-	go w.subscriptionLoop(ctx, version)
+	loopCtx, cancel := context.WithCancel(ctx)
+
+	w.mu.Lock()
+	w.cancel = cancel
+	w.mu.Unlock()
+
+	// Signal any concurrent Close that cancel is now assigned.
+	close(w.cancelReady)
+
+	go w.subscriptionLoop(loopCtx, version)
 	return nil
 }
 
@@ -207,11 +240,29 @@ func (w *Watcher) Close() error {
 		return nil
 	}
 	w.closed = true
+	started := w.started
 	w.mu.Unlock()
 
-	if w.cancel != nil {
-		w.cancel()
-		<-w.done // Wait for subscription goroutine to exit.
+	if started {
+		// Wait until Start has finished assigning w.cancel. This prevents a
+		// race where Close is called while Start is executing but hasn't yet
+		// stored the cancel function.
+		w.mu.RLock()
+		ready := w.cancelReady
+		w.mu.RUnlock()
+
+		if ready != nil {
+			<-ready
+		}
+
+		w.mu.RLock()
+		cancel := w.cancel
+		w.mu.RUnlock()
+
+		if cancel != nil {
+			cancel()
+			<-w.done // Wait for subscription goroutine to exit.
+		}
 	}
 
 	// Close all value channels.
