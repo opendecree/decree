@@ -227,6 +227,45 @@ func TestApplyAuth_MetadataHeaders_PreservesCallerMetadata(t *testing.T) {
 	}
 }
 
+func TestApplyAuth_MetadataHeaders_PreservesMultipleCallerKeys(t *testing.T) {
+	// Simulates a caller that attaches trace baggage and custom headers before
+	// the transport injects auth metadata.  All caller keys must survive.
+	base := metadata.Pairs(
+		"x-trace-id", "abc123",
+		"x-baggage", "k=v",
+	)
+	ctx := metadata.NewOutgoingContext(context.Background(), base)
+	ctx, _, err := applyAuth(ctx, authConfig{
+		subject:  "alice",
+		role:     "admin",
+		tenantID: "acme",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		t.Fatal("no outgoing metadata")
+	}
+	// Caller keys must be intact.
+	if vals := md.Get("x-trace-id"); len(vals) != 1 || vals[0] != "abc123" {
+		t.Errorf("x-trace-id clobbered: got %v", vals)
+	}
+	if vals := md.Get("x-baggage"); len(vals) != 1 || vals[0] != "k=v" {
+		t.Errorf("x-baggage clobbered: got %v", vals)
+	}
+	// Auth headers must be present.
+	if vals := md.Get("x-subject"); len(vals) != 1 || vals[0] != "alice" {
+		t.Errorf("x-subject: got %v, want [alice]", vals)
+	}
+	if vals := md.Get("x-role"); len(vals) != 1 || vals[0] != "admin" {
+		t.Errorf("x-role: got %v, want [admin]", vals)
+	}
+	if vals := md.Get("x-tenant-id"); len(vals) != 1 || vals[0] != "acme" {
+		t.Errorf("x-tenant-id: got %v, want [acme]", vals)
+	}
+}
+
 func TestApplyAuth_EmptyConfig_SetsNoHeaders(t *testing.T) {
 	ctx, callOpts, err := applyAuth(context.Background(), authConfig{})
 	if err != nil {
