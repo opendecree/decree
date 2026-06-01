@@ -111,33 +111,89 @@ func TestQueryWriteLogIter_ContextCancel(t *testing.T) {
 	}
 }
 
+// serverFixtureChain holds a 3-entry chain whose hashes were produced by the
+// server's ComputeEntryHash (epoch 1, with payload and metadata).  The values
+// were pre-computed with the same algorithm used by internal/audit/chain.go and
+// are intentionally hardcoded here so the test cannot pass tautologically (i.e.
+// VerifyChain cannot "cheat" by re-using its own hash function to generate the
+// expected values).
+//
+// Computation inputs:
+//
+//	t0 = 2024-01-01T00:00:00Z (UnixNano = 1704067200000000000)
+//	t1 = t0 + 1s
+//	t2 = t0 + 2s
+//
+// Entry 0 (oldest): id=srv-id-0, tenant=t1, actor=actor@example.com,
+//
+//	action=set_field, object_kind=field, epoch=1,
+//	field_path="app.name", old="old-value", new="new-value",
+//	config_version=3, metadata={"env":"prod"}
+//
+// Entry 1: id=srv-id-1, … new="newer-value", config_version=4,
+//
+//	metadata={"env":"prod","region":"us-east-1"}
+//
+// Entry 2 (newest): id=srv-id-2, all payload fields nil/absent.
+var serverFixtureChain = struct {
+	t0, t1, t2 time.Time
+	h0, h1, h2 string
+	cv3, cv4   int32
+}{
+	t0: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	t1: time.Date(2024, 1, 1, 0, 0, 1, 0, time.UTC),
+	t2: time.Date(2024, 1, 1, 0, 0, 2, 0, time.UTC),
+	// Hashes produced by internal/audit.ComputeEntryHash (epoch 1).
+	h0:  "224e3a5192d91f89e4e17cf72142c4a9ef549dcd897a7e2884f0c6a360603080",
+	h1:  "d410a6a5aad0938af621e270839c2fd1a85cb15f6470a9f4190f09daa9db573c",
+	h2:  "641579c51979ff8af817b204c6bb04477e5844f6c1fd3cf0b2f8e9837b0e7751",
+	cv3: 3,
+	cv4: 4,
+}
+
 // TestVerifyChain_MultiPageIntact tests the chunked streaming path where the
-// server splits entries across multiple pages (newest first).
+// server splits entries across multiple pages (newest first) using epoch-1
+// hashes pre-computed by the server's ComputeEntryHash.
 func TestVerifyChain_MultiPageIntact(t *testing.T) {
 	ma := &mockAuditTransport{}
 	client := New(WithAuditTransport(ma))
 
-	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	t1 := t0.Add(time.Second)
-	t2 := t0.Add(2 * time.Second)
-
-	h0 := computeClientHash("", &AuditEntry{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t0})
-	h1 := computeClientHash(h0, &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t1})
-	h2 := computeClientHash(h1, &AuditEntry{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t2})
+	fix := serverFixtureChain
 
 	// Server returns two pages, newest first.
-	// Page 1: [id-2], Page 2: [id-1, id-0]
+	// Page 1: [srv-id-2], Page 2: [srv-id-1, srv-id-0]
 	ma.queryWriteLogFn = func(_ context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		if req.PageToken == "" {
 			return &QueryWriteLogResponse{
-				Entries:       []*AuditEntry{{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h2, CreatedAt: t2}},
+				Entries: []*AuditEntry{{
+					ID: "srv-id-2", TenantID: "t1", Actor: "actor@example.com",
+					Action: "set_field", ObjectKind: "field",
+					EntryHash: fix.h2, CreatedAt: fix.t2,
+					ChainEpoch: 1,
+				}},
 				NextPageToken: "p2",
 			}, nil
 		}
 		return &QueryWriteLogResponse{
 			Entries: []*AuditEntry{
-				{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h1, CreatedAt: t1},
-				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h0, CreatedAt: t0},
+				{
+					ID: "srv-id-1", TenantID: "t1", Actor: "actor@example.com",
+					Action: "set_field", ObjectKind: "field",
+					EntryHash: fix.h1, CreatedAt: fix.t1,
+					ChainEpoch: 1, FieldPath: "app.name",
+					OldValue: "new-value", NewValue: "newer-value",
+					ConfigVersion: &fix.cv4,
+					Metadata:      map[string]string{"env": "prod", "region": "us-east-1"},
+				},
+				{
+					ID: "srv-id-0", TenantID: "t1", Actor: "actor@example.com",
+					Action: "set_field", ObjectKind: "field",
+					EntryHash: fix.h0, CreatedAt: fix.t0,
+					ChainEpoch: 1, FieldPath: "app.name",
+					OldValue: "old-value", NewValue: "new-value",
+					ConfigVersion: &fix.cv3,
+					Metadata:      map[string]string{"env": "prod"},
+				},
 			},
 		}, nil
 	}
@@ -155,27 +211,40 @@ func TestVerifyChain_MultiPageIntact(t *testing.T) {
 }
 
 // TestVerifyChain_MultiPageTampered verifies tampering is detected when entries
-// span multiple pages.
+// span multiple pages, using server-format epoch-1 hashes as the fixture.
 func TestVerifyChain_MultiPageTampered(t *testing.T) {
 	ma := &mockAuditTransport{}
 	client := New(WithAuditTransport(ma))
 
-	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	t1 := t0.Add(time.Second)
-
-	h0 := computeClientHash("", &AuditEntry{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t0})
-	// id-1 has a tampered hash (not linked to h0).
+	fix := serverFixtureChain
+	// srv-id-1 has a tampered hash that is not linked to h0 at all.
 	badHash := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
 	ma.queryWriteLogFn = func(_ context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		if req.PageToken == "" {
 			return &QueryWriteLogResponse{
-				Entries:       []*AuditEntry{{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: badHash, CreatedAt: t1}},
+				Entries: []*AuditEntry{{
+					ID: "srv-id-1", TenantID: "t1", Actor: "actor@example.com",
+					Action: "set_field", ObjectKind: "field",
+					EntryHash: badHash, CreatedAt: fix.t1,
+					ChainEpoch: 1, FieldPath: "app.name",
+					OldValue: "new-value", NewValue: "newer-value",
+					ConfigVersion: &fix.cv4,
+					Metadata:      map[string]string{"env": "prod", "region": "us-east-1"},
+				}},
 				NextPageToken: "p2",
 			}, nil
 		}
 		return &QueryWriteLogResponse{
-			Entries: []*AuditEntry{{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h0, CreatedAt: t0}},
+			Entries: []*AuditEntry{{
+				ID: "srv-id-0", TenantID: "t1", Actor: "actor@example.com",
+				Action: "set_field", ObjectKind: "field",
+				EntryHash: fix.h0, CreatedAt: fix.t0,
+				ChainEpoch: 1, FieldPath: "app.name",
+				OldValue: "old-value", NewValue: "new-value",
+				ConfigVersion: &fix.cv3,
+				Metadata:      map[string]string{"env": "prod"},
+			}},
 		}, nil
 	}
 
@@ -189,7 +258,7 @@ func TestVerifyChain_MultiPageTampered(t *testing.T) {
 	if len(result.Breaks) != 1 {
 		t.Fatalf("got %d breaks, want 1", len(result.Breaks))
 	}
-	if result.Breaks[0].EntryID != "id-1" {
-		t.Errorf("got break at entry %q, want id-1", result.Breaks[0].EntryID)
+	if result.Breaks[0].EntryID != "srv-id-1" {
+		t.Errorf("got break at entry %q, want srv-id-1", result.Breaks[0].EntryID)
 	}
 }
