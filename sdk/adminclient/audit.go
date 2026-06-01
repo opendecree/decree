@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -235,7 +236,7 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 		page := pages[p]
 		for e := len(page) - 1; e >= 0; e-- {
 			entry := page[e]
-			want := computeClientHash(prev, entry.ID, entry.TenantID, entry.Actor, entry.Action, entry.ObjectKind, entry.CreatedAt)
+			want := computeClientHash(prev, entry)
 			if entry.EntryHash != want {
 				result.Breaks = append(result.Breaks, VerifyChainBreak{
 					EntryID:  entry.ID,
@@ -252,9 +253,52 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 	return result, nil
 }
 
-func computeClientHash(previousHash, id, tenantID, actor, action, objectKind string, createdAt time.Time) string {
+func computeClientHash(previousHash string, e *AuditEntry) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
-		previousHash, id, tenantID, actor, action, objectKind, createdAt.UnixNano())
+	if e.ChainEpoch == 0 {
+		// Epoch 0: structural fields only (legacy, backward compat).
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
+			previousHash, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt.UnixNano())
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	// Epoch 1+: structural fields followed by payload fields.
+	// Mirrors internal/audit.ComputeEntryHash epoch-1 logic exactly.
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
+		previousHash, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt.UnixNano())
+	writeNullableStr(h, e.FieldPath)
+	writeNullableStr(h, e.OldValue)
+	writeNullableStr(h, e.NewValue)
+	writeNullableI32(h, e.ConfigVersion)
+	if len(e.Metadata) == 0 {
+		h.Write([]byte{0x00})
+	} else {
+		// Metadata is hashed as sorted JSON to produce a deterministic encoding
+		// that matches the server's encoding of the JSONB bytes.
+		h.Write([]byte{0x01})
+		b, _ := marshalSortedJSON(e.Metadata)
+		fmt.Fprint(h, hex.EncodeToString(b))
+	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func writeNullableStr(h interface{ Write([]byte) (int, error) }, s string) {
+	if s == "" {
+		h.Write([]byte{0x00})
+	} else {
+		h.Write([]byte{0x01})
+		fmt.Fprintf(h, "%s\x00", s)
+	}
+}
+
+func writeNullableI32(h interface{ Write([]byte) (int, error) }, v *int32) {
+	if v == nil {
+		h.Write([]byte{0x00})
+	} else {
+		fmt.Fprintf(h, "\x01%d\x00", *v)
+	}
+}
+
+func marshalSortedJSON(m map[string]string) ([]byte, error) {
+	// encoding/json marshals map keys in sorted order by default.
+	return json.Marshal(m)
 }

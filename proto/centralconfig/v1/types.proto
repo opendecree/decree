@@ -476,6 +476,17 @@ message AuditEntry {
 
   // entry_hash of the previous entry in this tenant's chain ("" for the first).
   string previous_hash = 12;
+
+  // Hash scheme epoch. 0 = legacy (structural fields only).
+  // 1+ = full payload included in the hash (field_path, old_value, new_value,
+  // config_version, metadata). Clients must use the same epoch when
+  // recomputing entry_hash for verification.
+  uint64 chain_epoch = 13;
+
+  // Arbitrary key-value metadata attached to this audit entry.
+  // Populated by the server when additional context was recorded (e.g. caller IP,
+  // request ID). Empty when no metadata was stored.
+  map<string, string> metadata = 14;
 }
 
 // UsageStats represents aggregated read usage statistics for a config field.

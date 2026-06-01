@@ -121,9 +121,9 @@ func TestVerifyChain_MultiPageIntact(t *testing.T) {
 	t1 := t0.Add(time.Second)
 	t2 := t0.Add(2 * time.Second)
 
-	h0 := computeClientHash("", "id-0", "t1", "actor", "set_field", "field", t0)
-	h1 := computeClientHash(h0, "id-1", "t1", "actor", "set_field", "field", t1)
-	h2 := computeClientHash(h1, "id-2", "t1", "actor", "set_field", "field", t2)
+	h0 := computeClientHash("", &AuditEntry{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t0})
+	h1 := computeClientHash(h0, &AuditEntry{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t1})
+	h2 := computeClientHash(h1, &AuditEntry{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t2})
 
 	// Server returns two pages, newest first.
 	// Page 1: [id-2], Page 2: [id-1, id-0]
@@ -163,7 +163,7 @@ func TestVerifyChain_MultiPageTampered(t *testing.T) {
 	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := t0.Add(time.Second)
 
-	h0 := computeClientHash("", "id-0", "t1", "actor", "set_field", "field", t0)
+	h0 := computeClientHash("", &AuditEntry{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", CreatedAt: t0})
 	// id-1 has a tampered hash (not linked to h0).
 	badHash := "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 

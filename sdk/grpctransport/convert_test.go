@@ -536,6 +536,48 @@ func TestAuditEntryFromProto_WithOptionals(t *testing.T) {
 	}
 }
 
+func TestAuditEntryFromProto_ChainEpochAndMetadata(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	proto := &pb.AuditEntry{
+		Id:         "e2",
+		TenantId:   "t2",
+		Actor:      "bob",
+		Action:     "rollback",
+		CreatedAt:  timestamppb.New(now),
+		ObjectKind: "field",
+		EntryHash:  "hash2",
+		ChainEpoch: 1,
+		Metadata:   map[string]string{"request_id": "req-abc", "ip": "1.2.3.4"},
+	}
+	out := auditEntryFromProto(proto)
+	if out.ChainEpoch != 1 {
+		t.Errorf("ChainEpoch: got %d, want 1", out.ChainEpoch)
+	}
+	if len(out.Metadata) != 2 {
+		t.Errorf("Metadata len: got %d, want 2", len(out.Metadata))
+	}
+	if out.Metadata["request_id"] != "req-abc" {
+		t.Errorf("Metadata[request_id]: got %q, want %q", out.Metadata["request_id"], "req-abc")
+	}
+	if out.Metadata["ip"] != "1.2.3.4" {
+		t.Errorf("Metadata[ip]: got %q, want %q", out.Metadata["ip"], "1.2.3.4")
+	}
+}
+
+func TestAuditEntryFromProto_NoMetadata(t *testing.T) {
+	proto := &pb.AuditEntry{
+		Id:         "e3",
+		ChainEpoch: 0,
+	}
+	out := auditEntryFromProto(proto)
+	if out.ChainEpoch != 0 {
+		t.Errorf("ChainEpoch: got %d, want 0", out.ChainEpoch)
+	}
+	if out.Metadata != nil {
+		t.Errorf("Metadata: expected nil for empty proto metadata, got %v", out.Metadata)
+	}
+}
+
 // --- timeToProto ---
 
 func TestTimeToProto_Nil(t *testing.T) {
