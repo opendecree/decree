@@ -951,3 +951,52 @@ func TestLockedValue_Set_ForwardsIdempotencyKey(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestLockedValue_Set_RejectsUnsupportedOptions(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	makeLockedValue := func(t *testing.T) *LockedValue {
+		t.Helper()
+		tr.on("GetField", nil, &GetFieldResponse{
+			FieldPath: "x", Value: StringVal("old"), Checksum: "chk",
+		}, nil)
+		lv, err := client.GetForUpdate(ctx, "t1", "x")
+		if err != nil {
+			t.Fatalf("GetForUpdate: unexpected error: %v", err)
+		}
+		return lv
+	}
+
+	tests := []struct {
+		name string
+		opt  WriteOption
+	}{
+		{
+			name: "WithExpectedChecksum",
+			opt:  WithExpectedChecksum("some-checksum"),
+		},
+		{
+			name: "WithValueDescriptions",
+			opt:  WithValueDescriptions(map[string]string{"x": "desc"}),
+		},
+		{
+			name: "WithFieldChecksums",
+			opt:  WithFieldChecksums(map[string]string{"x": "chk2"}),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lv := makeLockedValue(t)
+			err := lv.Set(ctx, "new", tc.opt)
+			if err == nil {
+				t.Fatalf("expected ErrInvalidArgument for %s, got nil", tc.name)
+			}
+			if !errors.Is(err, ErrInvalidArgument) {
+				t.Fatalf("expected errors.Is(err, ErrInvalidArgument), got: %v", err)
+			}
+		})
+	}
+}
