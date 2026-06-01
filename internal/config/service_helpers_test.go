@@ -161,6 +161,7 @@ func TestGetField_IncludeDescription(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 	desc := "the fee"
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 2}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
