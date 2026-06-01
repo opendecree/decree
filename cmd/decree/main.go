@@ -54,7 +54,7 @@ var rootCmd = &cobra.Command{
 		}
 		defer conn.Close()
 		fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for server %s (timeout %s)...\n", flagServer, timeout)
-		if err := waitForServer(conn, timeout); err != nil {
+		if err := waitForServer(cmd.Context(), conn, timeout); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "Server ready.\n")

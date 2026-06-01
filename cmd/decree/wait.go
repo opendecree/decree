@@ -11,9 +11,10 @@ import (
 
 // waitForServer polls the gRPC health check endpoint until the server is
 // ready or the timeout expires. Uses exponential backoff starting at 500ms.
-func waitForServer(conn *grpc.ClientConn, timeout time.Duration) error {
+// parent is cancelled when a signal is received; timeout caps how long we wait.
+func waitForServer(parent context.Context, conn *grpc.ClientConn, timeout time.Duration) error {
 	client := healthpb.NewHealthClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	backoff := 500 * time.Millisecond

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func TestWaitForServer_Healthy(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if err := waitForServer(conn, 5*time.Second); err != nil {
+	if err := waitForServer(context.Background(), conn, 5*time.Second); err != nil {
 		t.Fatalf("expected healthy server, got: %v", err)
 	}
 }
@@ -47,8 +48,27 @@ func TestWaitForServer_Timeout(t *testing.T) {
 	}
 	defer conn.Close()
 
-	err = waitForServer(conn, 2*time.Second)
+	err = waitForServer(context.Background(), conn, 2*time.Second)
 	if err == nil {
 		t.Fatal("expected timeout error, got nil")
+	}
+}
+
+func TestWaitForServer_ParentCancel(t *testing.T) {
+	// Connect to a port that's not listening so the server is never ready.
+	conn, err := grpc.NewClient("localhost:19999",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	err = waitForServer(ctx, conn, 30*time.Second)
+	if err == nil {
+		t.Fatal("expected error when parent context is cancelled, got nil")
 	}
 }
