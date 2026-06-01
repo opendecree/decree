@@ -152,4 +152,11 @@ func TestComputeEntryHash_Epoch1_MetadataJSONNormalization(t *testing.T) {
 	different := base
 	different.Metadata = []byte(`{"name":"other"}`)
 	assert.NotEqual(t, ComputeEntryHash(compact), ComputeEntryHash(different))
+
+	// Invalid JSON bytes are hashed unchanged (fallback path).
+	invalidJSON := base
+	invalidJSON.Metadata = []byte(`not-json`)
+	assert.NotPanics(t, func() { ComputeEntryHash(invalidJSON) })
+	// Two calls with the same invalid bytes produce the same hash.
+	assert.Equal(t, ComputeEntryHash(invalidJSON), ComputeEntryHash(invalidJSON))
 }
