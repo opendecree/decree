@@ -347,8 +347,6 @@ func (s *PGStore) BulkSetConfigValues(ctx context.Context, args []SetConfigValue
 	return br.Close()
 }
 
-const bulkInsertAuditWriteLogSQL = `INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at, chain_epoch) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
-
 func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAuditWriteLogParams) error {
 	if len(args) == 0 {
 		return nil
@@ -374,16 +372,7 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		return fmt.Errorf("get last audit hash: %w", err)
 	}
 
-	type row struct {
-		id        pgtype.UUID
-		kind      string
-		now       pgtype.Timestamptz
-		entryHash string
-		prevHash  string
-		arg       InsertAuditWriteLogParams
-	}
-	rows := make([]row, len(args))
-	for i, arg := range args {
+	for _, arg := range args {
 		id, err := configGenUUID()
 		if err != nil {
 			return err
@@ -411,33 +400,27 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 			ConfigVersion: arg.ConfigVersion,
 			Metadata:      arg.Metadata,
 		})
-		rows[i] = row{
-			id:        id,
-			kind:      kind,
-			now:       pgconv.TimeToTimestamptz(now),
-			entryHash: hash,
-			prevHash:  prevHash,
-			arg:       arg,
+		if err := s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
+			ID:            id,
+			TenantID:      tenantUUID,
+			Actor:         arg.Actor,
+			Action:        arg.Action,
+			FieldPath:     arg.FieldPath,
+			OldValue:      arg.OldValue,
+			NewValue:      arg.NewValue,
+			ConfigVersion: arg.ConfigVersion,
+			Metadata:      arg.Metadata,
+			ObjectKind:    kind,
+			PreviousHash:  prevHash,
+			EntryHash:     hash,
+			CreatedAt:     pgconv.TimeToTimestamptz(now),
+			ChainEpoch:    1,
+		}); err != nil {
+			return fmt.Errorf("insert audit log: %w", err)
 		}
 		prevHash = hash
 	}
-
-	batch := &pgx.Batch{}
-	for _, r := range rows {
-		batch.Queue(bulkInsertAuditWriteLogSQL,
-			r.id, tenantUUID, r.arg.Actor, r.arg.Action,
-			r.arg.FieldPath, r.arg.OldValue, r.arg.NewValue, r.arg.ConfigVersion,
-			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(1),
-		)
-	}
-	br := s.batcher().SendBatch(ctx, batch)
-	defer func() { _ = br.Close() }()
-	for range rows {
-		if _, err := br.Exec(); err != nil {
-			return fmt.Errorf("bulk insert audit log: %w", err)
-		}
-	}
-	return br.Close()
+	return nil
 }
 
 // Audit.
