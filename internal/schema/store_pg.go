@@ -65,9 +65,9 @@ func (s *PGStore) schemaDBNow(ctx context.Context) (time.Time, error) {
 	var ts pgtype.Timestamptz
 	var err error
 	if s.tx != nil {
-		err = s.tx.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+		err = s.tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
 	} else {
-		err = s.writePool.QueryRow(ctx, "SELECT CURRENT_TIMESTAMP").Scan(&ts)
+		err = s.writePool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
 	}
 	if err != nil {
 		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
