@@ -1173,3 +1173,70 @@ func TestRun_ConfigReseed_ListConfigVersionsError(t *testing.T) {
 		t.Fatalf("expected db down error, got %v", err)
 	}
 }
+
+// --- Round-trip: SchemaDef.Info ---
+
+func TestMarshal_SchemaInfoRoundTrip(t *testing.T) {
+	f := &File{
+		SpecVersion: "v1",
+		Schema: SchemaDef{
+			Name:        "payments",
+			Description: "Payment configuration",
+			Info: &SchemaInfoDef{
+				Title:  "Payments Schema",
+				Author: "platform-team",
+				Contact: &SchemaContactDef{
+					Name:  "Platform Team",
+					Email: "platform@example.com",
+					URL:   "https://example.com/platform",
+				},
+				Labels: map[string]string{"env": "prod", "team": "payments"},
+			},
+			Fields: map[string]FieldDef{
+				"rate": {Type: "number"},
+			},
+		},
+		Tenant: TenantDef{Name: "org1", Schema: "payments"},
+		Config: ConfigDef{Values: map[string]ConfigValueDef{"rate": {Value: 1.5}}},
+	}
+
+	data, err := Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f2, err := ParseFile(data)
+	if err != nil {
+		t.Fatalf("re-parse failed: %v\nYAML:\n%s", err, data)
+	}
+
+	if f2.Schema.Info == nil {
+		t.Fatalf("schema.info was nil after round-trip; YAML:\n%s", data)
+	}
+	if f2.Schema.Info.Title != f.Schema.Info.Title {
+		t.Errorf("info.title: got %q, want %q", f2.Schema.Info.Title, f.Schema.Info.Title)
+	}
+	if f2.Schema.Info.Author != f.Schema.Info.Author {
+		t.Errorf("info.author: got %q, want %q", f2.Schema.Info.Author, f.Schema.Info.Author)
+	}
+	if f2.Schema.Info.Contact == nil {
+		t.Fatal("info.contact was nil after round-trip")
+	}
+	if f2.Schema.Info.Contact.Name != f.Schema.Info.Contact.Name {
+		t.Errorf("info.contact.name: got %q, want %q", f2.Schema.Info.Contact.Name, f.Schema.Info.Contact.Name)
+	}
+	if f2.Schema.Info.Contact.Email != f.Schema.Info.Contact.Email {
+		t.Errorf("info.contact.email: got %q, want %q", f2.Schema.Info.Contact.Email, f.Schema.Info.Contact.Email)
+	}
+	if f2.Schema.Info.Contact.URL != f.Schema.Info.Contact.URL {
+		t.Errorf("info.contact.url: got %q, want %q", f2.Schema.Info.Contact.URL, f.Schema.Info.Contact.URL)
+	}
+	if len(f2.Schema.Info.Labels) != len(f.Schema.Info.Labels) {
+		t.Errorf("info.labels count: got %d, want %d", len(f2.Schema.Info.Labels), len(f.Schema.Info.Labels))
+	}
+	for k, want := range f.Schema.Info.Labels {
+		if got := f2.Schema.Info.Labels[k]; got != want {
+			t.Errorf("info.labels[%q]: got %q, want %q", k, got, want)
+		}
+	}
+}
