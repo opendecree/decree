@@ -16,6 +16,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.1.2 // indirect
+	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.51.0 // indirect
@@ -36,3 +37,5 @@ replace github.com/opendecree/decree/sdk/configclient => ../sdk/configclient
 replace github.com/opendecree/decree/sdk/grpctransport => ../sdk/grpctransport
 
 replace github.com/opendecree/decree/sdk/configwatcher => ../sdk/configwatcher
+
+replace github.com/opendecree/decree/sdk/retry => ../sdk/retry

@@ -925,3 +925,29 @@ func TestLockedValue_Set_WithDescription(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestLockedValue_Set_ForwardsIdempotencyKey(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{
+		FieldPath: "x", Value: StringVal("old"), Checksum: "chk",
+	}, nil)
+
+	lv, err := client.GetForUpdate(ctx, "t1", "x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tr.on("SetField", func(args ...any) bool {
+		r := args[0].(*SetFieldRequest)
+		return r.IdempotencyKey == "idem-key-123" &&
+			r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk"
+	}, &SetFieldResponse{}, nil)
+
+	err = lv.Set(ctx, "new", WithIdempotencyKey("idem-key-123"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -263,15 +263,19 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 // the client's retry configuration.
 func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	// LockedValue.Set is always safe to retry: the checksum acts as an implicit
+	// idempotency guard. Use retryDo directly to preserve that guarantee.
 	return retryDo(ctx, lv.client, func(ctx context.Context) error {
-		_, err := lv.client.transport.SetField(ctx, &SetFieldRequest{
+		req := &SetFieldRequest{
 			TenantID:         lv.tenantID,
 			FieldPath:        lv.FieldPath,
 			Value:            StringVal(newValue),
 			ExpectedChecksum: &lv.Checksum,
 			Description:      wo.description,
 			ValueDescription: wo.valueDescription,
-		})
+			IdempotencyKey:   wo.idempotencyKey,
+		}
+		_, err := lv.client.transport.SetField(ctx, req)
 		return err
 	})
 }

@@ -13,6 +13,7 @@ require (
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
+	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
@@ -21,6 +22,8 @@ require (
 )
 
 replace github.com/opendecree/decree/api => ../../api
+
+replace github.com/opendecree/decree/sdk/retry => ../retry
 
 replace github.com/opendecree/decree/sdk/configclient => ../configclient
 
