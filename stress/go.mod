@@ -26,6 +26,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/opendecree/decree/api v0.1.2 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.1.2 // indirect
+	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.51.0 // indirect
@@ -36,3 +37,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/opendecree/decree/sdk/retry => ../sdk/retry

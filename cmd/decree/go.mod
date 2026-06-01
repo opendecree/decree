@@ -20,6 +20,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.1.2 // indirect
+	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
@@ -32,6 +33,8 @@ require (
 )
 
 replace github.com/opendecree/decree/api => ../../api
+
+replace github.com/opendecree/decree/sdk/retry => ../../sdk/retry
 
 replace github.com/opendecree/decree/sdk/adminclient => ../../sdk/adminclient
 
