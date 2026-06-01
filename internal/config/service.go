@@ -403,13 +403,28 @@ func (s *Service) GetField(ctx context.Context, req *pb.GetFieldRequest) (*pb.Ge
 		return nil, errToStatus(err, "field not found", "failed to get field")
 	}
 
+	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
 	types, err := s.fieldTypeMap(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
+
+	rawValue := derefString(row.Value)
+	redactedValue := redactIfSensitive(sensitiveFields[row.FieldPath], rawValue)
+	var displayPtr *string
+	if sensitiveFields[row.FieldPath] {
+		displayPtr = &redactedValue
+	} else {
+		displayPtr = row.Value
+	}
+
 	cv := &pb.ConfigValue{
 		FieldPath: row.FieldPath,
-		Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
+		Value:     stringToTypedValue(displayPtr, lookupFieldType(types, row.FieldPath)),
 		Checksum:  derefString(row.Checksum),
 	}
 	if req.IncludeDescription && row.Description != nil {
@@ -433,11 +448,12 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		return nil, err
 	}
 
-	// Version and type-map are independent — fan out. Plain errgroup keeps
-	// parent ctx identity for downstream calls + tests.
+	// Version, type-map, and sensitive-field set are independent — fan out.
+	// Plain errgroup keeps parent ctx identity for downstream calls + tests.
 	var (
-		version int32
-		types   map[string]domain.FieldType
+		version         int32
+		types           map[string]domain.FieldType
+		sensitiveFields map[string]bool
 	)
 	{
 		var g errgroup.Group
@@ -452,6 +468,11 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 		g.Go(func() error {
 			var err error
 			types, err = s.fieldTypeMap(ctx, tenantID)
+			return err
+		})
+		g.Go(func() error {
+			var err error
+			sensitiveFields, err = s.getSensitiveFieldSet(ctx, tenantID)
 			return err
 		})
 		if err := g.Wait(); err != nil {
@@ -477,9 +498,16 @@ func (s *Service) GetFields(ctx context.Context, req *pb.GetFieldsRequest) (*pb.
 				}
 				return status.Error(codes.Internal, "failed to get field")
 			}
+			var displayPtr *string
+			if sensitiveFields[row.FieldPath] {
+				r := redactedSentinel
+				displayPtr = &r
+			} else {
+				displayPtr = row.Value
+			}
 			cv := &pb.ConfigValue{
 				FieldPath: row.FieldPath,
-				Value:     stringToTypedValue(row.Value, lookupFieldType(types, row.FieldPath)),
+				Value:     stringToTypedValue(displayPtr, lookupFieldType(types, row.FieldPath)),
 				Checksum:  derefString(row.Checksum),
 			}
 			if req.IncludeDescriptions && row.Description != nil {
@@ -906,6 +934,34 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	}
 	if len(targetRows) == 0 {
 		return nil, status.Error(codes.NotFound, "target version not found or empty")
+	}
+
+	// Fetch field locks once and memoize in context so each per-field guard
+	// check reads from context rather than issuing individual DB round-trips.
+	if locks, lockErr := s.store.GetFieldLocks(ctx, tenantID); lockErr != nil {
+		s.logger.ErrorContext(ctx, "failed to fetch field locks for rollback", "error", lockErr)
+		return nil, status.Error(codes.Internal, "failed to check field locks")
+	} else {
+		ctx = authz.WithFieldLockCache(ctx, locks)
+	}
+
+	// Fetch the type map so each restored value can be converted to the
+	// correct TypedValue variant before validation.
+	rollbackTypes, err := s.fieldTypeMap(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Guard and validate each field being restored. This prevents locked or
+	// now-invalid values from being silently reinstated via rollback.
+	for _, row := range targetRows {
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: row.FieldPath}); err != nil {
+			return nil, err
+		}
+		tv := stringToTypedValue(row.Value, lookupFieldType(rollbackTypes, row.FieldPath))
+		if err := s.validateField(ctx, tenantID, row.FieldPath, tv); err != nil {
+			return nil, err
+		}
 	}
 
 	desc := fmt.Sprintf("Rollback to version %d", req.Version)
