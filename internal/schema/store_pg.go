@@ -106,6 +106,11 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		Action:       arg.Action,
 		ObjectKind:   arg.ObjectKind,
 		CreatedAt:    now,
+		Epoch:        1,
+		FieldPath:    arg.FieldPath,
+		OldValue:     arg.OldValue,
+		NewValue:     arg.NewValue,
+		Metadata:     arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -121,6 +126,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash: prevHash,
 		EntryHash:    hash,
 		CreatedAt:    pgconv.TimeToTimestamptz(now),
+		ChainEpoch:   1,
 	})
 }
 

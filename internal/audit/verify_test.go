@@ -177,6 +177,94 @@ func TestVerifyChain_DetectsPayloadTampering(t *testing.T) {
 	assert.NotEmpty(t, result.Breaks, "should report at least one break")
 }
 
+// TestVerifyChain_ConfigWriterPayloadTampering verifies that audit entries written
+// with the full epoch-1 payload (as config/schema stores now produce) are detected
+// when any payload field is tampered.  Regression test for issue #641.
+func TestVerifyChain_ConfigWriterPayloadTampering(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	tenantID := "cfg00000-0000-0000-0000-000000000001"
+
+	fp := "app.timeout"
+	oldVal := "30"
+	newVal := "60"
+	ver := int32(2)
+
+	// Simulate three entries as a config writer would produce (Epoch 1, full payload).
+	for i := range 3 {
+		nv := string(rune('0'+i)) + "0"
+		err := store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+			TenantID:      tenantID,
+			Actor:         "alice",
+			Action:        "set_field",
+			ObjectKind:    "field",
+			FieldPath:     &fp,
+			OldValue:      &oldVal,
+			NewValue:      &nv,
+			ConfigVersion: &ver,
+		})
+		require.NoError(t, err)
+		oldVal = nv
+	}
+	_ = newVal // suppress unused warning
+
+	// Tamper the OldValue of the first entry — hash stays unchanged.
+	store.mu.Lock()
+	for i, e := range store.writeLogs {
+		if e.TenantID == tenantID {
+			tampered := "TAMPERED_OLD"
+			store.writeLogs[i].OldValue = &tampered
+			break
+		}
+	}
+	store.mu.Unlock()
+
+	result, err := VerifyChain(ctx, store, tenantID)
+	require.NoError(t, err)
+	assert.False(t, result.OK, "VerifyChain must detect OldValue tamper on epoch-1 config entry")
+	assert.NotEmpty(t, result.Breaks)
+}
+
+// TestVerifyChain_SchemaWriterPayloadTampering verifies that schema-level audit
+// entries (no ConfigVersion) also detect payload tampering with epoch-1.
+// Regression test for issue #641.
+func TestVerifyChain_SchemaWriterPayloadTampering(t *testing.T) {
+	store := NewMemoryStore()
+	ctx := context.Background()
+	tenantID := "" // schema entries use the global chain
+
+	fp := "schemas.my-schema"
+	old := `{"version":1}`
+	new := `{"version":2}`
+
+	err := store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+		TenantID:   tenantID,
+		Actor:      "admin",
+		Action:     "publish_schema",
+		ObjectKind: "schema",
+		FieldPath:  &fp,
+		OldValue:   &old,
+		NewValue:   &new,
+	})
+	require.NoError(t, err)
+
+	// Tamper NewValue — hash must no longer match.
+	store.mu.Lock()
+	for i, e := range store.writeLogs {
+		if e.TenantID == tenantID {
+			tampered := "TAMPERED_NEW"
+			store.writeLogs[i].NewValue = &tampered
+			break
+		}
+	}
+	store.mu.Unlock()
+
+	result, err := VerifyChain(ctx, store, tenantID)
+	require.NoError(t, err)
+	assert.False(t, result.OK, "VerifyChain must detect NewValue tamper on epoch-1 schema entry")
+	assert.NotEmpty(t, result.Breaks)
+}
+
 // TestConcurrentInserts_ChainIsLinear fires N concurrent writes and asserts the
 // resulting chain has no forks — every entry except the first has a unique
 // PreviousHash that matches exactly the preceding entry's EntryHash.
