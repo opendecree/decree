@@ -277,13 +277,14 @@ func TestRollbackToVersion_DependentRequired_Rejected(t *testing.T) {
 	}).Return([]GetFullConfigAtVersionRow{
 		{FieldPath: "payments.refunds_enabled", Value: strPtr("true")},
 	}, nil).Once()
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
-	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6}, nil)
-	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
 	// Post-rollback snapshot mirrors the target — same violation.
-	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
 		TenantID: tenantID1,
 		Version:  6,
 	}).Return([]GetFullConfigAtVersionRow{

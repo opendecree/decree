@@ -22,12 +22,26 @@ import (
 
 func encodeVersionOffset(offset int32) string { return pagination.EncodePageToken(offset) }
 
+// mockNoSensitiveFields stubs the three store calls that getSensitiveFieldSet
+// makes (GetTenantByID → GetSchemaVersion → GetSchemaFields) to return an
+// empty sensitive-field set. Call this in any test that exercises GetField or
+// GetFields but does not specifically test sensitive-value redaction.
+func mockNoSensitiveFields(store *mockStore) {
+	store.On("GetTenantByID", mock.Anything, mock.AnythingOfType("string")).
+		Return(domain.Tenant{ID: tenantID1, SchemaID: "s1", SchemaVersion: 1}, nil).Maybe()
+	store.On("GetSchemaVersion", mock.Anything, mock.Anything).
+		Return(domain.SchemaVersion{ID: "sv1"}, nil).Maybe()
+	store.On("GetSchemaFields", mock.Anything, mock.Anything).
+		Return([]domain.SchemaField{}, nil).Maybe()
+}
+
 // --- GetFields ---
 
 func TestGetFields_Success(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	val := "hello"
@@ -49,6 +63,7 @@ func TestGetFields_SkipsMissing(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
 
@@ -73,6 +88,7 @@ func TestGetFields_PreservesOrder(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	paths := []string{"a.one", "a.two", "a.three", "a.four", "a.five"}
@@ -100,6 +116,7 @@ func TestGetFields_MixedMissingAndPresent(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 
 	present := "x"
@@ -129,6 +146,7 @@ func TestGetFields_PropagatesError(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).Return(domain.ConfigVersion{Version: 1}, nil)
 	val := "ok"
 	store.On("GetConfigValueAtVersion", mock.Anything, GetConfigValueAtVersionParams{

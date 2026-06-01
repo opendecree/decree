@@ -551,18 +551,19 @@ func TestRollbackToVersion_Success(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
-	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{
 			{FieldPath: "a", Value: strPtr("1")},
 			{FieldPath: "b", Value: strPtr("2")},
 		}, nil)
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
-	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil)
-	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
-	cache.On("Invalidate", ctx, tenantID1).Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
 
 	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -571,13 +572,14 @@ func TestRollbackToVersion_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, int32(6), resp.ConfigVersion.Version)
-	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
+	store.AssertCalled(t, "BulkSetConfigValues", mock.Anything, mock.Anything)
 }
 
 func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
 	// GetLatestConfigVersion is now called inside the tx per attempt (4 total).
@@ -601,6 +603,7 @@ func TestRollbackToVersion_VersionConflictRetried(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
 	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).Return(domain.ConfigVersion{Version: 5}, nil)
@@ -966,6 +969,7 @@ func TestGetField_RecordsUsage(t *testing.T) {
 	)
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
@@ -1041,6 +1045,7 @@ func TestGetFields_RecordsUsage(t *testing.T) {
 	)
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 	// Each requested path returns a different row.
@@ -1102,6 +1107,7 @@ func TestGetField_NilRecorder_NoPanic(t *testing.T) {
 	svc, store, _, _ := newTestService()
 	ctx := auth.WithoutAuth(context.Background())
 
+	mockNoSensitiveFields(store)
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.AnythingOfType("config.GetConfigValueAtVersionParams")).
@@ -1466,14 +1472,15 @@ func TestRollbackToVersion_PreInvalidateFails_WriteProceeds(t *testing.T) {
 	svc, store, cache, _ := newTestService()
 	ctx := superadminCtx()
 
-	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+	store.On("GetFieldLocks", mock.Anything, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
 		Return([]GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}, nil)
-	store.On("GetLatestConfigVersion", ctx, tenantID1).
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 5}, nil)
-	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{ID: versionID3, TenantID: tenantID1, Version: 6, CreatedBy: "unknown"}, nil)
-	store.On("BulkSetConfigValues", ctx, mock.Anything).Return(nil)
-	store.On("InsertAuditWriteLog", ctx, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
 

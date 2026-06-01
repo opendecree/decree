@@ -88,6 +88,15 @@ func newPool(ctx context.Context, dsn string, opts []Option) (*pgxpool.Pool, err
 	cfg.MaxConnLifetime = 30 * time.Minute
 	cfg.MaxConnIdleTime = 10 * time.Minute
 	cfg.HealthCheckPeriod = 1 * time.Minute
+	// Switch to the application role on every new connection so that RLS
+	// policies apply even when the DSN user is a superuser or table owner.
+	// FORCE ROW LEVEL SECURITY in the migration ensures the policies are
+	// active regardless of role, but SET ROLE enforces the privilege boundary
+	// at the application layer as well.
+	cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SET ROLE decree_app")
+		return err
+	}
 	for _, opt := range opts {
 		opt(cfg)
 	}
