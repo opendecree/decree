@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,7 +24,14 @@ var (
 )
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(1)
 	}
 }
@@ -60,7 +70,7 @@ func init() {
 	pf.StringVar(&flagTenantID, "tenant-id", envOrDefault("DECREE_TENANT_ID", ""), "auth tenant ID (x-tenant-id header)")
 	pf.StringVar(&flagToken, "token", envOrDefault("DECREE_TOKEN", ""), "JWT bearer token")
 	pf.StringVarP(&flagOutput, "output", "o", "table", "output format: table, json, yaml")
-	pf.BoolVar(&flagInsecure, "insecure", envOrDefault("DECREE_INSECURE", "true") == "true", "skip TLS verification")
+	pf.BoolVar(&flagInsecure, "insecure", envOrDefault("DECREE_INSECURE", "false") == "true", "disable TLS (plaintext); for local development only")
 	pf.BoolVar(&flagWait, "wait", false, "wait for the server to be ready before executing the command")
 	pf.StringVar(&flagWaitTimeout, "wait-timeout", envOrDefault("DECREE_WAIT_TIMEOUT", "60s"), "maximum time to wait for server readiness")
 

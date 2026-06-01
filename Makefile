@@ -22,7 +22,7 @@ SERVER_LDFLAGS := -X github.com/opendecree/decree/internal/version.Version=$(GIT
 CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 
 # Module list for multi-module operations.
-SDK_MODULES := sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools
+SDK_MODULES := sdk/retry sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools
 
 .PHONY: all generate generate-proto generate-sqlc deps test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 

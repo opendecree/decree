@@ -12,6 +12,7 @@ require (
 	github.com/opendecree/decree/api v0.3.1 // indirect
 	github.com/opendecree/decree/sdk/configclient v0.1.2 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.1.2 // indirect
+	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
@@ -30,3 +31,5 @@ replace github.com/opendecree/decree/sdk/grpctransport => ../../sdk/grpctranspor
 replace github.com/opendecree/decree/sdk/configclient => ../../sdk/configclient
 
 replace github.com/opendecree/decree/sdk/configwatcher => ../../sdk/configwatcher
+
+replace github.com/opendecree/decree/sdk/retry => ../../sdk/retry

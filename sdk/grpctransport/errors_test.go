@@ -143,6 +143,13 @@ func TestMapConfigError_Default_PassThrough(t *testing.T) {
 	}
 }
 
+func TestMapAdminError_PermissionDenied_ReturnsErrPermissionDenied(t *testing.T) {
+	err := mapAdminError(status.Error(codes.PermissionDenied, "insufficient role"))
+	if !errors.Is(err, adminclient.ErrPermissionDenied) {
+		t.Errorf("got %v, want ErrPermissionDenied", err)
+	}
+}
+
 // --- mapAdminError: remaining codes ---
 
 func TestMapAdminError_AlreadyExists(t *testing.T) {

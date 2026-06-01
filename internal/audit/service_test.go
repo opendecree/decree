@@ -511,6 +511,58 @@ func TestAuditEntryToProto(t *testing.T) {
 	assert.Equal(t, int32(3), *pb.ConfigVersion)
 }
 
+func TestAuditEntryToProto_ChainEpochAndMetadata(t *testing.T) {
+	e := domain.AuditWriteLog{
+		ID:         "11111111-1111-1111-1111-111111111112",
+		TenantID:   "22222222-2222-2222-2222-222222222222",
+		Actor:      "admin",
+		Action:     "set_field",
+		ObjectKind: "field",
+		EntryHash:  "hash1",
+		ChainEpoch: 1,
+		Metadata:   []byte(`{"request_id":"abc","ip":"1.2.3.4"}`),
+		CreatedAt:  time.Now(),
+	}
+
+	out := auditEntryToProto(e)
+	assert.Equal(t, int32(1), out.ChainEpoch)
+	assert.Equal(t, e.Metadata, out.Metadata)
+}
+
+func TestAuditEntryToProto_NoMetadata(t *testing.T) {
+	e := domain.AuditWriteLog{
+		ID:         "11111111-1111-1111-1111-111111111113",
+		TenantID:   "22222222-2222-2222-2222-222222222222",
+		Actor:      "admin",
+		Action:     "set_field",
+		ObjectKind: "field",
+		ChainEpoch: 0,
+		CreatedAt:  time.Now(),
+	}
+
+	out := auditEntryToProto(e)
+	assert.Equal(t, int32(0), out.ChainEpoch)
+	assert.Nil(t, out.Metadata)
+}
+
+func TestAuditEntryToProto_InvalidMetadataJSON(t *testing.T) {
+	e := domain.AuditWriteLog{
+		ID:         "11111111-1111-1111-1111-111111111114",
+		TenantID:   "22222222-2222-2222-2222-222222222222",
+		Actor:      "admin",
+		Action:     "set_field",
+		ObjectKind: "field",
+		ChainEpoch: 1,
+		Metadata:   []byte(`not-valid-json`),
+		CreatedAt:  time.Now(),
+	}
+
+	// Raw bytes are passed through as-is; even invalid JSON is forwarded.
+	out := auditEntryToProto(e)
+	assert.Equal(t, int32(1), out.ChainEpoch)
+	assert.Equal(t, e.Metadata, out.Metadata)
+}
+
 func TestAuditService_RequiresAuth(t *testing.T) {
 	svc, _ := newTestService()
 	ctx := context.Background()
