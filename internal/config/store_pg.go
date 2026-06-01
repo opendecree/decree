@@ -358,6 +358,17 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		return err
 	}
 
+	// Acquire the advisory lock before reading the previous hash and writing
+	// entries. This prevents concurrent writers for the same tenant from forking
+	// the chain. The lock is held until the surrounding transaction commits or
+	// rolls back.
+	lockKey := "audit_chain:" + args[0].TenantID
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+	}
+
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
@@ -381,15 +392,24 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		if kind == "" {
 			kind = "field"
 		}
-		now := time.Now().Truncate(time.Microsecond)
+		now, err := s.configDBNow(ctx)
+		if err != nil {
+			return err
+		}
 		hash := audit.ComputeEntryHash(audit.ChainInput{
-			PreviousHash: prevHash,
-			ID:           pgconv.UUIDToString(id),
-			TenantID:     arg.TenantID,
-			Actor:        arg.Actor,
-			Action:       arg.Action,
-			ObjectKind:   kind,
-			CreatedAt:    now,
+			PreviousHash:  prevHash,
+			ID:            pgconv.UUIDToString(id),
+			TenantID:      arg.TenantID,
+			Actor:         arg.Actor,
+			Action:        arg.Action,
+			ObjectKind:    kind,
+			CreatedAt:     now,
+			Epoch:         1,
+			FieldPath:     arg.FieldPath,
+			OldValue:      arg.OldValue,
+			NewValue:      arg.NewValue,
+			ConfigVersion: arg.ConfigVersion,
+			Metadata:      arg.Metadata,
 		})
 		rows[i] = row{
 			id:        id,
@@ -407,7 +427,7 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 		batch.Queue(bulkInsertAuditWriteLogSQL,
 			r.id, tenantUUID, r.arg.Actor, r.arg.Action,
 			r.arg.FieldPath, r.arg.OldValue, r.arg.NewValue, r.arg.ConfigVersion,
-			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(0),
+			r.arg.Metadata, r.kind, r.prevHash, r.entryHash, r.now, int32(1),
 		)
 	}
 	br := s.batcher().SendBatch(ctx, batch)
@@ -421,6 +441,24 @@ func (s *PGStore) BulkInsertAuditWriteLog(ctx context.Context, args []InsertAudi
 }
 
 // Audit.
+
+// configDBNow fetches the current timestamp from the database, mirroring the
+// audit store's dbNow pattern. Using the DB clock ensures the timestamp stored
+// in PG round-trips exactly when VerifyChain recomputes the hash, avoiding
+// any sub-microsecond skew from the application server clock.
+func (s *PGStore) configDBNow(ctx context.Context) (time.Time, error) {
+	var ts pgtype.Timestamptz
+	var err error
+	if s.tx != nil {
+		err = s.tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
+	} else {
+		err = s.writePool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
+	}
+	return ts.Time.Truncate(time.Microsecond), nil
+}
 
 func configGenUUID() (pgtype.UUID, error) {
 	var id pgtype.UUID
@@ -439,6 +477,16 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		return err
 	}
 
+	// Acquire the advisory lock before reading the previous hash and inserting.
+	// This prevents concurrent writers for the same tenant from forking the chain.
+	// The lock is held until the surrounding transaction commits or rolls back.
+	lockKey := "audit_chain:" + arg.TenantID
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+	}
+
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
@@ -453,18 +501,26 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 	if kind == "" {
 		kind = "field"
 	}
-	// Truncate to microseconds to match PostgreSQL timestamptz precision so
-	// that the hash computed here and the hash recomputed during chain
-	// verification both use the same CreatedAt value.
-	now := time.Now().Truncate(time.Microsecond)
+	// Use the DB clock (same pattern as internal/audit/store_pg.go dbNow) so the
+	// timestamp round-trips exactly when VerifyChain recomputes the hash.
+	now, err := s.configDBNow(ctx)
+	if err != nil {
+		return err
+	}
 	hash := audit.ComputeEntryHash(audit.ChainInput{
-		PreviousHash: prevHash,
-		ID:           pgconv.UUIDToString(id),
-		TenantID:     arg.TenantID,
-		Actor:        arg.Actor,
-		Action:       arg.Action,
-		ObjectKind:   kind,
-		CreatedAt:    now,
+		PreviousHash:  prevHash,
+		ID:            pgconv.UUIDToString(id),
+		TenantID:      arg.TenantID,
+		Actor:         arg.Actor,
+		Action:        arg.Action,
+		ObjectKind:    kind,
+		CreatedAt:     now,
+		Epoch:         1,
+		FieldPath:     arg.FieldPath,
+		OldValue:      arg.OldValue,
+		NewValue:      arg.NewValue,
+		ConfigVersion: arg.ConfigVersion,
+		Metadata:      arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -481,6 +537,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash:  prevHash,
 		EntryHash:     hash,
 		CreatedAt:     pgconv.TimeToTimestamptz(now),
+		ChainEpoch:    1,
 	})
 }
 

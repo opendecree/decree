@@ -61,6 +61,20 @@ func (s *PGStore) RunInTx(ctx context.Context, fn func(Store) error) error {
 	return tx.Commit(ctx)
 }
 
+func (s *PGStore) schemaDBNow(ctx context.Context) (time.Time, error) {
+	var ts pgtype.Timestamptz
+	var err error
+	if s.tx != nil {
+		err = s.tx.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
+	} else {
+		err = s.writePool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&ts)
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fetch db timestamp: %w", err)
+	}
+	return ts.Time.Truncate(time.Microsecond), nil
+}
+
 func schemaGenUUID() (pgtype.UUID, error) {
 	var id pgtype.UUID
 	if _, err := rand.Read(id.Bytes[:]); err != nil {
@@ -84,6 +98,19 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		}
 	}
 
+	// Acquire the advisory lock before reading the previous hash and inserting.
+	// This prevents concurrent writers for the same tenant from forking the chain.
+	// The lock is held until the surrounding transaction commits or rolls back.
+	lockKey := "audit_chain:" + arg.TenantID
+	if arg.TenantID == "" {
+		lockKey = "audit_chain:global"
+	}
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+	}
+
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
@@ -94,10 +121,10 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		return err
 	}
 
-	// Truncate to microseconds to match PostgreSQL timestamptz precision so
-	// that the hash computed here and the hash recomputed during chain
-	// verification both use the same CreatedAt value.
-	now := time.Now().Truncate(time.Microsecond)
+	now, err := s.schemaDBNow(ctx)
+	if err != nil {
+		return err
+	}
 	hash := audit.ComputeEntryHash(audit.ChainInput{
 		PreviousHash: prevHash,
 		ID:           pgconv.UUIDToString(id),
@@ -106,6 +133,11 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		Action:       arg.Action,
 		ObjectKind:   arg.ObjectKind,
 		CreatedAt:    now,
+		Epoch:        1,
+		FieldPath:    arg.FieldPath,
+		OldValue:     arg.OldValue,
+		NewValue:     arg.NewValue,
+		Metadata:     arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -121,6 +153,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash: prevHash,
 		EntryHash:    hash,
 		CreatedAt:    pgconv.TimeToTimestamptz(now),
+		ChainEpoch:   1,
 	})
 }
 

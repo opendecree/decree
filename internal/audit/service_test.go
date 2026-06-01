@@ -526,8 +526,7 @@ func TestAuditEntryToProto_ChainEpochAndMetadata(t *testing.T) {
 
 	out := auditEntryToProto(e)
 	assert.Equal(t, uint64(1), out.ChainEpoch)
-	assert.Equal(t, "abc", out.Metadata["request_id"])
-	assert.Equal(t, "1.2.3.4", out.Metadata["ip"])
+	assert.Equal(t, map[string]string{"request_id": "abc", "ip": "1.2.3.4"}, out.Metadata)
 }
 
 func TestAuditEntryToProto_NoMetadata(t *testing.T) {
@@ -558,7 +557,7 @@ func TestAuditEntryToProto_InvalidMetadataJSON(t *testing.T) {
 		CreatedAt:  time.Now(),
 	}
 
-	// Should not panic; invalid JSON is silently ignored (metadata omitted).
+	// Invalid JSON → unmarshal fails → metadata omitted.
 	out := auditEntryToProto(e)
 	assert.Equal(t, uint64(1), out.ChainEpoch)
 	assert.Nil(t, out.Metadata)
