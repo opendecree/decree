@@ -1735,7 +1735,13 @@ type AuditEntry struct {
 	// SHA-256 hash of this entry's immutable fields, chained to previous_hash.
 	EntryHash string `protobuf:"bytes,11,opt,name=entry_hash,json=entryHash,proto3" json:"entry_hash,omitempty"`
 	// entry_hash of the previous entry in this tenant's chain ("" for the first).
-	PreviousHash  string `protobuf:"bytes,12,opt,name=previous_hash,json=previousHash,proto3" json:"previous_hash,omitempty"`
+	PreviousHash string `protobuf:"bytes,12,opt,name=previous_hash,json=previousHash,proto3" json:"previous_hash,omitempty"`
+	// Hash scheme epoch. 0 = legacy (structural fields only). 1 = full payload included.
+	// Clients must use this value to select the correct hash algorithm when verifying.
+	ChainEpoch int32 `protobuf:"varint,13,opt,name=chain_epoch,json=chainEpoch,proto3" json:"chain_epoch,omitempty"`
+	// Opaque key-value metadata attached to this audit entry (JSON-encoded).
+	// Included in the epoch-1 hash; clients must include it when recomputing.
+	Metadata      []byte `protobuf:"bytes,14,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1852,6 +1858,20 @@ func (x *AuditEntry) GetPreviousHash() string {
 		return x.PreviousHash
 	}
 	return ""
+}
+
+func (x *AuditEntry) GetChainEpoch() int32 {
+	if x != nil {
+		return x.ChainEpoch
+	}
+	return 0
+}
+
+func (x *AuditEntry) GetMetadata() []byte {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 // UsageStats represents aggregated read usage statistics for a config field.
@@ -2101,7 +2121,7 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"\n" +
 	"changed_by\x18\x06 \x01(\tR\tchangedBy\x129\n" +
 	"\n" +
-	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\xd9\x03\n" +
+	"changed_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tchangedAt\"\x96\x04\n" +
 	"\n" +
 	"AuditEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
@@ -2120,7 +2140,10 @@ const file_centralconfig_v1_types_proto_rawDesc = "" +
 	"objectKind\x12\x1d\n" +
 	"\n" +
 	"entry_hash\x18\v \x01(\tR\tentryHash\x12#\n" +
-	"\rprevious_hash\x18\f \x01(\tR\fpreviousHashB\r\n" +
+	"\rprevious_hash\x18\f \x01(\tR\fpreviousHash\x12\x1f\n" +
+	"\vchain_epoch\x18\r \x01(\x05R\n" +
+	"chainEpoch\x12\x1a\n" +
+	"\bmetadata\x18\x0e \x01(\fR\bmetadataB\r\n" +
 	"\v_field_pathB\f\n" +
 	"\n" +
 	"_old_valueB\f\n" +

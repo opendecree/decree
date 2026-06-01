@@ -364,6 +364,8 @@ func auditEntryFromProto(e *pb.AuditEntry) *adminclient.AuditEntry {
 	result.ObjectKind = e.GetObjectKind()
 	result.EntryHash = e.GetEntryHash()
 	result.PreviousHash = e.GetPreviousHash()
+	result.ChainEpoch = e.GetChainEpoch()
+	result.Metadata = e.GetMetadata()
 	return result
 }
 

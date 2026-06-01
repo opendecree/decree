@@ -84,6 +84,19 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		}
 	}
 
+	// Acquire the advisory lock before reading the previous hash and inserting.
+	// This prevents concurrent writers for the same tenant from forking the chain.
+	// The lock is held until the surrounding transaction commits or rolls back.
+	lockKey := "audit_chain:" + arg.TenantID
+	if arg.TenantID == "" {
+		lockKey = "audit_chain:global"
+	}
+	if s.tx != nil {
+		if _, err := s.tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", lockKey); err != nil {
+			return fmt.Errorf("acquire audit chain lock: %w", err)
+		}
+	}
+
 	prevHash, err := s.write.GetLastAuditHashForTenant(ctx, tenantUUID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("get last audit hash: %w", err)
@@ -106,6 +119,11 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		Action:       arg.Action,
 		ObjectKind:   arg.ObjectKind,
 		CreatedAt:    now,
+		Epoch:        1,
+		FieldPath:    arg.FieldPath,
+		OldValue:     arg.OldValue,
+		NewValue:     arg.NewValue,
+		Metadata:     arg.Metadata,
 	})
 
 	return s.write.InsertAuditWriteLog(ctx, dbstore.InsertAuditWriteLogParams{
@@ -121,6 +139,7 @@ func (s *PGStore) InsertAuditWriteLog(ctx context.Context, arg InsertAuditWriteL
 		PreviousHash: prevHash,
 		EntryHash:    hash,
 		CreatedAt:    pgconv.TimeToTimestamptz(now),
+		ChainEpoch:   1,
 	})
 }
 

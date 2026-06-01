@@ -327,6 +327,8 @@ func auditEntryToProto(e domain.AuditWriteLog) *pb.AuditEntry {
 		EntryHash:    e.EntryHash,
 		PreviousHash: e.PreviousHash,
 		CreatedAt:    timestamppb.New(e.CreatedAt),
+		ChainEpoch:   e.ChainEpoch,
+		Metadata:     e.Metadata,
 	}
 	entry.FieldPath = e.FieldPath
 	entry.OldValue = e.OldValue

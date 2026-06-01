@@ -123,6 +123,12 @@ type AuditEntry struct {
 	PreviousHash  string
 	EntryHash     string
 	CreatedAt     time.Time
+	// ChainEpoch indicates the hash scheme used for EntryHash.
+	// 0 = legacy (structural fields only). 1 = full payload included.
+	ChainEpoch int32
+	// Metadata holds opaque key-value metadata attached to this entry.
+	// Required for epoch-1 hash verification.
+	Metadata []byte
 }
 
 // VerifyChainResult is the outcome of a local audit chain verification.

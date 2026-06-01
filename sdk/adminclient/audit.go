@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -235,7 +236,20 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 		page := pages[p]
 		for e := len(page) - 1; e >= 0; e-- {
 			entry := page[e]
-			want := computeClientHash(prev, entry.ID, entry.TenantID, entry.Actor, entry.Action, entry.ObjectKind, entry.CreatedAt)
+			var fieldPath, oldValue, newValue *string
+			if entry.FieldPath != "" {
+				fp := entry.FieldPath
+				fieldPath = &fp
+			}
+			if entry.OldValue != "" {
+				ov := entry.OldValue
+				oldValue = &ov
+			}
+			if entry.NewValue != "" {
+				nv := entry.NewValue
+				newValue = &nv
+			}
+			want := computeClientHash(entry.ChainEpoch, prev, entry.ID, entry.TenantID, entry.Actor, entry.Action, entry.ObjectKind, entry.CreatedAt, fieldPath, oldValue, newValue, entry.ConfigVersion, entry.Metadata)
 			if entry.EntryHash != want {
 				result.Breaks = append(result.Breaks, VerifyChainBreak{
 					EntryID:  entry.ID,
@@ -252,9 +266,46 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 	return result, nil
 }
 
-func computeClientHash(previousHash, id, tenantID, actor, action, objectKind string, createdAt time.Time) string {
+// computeClientHash replicates the server's ComputeEntryHash logic for the
+// given epoch. Epoch 0 hashes only structural fields (backward compat).
+// Epoch 1 includes all payload fields so content tampering is detectable.
+func computeClientHash(epoch int32, previousHash, id, tenantID, actor, action, objectKind string, createdAt time.Time, fieldPath, oldValue, newValue *string, configVersion *int32, metadata []byte) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
+	if epoch == 0 {
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
+			previousHash, id, tenantID, actor, action, objectKind, createdAt.UnixNano())
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	// Epoch 1+: structural fields followed by payload fields.
+	// Payload fields use a 1-byte presence marker: 0x00=nil, 0x01=non-nil.
+	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
 		previousHash, id, tenantID, actor, action, objectKind, createdAt.UnixNano())
+	writeNullableClientStr(h, fieldPath)
+	writeNullableClientStr(h, oldValue)
+	writeNullableClientStr(h, newValue)
+	writeNullableClientI32(h, configVersion)
+	if len(metadata) == 0 {
+		_, _ = h.Write([]byte{0x00})
+	} else {
+		_, _ = h.Write([]byte{0x01})
+		fmt.Fprint(h, hex.EncodeToString(metadata))
+	}
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func writeNullableClientStr(h io.Writer, s *string) {
+	if s == nil {
+		_, _ = h.Write([]byte{0x00})
+	} else {
+		_, _ = h.Write([]byte{0x01})
+		fmt.Fprintf(h, "%s\x00", *s)
+	}
+}
+
+func writeNullableClientI32(h io.Writer, v *int32) {
+	if v == nil {
+		_, _ = h.Write([]byte{0x00})
+	} else {
+		fmt.Fprintf(h, "\x01%d\x00", *v)
+	}
 }

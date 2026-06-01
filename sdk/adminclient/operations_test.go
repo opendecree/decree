@@ -856,17 +856,20 @@ func TestVerifyChain_IntactChain(t *testing.T) {
 	t1 := t0.Add(time.Second)
 	t2 := t0.Add(2 * time.Second)
 
-	// Build three entries with correct hashes, newest-first (as server returns them).
-	h0 := computeClientHash("", "id-0", "t1", "actor", "set_field", "field", t0)
-	h1 := computeClientHash(h0, "id-1", "t1", "actor", "set_field", "field", t1)
-	h2 := computeClientHash(h1, "id-2", "t1", "actor", "set_field", "field", t2)
+	// Use pre-computed golden epoch-0 hashes (not the function under test) to
+	// avoid circular testing. These match goldenE0H0/H1/H2 in iter_test.go.
+	const (
+		h0 = "d1aa4912744b449964c6e0f45c23382d516cde9eb890b3afcce3c1b5cf54c6fc"
+		h1 = "a473ca8a427fe513efc77e129b00b3fa35009c2fd023bec6c0a7b7ed39810f98"
+		h2 = "9277d017e924b4781212e6f4cceb1bc1300fb4b1f4e9004910d0fdd8a94dfa00"
+	)
 
 	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		return &QueryWriteLogResponse{
 			Entries: []*AuditEntry{
-				{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h2, CreatedAt: t2},
-				{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h1, CreatedAt: t1},
-				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h0, CreatedAt: t0},
+				{ID: "id-2", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h2, CreatedAt: t2, ChainEpoch: 0},
+				{ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h1, CreatedAt: t1, ChainEpoch: 0},
+				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: h0, CreatedAt: t0, ChainEpoch: 0},
 			},
 		}, nil
 	}
@@ -892,7 +895,7 @@ func TestVerifyChain_DetectsTampering(t *testing.T) {
 	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
 		return &QueryWriteLogResponse{
 			Entries: []*AuditEntry{
-				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: "tampered", CreatedAt: t0},
+				{ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field", EntryHash: "tampered", CreatedAt: t0, ChainEpoch: 0},
 			},
 		}, nil
 	}
@@ -948,8 +951,8 @@ func TestVerifyChain_GlobalChain(t *testing.T) {
 
 func TestComputeClientHash_Deterministic(t *testing.T) {
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	h1 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
-	h2 := computeClientHash("prev", "id-1", "tenant-1", "actor", "set_field", "field", ts)
+	h1 := computeClientHash(0, "prev", "id-1", "tenant-1", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil)
+	h2 := computeClientHash(0, "prev", "id-1", "tenant-1", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil)
 	if h1 != h2 {
 		t.Errorf("hash not deterministic: %q != %q", h1, h2)
 	}
@@ -960,15 +963,20 @@ func TestComputeClientHash_Deterministic(t *testing.T) {
 
 func TestComputeClientHash_Sensitivity(t *testing.T) {
 	ts := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	base := computeClientHash("", "id-1", "t1", "actor", "set_field", "field", ts)
+	// Use a known golden value for "base" (epoch 0, id-1, t1, actor, set_field, field, ts, prev="").
+	// This is NOT a computed value — it is pinned from the server's reference implementation.
+	const base = "4eb2db1f67a643db64698ba6e372ce02c57b985440f71b99afbd63933a423f78"
 
-	if computeClientHash("x", "id-1", "t1", "actor", "set_field", "field", ts) == base {
+	if computeClientHash(0, "", "id-1", "t1", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil) != base {
+		t.Error("base hash does not match expected golden value")
+	}
+	if computeClientHash(0, "x", "id-1", "t1", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil) == base {
 		t.Error("previousHash change did not change hash")
 	}
-	if computeClientHash("", "id-2", "t1", "actor", "set_field", "field", ts) == base {
+	if computeClientHash(0, "", "id-2", "t1", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil) == base {
 		t.Error("id change did not change hash")
 	}
-	if computeClientHash("", "id-1", "t2", "actor", "set_field", "field", ts) == base {
+	if computeClientHash(0, "", "id-1", "t2", "actor", "set_field", "field", ts, nil, nil, nil, nil, nil) == base {
 		t.Error("tenantID change did not change hash")
 	}
 }

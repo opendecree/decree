@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -136,7 +137,10 @@ Requires migration 002_audit_tamper_evident to be applied.`,
 				want,
 			})
 		}
-		return printOutput(rows)
+		if err := printOutput(rows); err != nil {
+			return err
+		}
+		return errors.New("chain verification failed")
 	},
 }
 
