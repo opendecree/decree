@@ -187,6 +187,11 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 // pages newest-first; VerifyChain processes them in reverse to walk oldest-first
 // without an in-memory sort.
 //
+// Tail truncation (removal of the genesis entry or oldest entries) is detected
+// by asserting that the oldest entry has previous_hash == "". Head truncation
+// (removal of the newest entries) cannot be detected without a server-provided
+// authoritative head hash; VerifyChain does not attempt to detect it.
+//
 // Note: entry_hash and previous_hash fields require the server to be running
 // with migration 002_audit_tamper_evident applied.
 func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainResult, error) {
@@ -252,6 +257,23 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 		}
 	}
 	result.OK = len(result.Breaks) == 0
+
+	// Genesis check: the oldest entry must have previous_hash == "".
+	// A non-empty previous_hash means the chain is missing its beginning (tail truncation).
+	if total > 0 {
+		oldest := pages[len(pages)-1][len(pages[len(pages)-1])-1]
+		if oldest.PreviousHash != "" {
+			result.OK = false
+			result.Breaks = append(result.Breaks, VerifyChainBreak{
+				EntryID:  oldest.ID,
+				Position: 0,
+				Got:      oldest.PreviousHash,
+				Want:     "",
+				Reason:   "chain is truncated: oldest entry has non-empty previous_hash",
+			})
+		}
+	}
+
 	return result, nil
 }
 
