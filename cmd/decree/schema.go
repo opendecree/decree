@@ -21,9 +21,6 @@ var schemaCreateCmd = &cobra.Command{
 	Short: "Create a new schema from a YAML file",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		file, _ := cmd.Flags().GetString("file")
-		if file == "" {
-			return fmt.Errorf("--file is required")
-		}
 		data, err := os.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("read file: %w", err)
@@ -228,6 +225,7 @@ var schemaImportCmd = &cobra.Command{
 
 func init() {
 	schemaCreateCmd.Flags().StringP("file", "f", "", "YAML file with schema definition")
+	_ = schemaCreateCmd.MarkFlagRequired("file")
 	schemaGetCmd.Flags().Int32("version", 0, "specific version (default: latest)")
 	schemaExportCmd.Flags().Int32("version", 0, "specific version (default: latest)")
 	schemaImportCmd.Flags().Bool("publish", false, "auto-publish the imported version")

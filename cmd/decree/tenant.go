@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -20,9 +19,6 @@ var tenantCreateCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString("name")
 		schemaID, _ := cmd.Flags().GetString("schema")
 		version, _ := cmd.Flags().GetInt32("schema-version")
-		if name == "" || schemaID == "" || version == 0 {
-			return fmt.Errorf("--name, --schema, and --schema-version are required")
-		}
 		conn, err := dialServer()
 		if err != nil {
 			return err
@@ -122,8 +118,11 @@ var tenantDeleteCmd = &cobra.Command{
 
 func init() {
 	tenantCreateCmd.Flags().String("name", "", "tenant name (slug)")
+	_ = tenantCreateCmd.MarkFlagRequired("name")
 	tenantCreateCmd.Flags().String("schema", "", "schema ID")
+	_ = tenantCreateCmd.MarkFlagRequired("schema")
 	tenantCreateCmd.Flags().Int32("schema-version", 0, "published schema version")
+	_ = tenantCreateCmd.MarkFlagRequired("schema-version")
 	tenantListCmd.Flags().String("schema", "", "filter by schema ID")
 
 	tenantCmd.AddCommand(tenantCreateCmd)

@@ -393,8 +393,8 @@ func TestSchemaCreate_MissingFile_ErrorNotOnStdout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing --file, got nil")
 	}
-	if !strings.Contains(err.Error(), "--file") {
-		t.Errorf("expected error to mention --file, got %q", err.Error())
+	if !strings.Contains(err.Error(), "file") {
+		t.Errorf("expected error to mention file, got %q", err.Error())
 	}
 	if stdout.Len() != 0 {
 		t.Errorf("expected empty stdout on flag error, got: %q", stdout.String())
