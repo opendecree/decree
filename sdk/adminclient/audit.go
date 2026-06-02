@@ -212,7 +212,9 @@ func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainR
 		for _, f := range filters {
 			f(req)
 		}
-		resp, err := c.audit.QueryWriteLog(ctx, req)
+		resp, err := retry(ctx, c, func(ctx context.Context) (*QueryWriteLogResponse, error) {
+			return c.audit.QueryWriteLog(ctx, req)
+		})
 		if err != nil {
 			return VerifyChainResult{}, fmt.Errorf("fetch entries: %w", err)
 		}
