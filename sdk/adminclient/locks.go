@@ -27,5 +27,7 @@ func (c *Client) ListFieldLocks(ctx context.Context, tenantID string) ([]FieldLo
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return c.schema.ListFieldLocks(ctx, tenantID)
+	return retry(ctx, c, func(ctx context.Context) ([]FieldLock, error) {
+		return c.schema.ListFieldLocks(ctx, tenantID)
+	})
 }

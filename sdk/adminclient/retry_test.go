@@ -258,6 +258,70 @@ func TestBackoffDuration(t *testing.T) {
 	}
 }
 
+func TestRetry_VerifyChain_RetriesOnUnavailable(t *testing.T) {
+	calls := 0
+	ma := &mockAuditTransport{
+		queryWriteLogFn: func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+			calls++
+			if calls < 3 {
+				return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+			}
+			return &QueryWriteLogResponse{}, nil
+		},
+	}
+	c := New(
+		WithAuditTransport(ma),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	result, err := c.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.OK {
+		t.Errorf("expected OK chain, got breaks: %v", result.Breaks)
+	}
+	if calls != 3 {
+		t.Errorf("got %d calls, want 3", calls)
+	}
+}
+
+func TestRetry_ListFieldLocks_RetriesOnUnavailable(t *testing.T) {
+	calls := 0
+	ms := &mockSchemaTransport{
+		listFieldLocksFn: func(_ context.Context, _ string) ([]FieldLock, error) {
+			calls++
+			if calls < 3 {
+				return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+			}
+			return []FieldLock{{TenantID: "t1", FieldPath: "app.fee"}}, nil
+		},
+	}
+	c := New(
+		WithSchemaTransport(ms),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	locks, err := c.ListFieldLocks(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(locks) != 1 {
+		t.Errorf("got %d locks, want 1", len(locks))
+	}
+	if calls != 3 {
+		t.Errorf("got %d calls, want 3", calls)
+	}
+}
+
 func TestRetry_GetSchema_RetriesOnUnavailable(t *testing.T) {
 	calls := 0
 	ms := &mockSchemaTransport{
