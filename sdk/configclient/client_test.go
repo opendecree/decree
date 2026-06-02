@@ -573,6 +573,138 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+func TestUpdate_WriteOptionsForwarded(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{
+		FieldPath: "k", Value: StringVal("old"), Checksum: "chk1",
+	}, nil)
+
+	var capturedReq *SetFieldRequest
+	tr.on("SetField", func(args ...any) bool {
+		capturedReq = args[0].(*SetFieldRequest)
+		return true
+	}, &SetFieldResponse{}, nil)
+
+	err := client.Update(ctx, "t1", "k", func(current string) (string, error) {
+		return "new", nil
+	}, WithDescription("my-desc"), WithValueDescription("val-desc"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedReq == nil {
+		t.Fatal("SetField was not called")
+	}
+	if capturedReq.Description != "my-desc" {
+		t.Errorf("description: got %q, want %q", capturedReq.Description, "my-desc")
+	}
+	if capturedReq.ValueDescription != "val-desc" {
+		t.Errorf("value description: got %q, want %q", capturedReq.ValueDescription, "val-desc")
+	}
+}
+
+func TestUpdate_RetryOnChecksumMismatch(t *testing.T) {
+	ctx := context.Background()
+
+	var stGets, stSets int
+	st := &sequencedTransport{
+		getField: func(_ context.Context, req *GetFieldRequest) (*GetFieldResponse, error) {
+			stGets++
+			switch stGets {
+			case 1:
+				return &GetFieldResponse{FieldPath: req.FieldPath, Value: StringVal("old"), Checksum: "chk1"}, nil
+			default:
+				return &GetFieldResponse{FieldPath: req.FieldPath, Value: StringVal("mid"), Checksum: "chk2"}, nil
+			}
+		},
+		setField: func(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+			stSets++
+			if stSets == 1 {
+				// First attempt: concurrent writer changed the value.
+				return nil, ErrChecksumMismatch
+			}
+			return &SetFieldResponse{}, nil
+		},
+	}
+
+	client := New(st)
+	err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
+		return current + "-updated", nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stGets != 2 {
+		t.Errorf("expected 2 GetField calls (1 per attempt), got %d", stGets)
+	}
+	if stSets != 2 {
+		t.Errorf("expected 2 SetField calls (1 mismatch + 1 success), got %d", stSets)
+	}
+}
+
+func TestUpdate_ChecksumMismatchExhaustsRetries(t *testing.T) {
+	ctx := context.Background()
+
+	var stGets, stSets int
+	st := &sequencedTransport{
+		getField: func(_ context.Context, req *GetFieldRequest) (*GetFieldResponse, error) {
+			stGets++
+			return &GetFieldResponse{FieldPath: req.FieldPath, Value: StringVal("v"), Checksum: "chk"}, nil
+		},
+		setField: func(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+			stSets++
+			return nil, ErrChecksumMismatch
+		},
+	}
+
+	client := New(st)
+	err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
+		return current + "!", nil
+	})
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Fatalf("got error %v, want ErrChecksumMismatch", err)
+	}
+	if stGets != updateMaxAttempts {
+		t.Errorf("expected %d GetField calls, got %d", updateMaxAttempts, stGets)
+	}
+	if stSets != updateMaxAttempts {
+		t.Errorf("expected %d SetField calls, got %d", updateMaxAttempts, stSets)
+	}
+}
+
+// sequencedTransport is a Transport implementation driven by user-supplied
+// function fields. Used to build stateful call sequences in tests.
+type sequencedTransport struct {
+	getField func(context.Context, *GetFieldRequest) (*GetFieldResponse, error)
+	setField func(context.Context, *SetFieldRequest) (*SetFieldResponse, error)
+}
+
+func (t *sequencedTransport) GetField(ctx context.Context, req *GetFieldRequest) (*GetFieldResponse, error) {
+	return t.getField(ctx, req)
+}
+
+func (t *sequencedTransport) SetField(ctx context.Context, req *SetFieldRequest) (*SetFieldResponse, error) {
+	return t.setField(ctx, req)
+}
+
+func (t *sequencedTransport) GetConfig(_ context.Context, _ *GetConfigRequest) (*GetConfigResponse, error) {
+	panic("sequencedTransport: GetConfig not implemented")
+}
+
+func (t *sequencedTransport) GetFields(_ context.Context, _ *GetFieldsRequest) (*GetFieldsResponse, error) {
+	panic("sequencedTransport: GetFields not implemented")
+}
+
+func (t *sequencedTransport) SetFields(_ context.Context, _ *SetFieldsRequest) (*SetFieldsResponse, error) {
+	panic("sequencedTransport: SetFields not implemented")
+}
+
+func (t *sequencedTransport) Subscribe(_ context.Context, _ *SubscribeRequest) (Subscription, error) {
+	panic("sequencedTransport: Subscribe not implemented")
+}
+
 // --- Typed getters ---
 
 func TestGetInt_Success(t *testing.T) {
