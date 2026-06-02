@@ -367,6 +367,15 @@ func (w *Watcher) loadSnapshot(ctx context.Context) (int32, error) {
 	return resp.Version, nil
 }
 
+// subscriptionLoop is the single background goroutine that owns the done channel.
+// It is started by [Watcher.Start] and runs until ctx is cancelled. [Watcher.Close]
+// reaps it by calling cancel() and then blocking on <-w.done, so the goroutine is
+// guaranteed to have exited before Close returns.
+//
+// On each reconnect the loop reloads a fresh snapshot before resubscribing. This
+// snapshot-then-subscribe ordering ensures that changes received during the disconnect
+// window are never missed: the snapshot captures the current state and the subscribe
+// cursor (snapshotVersion+1) replays any changes the server recorded after that point.
 func (w *Watcher) subscriptionLoop(ctx context.Context, snapshotVersion int32) {
 	defer close(w.done)
 
