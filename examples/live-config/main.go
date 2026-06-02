@@ -50,10 +50,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create watcher: %w", err)
 	}
-	rateLimit := w.Int("server.rate_limit", 100)
-	timeout := w.Duration("server.timeout", 30*time.Second)
-	maxConns := w.Int("server.max_connections", 50)
-	debug := w.Bool("app.debug", false)
+	rateLimit, _ := w.Int("server.rate_limit", 100)
+	timeout, _ := w.Duration("server.timeout", 30*time.Second)
+	maxConns, _ := w.Int("server.max_connections", 50)
+	debug, _ := w.Bool("app.debug", false)
 
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("start watcher: %w", err)

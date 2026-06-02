@@ -41,8 +41,8 @@ func TestExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create watcher: %v", err)
 	}
-	darkMode := w.Bool("features.dark_mode", false)
-	betaAccess := w.Bool("features.beta_access", false)
+	darkMode, _ := w.Bool("features.dark_mode", false)
+	betaAccess, _ := w.Bool("features.beta_access", false)
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("start watcher: %v", err)
