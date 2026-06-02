@@ -2,6 +2,8 @@ package validate
 
 import (
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -38,8 +40,7 @@ fields:
     type: time
 `
 
-func TestValidate_Valid(t *testing.T) {
-	config := `spec_version: "v1"
+const validConfigYAML = `spec_version: "v1"
 values:
   rate:
     value: 50.5
@@ -60,6 +61,9 @@ values:
   start_time:
     value: "2024-01-01T00:00:00Z"
 `
+
+func TestValidate_Valid(t *testing.T) {
+	config := validConfigYAML
 	result, err := Validate([]byte(schemaYAML), []byte(config))
 	if err != nil {
 		t.Fatal(err)
@@ -845,6 +849,98 @@ fields:
 				t.Errorf("expected no error for valid default, got: %v", err)
 			}
 		})
+	}
+}
+
+// --- Large-integer precision ---
+
+func TestValidate_Uint64NearMaxUint64(t *testing.T) {
+	// uint64(math.MaxUint64) converted to float64 loses precision.
+	// validateInteger must still accept it without a spurious "not integer" error.
+	schema := &SchemaFile{
+		SpecVersion: "v1",
+		Name:        "test",
+		Fields:      map[string]FieldDef{"n": {Type: "integer"}},
+	}
+	config := &ConfigFile{
+		SpecVersion: "v1",
+		Values:      map[string]ConfigValueDef{"n": {Value: uint64(math.MaxUint64)}},
+	}
+	result := ValidateParsed(schema, config)
+	if !result.IsValid() {
+		t.Errorf("expected valid for uint64(MaxUint64), got: %s", result.Error())
+	}
+}
+
+// --- Double-violation: malformed duration + enum ---
+
+func TestValidate_Duration_MalformedAndNotInEnum(t *testing.T) {
+	// A duration field with an enum constraint that also has a malformed value
+	// should produce two independent violations: one for invalid syntax, one for
+	// the enum mismatch. This exercises the fact that validateEnum runs after
+	// type-specific validation regardless of whether the type check passed.
+	schema := &SchemaFile{
+		SpecVersion: "v1",
+		Name:        "test",
+		Fields: map[string]FieldDef{
+			"timeout": {
+				Type:        "duration",
+				Constraints: &ConstraintsDef{Enum: []string{"1s", "5s", "30s"}},
+			},
+		},
+	}
+	config := &ConfigFile{
+		SpecVersion: "v1",
+		Values:      map[string]ConfigValueDef{"timeout": {Value: "bad-duration"}},
+	}
+	result := ValidateParsed(schema, config)
+	if result.IsValid() {
+		t.Fatal("expected violations, got valid")
+	}
+	if len(result.Violations) < 2 {
+		t.Errorf("expected at least 2 violations (syntax + enum), got %d: %s", len(result.Violations), result.Error())
+	}
+}
+
+// --- ValidateFiles ---
+
+func TestValidateFiles_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	schemaPath := filepath.Join(dir, "schema.yaml")
+	configPath := filepath.Join(dir, "config.yaml")
+
+	if err := os.WriteFile(schemaPath, []byte(schemaYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(validConfigYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ValidateFiles(schemaPath, configPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.IsValid() {
+		t.Errorf("expected valid, got: %s", result.Error())
+	}
+}
+
+func TestValidateFiles_MissingSchemaFile(t *testing.T) {
+	_, err := ValidateFiles("/nonexistent/schema.yaml", "/nonexistent/config.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing schema file, got nil")
+	}
+}
+
+func TestValidateFiles_MissingConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	schemaPath := filepath.Join(dir, "schema.yaml")
+	if err := os.WriteFile(schemaPath, []byte(schemaYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ValidateFiles(schemaPath, "/nonexistent/config.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing config file, got nil")
 	}
 }
 
