@@ -1773,3 +1773,48 @@ func TestSetField_WriteOnce_FirstWrite_Allowed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), resp.ConfigVersion.Version)
 }
+
+func TestSetFields_ReadOnly_Rejected(t *testing.T) {
+	svc, store, _, _ := setupWriteAttrService(t)
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "config.frozen", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "x"}}},
+		},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "read-only")
+}
+
+func TestSetFields_WriteOnce_SecondWrite_Rejected(t *testing.T) {
+	svc, store, _, _ := setupWriteAttrService(t)
+	ctx := superadminCtx()
+	existing := "initial"
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{Value: &existing}, nil)
+
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates: []*pb.FieldUpdate{
+			{FieldPath: "config.init", Value: &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "second"}}},
+		},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "write-once")
+}
