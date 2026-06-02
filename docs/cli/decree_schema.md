@@ -33,7 +33,6 @@ Create, list, publish, import/export, and delete configuration schemas. Schemas 
 ### SEE ALSO
 
 * [decree](decree.md)	 - OpenDecree CLI
-* [decree schema create](decree_schema_create.md)	 - Create a new schema from a YAML file
 * [decree schema delete](decree_schema_delete.md)	 - Delete a schema and all its versions (cascades to tenants)
 * [decree schema export](decree_schema_export.md)	 - Export a schema to YAML
 * [decree schema get](decree_schema_get.md)	 - Show a schema
