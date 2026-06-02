@@ -16,10 +16,6 @@ var validateCmd = &cobra.Command{
 		schemaFile, _ := cmd.Flags().GetString("schema")
 		configFile, _ := cmd.Flags().GetString("config")
 
-		if schemaFile == "" || configFile == "" {
-			return fmt.Errorf("both --schema and --config are required")
-		}
-
 		schemaData, err := os.ReadFile(schemaFile)
 		if err != nil {
 			return fmt.Errorf("read schema: %w", err)
@@ -54,6 +50,8 @@ var validateCmd = &cobra.Command{
 
 func init() {
 	validateCmd.Flags().String("schema", "", "schema YAML file")
+	_ = validateCmd.MarkFlagRequired("schema")
 	validateCmd.Flags().String("config", "", "config YAML file")
+	_ = validateCmd.MarkFlagRequired("config")
 	validateCmd.Flags().Bool("strict", false, "reject unknown fields not in schema")
 }

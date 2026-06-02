@@ -27,7 +27,7 @@ File mode (compare two local config YAML files):
 
 		var oldValues, newValues map[string]string
 
-		if oldFile != "" && newFile != "" {
+		if oldFile != "" {
 			// File mode: compare two local YAML files.
 			oldData, err := os.ReadFile(oldFile)
 			if err != nil {
@@ -39,8 +39,6 @@ File mode (compare two local config YAML files):
 			}
 			oldValues = parseConfigValues(oldData)
 			newValues = parseConfigValues(newData)
-		} else if oldFile != "" || newFile != "" {
-			return fmt.Errorf("both --old and --new are required for file mode")
 		} else {
 			// Server mode: compare two versions.
 			if len(args) != 3 {
@@ -112,4 +110,5 @@ func parseConfigValues(data []byte) map[string]string {
 func init() {
 	diffCmd.Flags().String("old", "", "old config YAML file (file mode)")
 	diffCmd.Flags().String("new", "", "new config YAML file (file mode)")
+	diffCmd.MarkFlagsRequiredTogether("old", "new")
 }
