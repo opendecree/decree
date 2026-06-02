@@ -1033,6 +1033,52 @@ func TestRun_ConfigOnly_SchemaMismatch_ErrorMessage(t *testing.T) {
 	}
 }
 
+func TestRun_ConfigOnly_ResolveTenant_ListSchemasError(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s1", 1, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			// Tenant not found under the resolved schema — triggers cross-schema check.
+			return nil, nil
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return nil, fmt.Errorf("rpc error")
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil || !strings.Contains(err.Error(), "rpc error") {
+		t.Fatalf("expected rpc error to be propagated, got %v", err)
+	}
+}
+
+func TestRun_ConfigOnly_ResolveTenant_ListTenantsError(t *testing.T) {
+	file := configOnlyFile(nil)
+	mock := &mockClient{
+		getLatestPublishedSchemaVersionFn: func(_ context.Context, _ string) (string, int32, error) {
+			return "s_payments", 1, nil
+		},
+		listSchemasFn: func(_ context.Context) ([]*adminclient.Schema, error) {
+			return []*adminclient.Schema{
+				{ID: "s_payments", Name: "payments"},
+				{ID: "s_billing", Name: "billing"},
+			}, nil
+		},
+		listTenantsFn: func(_ context.Context, schemaID string) ([]*adminclient.Tenant, error) {
+			if schemaID == "s_payments" {
+				// Tenant not found under resolved schema — triggers cross-schema check.
+				return nil, nil
+			}
+			return nil, fmt.Errorf("db down")
+		},
+	}
+	_, err := Run(context.Background(), mock, file)
+	if err == nil || !strings.Contains(err.Error(), "db down") {
+		t.Fatalf("expected db down error to be propagated, got %v", err)
+	}
+}
+
 func TestRun_ConfigOnly_WithLocks(t *testing.T) {
 	file := configOnlyFile(nil)
 	file.Locks = []LockDef{

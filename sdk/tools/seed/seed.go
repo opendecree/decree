@@ -368,16 +368,20 @@ func resolveTenant(ctx context.Context, client Client, file *File, result *Resul
 	// silently creating a duplicate.
 	if file.Schema.Name == "" {
 		allSchemas, err := client.ListSchemas(ctx)
-		if err == nil {
-			for _, s := range allSchemas {
-				if s.ID == result.SchemaID {
-					continue
-				}
-				others, _ := client.ListTenants(ctx, s.ID)
-				for _, t := range others {
-					if t.Name == file.Tenant.Name {
-						return fmt.Errorf("tenant %q is bound to schema %q, not %q", t.Name, s.Name, file.Tenant.Schema)
-					}
+		if err != nil {
+			return fmt.Errorf("listing schemas: %w", err)
+		}
+		for _, s := range allSchemas {
+			if s.ID == result.SchemaID {
+				continue
+			}
+			others, err := client.ListTenants(ctx, s.ID)
+			if err != nil {
+				return fmt.Errorf("listing tenants for schema %q: %w", s.Name, err)
+			}
+			for _, t := range others {
+				if t.Name == file.Tenant.Name {
+					return fmt.Errorf("tenant %q is bound to schema %q, not %q", t.Name, s.Name, file.Tenant.Schema)
 				}
 			}
 		}
