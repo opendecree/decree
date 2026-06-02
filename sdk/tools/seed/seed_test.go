@@ -1222,6 +1222,53 @@ func TestRun_ConfigReseed_ListConfigVersionsError(t *testing.T) {
 
 // --- Round-trip: SchemaDef.Info ---
 
+func TestRun_SchemaInfoPassedToImportSchema(t *testing.T) {
+	var capturedYAML []byte
+	file := &File{
+		SpecVersion: "v1",
+		Schema: SchemaDef{
+			Name:        "payments",
+			Description: "Payment configuration",
+			Info: &SchemaInfoDef{
+				Title:  "Payments Schema",
+				Author: "platform-team",
+				Contact: &SchemaContactDef{
+					Name:  "Platform Team",
+					Email: "platform@example.com",
+					URL:   "https://example.com/platform",
+				},
+				Labels: map[string]string{"env": "prod", "team": "payments"},
+			},
+			Fields: map[string]FieldDef{"rate": {Type: "number"}},
+		},
+		Tenant: TenantDef{Name: "org1"},
+	}
+	mock := &mockClient{
+		importSchemaFn: func(_ context.Context, yamlContent []byte, _ ...adminclient.ImportSchemaOption) (*adminclient.Schema, error) {
+			capturedYAML = yamlContent
+			return &adminclient.Schema{ID: "s1", Version: 1}, nil
+		},
+		listTenantsFn: func(_ context.Context, _ string) ([]*adminclient.Tenant, error) {
+			return nil, nil
+		},
+		createTenantFn: func(_ context.Context, _, _ string, _ int32) (*adminclient.Tenant, error) {
+			return &adminclient.Tenant{ID: "t1"}, nil
+		},
+	}
+	if _, err := Run(context.Background(), mock, file); err != nil {
+		t.Fatal(err)
+	}
+	if capturedYAML == nil {
+		t.Fatal("ImportSchema was not called")
+	}
+	yamlStr := string(capturedYAML)
+	for _, want := range []string{"Payments Schema", "platform-team", "platform@example.com", "https://example.com/platform", "env", "prod", "team", "payments"} {
+		if !strings.Contains(yamlStr, want) {
+			t.Errorf("schema YAML passed to ImportSchema missing %q:\n%s", want, yamlStr)
+		}
+	}
+}
+
 func TestMarshal_SchemaInfoRoundTrip(t *testing.T) {
 	f := &File{
 		SpecVersion: "v1",
