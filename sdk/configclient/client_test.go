@@ -782,6 +782,54 @@ func TestGetStringNullable_EmptyString(t *testing.T) {
 	}
 }
 
+func TestGetString_Null(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{FieldPath: "name", Value: nil}, nil)
+
+	val, err := client.GetString(ctx, "t1", "name")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("got %q, want empty string", val)
+	}
+}
+
+func TestGetFloat_Null(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{FieldPath: "rate", Value: nil}, nil)
+
+	val, err := client.GetFloat(ctx, "t1", "rate")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != 0 {
+		t.Errorf("got %v, want 0", val)
+	}
+}
+
+func TestGetBool_Null(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{FieldPath: "enabled", Value: nil}, nil)
+
+	val, err := client.GetBool(ctx, "t1", "enabled")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != false {
+		t.Errorf("got %v, want false", val)
+	}
+}
+
 // --- Typed setters ---
 
 func TestSetInt_Success(t *testing.T) {
