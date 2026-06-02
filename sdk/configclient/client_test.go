@@ -365,6 +365,117 @@ func TestAtVersion(t *testing.T) {
 	}
 }
 
+// --- Snapshot error paths ---
+
+var errGeneric = errors.New("boom")
+
+func TestSnapshot_ConstructorError(t *testing.T) {
+	tests := []struct {
+		name    string
+		tErr    error
+		wantErr error
+	}{
+		{name: "not found", tErr: ErrNotFound, wantErr: ErrNotFound},
+		{name: "permission denied", tErr: ErrPermissionDenied, wantErr: ErrPermissionDenied},
+		{name: "generic", tErr: errGeneric, wantErr: errGeneric},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := &mockTransport{}
+			client := New(tr)
+			tr.on("GetConfig", nil, (*GetConfigResponse)(nil), tc.tErr)
+			_, err := client.Snapshot(context.Background(), "t1")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestSnapshotGet_Error(t *testing.T) {
+	tests := []struct {
+		name    string
+		tErr    error
+		wantErr error
+	}{
+		{name: "not found", tErr: ErrNotFound, wantErr: ErrNotFound},
+		{name: "permission denied", tErr: ErrPermissionDenied, wantErr: ErrPermissionDenied},
+		{name: "generic", tErr: errGeneric, wantErr: errGeneric},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := &mockTransport{}
+			client := New(tr)
+			snap := client.AtVersion("t1", 2)
+			tr.on("GetField", nil, (*GetFieldResponse)(nil), tc.tErr)
+			_, err := snap.Get(context.Background(), "a.b")
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestSnapshotGetAll_Error(t *testing.T) {
+	tests := []struct {
+		name    string
+		tErr    error
+		wantErr error
+	}{
+		{name: "not found", tErr: ErrNotFound, wantErr: ErrNotFound},
+		{name: "permission denied", tErr: ErrPermissionDenied, wantErr: ErrPermissionDenied},
+		{name: "generic", tErr: errGeneric, wantErr: errGeneric},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := &mockTransport{}
+			client := New(tr)
+			snap := client.AtVersion("t1", 2)
+			tr.on("GetConfig", nil, (*GetConfigResponse)(nil), tc.tErr)
+			_, err := snap.GetAll(context.Background())
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestSnapshotGetFields_Error(t *testing.T) {
+	tests := []struct {
+		name    string
+		tErr    error
+		wantErr error
+	}{
+		{name: "not found", tErr: ErrNotFound, wantErr: ErrNotFound},
+		{name: "permission denied", tErr: ErrPermissionDenied, wantErr: ErrPermissionDenied},
+		{name: "generic", tErr: errGeneric, wantErr: errGeneric},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := &mockTransport{}
+			client := New(tr)
+			snap := client.AtVersion("t1", 2)
+			tr.on("GetFields", nil, (*GetFieldsResponse)(nil), tc.tErr)
+			_, err := snap.GetFields(context.Background(), []string{"a.b"})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("got %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 // --- Snapshot retry ---
 
 func TestSnapshot_RetriedOnRetryableError(t *testing.T) {
