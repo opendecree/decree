@@ -172,6 +172,12 @@ func NewGateway(ctx context.Context, httpPort, grpcAddr string, opts ...GatewayO
 		handler = corsMiddleware(o.corsOrigins)(handler)
 	}
 
+	// Streaming routes (e.g. /v1/tenants/{id}/config:subscribe) must not be
+	// terminated by the server-level WriteTimeout. Wrap the handler so that
+	// those requests clear their write deadline immediately after headers are
+	// received, while all other routes keep the 60 s timeout enforced below.
+	handler = clearWriteDeadlineMiddleware(handler)
+
 	httpServer := &http.Server{
 		Addr:              listenerAddr,
 		Handler:           handler,
@@ -284,6 +290,33 @@ func requireAuth(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// clearWriteDeadlineMiddleware clears the HTTP write deadline for streaming
+// routes so that the server-level WriteTimeout does not terminate long-lived
+// SSE / gRPC-gateway server-stream responses. Non-streaming routes are
+// unaffected: their write deadline is already set by net/http before the
+// handler is called and remains in place.
+//
+// Streaming routes are identified by paths that end with ":subscribe"
+// (the gRPC-gateway URL verb convention, e.g. /v1/tenants/{id}/config:subscribe).
+func clearWriteDeadlineMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isStreamingPath(r.URL.Path) {
+			// ResponseController wraps the underlying net.Conn so we can call
+			// SetWriteDeadline. A zero time value disables the deadline.
+			rc := http.NewResponseController(w)
+			_ = rc.SetWriteDeadline(time.Time{})
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isStreamingPath reports whether path corresponds to a server-streaming RPC.
+// Currently the only streaming endpoint exposed via the REST gateway is the
+// Subscribe action, which uses the gRPC-gateway "verb" suffix ":subscribe".
+func isStreamingPath(path string) bool {
+	return strings.HasSuffix(path, ":subscribe")
 }
 
 // spaHandler serves an embedded filesystem for a single-page application.

@@ -448,3 +448,63 @@ func TestIsLoopbackAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestIsStreamingPath(t *testing.T) {
+	tests := []struct {
+		path       string
+		wantStream bool
+	}{
+		{"/v1/tenants/abc/config:subscribe", true},
+		{"/v1/tenants/00000000-0000-0000-0000-000000000001/config:subscribe", true},
+		{"/v1/tenants/abc/config", false},
+		{"/v1/tenants/abc/config:get", false},
+		{"/v1/schemas", false},
+		{"/docs", false},
+		{"", false},
+		// Must not match a path that merely contains ":subscribe" mid-segment.
+		{"/v1/config:subscribe/extra", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			assert.Equal(t, tt.wantStream, isStreamingPath(tt.path))
+		})
+	}
+}
+
+// clearWriteDeadlineMiddleware_NonStreamingPassthrough verifies that non-streaming
+// routes pass through without modification.
+func TestClearWriteDeadlineMiddleware_NonStreamingPassthrough(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := clearWriteDeadlineMiddleware(inner)
+	req := httptest.NewRequest("GET", "/v1/tenants/abc/config", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	assert.True(t, called)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestClearWriteDeadlineMiddleware_StreamingPath verifies that streaming routes
+// clear the write deadline (SetWriteDeadline is called on the ResponseController).
+// httptest.ResponseRecorder does not implement SetWriteDeadline, so the error is
+// silently ignored by the middleware — the key check is that the inner handler
+// is still called and the response completes.
+func TestClearWriteDeadlineMiddleware_StreamingPath(t *testing.T) {
+	called := false
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+	h := clearWriteDeadlineMiddleware(inner)
+	req := httptest.NewRequest("GET", "/v1/tenants/abc/config:subscribe", nil)
+	w := httptest.NewRecorder()
+	// The middleware calls rc.SetWriteDeadline on the recorder; ResponseRecorder
+	// does not implement net.Conn so the call returns an unsupported error that is
+	// intentionally ignored. The important invariant is that the inner handler runs.
+	h.ServeHTTP(w, req)
+	assert.True(t, called, "inner handler must still be called for streaming paths")
+	assert.Equal(t, http.StatusOK, w.Code)
+}
