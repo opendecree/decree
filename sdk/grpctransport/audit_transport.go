@@ -15,7 +15,7 @@ import (
 // AuditTransport implements [adminclient.AuditTransport] using gRPC.
 type AuditTransport struct {
 	rpc  pb.AuditServiceClient
-	auth authConfig
+	auth authApplier
 }
 
 // Compile-time check.
@@ -30,15 +30,12 @@ func NewAuditTransport(conn grpc.ClientConnInterface, opts ...Option) (*AuditTra
 	}
 	return &AuditTransport{
 		rpc:  pb.NewAuditServiceClient(conn),
-		auth: cfg.auth,
+		auth: newAuthApplier(cfg.auth),
 	}, nil
 }
 
 func (t *AuditTransport) QueryWriteLog(ctx context.Context, req *adminclient.QueryWriteLogRequest) (*adminclient.QueryWriteLogResponse, error) {
-	ctx, callOpts, err := applyAuth(ctx, t.auth)
-	if err != nil {
-		return nil, err
-	}
+	ctx, callOpts := t.auth.apply(ctx)
 	protoReq := &pb.QueryWriteLogRequest{
 		TenantId:  req.TenantID,
 		Actor:     req.Actor,
@@ -63,10 +60,7 @@ func (t *AuditTransport) QueryWriteLog(ctx context.Context, req *adminclient.Que
 }
 
 func (t *AuditTransport) GetFieldUsage(ctx context.Context, tenantID, fieldPath string, start, end *time.Time) (*adminclient.UsageStats, error) {
-	ctx, callOpts, err := applyAuth(ctx, t.auth)
-	if err != nil {
-		return nil, err
-	}
+	ctx, callOpts := t.auth.apply(ctx)
 	resp, err := t.rpc.GetFieldUsage(ctx, &pb.GetFieldUsageRequest{
 		TenantId:  tenantID,
 		FieldPath: fieldPath,
@@ -80,10 +74,7 @@ func (t *AuditTransport) GetFieldUsage(ctx context.Context, tenantID, fieldPath 
 }
 
 func (t *AuditTransport) GetTenantUsage(ctx context.Context, tenantID string, start, end *time.Time) ([]*adminclient.UsageStats, error) {
-	ctx, callOpts, err := applyAuth(ctx, t.auth)
-	if err != nil {
-		return nil, err
-	}
+	ctx, callOpts := t.auth.apply(ctx)
 	resp, err := t.rpc.GetTenantUsage(ctx, &pb.GetTenantUsageRequest{
 		TenantId:  tenantID,
 		StartTime: timeToProto(start),
@@ -100,10 +91,7 @@ func (t *AuditTransport) GetTenantUsage(ctx context.Context, tenantID string, st
 }
 
 func (t *AuditTransport) GetUnusedFields(ctx context.Context, tenantID string, since time.Time) ([]string, error) {
-	ctx, callOpts, err := applyAuth(ctx, t.auth)
-	if err != nil {
-		return nil, err
-	}
+	ctx, callOpts := t.auth.apply(ctx)
 	resp, err := t.rpc.GetUnusedFields(ctx, &pb.GetUnusedFieldsRequest{
 		TenantId: tenantID,
 		Since:    timestamppb.New(since),

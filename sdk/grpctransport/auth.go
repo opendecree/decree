@@ -167,6 +167,47 @@ func applyAuth(ctx context.Context, auth authConfig) (context.Context, []grpc.Ca
 	}
 }
 
+// authApplier holds pre-computed auth state so that per-RPC credential
+// objects and metadata key-value pairs are built once at construction time
+// rather than on every method call.
+type authApplier struct {
+	mdPairs  []string          // pre-computed metadata key-value pairs (metadata-header auth)
+	callOpts []grpc.CallOption // pre-computed PerRPCCredentials option (bearer/token-source auth)
+}
+
+// newAuthApplier converts an authConfig into a pre-computed authApplier.
+func newAuthApplier(auth authConfig) authApplier {
+	switch {
+	case auth.tokenSource != nil:
+		creds := tokenSourceCreds{source: auth.tokenSource}
+		return authApplier{callOpts: []grpc.CallOption{grpc.PerRPCCredentials(creds)}}
+	case auth.bearerToken != "":
+		creds := bearerToken{token: auth.bearerToken}
+		return authApplier{callOpts: []grpc.CallOption{grpc.PerRPCCredentials(creds)}}
+	default:
+		var pairs []string
+		if auth.subject != "" {
+			pairs = append(pairs, "x-subject", auth.subject)
+		}
+		if auth.role != "" {
+			pairs = append(pairs, "x-role", auth.role)
+		}
+		if auth.tenantID != "" {
+			pairs = append(pairs, "x-tenant-id", auth.tenantID)
+		}
+		return authApplier{mdPairs: pairs}
+	}
+}
+
+// apply attaches the pre-computed auth to the outgoing context and returns
+// any required call options. It never returns an error.
+func (a authApplier) apply(ctx context.Context) (context.Context, []grpc.CallOption) {
+	if len(a.mdPairs) > 0 {
+		ctx = metadata.AppendToOutgoingContext(ctx, a.mdPairs...)
+	}
+	return ctx, a.callOpts
+}
+
 // Compile-time check: both types satisfy credentials.PerRPCCredentials.
 var (
 	_ credentials.PerRPCCredentials = bearerToken{}
