@@ -56,26 +56,26 @@ func (c *Client) ListTenants(ctx context.Context, schemaID string) ([]*Tenant, e
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return retry(ctx, c, func(ctx context.Context) ([]*Tenant, error) {
-		var schemaFilter *string
-		if schemaID != "" {
-			schemaFilter = &schemaID
+	var schemaFilter *string
+	if schemaID != "" {
+		schemaFilter = &schemaID
+	}
+	var all []*Tenant
+	pageToken := ""
+	for {
+		resp, err := retry(ctx, c, func(ctx context.Context) (*ListTenantsResponse, error) {
+			return c.schema.ListTenants(ctx, schemaFilter, 100, pageToken)
+		})
+		if err != nil {
+			return nil, err
 		}
-		var all []*Tenant
-		pageToken := ""
-		for {
-			resp, err := c.schema.ListTenants(ctx, schemaFilter, 100, pageToken)
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, resp.Tenants...)
-			if resp.NextPageToken == "" {
-				break
-			}
-			pageToken = resp.NextPageToken
+		all = append(all, resp.Tenants...)
+		if resp.NextPageToken == "" {
+			break
 		}
-		return all, nil
-	})
+		pageToken = resp.NextPageToken
+	}
+	return all, nil
 }
 
 // UpdateTenantName updates a tenant's name.

@@ -61,22 +61,22 @@ func (c *Client) ListSchemas(ctx context.Context) ([]*Schema, error) {
 	if c.schema == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return retry(ctx, c, func(ctx context.Context) ([]*Schema, error) {
-		var all []*Schema
-		pageToken := ""
-		for {
-			resp, err := c.schema.ListSchemas(ctx, 100, pageToken)
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, resp.Schemas...)
-			if resp.NextPageToken == "" {
-				break
-			}
-			pageToken = resp.NextPageToken
+	var all []*Schema
+	pageToken := ""
+	for {
+		resp, err := retry(ctx, c, func(ctx context.Context) (*ListSchemasResponse, error) {
+			return c.schema.ListSchemas(ctx, 100, pageToken)
+		})
+		if err != nil {
+			return nil, err
 		}
-		return all, nil
-	})
+		all = append(all, resp.Schemas...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+	return all, nil
 }
 
 // UpdateSchema creates a new draft version by merging field changes with the latest version.

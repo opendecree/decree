@@ -43,29 +43,30 @@ func (c *Client) QueryWriteLog(ctx context.Context, filters ...AuditFilter) ([]*
 	if c.audit == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return retry(ctx, c, func(ctx context.Context) ([]*AuditEntry, error) {
-		var all []*AuditEntry
-		pageToken := ""
-		for {
+	var all []*AuditEntry
+	pageToken := ""
+	for {
+		token := pageToken
+		resp, err := retry(ctx, c, func(ctx context.Context) (*QueryWriteLogResponse, error) {
 			req := &QueryWriteLogRequest{
 				PageSize:  100,
-				PageToken: pageToken,
+				PageToken: token,
 			}
 			for _, f := range filters {
 				f(req)
 			}
-			resp, err := c.audit.QueryWriteLog(ctx, req)
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, resp.Entries...)
-			if resp.NextPageToken == "" {
-				break
-			}
-			pageToken = resp.NextPageToken
+			return c.audit.QueryWriteLog(ctx, req)
+		})
+		if err != nil {
+			return nil, err
 		}
-		return all, nil
-	})
+		all = append(all, resp.Entries...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+	return all, nil
 }
 
 // AuditIterator is a streaming handle returned by [Client.QueryWriteLogIter].
