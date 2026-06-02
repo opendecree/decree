@@ -3,6 +3,8 @@ package adminclient
 import (
 	"errors"
 	"fmt"
+
+	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
 
 var (
@@ -45,15 +47,8 @@ func InvalidArgumentError(message string) error {
 // RetryableError wraps an error to indicate the operation may succeed on retry.
 // Transport implementations should wrap transient errors (e.g. Unavailable,
 // DeadlineExceeded, ResourceExhausted) in RetryableError.
-type RetryableError struct {
-	Err error
-}
-
-func (e *RetryableError) Error() string { return e.Err.Error() }
-func (e *RetryableError) Unwrap() error { return e.Err }
+// It is an alias for the shared [sdkretry.RetryableError] type.
+type RetryableError = sdkretry.RetryableError
 
 // IsRetryable reports whether err is marked as retryable by the transport.
-func IsRetryable(err error) bool {
-	var re *RetryableError
-	return errors.As(err, &re)
-}
+var IsRetryable = sdkretry.IsRetryable

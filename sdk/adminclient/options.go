@@ -41,7 +41,7 @@ func WithServerTransport(t ServerTransport) Option {
 // By default, only errors wrapped in [RetryableError] by the transport are retried.
 func WithRetry(cfg RetryConfig) Option {
 	return func(o *clientOptions) {
-		o.retry = cfg.withDefaults()
+		o.retry = cfg.WithDefaults()
 		o.retryEnabled = true
 	}
 }

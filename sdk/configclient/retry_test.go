@@ -135,7 +135,7 @@ func TestRetry_RespectsContextCancellation(t *testing.T) {
 }
 
 func TestRetryConfig_Defaults(t *testing.T) {
-	cfg := RetryConfig{}.withDefaults()
+	cfg := RetryConfig{}.WithDefaults()
 	if cfg.MaxAttempts != 3 {
 		t.Errorf("got %v, want %v", cfg.MaxAttempts, 3)
 	}
@@ -155,7 +155,7 @@ func TestRetryConfig_PreservesCustomValues(t *testing.T) {
 		MaxAttempts:    5,
 		InitialBackoff: 200 * time.Millisecond,
 		MaxBackoff:     10 * time.Second,
-	}.withDefaults()
+	}.WithDefaults()
 	if cfg.MaxAttempts != 5 {
 		t.Errorf("got %v, want %v", cfg.MaxAttempts, 5)
 	}
