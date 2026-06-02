@@ -40,7 +40,7 @@ var validateCmd = &cobra.Command{
 		}
 
 		if result.IsValid() {
-			fmt.Println("Valid.")
+			printStatus(cmd, "Valid.\n")
 			return nil
 		}
 

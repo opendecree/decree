@@ -83,7 +83,7 @@ File mode (compare two local config YAML files):
 
 		result := diff.Compare(oldValues, newValues)
 		if !result.HasChanges() {
-			fmt.Println("No changes.")
+			printStatus(cmd, "No changes.\n")
 			return nil
 		}
 

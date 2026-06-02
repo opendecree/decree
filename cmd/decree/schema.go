@@ -79,7 +79,7 @@ var schemaGetCmd = &cobra.Command{
 		for _, f := range s.Fields {
 			rows = append(rows, []string{f.Path, string(f.Type), strconv.FormatBool(f.Nullable), strconv.FormatBool(f.Deprecated), f.Description})
 		}
-		fmt.Printf("Schema: %s (%s) v%d [published=%v]\n\n", s.Name, s.ID, s.Version, s.Published)
+		printStatus(cmd, "Schema: %s (%s) v%d [published=%v]\n\n", s.Name, s.ID, s.Version, s.Published)
 		return printOutput(rows)
 	},
 }
@@ -133,7 +133,7 @@ var schemaPublishCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Published %s v%d\n", s.Name, s.Version)
+		printStatus(cmd, "Published %s v%d\n", s.Name, s.Version)
 		return nil
 	},
 }
@@ -156,7 +156,7 @@ var schemaDeleteCmd = &cobra.Command{
 		if err := admin.DeleteSchema(cmd.Context(), args[0]); err != nil {
 			return err
 		}
-		fmt.Println("Deleted.")
+		printStatus(cmd, "Deleted.\n")
 		return nil
 	},
 }
@@ -218,9 +218,9 @@ var schemaImportCmd = &cobra.Command{
 			return err
 		}
 		if s.Published {
-			fmt.Printf("Imported and published %s v%d\n", s.Name, s.Version)
+			printStatus(cmd, "Imported and published %s v%d\n", s.Name, s.Version)
 		} else {
-			fmt.Printf("Imported %s v%d (draft)\n", s.Name, s.Version)
+			printStatus(cmd, "Imported %s v%d (draft)\n", s.Name, s.Version)
 		}
 		return nil
 	},

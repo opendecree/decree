@@ -463,6 +463,24 @@ func TestIsolatedCommand_FreshState(t *testing.T) {
 	}
 }
 
+// --- Status message routing ---
+
+func TestPrintStatus_WritesToStderrNotStdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+
+	printStatus(cmd, "Deleted.\n")
+
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout, got %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "Deleted.") {
+		t.Errorf("expected stderr to contain %q, got %q", "Deleted.", stderr.String())
+	}
+}
+
 // --- Completions ---
 
 func TestCompletionScripts(t *testing.T) {

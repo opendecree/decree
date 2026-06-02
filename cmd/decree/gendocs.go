@@ -48,7 +48,7 @@ var genDocsCmd = &cobra.Command{
 			return fmt.Errorf("generate docs: %w", err)
 		}
 
-		fmt.Printf("CLI docs generated in %s/\n", outDir)
+		printStatus(cmd, "CLI docs generated in %s/\n", outDir)
 		return nil
 	},
 }
@@ -81,7 +81,7 @@ var genManCmd = &cobra.Command{
 			return fmt.Errorf("generate man pages: %w", err)
 		}
 
-		fmt.Printf("Man pages generated in %s/\n", outDir)
+		printStatus(cmd, "Man pages generated in %s/\n", outDir)
 		return nil
 	},
 }

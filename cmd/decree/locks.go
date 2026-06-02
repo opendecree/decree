@@ -30,7 +30,7 @@ var lockSetCmd = &cobra.Command{
 		if err := admin.LockField(cmd.Context(), args[0], args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Locked %s\n", args[1])
+		printStatus(cmd, "Locked %s\n", args[1])
 		return nil
 	},
 }
@@ -53,7 +53,7 @@ var lockRemoveCmd = &cobra.Command{
 		if err := admin.UnlockField(cmd.Context(), args[0], args[1]); err != nil {
 			return err
 		}
-		fmt.Printf("Unlocked %s\n", args[1])
+		printStatus(cmd, "Unlocked %s\n", args[1])
 		return nil
 	},
 }
@@ -78,7 +78,7 @@ var lockListCmd = &cobra.Command{
 			return err
 		}
 		if len(locks) == 0 {
-			fmt.Println("No locks.")
+			printStatus(cmd, "No locks.\n")
 			return nil
 		}
 		rows := tableRows([]string{"FIELD_PATH", "LOCKED_VALUES"})
