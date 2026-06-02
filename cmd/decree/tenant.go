@@ -115,7 +115,7 @@ var tenantDeleteCmd = &cobra.Command{
 		if err := admin.DeleteTenant(cmd.Context(), args[0]); err != nil {
 			return err
 		}
-		fmt.Println("Deleted.")
+		printStatus(cmd, "Deleted.\n")
 		return nil
 	},
 }

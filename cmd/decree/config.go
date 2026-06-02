@@ -103,7 +103,7 @@ Values are parsed according to the schema's field type:
 		if err := runConfigSet(cmd.Context(), admin, cfg, args[0], args[1], args[2]); err != nil {
 			return err
 		}
-		fmt.Println("Set.")
+		printStatus(cmd, "Set.\n")
 		return nil
 	},
 }
@@ -161,7 +161,7 @@ var configSetManyCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Set %d values.\n", n)
+		printStatus(cmd, "Set %d values.\n", n)
 		return nil
 	},
 }
@@ -248,7 +248,7 @@ var configRollbackCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Rolled back to v%d → created v%d\n", version, v.Version)
+		printStatus(cmd, "Rolled back to v%d → created v%d\n", version, v.Version)
 		return nil
 	},
 }
@@ -319,7 +319,7 @@ var configImportCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Imported → created v%d\n", v.Version)
+		printStatus(cmd, "Imported → created v%d\n", v.Version)
 		return nil
 	},
 }

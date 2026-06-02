@@ -144,7 +144,7 @@ var auditUnusedCmd = &cobra.Command{
 			return err
 		}
 		if len(fields) == 0 {
-			fmt.Println("No unused fields.")
+			printStatus(cmd, "No unused fields.\n")
 			return nil
 		}
 		rows := tableRows([]string{"UNUSED_FIELD"})

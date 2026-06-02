@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
@@ -61,6 +62,12 @@ func printTable(w io.Writer, data any) error {
 		}
 	}
 	return tw.Flush()
+}
+
+// printStatus writes a human-readable status message to cmd.ErrOrStderr() so
+// that it never pollutes the machine-readable stdout stream.
+func printStatus(cmd *cobra.Command, format string, args ...any) {
+	fmt.Fprintf(cmd.ErrOrStderr(), format, args...)
 }
 
 // tableRows is a helper to build table data with headers.
