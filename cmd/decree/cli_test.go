@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/opendecree/decree/sdk/adminclient"
 )
 
@@ -151,7 +153,19 @@ func TestPrintVerifyResult_TablePrintedBeforeError(t *testing.T) {
 
 // --- Argument validation ---
 
+// resetRootCmd restores rootCmd I/O and args after a test so that global state
+// mutations do not leak between tests.
+func resetRootCmd(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() {
+		rootCmd.SetArgs(nil)
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+	})
+}
+
 func TestSchemaGet_RequiresSchemaID(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"schema", "get"})
 	err := rootCmd.Execute()
 	if err == nil {
@@ -163,6 +177,7 @@ func TestSchemaGet_RequiresSchemaID(t *testing.T) {
 }
 
 func TestConfigGet_RequiresTenantAndField(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"config", "get", "only-one-arg"})
 	err := rootCmd.Execute()
 	if err == nil {
@@ -174,6 +189,7 @@ func TestConfigGet_RequiresTenantAndField(t *testing.T) {
 }
 
 func TestConfigSet_RequiresThreeArgs(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"config", "set", "tenant", "field"})
 	err := rootCmd.Execute()
 	if err == nil {
@@ -185,6 +201,7 @@ func TestConfigSet_RequiresThreeArgs(t *testing.T) {
 }
 
 func TestWatch_RequiresTenantID(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"watch"})
 	err := rootCmd.Execute()
 	if err == nil {
@@ -305,6 +322,7 @@ func TestRootCmd_SilenceErrors(t *testing.T) {
 // TestValidateCmd_MissingFlagsReturnsError verifies that validateCmd.RunE
 // returns an error (rather than calling os.Exit) when required flags are absent.
 func TestValidateCmd_MissingFlagsReturnsError(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"validate"})
 	err := rootCmd.Execute()
 	if err == nil {
@@ -318,10 +336,130 @@ func TestValidateCmd_MissingFlagsReturnsError(t *testing.T) {
 // TestValidateCmd_InvalidSchemaFileReturnsError verifies that a missing schema
 // file returns an error from RunE instead of calling os.Exit.
 func TestValidateCmd_InvalidSchemaFileReturnsError(t *testing.T) {
+	resetRootCmd(t)
 	rootCmd.SetArgs([]string{"validate", "--schema", "/nonexistent/schema.yaml", "--config", "/nonexistent/config.yaml"})
 	err := rootCmd.Execute()
 	if err == nil {
 		t.Fatal("expected error for missing schema file, got nil")
+	}
+}
+
+// --- Exit codes and stderr/stdout routing ---
+
+// TestArgError_GoesToStderr verifies that a cobra argument-validation error
+// (wrong number of positional args) is returned by Execute and that nothing
+// is written to stdout.
+func TestArgError_GoesToStderr(t *testing.T) {
+	resetRootCmd(t)
+	var stdout, stderr bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs([]string{"schema", "get"}) // requires exactly 1 arg
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout on argument error, got: %q", stdout.String())
+	}
+}
+
+// TestArgError_ReturnsNonNilError verifies that Execute returns a non-nil
+// error (i.e. the exit path is via returned error, not os.Exit).
+func TestArgError_ReturnsNonNilError(t *testing.T) {
+	resetRootCmd(t)
+	var stdout, stderr bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs([]string{"config", "get", "only-one-arg"}) // requires 2 args
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected non-nil error for wrong arg count, got nil")
+	}
+}
+
+// TestSchemaCreate_MissingFile_ErrorNotOnStdout verifies that a RunE error
+// (missing required flag) is returned and stdout stays empty.
+func TestSchemaCreate_MissingFile_ErrorNotOnStdout(t *testing.T) {
+	resetRootCmd(t)
+	var stdout, stderr bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs([]string{"schema", "create"}) // --file is required
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing --file, got nil")
+	}
+	if !strings.Contains(err.Error(), "--file") {
+		t.Errorf("expected error to mention --file, got %q", err.Error())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout on flag error, got: %q", stdout.String())
+	}
+}
+
+// TestTenantCreate_MissingFlags_ReturnsError verifies that tenant create
+// without required flags returns an error rather than calling os.Exit.
+func TestTenantCreate_MissingFlags_ReturnsError(t *testing.T) {
+	resetRootCmd(t)
+	var stdout, stderr bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs([]string{"tenant", "create"}) // --name, --schema, --schema-version required
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing tenant create flags, got nil")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout on flag error, got: %q", stdout.String())
+	}
+}
+
+// TestValidateCmd_MissingFlags_StdoutEmpty verifies that a validate error
+// (missing flags) does not pollute stdout.
+func TestValidateCmd_MissingFlags_StdoutEmpty(t *testing.T) {
+	resetRootCmd(t)
+	var stdout, stderr bytes.Buffer
+	rootCmd.SetOut(&stdout)
+	rootCmd.SetErr(&stderr)
+	rootCmd.SetArgs([]string{"validate"})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing --schema / --config, got nil")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout on validation flag error, got: %q", stdout.String())
+	}
+}
+
+// TestIsolatedCommand_FreshState verifies that creating a fresh cobra.Command
+// (not the shared rootCmd) keeps tests fully isolated from global flag state.
+func TestIsolatedCommand_FreshState(t *testing.T) {
+	// Build a minimal isolated command tree to confirm the isolation pattern works.
+	parent := &cobra.Command{Use: "root", SilenceUsage: true, SilenceErrors: true}
+	child := &cobra.Command{
+		Use:  "sub",
+		Args: cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, _ []string) error { return nil },
+	}
+	parent.AddCommand(child)
+
+	var stdout, stderr bytes.Buffer
+	parent.SetOut(&stdout)
+	parent.SetErr(&stderr)
+	parent.SetArgs([]string{"sub"}) // missing required arg
+
+	err := parent.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing positional arg, got nil")
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("expected empty stdout, got: %q", stdout.String())
 	}
 }
 
