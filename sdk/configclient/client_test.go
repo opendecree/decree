@@ -828,7 +828,25 @@ func TestUpdate_ChecksumMismatchExhaustsRetries(t *testing.T) {
 	}
 }
 
-func TestUpdate_UpdateFnError(t *testing.T) {
+func TestUpdate_ChecksumMismatch(t *testing.T) {
+	st := &sequencedTransport{
+		getField: func(_ context.Context, req *GetFieldRequest) (*GetFieldResponse, error) {
+			return &GetFieldResponse{FieldPath: req.FieldPath, Value: StringVal("v"), Checksum: "chk"}, nil
+		},
+		setField: func(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+			return nil, ErrChecksumMismatch
+		},
+	}
+	client := New(st)
+	err := client.Update(context.Background(), "t1", "field", func(current string) (string, error) {
+		return current + "!", nil
+	})
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Fatalf("got error %v, want ErrChecksumMismatch", err)
+	}
+}
+
+func TestUpdate_FnError(t *testing.T) {
 	fnErr := errors.New("fn failed")
 	calls := 0
 	tr := &sequencedTransport{
