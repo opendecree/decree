@@ -322,6 +322,140 @@ func TestAtVersion(t *testing.T) {
 	}
 }
 
+// --- Snapshot retry ---
+
+func TestSnapshot_RetriedOnRetryableError(t *testing.T) {
+	calls := 0
+	tr := &mockTransport{}
+	client := New(tr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+
+	tr.on("GetConfig", func(args ...any) bool {
+		calls++
+		r := args[0].(*GetConfigRequest)
+		return r.Version == nil
+	}, &GetConfigResponse{TenantID: "t1", Version: 7}, nil)
+
+	snap, err := client.Snapshot(ctx, "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if snap.Version() != 7 {
+		t.Errorf("got %v, want %v", snap.Version(), int32(7))
+	}
+}
+
+func TestSnapshotGet_RetriedOnRetryableError(t *testing.T) {
+	ctr := &countingReadTransport{failUntil: 2}
+	client := New(ctr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+	snap := client.AtVersion("t1", 4)
+
+	val, err := snap.Get(ctx, "feature.x")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "retried-ok" {
+		t.Errorf("got %v, want retried-ok", val)
+	}
+	if ctr.calls != 3 {
+		t.Errorf("expected 3 calls (2 failures + 1 success), got %d", ctr.calls)
+	}
+}
+
+func TestSnapshotGetAll_RetriedOnRetryableError(t *testing.T) {
+	ctr := &countingReadTransport{failUntil: 2}
+	client := New(ctr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+	snap := client.AtVersion("t1", 2)
+
+	vals, err := snap.GetAll(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vals["field"] != "retried-ok" {
+		t.Errorf("got %v, want retried-ok", vals["field"])
+	}
+	if ctr.calls != 3 {
+		t.Errorf("expected 3 calls, got %d", ctr.calls)
+	}
+}
+
+func TestSnapshotGetFields_RetriedOnRetryableError(t *testing.T) {
+	ctr := &countingReadTransport{failUntil: 2}
+	client := New(ctr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+	ctx := context.Background()
+	snap := client.AtVersion("t1", 2)
+
+	vals, err := snap.GetFields(ctx, []string{"field"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if vals["field"] != "retried-ok" {
+		t.Errorf("got %v, want retried-ok", vals["field"])
+	}
+	if ctr.calls != 3 {
+		t.Errorf("expected 3 calls, got %d", ctr.calls)
+	}
+}
+
+// countingReadTransport fails the first N read calls with RetryableError and succeeds thereafter.
+type countingReadTransport struct {
+	mockTransport
+	failUntil int
+	calls     int
+}
+
+func (t *countingReadTransport) GetField(_ context.Context, _ *GetFieldRequest) (*GetFieldResponse, error) {
+	t.calls++
+	if t.calls <= t.failUntil {
+		return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+	}
+	return &GetFieldResponse{FieldPath: "feature.x", Value: StringVal("retried-ok")}, nil
+}
+
+func (t *countingReadTransport) GetConfig(_ context.Context, _ *GetConfigRequest) (*GetConfigResponse, error) {
+	t.calls++
+	if t.calls <= t.failUntil {
+		return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+	}
+	return &GetConfigResponse{
+		TenantID: "t1",
+		Version:  2,
+		Values:   []ConfigValue{{FieldPath: "field", Value: StringVal("retried-ok")}},
+	}, nil
+}
+
+func (t *countingReadTransport) GetFields(_ context.Context, _ *GetFieldsRequest) (*GetFieldsResponse, error) {
+	t.calls++
+	if t.calls <= t.failUntil {
+		return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+	}
+	return &GetFieldsResponse{
+		Values: []ConfigValue{{FieldPath: "field", Value: StringVal("retried-ok")}},
+	}, nil
+}
+
 // --- GetForUpdate + LockedValue.Set ---
 
 func TestGetForUpdate_ThenSet(t *testing.T) {
