@@ -37,9 +37,11 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "decree",
-	Short: "OpenDecree CLI",
-	Long:  "Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.",
+	Use:           "decree",
+	Short:         "OpenDecree CLI",
+	Long:          "Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.",
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		if !flagWait {
 			return nil

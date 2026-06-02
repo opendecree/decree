@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"time"
 
@@ -15,11 +16,14 @@ import (
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
-// normalizeStreamErr maps a streaming RPC error to nil when the error is caused
-// by context cancellation (Ctrl-C / SIGTERM), so the CLI exits with code 0.
-// All other errors are returned unchanged.
+// normalizeStreamErr maps a streaming RPC error to nil when the error signals a
+// clean stream end: context cancellation (Ctrl-C / SIGTERM) or io.EOF (graceful
+// server shutdown). All other errors are returned unchanged.
 func normalizeStreamErr(err error) error {
 	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	if errors.Is(err, io.EOF) {
 		return nil
 	}
 	if s, ok := status.FromError(err); ok && s.Code() == codes.Canceled {

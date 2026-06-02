@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"google.golang.org/grpc/codes"
@@ -58,5 +59,14 @@ func TestWatchStream_OtherErrorPreserved(t *testing.T) {
 	}
 	if !errors.Is(err, rpcErr) {
 		t.Errorf("expected original error preserved, got %v", err)
+	}
+}
+
+// TestWatchStream_EOFReturnsNil verifies that io.EOF (graceful server shutdown)
+// is treated as a clean stream end and mapped to nil — exit 0.
+func TestWatchStream_EOFReturnsNil(t *testing.T) {
+	err := normalizeStreamErr(io.EOF)
+	if err != nil {
+		t.Errorf("expected nil for io.EOF, got %v", err)
 	}
 }

@@ -48,8 +48,7 @@ var validateCmd = &cobra.Command{
 		for _, v := range result.Violations {
 			fmt.Fprintf(os.Stderr, "  %s\n", v.Error())
 		}
-		os.Exit(1)
-		return nil
+		return fmt.Errorf("validation failed with %d violation(s)", len(result.Violations))
 	},
 }
 
