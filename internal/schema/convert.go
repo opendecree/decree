@@ -136,7 +136,7 @@ func computeChecksum(fields []*pb.SchemaField) string {
 
 	h := sha256.New()
 	for _, f := range sorted {
-		_, _ = fmt.Fprintf(h, "%s:%s:%v:%v", f.Path, f.Type.String(), f.Nullable, f.Deprecated)
+		_, _ = fmt.Fprintf(h, "%s:%s:%v:%v:%v:%v:%v", f.Path, f.Type.String(), f.Nullable, f.Deprecated, f.Sensitive, f.ReadOnly, f.WriteOnce)
 		if f.Constraints != nil {
 			data, _ := json.Marshal(f.Constraints)
 			h.Write(data)

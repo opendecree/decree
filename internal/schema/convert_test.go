@@ -93,6 +93,36 @@ func TestFieldToProto_EnrichmentAttributes_RoundTrip(t *testing.T) {
 	assert.True(t, got.Sensitive, "sensitive should survive round-trip")
 }
 
+func TestComputeChecksum_SensitiveFlipChangesChecksum(t *testing.T) {
+	base := []*pb.SchemaField{
+		{Path: "a.secret", Type: pb.FieldType_FIELD_TYPE_STRING, Sensitive: false},
+	}
+	sensitive := []*pb.SchemaField{
+		{Path: "a.secret", Type: pb.FieldType_FIELD_TYPE_STRING, Sensitive: true},
+	}
+	assert.NotEqual(t, computeChecksum(base), computeChecksum(sensitive), "flipping sensitive must change checksum")
+}
+
+func TestComputeChecksum_ReadOnlyFlipChangesChecksum(t *testing.T) {
+	base := []*pb.SchemaField{
+		{Path: "a.field", Type: pb.FieldType_FIELD_TYPE_STRING, ReadOnly: false},
+	}
+	readOnly := []*pb.SchemaField{
+		{Path: "a.field", Type: pb.FieldType_FIELD_TYPE_STRING, ReadOnly: true},
+	}
+	assert.NotEqual(t, computeChecksum(base), computeChecksum(readOnly), "flipping read_only must change checksum")
+}
+
+func TestComputeChecksum_WriteOnceFlipChangesChecksum(t *testing.T) {
+	base := []*pb.SchemaField{
+		{Path: "a.field", Type: pb.FieldType_FIELD_TYPE_STRING, WriteOnce: false},
+	}
+	writeOnce := []*pb.SchemaField{
+		{Path: "a.field", Type: pb.FieldType_FIELD_TYPE_STRING, WriteOnce: true},
+	}
+	assert.NotEqual(t, computeChecksum(base), computeChecksum(writeOnce), "flipping write_once must change checksum")
+}
+
 func TestPtrString(t *testing.T) {
 	assert.Nil(t, ptrString(""))
 	s := ptrString("hello")
