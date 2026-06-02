@@ -1,6 +1,8 @@
 package grpctransport
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -30,7 +32,14 @@ func mapConfigError(err error) error {
 		return configclient.ErrAlreadyExists
 	case codes.InvalidArgument:
 		return configclient.InvalidArgumentError(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+	case codes.ResourceExhausted:
+		// ResourceExhausted signals a rate limit. The server attaches a RetryInfo
+		// detail with a hard backoff hint; wrapping as RetryableError would discard
+		// that hint and cause retry loops to hammer the limiter. Wrap both the
+		// original gRPC error (so status.Code still returns ResourceExhausted) and
+		// ErrRateLimited (so callers can errors.Is check the sentinel).
+		return fmt.Errorf("%w: %w", err, configclient.ErrRateLimited)
+	case codes.Unavailable, codes.DeadlineExceeded:
 		return &configclient.RetryableError{Err: err}
 	default:
 		return err
@@ -57,7 +66,12 @@ func mapAdminError(err error) error {
 		return adminclient.ErrPermissionDenied
 	case codes.InvalidArgument:
 		return adminclient.InvalidArgumentError(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+	case codes.ResourceExhausted:
+		// ResourceExhausted signals a rate limit. Wrap both the original gRPC error
+		// (so status.Code still returns ResourceExhausted) and ErrRateLimited (so
+		// callers can errors.Is check the sentinel).
+		return fmt.Errorf("%w: %w", err, adminclient.ErrRateLimited)
+	case codes.Unavailable, codes.DeadlineExceeded:
 		return &adminclient.RetryableError{Err: err}
 	default:
 		return err
