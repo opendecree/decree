@@ -156,6 +156,17 @@ func ParseSchema(data []byte) (*SchemaFile, error) {
 		if !isValidType(f.Type) {
 			return nil, fmt.Errorf("field %s: unknown type %q", path, f.Type)
 		}
+		if f.Default != "" {
+			dv, err := parseDefaultAsTyped(f.Type, f.Default)
+			if err != nil {
+				return nil, fmt.Errorf("field %s: invalid default: %w", path, err)
+			}
+			r := &Result{}
+			validateValue(r, path, dv, f)
+			if !r.IsValid() {
+				return nil, fmt.Errorf("field %s: default %q violates constraints: %s", path, f.Default, r.Error())
+			}
+		}
 	}
 	return &doc, nil
 }
@@ -422,6 +433,34 @@ func validateNumericConstraints(result *Result, path string, n float64, c *Const
 	}
 	if c.ExclusiveMaximum != nil && n >= *c.ExclusiveMaximum {
 		result.add(path, fmt.Sprintf("value %s must be less than %s", formatFloat(n), formatFloat(*c.ExclusiveMaximum)))
+	}
+}
+
+// parseDefaultAsTyped converts the string default stored in a schema field into
+// the Go value that validateValue expects for that type.
+func parseDefaultAsTyped(fieldType, s string) (any, error) {
+	switch fieldType {
+	case "integer":
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("not a valid integer: %q", s)
+		}
+		return float64(n), nil
+	case "number":
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return nil, fmt.Errorf("not a valid number: %q", s)
+		}
+		return f, nil
+	case "bool":
+		b, err := strconv.ParseBool(s)
+		if err != nil {
+			return nil, fmt.Errorf("not a valid bool: %q (expected true or false)", s)
+		}
+		return b, nil
+	default:
+		// string, time, duration, url, json — all stored as strings; validateValue handles format checks.
+		return s, nil
 	}
 }
 
