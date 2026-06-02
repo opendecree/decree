@@ -576,10 +576,19 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	}
 	oldValue := s.getCurrentValue(ctx, tenantID, req.FieldPath, latestVersion)
 
-	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	// Fetch sensitive + write-guard attrs in one store round-trip.
+	fieldSets, err := s.getSchemaFieldSets(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
+	// Enforce read_only / write_once schema attributes.
+	if attrs, ok := fieldSets.WriteAttrs[req.FieldPath]; ok {
+		if err := checkWriteAttributes(req.FieldPath, attrs, oldValue); err != nil {
+			return nil, err
+		}
+	}
+
+	sensitiveFields := fieldSets.Sensitive
 
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
@@ -742,10 +751,21 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		})
 	}
 
-	sensitiveFieldsMulti, err := s.getSensitiveFieldSet(ctx, tenantID)
+	// Fetch sensitive + write-guard attrs in one store round-trip.
+	fieldSetsMulti, err := s.getSchemaFieldSets(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
+	// Enforce read_only / write_once schema attributes.
+	for i, update := range req.Updates {
+		if attrs, ok := fieldSetsMulti.WriteAttrs[update.FieldPath]; ok {
+			if err := checkWriteAttributes(update.FieldPath, attrs, changes[i].oldValue); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	sensitiveFieldsMulti := fieldSetsMulti.Sensitive
 
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
@@ -961,6 +981,24 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 		tv := stringToTypedValue(row.Value, lookupFieldType(rollbackTypes, row.FieldPath))
 		if err := s.validateField(ctx, tenantID, row.FieldPath, tv); err != nil {
 			return nil, err
+		}
+	}
+
+	// Enforce read_only / write_once schema attributes after lock/validation checks.
+	rollbackFieldSets, err := s.getSchemaFieldSets(ctx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	rollbackLatestVersion, err := s.resolveVersion(ctx, tenantID, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range targetRows {
+		if attrs, ok := rollbackFieldSets.WriteAttrs[row.FieldPath]; ok {
+			currentValue := s.getCurrentValue(ctx, tenantID, row.FieldPath, rollbackLatestVersion)
+			if err := checkWriteAttributes(row.FieldPath, attrs, currentValue); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1328,10 +1366,21 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		desc = parsed.Description
 	}
 
-	sensitiveFields, err := s.getSensitiveFieldSet(ctx, tenantID)
+	// Fetch sensitive + write-guard attrs in one store round-trip.
+	importFieldSets, err := s.getSchemaFieldSets(ctx, tenantID)
 	if err != nil {
 		return nil, err
 	}
+	// Enforce read_only / write_once schema attributes.
+	for i, v := range values {
+		if attrs, ok := importFieldSets.WriteAttrs[v.FieldPath]; ok {
+			if err := checkWriteAttributes(v.FieldPath, attrs, changes[i].oldValue); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	sensitiveFields := importFieldSets.Sensitive
 
 	depRules, err := s.fetchDependentRequiredRules(ctx, tenantID)
 	if err != nil {
@@ -1466,8 +1515,58 @@ func (s *Service) filterByImportMode(ctx context.Context, tenantID string, lates
 	}
 }
 
-// getSensitiveFieldSet returns a set of field paths that are marked sensitive
-// for the tenant's current schema version.
+// schemaFieldSets bundles the per-field attribute sets derived from a single
+// schema-fields fetch. Both sets are built in one pass to avoid a second round-trip.
+type schemaFieldSets struct {
+	// Sensitive maps field path → true for fields marked sensitive.
+	Sensitive map[string]bool
+	// WriteAttrs maps field path → write-guard attributes for fields that have
+	// ReadOnly or WriteOnce set. Fields with neither attribute are absent.
+	WriteAttrs map[string]fieldWriteAttrs
+}
+
+// fieldWriteAttrs holds the write-guard attributes for a single schema field.
+type fieldWriteAttrs struct {
+	ReadOnly  bool
+	WriteOnce bool
+}
+
+// getSchemaFieldSets fetches the schema fields for a tenant and builds both
+// the sensitive-field set and the write-guard attribute map in one pass.
+// Returns a gRPC status error on any store failure.
+func (s *Service) getSchemaFieldSets(ctx context.Context, tenantID string) (schemaFieldSets, error) {
+	tenant, err := s.store.GetTenantByID(ctx, tenantID)
+	if err != nil {
+		return schemaFieldSets{}, status.Error(codes.NotFound, "tenant not found")
+	}
+	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
+		SchemaID: tenant.SchemaID,
+		Version:  tenant.SchemaVersion,
+	})
+	if err != nil {
+		return schemaFieldSets{}, status.Error(codes.Internal, "failed to get schema version")
+	}
+	fields, err := s.store.GetSchemaFields(ctx, sv.ID)
+	if err != nil {
+		return schemaFieldSets{}, status.Error(codes.Internal, "failed to get schema fields")
+	}
+	sets := schemaFieldSets{
+		Sensitive:  make(map[string]bool, len(fields)),
+		WriteAttrs: make(map[string]fieldWriteAttrs, len(fields)),
+	}
+	for _, f := range fields {
+		if f.Sensitive {
+			sets.Sensitive[f.Path] = true
+		}
+		if f.ReadOnly || f.WriteOnce {
+			sets.WriteAttrs[f.Path] = fieldWriteAttrs{ReadOnly: f.ReadOnly, WriteOnce: f.WriteOnce}
+		}
+	}
+	return sets, nil
+}
+
+// getSensitiveFieldSetFromTenant returns only the sensitive-field set from a
+// pre-resolved tenant. Used by read paths that don't need write-guard attrs.
 func (s *Service) getSensitiveFieldSetFromTenant(ctx context.Context, tenant domain.Tenant) (map[string]bool, error) {
 	sv, err := s.store.GetSchemaVersion(ctx, domain.SchemaVersionKey{
 		SchemaID: tenant.SchemaID,
@@ -1495,6 +1594,20 @@ func (s *Service) getSensitiveFieldSet(ctx context.Context, tenantID string) (ma
 		return nil, status.Error(codes.NotFound, "tenant not found")
 	}
 	return s.getSensitiveFieldSetFromTenant(ctx, tenant)
+}
+
+// checkWriteAttributes enforces ReadOnly and WriteOnce field attributes.
+// currentValue is the field's value at the latest version ("" means unset).
+// Returns codes.FailedPrecondition when a read-only field is written and when
+// a write-once field already has a value.
+func checkWriteAttributes(fieldPath string, attrs fieldWriteAttrs, currentValue string) error {
+	if attrs.ReadOnly {
+		return status.Errorf(codes.FailedPrecondition, "field %s is read-only and cannot be modified", fieldPath)
+	}
+	if attrs.WriteOnce && currentValue != "" {
+		return status.Errorf(codes.FailedPrecondition, "field %s is write-once and already has a value", fieldPath)
+	}
+	return nil
 }
 
 // --- Helpers ---

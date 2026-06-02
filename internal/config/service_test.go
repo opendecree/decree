@@ -564,6 +564,8 @@ func TestRollbackToVersion_Success(t *testing.T) {
 	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
 	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	// getFieldWriteAttrsMap needs schema store calls.
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -617,6 +619,8 @@ func TestRollbackToVersion_VersionConflictReturnsAborted(t *testing.T) {
 	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
 		Return(domain.ConfigVersion{}, ErrVersionConflict)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	// getFieldWriteAttrsMap needs schema store calls.
+	setupNoSensitiveFields(store)
 
 	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -644,6 +648,8 @@ func TestRollbackToVersion_VersionConflictRetried(t *testing.T) {
 	store.On("BulkSetConfigValues", mock.Anything, mock.Anything).Return(nil)
 	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	// getFieldWriteAttrsMap needs schema store calls.
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -667,6 +673,8 @@ func TestRollbackToVersion_LockedField_ReturnsFailedPrecondition(t *testing.T) {
 		Return([]GetFullConfigAtVersionRow{{FieldPath: "payments.fee", Value: strPtr("0.5")}}, nil)
 	store.On("GetFieldLocks", mock.Anything, tenantID1).
 		Return([]domain.TenantFieldLock{{TenantID: tenantID1, FieldPath: "payments.fee"}}, nil)
+	// getFieldWriteAttrsMap needs schema store calls.
+	setupNoSensitiveFields(store)
 
 	_, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{TenantId: tenantID1, Version: 2})
 	require.Error(t, err)
@@ -1554,6 +1562,8 @@ func TestRollbackToVersion_PreInvalidateFails_WriteProceeds(t *testing.T) {
 	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(errors.New("redis down")).Once()
 	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil).Once()
+	// getFieldWriteAttrsMap needs schema store calls.
+	setupNoSensitiveFields(store)
 
 	resp, err := svc.RollbackToVersion(ctx, &pb.RollbackToVersionRequest{
 		TenantId: tenantID1,
@@ -1671,4 +1681,95 @@ func TestSetField_SensitiveFields_SchemaFieldsError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
+// --- read_only / write_once enforcement ---
+
+// setupWriteAttrService creates a service with a schema that declares one
+// read-only field ("config.frozen") and one write-once field ("config.init").
+func setupWriteAttrService(t *testing.T) (*Service, *mockStore, *mockCache, *mockPublisher) {
+	t.Helper()
+	svc, store, c, pub := newTestService()
+	// Schema store calls used by getSchemaFieldSets.
+	store.On("GetTenantByID", mock.Anything, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil).Maybe()
+	store.On("GetSchemaVersion", mock.Anything, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil).Maybe()
+	store.On("GetSchemaFields", mock.Anything, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "config.frozen", FieldType: domain.FieldTypeString, ReadOnly: true},
+			{Path: "config.init", FieldType: domain.FieldTypeString, WriteOnce: true},
+		}, nil).Maybe()
+	return svc, store, c, pub
+}
+
+func TestSetField_ReadOnly_Rejected(t *testing.T) {
+	svc, store, _, _ := setupWriteAttrService(t)
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "config.frozen",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "new-value"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "read-only")
+}
+
+func TestSetField_WriteOnce_SecondWrite_Rejected(t *testing.T) {
+	// Write-once field already has a value — the second write must be rejected.
+	svc, store, _, _ := setupWriteAttrService(t)
+	ctx := superadminCtx()
+
+	existingVal := "initial-value"
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{Version: 1}, nil)
+	// getCurrentValue returns the existing value for the write-once check.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.Anything).
+		Return(GetConfigValueAtVersionRow{Value: &existingVal}, nil)
+
+	_, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "config.init",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "second-value"}},
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	assert.Contains(t, status.Convert(err).Message(), "write-once")
+}
+
+func TestSetField_WriteOnce_FirstWrite_Allowed(t *testing.T) {
+	// Write-once field has no existing value — the first write must succeed.
+	svc, store, cache, pub := setupWriteAttrService(t)
+	ctx := superadminCtx()
+
+	store.On("GetFieldLocks", ctx, tenantID1).Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+	store.On("CreateConfigVersion", mock.Anything, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("SetConfigValue", mock.Anything, mock.AnythingOfType("config.SetConfigValueParams")).Return(nil)
+	store.On("InsertAuditWriteLog", mock.Anything, mock.AnythingOfType("config.InsertAuditWriteLogParams")).Return(nil)
+	cache.On("Invalidate", mock.Anything, tenantID1).Return(nil)
+	pub.On("Publish", mock.Anything, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	resp, err := svc.SetField(ctx, &pb.SetFieldRequest{
+		TenantId:  tenantID1,
+		FieldPath: "config.init",
+		Value:     &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "first-value"}},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), resp.ConfigVersion.Version)
 }
