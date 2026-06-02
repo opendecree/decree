@@ -16,36 +16,6 @@ var schemaCmd = &cobra.Command{
 	Long:  "Create, list, publish, import/export, and delete configuration schemas. Schemas define the allowed fields, types, and constraints for tenant configurations.",
 }
 
-var schemaCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create a new schema from a YAML file",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		file, _ := cmd.Flags().GetString("file")
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return fmt.Errorf("read file: %w", err)
-		}
-		conn, err := dialServer()
-		if err != nil {
-			return err
-		}
-		defer func() { _ = conn.Close() }()
-
-		admin, err := newAdminClient(conn)
-		if err != nil {
-			return err
-		}
-		s, err := admin.ImportSchema(cmd.Context(), data)
-		if err != nil {
-			return err
-		}
-		return printOutput(tableRows(
-			[]string{"ID", "NAME", "VERSION", "PUBLISHED"},
-			[]string{s.ID, s.Name, strconv.Itoa(int(s.Version)), strconv.FormatBool(s.Published)},
-		))
-	},
-}
-
 var schemaGetCmd = &cobra.Command{
 	Use:   "get <schema-id>",
 	Short: "Show a schema",
@@ -224,13 +194,10 @@ var schemaImportCmd = &cobra.Command{
 }
 
 func init() {
-	schemaCreateCmd.Flags().StringP("file", "f", "", "YAML file with schema definition")
-	_ = schemaCreateCmd.MarkFlagRequired("file")
 	schemaGetCmd.Flags().Int32("version", 0, "specific version (default: latest)")
 	schemaExportCmd.Flags().Int32("version", 0, "specific version (default: latest)")
 	schemaImportCmd.Flags().Bool("publish", false, "auto-publish the imported version")
 
-	schemaCmd.AddCommand(schemaCreateCmd)
 	schemaCmd.AddCommand(schemaGetCmd)
 	schemaCmd.AddCommand(schemaListCmd)
 	schemaCmd.AddCommand(schemaPublishCmd)

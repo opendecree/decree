@@ -28,7 +28,7 @@ func TestRootCommand_HasAllSubcommands(t *testing.T) {
 }
 
 func TestSchemaCommand_HasSubcommands(t *testing.T) {
-	expected := []string{"create", "get", "list", "publish", "delete", "export", "import"}
+	expected := []string{"get", "list", "publish", "delete", "export", "import"}
 	names := make([]string, 0, len(expected))
 	for _, cmd := range schemaCmd.Commands() {
 		names = append(names, cmd.Name())
@@ -377,27 +377,6 @@ func TestArgError_ReturnsNonNilError(t *testing.T) {
 	err := rootCmd.Execute()
 	if err == nil {
 		t.Fatal("expected non-nil error for wrong arg count, got nil")
-	}
-}
-
-// TestSchemaCreate_MissingFile_ErrorNotOnStdout verifies that a RunE error
-// (missing required flag) is returned and stdout stays empty.
-func TestSchemaCreate_MissingFile_ErrorNotOnStdout(t *testing.T) {
-	resetRootCmd(t)
-	var stdout, stderr bytes.Buffer
-	rootCmd.SetOut(&stdout)
-	rootCmd.SetErr(&stderr)
-	rootCmd.SetArgs([]string{"schema", "create"}) // --file is required
-
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Fatal("expected error for missing --file, got nil")
-	}
-	if !strings.Contains(err.Error(), "file") {
-		t.Errorf("expected error to mention file, got %q", err.Error())
-	}
-	if stdout.Len() != 0 {
-		t.Errorf("expected empty stdout on flag error, got: %q", stdout.String())
 	}
 }
 
