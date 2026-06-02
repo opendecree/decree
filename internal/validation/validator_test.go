@@ -121,15 +121,17 @@ func TestValidate_StringPattern(t *testing.T) {
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "not-an-email"}}))
 }
 
-func TestValidate_InvalidRegexInDB_DoesNotPanic(t *testing.T) {
+func TestValidate_InvalidRegexInDB_FailsClosed(t *testing.T) {
 	// Simulates a bad pattern written directly to the DB bypassing schema validation.
-	// The validator must skip the regex check rather than panic.
+	// The validator must fail closed: every value is rejected, not silently accepted.
 	v := NewFieldValidator("field", pb.FieldType_FIELD_TYPE_STRING, false, false, &pb.FieldConstraints{
 		Regex: ptr(`[invalid`),
 	})
 
-	// No panic; regex check is silently skipped so every value passes.
-	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "any value"}}))
+	// Fail closed: broken constraint rejects all values, not accepts everything.
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "any value"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "constraint cannot be enforced")
 }
 
 func TestValidate_InvalidRegex_IncrementsCounter(t *testing.T) {
@@ -281,6 +283,20 @@ func TestValidate_JSONSchema(t *testing.T) {
 	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: `{"name": "test"}`}}))
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: `{"foo": "bar"}`}})) // missing required "name"
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: `not json`}}))
+}
+
+func TestValidate_InvalidJSONSchemaInDB_FailsClosed(t *testing.T) {
+	// Simulates a malformed json_schema written directly to the DB bypassing schema validation.
+	// The validator must fail closed: every value is rejected, not silently accepted.
+	bad := `{not valid json`
+	v := NewFieldValidator("meta", pb.FieldType_FIELD_TYPE_JSON, false, false, &pb.FieldConstraints{
+		JsonSchema: &bad,
+	})
+
+	// Fail closed: broken constraint rejects all values, not accepts everything.
+	err := v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: `{"any": "value"}`}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "constraint cannot be enforced")
 }
 
 // --- No constraints (type check only) ---

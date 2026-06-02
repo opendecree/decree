@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // validateFieldConstraintsBatch runs validateFieldConstraints for each field in
@@ -102,9 +103,22 @@ func validateFieldConstraints(field *pb.SchemaField, regexMaxLen int) error {
 		}
 	}
 
-	// JSON Schema: json only
+	// JSON Schema: json only; compile eagerly to reject malformed schemas at import time.
 	if c.JsonSchema != nil && ft != pb.FieldType_FIELD_TYPE_JSON {
 		return fmt.Errorf("field %s: 'json_schema' constraint is not valid for type %s (only json)", path, ft)
+	}
+	if c.JsonSchema != nil && ft == pb.FieldType_FIELD_TYPE_JSON {
+		compiler := jsonschema.NewCompiler()
+		doc, err := jsonschema.UnmarshalJSON(strings.NewReader(*c.JsonSchema))
+		if err != nil {
+			return fmt.Errorf("field %s: invalid json_schema constraint: %w", path, err)
+		}
+		if err := compiler.AddResource("schema.json", doc); err != nil {
+			return fmt.Errorf("field %s: invalid json_schema constraint: %w", path, err)
+		}
+		if _, err := compiler.Compile("schema.json"); err != nil {
+			return fmt.Errorf("field %s: invalid json_schema constraint: %w", path, err)
+		}
 	}
 
 	// enum: any type is fine — no restriction needed

@@ -84,6 +84,24 @@ func TestValidateConstraints_JSONSchema(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestValidateConstraints_InvalidJSONSchema_Rejected(t *testing.T) {
+	badSchemas := []string{
+		`{not valid json`,
+		`{"type": "nonexistent-type-xyz"}`,
+		`{"$ref": "http://[invalid"}`,
+	}
+	for _, bad := range badSchemas {
+		t.Run(bad, func(t *testing.T) {
+			err := validateFieldConstraints(&pb.SchemaField{
+				Path: "x", Type: pb.FieldType_FIELD_TYPE_JSON,
+				Constraints: &pb.FieldConstraints{JsonSchema: &bad},
+			}, 0)
+			assert.Error(t, err, "expected error for invalid json_schema %q", bad)
+			assert.Contains(t, err.Error(), "invalid json_schema constraint")
+		})
+	}
+}
+
 func TestValidateConstraints_EnumOnAnyType(t *testing.T) {
 	// Enum is valid on any type.
 	for _, ft := range []pb.FieldType{
