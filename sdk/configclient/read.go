@@ -59,7 +59,8 @@ func (c *Client) GetFields(ctx context.Context, tenantID string, fieldPaths []st
 // --- Type-specific getters ---
 
 // GetString returns the current value as a string.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns "" with a nil error if the field value is null; use [Client.GetStringNullable] to distinguish null from an empty string.
 // Returns [ErrTypeMismatch] if the field is not a string type.
 func (c *Client) GetString(ctx context.Context, tenantID, fieldPath string) (string, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
@@ -78,7 +79,8 @@ func (c *Client) GetString(ctx context.Context, tenantID, fieldPath string) (str
 }
 
 // GetInt returns the current value as an int64.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns 0 with a nil error if the field value is null; use [Client.GetIntNullable] to distinguish null from zero.
 // Returns [ErrTypeMismatch] if the field is not an integer type.
 func (c *Client) GetInt(ctx context.Context, tenantID, fieldPath string) (int64, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
@@ -95,7 +97,8 @@ func (c *Client) GetInt(ctx context.Context, tenantID, fieldPath string) (int64,
 }
 
 // GetFloat returns the current value as a float64.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns 0 with a nil error if the field value is null; use a nullable variant for null detection.
 // Returns [ErrTypeMismatch] if the field is not a number type.
 func (c *Client) GetFloat(ctx context.Context, tenantID, fieldPath string) (float64, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
@@ -112,7 +115,8 @@ func (c *Client) GetFloat(ctx context.Context, tenantID, fieldPath string) (floa
 }
 
 // GetBool returns the current value as a bool.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns false with a nil error if the field value is null; use [Client.GetBoolNullable] to distinguish null from false.
 // Returns [ErrTypeMismatch] if the field is not a bool type.
 func (c *Client) GetBool(ctx context.Context, tenantID, fieldPath string) (bool, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
@@ -129,7 +133,8 @@ func (c *Client) GetBool(ctx context.Context, tenantID, fieldPath string) (bool,
 }
 
 // GetTime returns the current value as a time.Time.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns a zero time.Time with a nil error if the field value is null; use a nullable variant for null detection.
 // Returns [ErrTypeMismatch] if the field is not a time type.
 func (c *Client) GetTime(ctx context.Context, tenantID, fieldPath string) (time.Time, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
@@ -146,7 +151,8 @@ func (c *Client) GetTime(ctx context.Context, tenantID, fieldPath string) (time.
 }
 
 // GetDuration returns the current value as a time.Duration.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns [ErrNotFound] if the field does not exist.
+// Returns 0 with a nil error if the field value is null; use a nullable variant for null detection.
 // Returns [ErrTypeMismatch] if the field is not a duration type.
 func (c *Client) GetDuration(ctx context.Context, tenantID, fieldPath string) (time.Duration, error) {
 	tv, err := c.getTypedValue(ctx, tenantID, fieldPath)
