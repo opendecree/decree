@@ -715,6 +715,139 @@ func assertViolation(t *testing.T, result *Result, field, msgSubstr string) {
 	t.Errorf("expected violation for %s containing %q, got: %s", field, msgSubstr, result.Error())
 }
 
+// --- Default value validation ---
+
+func TestParseSchema_DefaultValidation_InvalidType(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{"integer default not a number", `spec_version: "v1"
+name: test
+fields:
+  count:
+    type: integer
+    default: "notanumber"`},
+		{"bool default not bool", `spec_version: "v1"
+name: test
+fields:
+  flag:
+    type: bool
+    default: "yes"`},
+		{"number default not a number", `spec_version: "v1"
+name: test
+fields:
+  ratio:
+    type: number
+    default: "abc"`},
+		{"time default invalid format", `spec_version: "v1"
+name: test
+fields:
+  ts:
+    type: time
+    default: "not-a-time"`},
+		{"url default not absolute", `spec_version: "v1"
+name: test
+fields:
+  endpoint:
+    type: url
+    default: "relative/path"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSchema([]byte(tt.schema))
+			if err == nil {
+				t.Error("expected error for invalid default, got nil")
+			}
+		})
+	}
+}
+
+func TestParseSchema_DefaultValidation_ConstraintViolation(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{"integer default below minimum", `spec_version: "v1"
+name: test
+fields:
+  count:
+    type: integer
+    default: "3"
+    constraints:
+      minimum: 10`},
+		{"string default below minLength", `spec_version: "v1"
+name: test
+fields:
+  code:
+    type: string
+    default: "ab"
+    constraints:
+      minLength: 5`},
+		{"default not in enum", `spec_version: "v1"
+name: test
+fields:
+  color:
+    type: string
+    default: "purple"
+    constraints:
+      enum: [red, green, blue]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSchema([]byte(tt.schema))
+			if err == nil {
+				t.Error("expected error for default violating constraints, got nil")
+			}
+		})
+	}
+}
+
+func TestParseSchema_DefaultValidation_Valid(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{"integer default valid", `spec_version: "v1"
+name: test
+fields:
+  count:
+    type: integer
+    default: "42"`},
+		{"bool default true", `spec_version: "v1"
+name: test
+fields:
+  flag:
+    type: bool
+    default: "true"`},
+		{"string default within constraints", `spec_version: "v1"
+name: test
+fields:
+  code:
+    type: string
+    default: "hello"
+    constraints:
+      minLength: 3
+      maxLength: 10`},
+		{"string default in enum", `spec_version: "v1"
+name: test
+fields:
+  color:
+    type: string
+    default: "red"
+    constraints:
+      enum: [red, green, blue]`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSchema([]byte(tt.schema))
+			if err != nil {
+				t.Errorf("expected no error for valid default, got: %v", err)
+			}
+		})
+	}
+}
+
 func containsStr(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
