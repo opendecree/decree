@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/opendecree/decree/sdk/tools/internal/fieldtype"
 )
 
 // Schema is the input to documentation generation.
@@ -345,11 +343,4 @@ func formatFloat(f float64) string {
 		return fmt.Sprintf("%d", int64(f))
 	}
 	return fmt.Sprintf("%g", f)
-}
-
-// FieldTypeName returns the human-readable short name for a proto field type
-// enum name (e.g., "FIELD_TYPE_STRING" → "string"). Returns the input
-// unchanged if not recognized.
-func FieldTypeName(protoName string) string {
-	return fieldtype.Name(protoName)
 }

@@ -156,28 +156,6 @@ func TestGenerate_NoPrefix(t *testing.T) {
 	assertContains(t, md, "### `standalone`")
 }
 
-func TestFieldTypeName(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"FIELD_TYPE_STRING", "string"},
-		{"FIELD_TYPE_INT", "integer"},
-		{"FIELD_TYPE_NUMBER", "number"},
-		{"FIELD_TYPE_BOOL", "bool"},
-		{"FIELD_TYPE_TIME", "time"},
-		{"FIELD_TYPE_DURATION", "duration"},
-		{"FIELD_TYPE_URL", "url"},
-		{"FIELD_TYPE_JSON", "json"},
-		{"UNKNOWN", "UNKNOWN"},
-	}
-	for _, tt := range tests {
-		if got := FieldTypeName(tt.input); got != tt.want {
-			t.Errorf("FieldTypeName(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
 func TestGenerate_SchemaInfo(t *testing.T) {
 	schema := Schema{
 		Name: "test",
