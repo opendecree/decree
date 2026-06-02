@@ -7,11 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/adminclient"
+	"github.com/opendecree/decree/sdk/configclient"
 	"github.com/opendecree/decree/sdk/tools/docgen"
 )
 
@@ -20,20 +17,17 @@ import (
 func TestTypedValueDisplay(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    *pb.TypedValue
+		input    *configclient.TypedValue
 		expected string
 	}{
 		{"nil", nil, "<null>"},
-		{"string", &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: "hello"}}, "hello"},
-		{"integer", &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 42}}, "42"},
-		{"number", &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 3.14}}, "3.14"},
-		{"bool", &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: true}}, "true"},
-		{"url", &pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "https://example.com"}}, "https://example.com"},
-		{"json", &pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: `{"a":1}`}}, `{"a":1}`},
-		{"duration", &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(5 * time.Minute)}}, "5m0s"},
-		{"duration nil", &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{}}, ""},
-		{"time nil", &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{}}, ""},
-		{"empty kind", &pb.TypedValue{}, ""},
+		{"string", configclient.StringVal("hello"), "hello"},
+		{"integer", configclient.IntVal(42), "42"},
+		{"number", configclient.FloatVal(3.14), "3.14"},
+		{"bool", configclient.BoolVal(true), "true"},
+		{"url", configclient.URLVal("https://example.com"), "https://example.com"},
+		{"json", configclient.JSONVal(`{"a":1}`), `{"a":1}`},
+		{"duration", configclient.DurationVal(5 * time.Minute), "5m0s"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -46,7 +40,7 @@ func TestTypedValueDisplay(t *testing.T) {
 
 func TestTypedValueDisplay_Time(t *testing.T) {
 	ts := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
-	tv := &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(ts)}}
+	tv := configclient.TimeVal(ts)
 	if !strings.Contains(typedValueDisplay(tv), "2026-03-30") {
 		t.Errorf("expected %q to contain %q", typedValueDisplay(tv), "2026-03-30")
 	}

@@ -29,5 +29,7 @@ func (s *grpcSubscription) Recv() (*configclient.ConfigChange, error) {
 		FieldPath: change.GetFieldPath(),
 		OldValue:  typedValueFromProto(change.GetOldValue()),
 		NewValue:  typedValueFromProto(change.GetNewValue()),
+		Version:   change.GetVersion(),
+		ChangedBy: change.GetChangedBy(),
 	}, nil
 }
