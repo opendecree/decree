@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -88,13 +90,41 @@ func TestStringToTypedValue_UnknownTypeFallsBackToString(t *testing.T) {
 }
 
 func TestStringToTypedValue_ParseErrorsYieldZeroValues(t *testing.T) {
-	// Malformed numeric/bool/time/duration strings: parse errors are swallowed and
+	// Malformed numeric/bool/time/duration strings: parse errors are logged and
 	// the zero value is returned (never a nil TypedValue for a non-nil input).
 	assert.Equal(t, int64(0), stringToTypedValue(strPtr("notint"), domain.FieldTypeInteger).GetIntegerValue())
 	assert.Equal(t, float64(0), stringToTypedValue(strPtr("notfloat"), domain.FieldTypeNumber).GetNumberValue())
 	assert.False(t, stringToTypedValue(strPtr("notbool"), domain.FieldTypeBool).GetBoolValue())
 	assert.True(t, stringToTypedValue(strPtr("nottime"), domain.FieldTypeTime).GetTimeValue().AsTime().IsZero())
 	assert.Equal(t, time.Duration(0), stringToTypedValue(strPtr("notdur"), domain.FieldTypeDuration).GetDurationValue().AsDuration())
+}
+
+func TestStringToTypedValue_ParseErrorsAreLogged(t *testing.T) {
+	// Corrupt DB values must produce a log warning instead of being silently swallowed.
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})
+	prev := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	cases := []struct {
+		raw string
+		ft  domain.FieldType
+	}{
+		{"not-an-int", domain.FieldTypeInteger},
+		{"not-a-float", domain.FieldTypeNumber},
+		{"not-a-bool", domain.FieldTypeBool},
+		{"not-a-time", domain.FieldTypeTime},
+		{"not-a-duration", domain.FieldTypeDuration},
+	}
+	for _, c := range cases {
+		buf.Reset()
+		tv := stringToTypedValue(strPtr(c.raw), c.ft)
+		require.NotNil(t, tv, "expected non-nil TypedValue for field type %s", c.ft)
+		logged := buf.String()
+		assert.Contains(t, logged, "stringToTypedValue", "expected warning log for field type %s", c.ft)
+		assert.Contains(t, logged, c.raw, "expected raw value in log for field type %s", c.ft)
+	}
 }
 
 func TestTypedValueToString_Nil(t *testing.T) {

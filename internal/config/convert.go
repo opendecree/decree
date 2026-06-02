@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -100,28 +101,49 @@ func typedValueToString(tv *pb.TypedValue) *string {
 }
 
 // stringToTypedValue converts a DB string value to a TypedValue using the field type.
-// Returns nil for a nil (null) string.
+// Returns nil for a nil (null) string. Parse errors are logged as warnings and the
+// zero value for the target type is returned rather than silently discarding the error.
 func stringToTypedValue(s *string, ft domain.FieldType) *pb.TypedValue {
 	if s == nil {
 		return nil
 	}
 	switch ft {
 	case domain.FieldTypeInteger:
-		v, _ := strconv.ParseInt(*s, 10, 64)
+		v, err := strconv.ParseInt(*s, 10, 64)
+		if err != nil {
+			slog.Default().Warn("stringToTypedValue: failed to parse integer DB value",
+				"raw", *s, "error", err)
+		}
 		return &pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: v}}
 	case domain.FieldTypeNumber:
-		v, _ := strconv.ParseFloat(*s, 64)
+		v, err := strconv.ParseFloat(*s, 64)
+		if err != nil {
+			slog.Default().Warn("stringToTypedValue: failed to parse number DB value",
+				"raw", *s, "error", err)
+		}
 		return &pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: v}}
 	case domain.FieldTypeString:
 		return &pb.TypedValue{Kind: &pb.TypedValue_StringValue{StringValue: *s}}
 	case domain.FieldTypeBool:
-		v, _ := strconv.ParseBool(*s)
+		v, err := strconv.ParseBool(*s)
+		if err != nil {
+			slog.Default().Warn("stringToTypedValue: failed to parse bool DB value",
+				"raw", *s, "error", err)
+		}
 		return &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: v}}
 	case domain.FieldTypeTime:
-		t, _ := time.Parse(time.RFC3339Nano, *s)
+		t, err := time.Parse(time.RFC3339Nano, *s)
+		if err != nil {
+			slog.Default().Warn("stringToTypedValue: failed to parse time DB value",
+				"raw", *s, "error", err)
+		}
 		return &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(t)}}
 	case domain.FieldTypeDuration:
-		d, _ := time.ParseDuration(*s)
+		d, err := time.ParseDuration(*s)
+		if err != nil {
+			slog.Default().Warn("stringToTypedValue: failed to parse duration DB value",
+				"raw", *s, "error", err)
+		}
 		return &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(d)}}
 	case domain.FieldTypeURL:
 		return &pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: *s}}
