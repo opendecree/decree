@@ -11,8 +11,8 @@
 //	transport := grpctransport.NewConfigTransport(conn, grpctransport.WithSubject("myapp"))
 //	w := configwatcher.New(transport, "tenant-uuid")
 //
-//	fee := w.Float("payments.fee_rate", 0.01)
-//	enabled := w.Bool("payments.enabled", false)
+//	fee, _ := w.Float("payments.fee_rate", 0.01)
+//	enabled, _ := w.Bool("payments.enabled", false)
 //
 //	w.Start(ctx)
 //	defer w.Close()
@@ -27,6 +27,7 @@ package configwatcher
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"sync"
@@ -34,6 +35,12 @@ import (
 
 	"github.com/opendecree/decree/sdk/configclient"
 )
+
+// ErrStarted is returned by Register* methods (String, Int, Bool, etc.) when
+// the watcher has already been started. All fields must be registered before
+// calling [Watcher.Start]; a field registered after Start will never receive
+// stream updates.
+var ErrStarted = errors.New("configwatcher: cannot register field after Start")
 
 // Watcher monitors a tenant's configuration via a subscription stream.
 // Register typed field accessors before calling [Watcher.Start].
@@ -119,69 +126,72 @@ func WithSnapshotTimeout(d time.Duration) Option {
 
 // String registers a string field and returns a live [Value] handle.
 // The defaultVal is returned when the field is null or missing.
-// Must be called before [Watcher.Start].
-func (w *Watcher) String(fieldPath string, defaultVal string) *Value[string] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) String(fieldPath string, defaultVal string) (*Value[string], error) {
 	return registerField(w, fieldPath, defaultVal, parseString)
 }
 
 // Int registers an integer field and returns a live [Value] handle.
 // Values are stored as decimal strings (e.g. "42") and parsed to int64.
 // The defaultVal is returned when the field is null, missing, or unparseable.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Int(fieldPath string, defaultVal int64) *Value[int64] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Int(fieldPath string, defaultVal int64) (*Value[int64], error) {
 	return registerField(w, fieldPath, defaultVal, parseInt)
 }
 
 // Float registers a floating-point field and returns a live [Value] handle.
 // Values are stored as decimal strings (e.g. "3.14") and parsed to float64.
 // The defaultVal is returned when the field is null, missing, or unparseable.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Float(fieldPath string, defaultVal float64) *Value[float64] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Float(fieldPath string, defaultVal float64) (*Value[float64], error) {
 	return registerField(w, fieldPath, defaultVal, parseFloat)
 }
 
 // Bool registers a boolean field and returns a live [Value] handle.
 // Values are stored as "true" or "false" strings.
 // The defaultVal is returned when the field is null, missing, or unparseable.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Bool(fieldPath string, defaultVal bool) *Value[bool] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Bool(fieldPath string, defaultVal bool) (*Value[bool], error) {
 	return registerField(w, fieldPath, defaultVal, parseBool)
 }
 
 // Duration registers a duration field and returns a live [Value] handle.
 // Values are stored as Go-style duration strings (e.g. "24h", "500ms").
 // The defaultVal is returned when the field is null, missing, or unparseable.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Duration(fieldPath string, defaultVal time.Duration) *Value[time.Duration] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Duration(fieldPath string, defaultVal time.Duration) (*Value[time.Duration], error) {
 	return registerField(w, fieldPath, defaultVal, parseDuration)
 }
 
 // Time registers a timestamp field and returns a live [Value] handle.
 // Values are stored as RFC3339Nano strings and parsed to time.Time.
 // The defaultVal is returned when the field is null, missing, or unparseable.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Time(fieldPath string, defaultVal time.Time) *Value[time.Time] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Time(fieldPath string, defaultVal time.Time) (*Value[time.Time], error) {
 	return registerField(w, fieldPath, defaultVal, parseTime)
 }
 
 // Raw registers a string field with no type conversion and returns a live [Value] handle.
 // This is equivalent to [Watcher.String] — provided for clarity of intent.
-// Must be called before [Watcher.Start].
-func (w *Watcher) Raw(fieldPath string, defaultVal string) *Value[string] {
+// Must be called before [Watcher.Start]; returns [ErrStarted] if called after.
+func (w *Watcher) Raw(fieldPath string, defaultVal string) (*Value[string], error) {
 	return registerField(w, fieldPath, defaultVal, parseString)
 }
 
-func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func(string) (T, error)) *Value[T] {
+func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func(string) (T, error)) (*Value[T], error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.started {
+		return nil, ErrStarted
+	}
 	v := newValue(defaultVal, parse)
 	v.fieldPath = fieldPath
 	v.logger = w.opts.logger
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.fields[fieldPath] = &fieldEntry{
 		rawUpdate: func(value string, isSet bool) { v.update(value, isSet) },
 		closeFunc: func() { v.close() },
 	}
-	return v
+	return v, nil
 }
 
 // --- Lifecycle ---

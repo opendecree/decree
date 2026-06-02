@@ -197,10 +197,16 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	fee := w.Float("payments.fee", 0.01)
-	enabled := w.Bool("payments.enabled", false)
+	fee, err := w.Float("payments.fee", 0.01)
+	if err != nil {
+		t.Fatalf("Float: %v", err)
+	}
+	enabled, err := w.Bool("payments.enabled", false)
+	if err != nil {
+		t.Fatalf("Bool: %v", err)
+	}
 
-	err := w.Start(ctx)
+	err = w.Start(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -256,12 +262,84 @@ func TestWatcher_SnapshotError(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	_ = w.String("app.name", "default")
+	_, _ = w.String("app.name", "default")
 
 	err := w.Start(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+}
+
+// TestWatcher_RegisterAfterStart verifies that calling a Register* method after
+// Start returns ErrStarted and that a field registered before Start is still live.
+func TestWatcher_RegisterAfterStart(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sub := newMockSubscription(ctx)
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts:      options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:    make(map[string]*fieldEntry),
+		done:      make(chan struct{}),
+	}
+
+	// Register a field before Start — must succeed.
+	name, err := w.String("app.name", "default")
+	if err != nil {
+		t.Fatalf("String before Start: %v", err)
+	}
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Registering after Start must return ErrStarted.
+	_, errAfter := w.String("app.other", "x")
+	if errAfter == nil {
+		t.Fatal("expected ErrStarted, got nil")
+	}
+	if errAfter != ErrStarted {
+		t.Errorf("got %v, want ErrStarted", errAfter)
+	}
+
+	// Verify all typed methods return ErrStarted after Start.
+	if _, e := w.Int("x", 0); e != ErrStarted {
+		t.Errorf("Int: got %v, want ErrStarted", e)
+	}
+	if _, e := w.Float("x", 0); e != ErrStarted {
+		t.Errorf("Float: got %v, want ErrStarted", e)
+	}
+	if _, e := w.Bool("x", false); e != ErrStarted {
+		t.Errorf("Bool: got %v, want ErrStarted", e)
+	}
+	if _, e := w.Duration("x", 0); e != ErrStarted {
+		t.Errorf("Duration: got %v, want ErrStarted", e)
+	}
+	if _, e := w.Time("x", time.Time{}); e != ErrStarted {
+		t.Errorf("Time: got %v, want ErrStarted", e)
+	}
+	if _, e := w.Raw("x", ""); e != ErrStarted {
+		t.Errorf("Raw: got %v, want ErrStarted", e)
+	}
+
+	// The pre-registered field must still be accessible.
+	if got := name.Get(); got != "default" {
+		t.Errorf("Get: got %q, want %q", got, "default")
+	}
+
+	cancel()
+	_ = w.Close()
 }
 
 func TestWatcher_NullField(t *testing.T) {
@@ -289,9 +367,12 @@ func TestWatcher_NullField(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	name := w.String("app.name", "fallback")
+	name, err := w.String("app.name", "fallback")
+	if err != nil {
+		t.Fatalf("String: %v", err)
+	}
 
-	err := w.Start(ctx)
+	err = w.Start(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -361,7 +442,10 @@ func TestWatcher_TypeFlipMidStream(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	fee := w.Float("payments.fee", 0.01)
+	fee, err := w.Float("payments.fee", 0.01)
+	if err != nil {
+		t.Fatalf("Float: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -550,7 +634,10 @@ func TestWatcher_ReconnectVersionCursor(t *testing.T) {
 		done:   make(chan struct{}),
 	}
 
-	x := w.String("x", "default")
+	x, err := w.String("x", "default")
+	if err != nil {
+		t.Fatalf("String: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -689,7 +776,10 @@ func TestWatcher_TimeField(t *testing.T) {
 	}
 
 	w := New(tr, "t1")
-	scheduled := w.Time("deploy.scheduled_at", time.Time{})
+	scheduled, err := w.Time("deploy.scheduled_at", time.Time{})
+	if err != nil {
+		t.Fatalf("Time: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -825,7 +915,10 @@ func TestValue_DroppedCount_ViaWatcher(t *testing.T) {
 	}
 
 	w := New(tr, "t1", WithLogger(logger))
-	fee := w.Int("payments.fee", 0)
+	fee, err := w.Int("payments.fee", 0)
+	if err != nil {
+		t.Fatalf("Int: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -1013,7 +1106,10 @@ func TestWatcher_ReconnectNoSpuriousChanges(t *testing.T) {
 		done:   make(chan struct{}),
 	}
 
-	name := w.String("app.name", "default")
+	name, err := w.String("app.name", "default")
+	if err != nil {
+		t.Fatalf("String: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)

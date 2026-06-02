@@ -40,8 +40,8 @@ func ExampleWatcher() {
 	w := configwatcher.New(&fakeTransport{}, "tenant-1")
 
 	// Register typed fields before calling Start.
-	maxConn := w.Int("limits.max_connections", 100)
-	debug := w.Bool("app.debug", false)
+	maxConn, _ := w.Int("limits.max_connections", 100)
+	debug, _ := w.Bool("app.debug", false)
 
 	// Before Start is called, Get returns the registered default.
 	fmt.Println(maxConn.Get())
@@ -56,7 +56,7 @@ func ExampleWatcher_Start() {
 	defer cancel()
 
 	w := configwatcher.New(&fakeTransport{}, "tenant-1")
-	timeout := w.String("jobs.timeout", "30s")
+	timeout, _ := w.String("jobs.timeout", "30s")
 
 	// Start loads a snapshot and streams live updates in the background.
 	if err := w.Start(ctx); err != nil {
@@ -71,7 +71,7 @@ func ExampleWatcher_Start() {
 
 func ExampleValue_Changes() {
 	w := configwatcher.New(&fakeTransport{}, "tenant-1")
-	maxConn := w.Int("limits.max_connections", 100)
+	maxConn, _ := w.Int("limits.max_connections", 100)
 
 	// Changes channel receives a notification on every update.
 	// Read without blocking — no update has arrived yet.
@@ -86,7 +86,7 @@ func ExampleValue_Changes() {
 
 func ExampleValue_GetWithNull() {
 	w := configwatcher.New(&fakeTransport{}, "tenant-1")
-	flag := w.Bool("feature.enabled", false)
+	flag, _ := w.Bool("feature.enabled", false)
 
 	val, ok := flag.GetWithNull()
 	fmt.Println(val, ok) // default; field not yet received from server
@@ -100,7 +100,7 @@ func ExampleWithReconnectBackoff() {
 	w := configwatcher.New(&fakeTransport{}, "tenant-1",
 		configwatcher.WithReconnectBackoff(100*time.Millisecond, 10*time.Second),
 	)
-	flag := w.Bool("feature.enabled", false)
+	flag, _ := w.Bool("feature.enabled", false)
 
 	if err := w.Start(ctx); err != nil {
 		fmt.Println("start error:", err)

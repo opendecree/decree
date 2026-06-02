@@ -47,8 +47,8 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create watcher: %w", err)
 	}
-	darkMode := w.Bool("features.dark_mode", false)
-	betaAccess := w.Bool("features.beta_access", false)
+	darkMode, _ := w.Bool("features.dark_mode", false)
+	betaAccess, _ := w.Bool("features.beta_access", false)
 
 	// Start loads the current values and subscribes to live changes.
 	if err := w.Start(ctx); err != nil {

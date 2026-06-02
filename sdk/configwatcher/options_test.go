@@ -57,12 +57,30 @@ func TestWithLogger(t *testing.T) {
 func TestFieldRegistration(t *testing.T) {
 	w := New(nil, "t1")
 
-	strVal := w.String("app.name", "default")
-	intVal := w.Int("app.retries", 3)
-	floatVal := w.Float("app.rate", 0.01)
-	boolVal := w.Bool("app.enabled", false)
-	durVal := w.Duration("app.timeout", time.Second)
-	rawVal := w.Raw("app.raw", "raw-default")
+	strVal, err := w.String("app.name", "default")
+	if err != nil {
+		t.Fatalf("String: %v", err)
+	}
+	intVal, err := w.Int("app.retries", 3)
+	if err != nil {
+		t.Fatalf("Int: %v", err)
+	}
+	floatVal, err := w.Float("app.rate", 0.01)
+	if err != nil {
+		t.Fatalf("Float: %v", err)
+	}
+	boolVal, err := w.Bool("app.enabled", false)
+	if err != nil {
+		t.Fatalf("Bool: %v", err)
+	}
+	durVal, err := w.Duration("app.timeout", time.Second)
+	if err != nil {
+		t.Fatalf("Duration: %v", err)
+	}
+	rawVal, err := w.Raw("app.raw", "raw-default")
+	if err != nil {
+		t.Fatalf("Raw: %v", err)
+	}
 
 	if got := strVal.Get(); got != "default" {
 		t.Errorf("got %v, want %v", got, "default")

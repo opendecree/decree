@@ -82,7 +82,7 @@ func TestWatcher_ConcurrentRegisterAndPaths(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			if g%2 == 0 {
-				registerField(w, fmt.Sprintf("field-%d", g), int64(0), parseInt)
+				_, _ = registerField(w, fmt.Sprintf("field-%d", g), int64(0), parseInt)
 			} else {
 				w.registeredPaths()
 			}
@@ -122,7 +122,7 @@ func TestWatcher_ConcurrentStartAndClose(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	_ = w.String("app.name", "default")
+	_, _ = w.String("app.name", "default")
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -169,7 +169,7 @@ func TestWatcher_DoubleStart(t *testing.T) {
 		done:      make(chan struct{}),
 	}
 
-	_ = w.String("app.name", "default")
+	_, _ = w.String("app.name", "default")
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("first Start: %v", err)
@@ -215,7 +215,7 @@ func TestWatcher_StartCloseConcurrent(t *testing.T) {
 			done:      make(chan struct{}),
 		}
 
-		_ = w.String("app.name", "default")
+		_, _ = w.String("app.name", "default")
 
 		// ready gates Start and Close to begin at the same instant.
 		ready := make(chan struct{})
@@ -325,7 +325,10 @@ func TestWatcher_CloseWhileStreamSends(t *testing.T) {
 		done:   make(chan struct{}),
 	}
 
-	val := w.String("key", "default")
+	val, err := w.String("key", "default")
+	if err != nil {
+		t.Fatalf("String: %v", err)
+	}
 
 	if err := w.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
