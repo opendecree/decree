@@ -242,6 +242,30 @@ func TestGetFieldUsage_Success(t *testing.T) {
 	assert.Equal(t, "reader", *resp.Stats.LastReadBy)
 }
 
+func TestGetFieldUsage_PicksMaxLastReadAt(t *testing.T) {
+	svc, store := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	// older is listed last in the slice — bug would have returned "older-reader".
+	olderReader := "older-reader"
+	newerReader := "newer-reader"
+	older := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	newer := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	store.On("GetFieldUsage", ctx, mock.Anything).Return([]domain.UsageStat{
+		{ReadCount: 5, LastReadBy: &newerReader, LastReadAt: &newer},
+		{ReadCount: 10, LastReadBy: &olderReader, LastReadAt: &older},
+	}, nil)
+
+	resp, err := svc.GetFieldUsage(ctx, &pb.GetFieldUsageRequest{
+		TenantId:  "22222222-2222-2222-2222-222222222222",
+		FieldPath: "app.fee",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(15), resp.Stats.ReadCount)
+	assert.Equal(t, "newer-reader", *resp.Stats.LastReadBy)
+	assert.Equal(t, newer.Unix(), resp.Stats.LastReadAt.AsTime().Unix())
+}
+
 func TestGetFieldUsage_InvalidTenantID(t *testing.T) {
 	svc, _ := newTestService()
 	_, err := svc.GetFieldUsage(auth.WithoutAuth(context.Background()), &pb.GetFieldUsageRequest{TenantId: "bad"})
