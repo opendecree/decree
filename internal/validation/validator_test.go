@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -157,6 +158,27 @@ func TestValidate_EnumOnInteger(t *testing.T) {
 
 	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 1}}))
 	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_IntegerValue{IntegerValue: 5}}))
+}
+
+func TestValidate_EnumOnLargeNumber(t *testing.T) {
+	// Storage writes 1000000 as "1000000" (FormatFloat 'f'), not "1e+06" (%g).
+	// Enum comparison must use the same format or valid stored values are falsely rejected.
+	v := NewFieldValidator("quota", pb.FieldType_FIELD_TYPE_NUMBER, false, false, &pb.FieldConstraints{
+		EnumValues: []string{"1000000", "2000000"},
+	})
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 1_000_000}}))
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 3_000_000}}))
+}
+
+func TestValidate_EnumOnDuration(t *testing.T) {
+	// Enum on a duration field: stored values use Duration.String() format.
+	v := NewFieldValidator("ttl", pb.FieldType_FIELD_TYPE_DURATION, false, false, &pb.FieldConstraints{
+		EnumValues: []string{"1m30s", "5m0s"},
+	})
+
+	require.NoError(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(90 * time.Second)}}))
+	assert.Error(t, v.Validate(&pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(10 * time.Second)}}))
 }
 
 // --- Duration constraints ---
