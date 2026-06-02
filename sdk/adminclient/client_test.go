@@ -535,3 +535,35 @@ func TestGetLatestPublishedSchemaVersion_GetSchemaVersionError(t *testing.T) {
 		t.Errorf("expected transport error, got %v", err)
 	}
 }
+
+func TestGetLatestPublishedSchemaVersion_GappedVersionHistory(t *testing.T) {
+	// v5 draft, v4 deleted (ErrNotFound), v3 published — should return v3.
+	ms := &mockSchemaTransport{}
+	client := New(WithSchemaTransport(ms))
+
+	ms.listSchemasFn = func(_ context.Context, _ int32, _ string) (*ListSchemasResponse, error) {
+		return &ListSchemasResponse{
+			Schemas: []*Schema{{ID: "s1", Name: "payments", Version: 5, Published: false}},
+		}, nil
+	}
+	ms.getSchemaFn = func(_ context.Context, id string, version *int32) (*Schema, error) {
+		if id != "s1" {
+			t.Errorf("unexpected id %q", id)
+		}
+		switch *version {
+		case 4:
+			return nil, ErrNotFound
+		case 3:
+			return &Schema{ID: "s1", Version: 3, Published: true}, nil
+		}
+		return nil, ErrNotFound
+	}
+
+	id, version, err := client.GetLatestPublishedSchemaVersion(context.Background(), "payments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "s1" || version != 3 {
+		t.Errorf("got %s@%d, want s1@3", id, version)
+	}
+}

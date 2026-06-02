@@ -2,6 +2,7 @@ package adminclient
 
 import (
 	"context"
+	"errors"
 )
 
 // CreateSchema creates a new schema with an initial draft version (v1).
@@ -177,6 +178,9 @@ func (c *Client) GetLatestPublishedSchemaVersion(ctx context.Context, name strin
 	// Latest is a draft — walk back to find the newest published version.
 	for v := match.Version - 1; v >= 1; v-- {
 		s, err := c.GetSchemaVersion(ctx, match.ID, v)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
 		if err != nil {
 			return "", 0, err
 		}
