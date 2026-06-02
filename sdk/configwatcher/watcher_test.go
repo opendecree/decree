@@ -866,3 +866,205 @@ func TestValue_DroppedCount_ViaWatcher(t *testing.T) {
 	cancel()
 	_ = w.Close()
 }
+
+// --- Dedup / unchanged-value tests ---
+
+// TestValue_NoChangeOnSameValue verifies that no Change is sent when update is
+// called with a value identical to the current value (unchanged reconnect case).
+func TestValue_NoChangeOnSameValue(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+
+	// First update: sets the value to 42 — should emit a Change.
+	v.update("42", true)
+	select {
+	case <-v.Changes():
+		// Expected: first update always emits.
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected Change for initial set, got none")
+	}
+
+	// Second update with the same value — should NOT emit a Change.
+	v.update("42", true)
+	select {
+	case ch := <-v.Changes():
+		t.Errorf("unexpected Change for unchanged value: old=%v new=%v", ch.Old, ch.New)
+	case <-time.After(50 * time.Millisecond):
+		// Correct: no Change emitted.
+	}
+}
+
+// TestValue_ChangeEmittedOnDifferentValue verifies that a Change IS still sent
+// when the value actually changes.
+func TestValue_ChangeEmittedOnDifferentValue(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+
+	v.update("1", true)
+	<-v.Changes() // drain first change
+
+	v.update("2", true)
+	select {
+	case ch := <-v.Changes():
+		if ch.Old != int64(1) || ch.New != int64(2) {
+			t.Errorf("got old=%v new=%v, want old=1 new=2", ch.Old, ch.New)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected Change for different value, got none")
+	}
+}
+
+// TestValue_NoChangeOnSameNull verifies that repeated null updates do not emit.
+func TestValue_NoChangeOnSameNull(t *testing.T) {
+	v := newValue("default", parseString)
+
+	// First null update from the initial null state — old and new are both null,
+	// values are both "default": no change expected.
+	v.update("", false)
+	select {
+	case ch := <-v.Changes():
+		t.Errorf("unexpected Change for null→null: %+v", ch)
+	case <-time.After(50 * time.Millisecond):
+		// Correct: both old and new are null+default, nothing to emit.
+	}
+
+	// Set a real value, then go back to null twice: second null must not re-emit.
+	v.update("hello", true)
+	<-v.Changes() // drain the set
+
+	v.update("", false) // → null (Change emitted)
+	<-v.Changes()       // drain the null change
+
+	v.update("", false) // still null (no Change)
+	select {
+	case ch := <-v.Changes():
+		t.Errorf("unexpected Change for repeated null: %+v", ch)
+	case <-time.After(50 * time.Millisecond):
+		// Correct.
+	}
+}
+
+// TestValue_NoChangeOnSameTime verifies that time.Time values are compared via
+// .Equal() so that monotonic-clock differences do not trigger spurious Changes.
+func TestValue_NoChangeOnSameTime(t *testing.T) {
+	epoch := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	v := newValue(time.Time{}, parseTime)
+
+	raw := epoch.Format(time.RFC3339Nano)
+
+	v.update(raw, true)
+	<-v.Changes() // drain initial change
+
+	// Send the same RFC3339Nano string again — parsed time equals the stored one.
+	v.update(raw, true)
+	select {
+	case ch := <-v.Changes():
+		t.Errorf("unexpected Change for identical time.Time: old=%v new=%v", ch.Old, ch.New)
+	case <-time.After(50 * time.Millisecond):
+		// Correct.
+	}
+}
+
+// TestWatcher_ReconnectNoSpuriousChanges verifies that on reconnect, when the
+// server returns the same values that were already in effect, no Changes are
+// emitted to consumers.
+func TestWatcher_ReconnectNoSpuriousChanges(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var snapshotCall atomic.Int32
+
+	firstSubCh := make(chan *configclient.ConfigChange, 4)
+	firstSubCtx, firstSubCancel := context.WithCancel(context.Background())
+	defer firstSubCancel()
+
+	secondSubCh := make(chan *configclient.ConfigChange, 4)
+	var subscribeCall atomic.Int32
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			// Both initial and reconnect snapshots return the same value.
+			snapshotCall.Add(1)
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "app.name", Value: configclient.StringVal("hello")},
+				},
+			}, nil
+		},
+		subscribeFn: func(subCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			call := int(subscribeCall.Add(1))
+			if call == 1 {
+				return &mockSubscription{ch: firstSubCh, ctx: firstSubCtx}, nil
+			}
+			return &mockSubscription{ch: secondSubCh, ctx: subCtx}, nil
+		},
+	}
+
+	w := &Watcher{
+		transport: tr,
+		tenantID:  "t1",
+		opts: options{
+			minBackoff:      5 * time.Millisecond,
+			maxBackoff:      20 * time.Millisecond,
+			snapshotTimeout: 100 * time.Millisecond,
+			logger:          slog.New(slog.NewTextHandler(io.Discard, nil)),
+		},
+		fields: make(map[string]*fieldEntry),
+		done:   make(chan struct{}),
+	}
+
+	name := w.String("app.name", "default")
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	// Drain the initial snapshot Change.
+	select {
+	case <-name.Changes():
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected initial Change from snapshot")
+	}
+
+	// Wait for first Subscribe call.
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for int(subscribeCall.Load()) < 1 {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for first Subscribe call")
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	// Simulate disconnect.
+	firstSubCancel()
+	close(firstSubCh)
+
+	// Wait for reconnect (second Subscribe call).
+	reconnectDeadline := time.Now().Add(500 * time.Millisecond)
+	for int(subscribeCall.Load()) < 2 {
+		if time.Now().After(reconnectDeadline) {
+			t.Fatal("timed out waiting for reconnect")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Give the watcher time to apply the reconnect snapshot.
+	time.Sleep(20 * time.Millisecond)
+
+	// No spurious Change should have been emitted: the reconnect snapshot
+	// returned the same value "hello" that was already in effect.
+	select {
+	case ch := <-name.Changes():
+		t.Errorf("spurious Change on reconnect with unchanged value: old=%q new=%q", ch.Old, ch.New)
+	case <-time.After(50 * time.Millisecond):
+		// Correct: no Change emitted.
+	}
+
+	// Value must still be accessible.
+	if got := name.Get(); got != "hello" {
+		t.Errorf("Get after reconnect: got %q, want %q", got, "hello")
+	}
+
+	cancel()
+	_ = w.Close()
+}
