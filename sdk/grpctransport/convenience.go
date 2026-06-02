@@ -23,7 +23,7 @@ func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) (*configclie
 	}
 	transport := &ConfigTransport{
 		rpc:  pb.NewConfigServiceClient(conn),
-		auth: cfg.auth,
+		auth: newAuthApplier(cfg.auth),
 	}
 	return configclient.New(transport, cfg.clientOpts...), nil
 }
@@ -42,9 +42,9 @@ func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) (*adminclient
 		return nil, err
 	}
 	return adminclient.New(
-		adminclient.WithSchemaTransport(&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: cfg.auth}),
-		adminclient.WithConfigTransport(&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: cfg.auth}),
-		adminclient.WithAuditTransport(&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: cfg.auth}),
+		adminclient.WithSchemaTransport(&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
+		adminclient.WithConfigTransport(&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
+		adminclient.WithAuditTransport(&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
 		adminclient.WithServerTransport(&ServerTransport{rpc: pb.NewServerServiceClient(conn)}),
 	), nil
 }
@@ -63,7 +63,7 @@ func NewWatcher(conn grpc.ClientConnInterface, tenantID string, opts ...Option) 
 	}
 	transport := &ConfigTransport{
 		rpc:  pb.NewConfigServiceClient(conn),
-		auth: cfg.auth,
+		auth: newAuthApplier(cfg.auth),
 	}
 	return configwatcher.New(transport, tenantID, cfg.watcherOpts...), nil
 }
