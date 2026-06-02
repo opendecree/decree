@@ -286,6 +286,45 @@ func TestParseDuration_Invalid(t *testing.T) {
 	}
 }
 
+// --- SilenceUsage / SilenceErrors (#707) ---
+
+func TestRootCmd_SilenceUsage(t *testing.T) {
+	if !rootCmd.SilenceUsage {
+		t.Error("expected rootCmd.SilenceUsage = true, got false")
+	}
+}
+
+func TestRootCmd_SilenceErrors(t *testing.T) {
+	if !rootCmd.SilenceErrors {
+		t.Error("expected rootCmd.SilenceErrors = true, got false")
+	}
+}
+
+// --- validate RunE returns error instead of os.Exit (#708) ---
+
+// TestValidateCmd_MissingFlagsReturnsError verifies that validateCmd.RunE
+// returns an error (rather than calling os.Exit) when required flags are absent.
+func TestValidateCmd_MissingFlagsReturnsError(t *testing.T) {
+	rootCmd.SetArgs([]string{"validate"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing --schema / --config, got nil")
+	}
+	if !strings.Contains(err.Error(), "required") {
+		t.Errorf("expected error to mention %q, got %q", "required", err.Error())
+	}
+}
+
+// TestValidateCmd_InvalidSchemaFileReturnsError verifies that a missing schema
+// file returns an error from RunE instead of calling os.Exit.
+func TestValidateCmd_InvalidSchemaFileReturnsError(t *testing.T) {
+	rootCmd.SetArgs([]string{"validate", "--schema", "/nonexistent/schema.yaml", "--config", "/nonexistent/config.yaml"})
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for missing schema file, got nil")
+	}
+}
+
 // --- Completions ---
 
 func TestCompletionScripts(t *testing.T) {
