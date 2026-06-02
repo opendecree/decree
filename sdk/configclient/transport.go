@@ -112,4 +112,6 @@ type ConfigChange struct {
 	FieldPath string
 	OldValue  *TypedValue
 	NewValue  *TypedValue
+	Version   int32
+	ChangedBy string
 }

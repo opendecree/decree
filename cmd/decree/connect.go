@@ -48,3 +48,7 @@ func newAdminClient(conn *grpc.ClientConn) (*adminclient.Client, error) {
 func newConfigClient(conn *grpc.ClientConn) (*configclient.Client, error) {
 	return grpctransport.NewConfigClient(conn, authOptions()...)
 }
+
+func newConfigTransport(conn *grpc.ClientConn) (*grpctransport.ConfigTransport, error) {
+	return grpctransport.NewConfigTransport(conn, authOptions()...)
+}
