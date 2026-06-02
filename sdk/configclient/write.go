@@ -2,6 +2,7 @@ package configclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -294,22 +295,38 @@ func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOp
 	})
 }
 
+// updateMaxAttempts is the maximum number of read-modify-write attempts in Update.
+const updateMaxAttempts = 3
+
 // Update performs an atomic read-modify-write on a single field.
 // It reads the current value and checksum, calls updateFn with the current value,
 // and writes the result back with the checksum for optimistic concurrency.
+// On [ErrChecksumMismatch] (concurrent write by another caller) the entire
+// read-modify-write cycle is retried up to 3 times before returning the error.
 //
-// Returns [ErrChecksumMismatch] if the value was modified between the read and write.
+// Returns [ErrChecksumMismatch] if the value was still being concurrently modified
+// after all retry attempts.
 // Returns [ErrNotFound] if the field has no value set.
-func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateFn func(current string) (string, error)) error {
-	lv, err := c.GetForUpdate(ctx, tenantID, fieldPath)
-	if err != nil {
-		return err
+func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateFn func(current string) (string, error), opts ...WriteOption) error {
+	for attempt := range updateMaxAttempts {
+		lv, err := c.GetForUpdate(ctx, tenantID, fieldPath)
+		if err != nil {
+			return err
+		}
+		newValue, err := updateFn(lv.Value)
+		if err != nil {
+			return err
+		}
+		err = lv.Set(ctx, newValue, opts...)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, ErrChecksumMismatch) || attempt == updateMaxAttempts-1 {
+			return err
+		}
 	}
-	newValue, err := updateFn(lv.Value)
-	if err != nil {
-		return err
-	}
-	return lv.Set(ctx, newValue)
+	// Unreachable, but satisfies the compiler.
+	return ErrChecksumMismatch
 }
 
 // --- Type-specific setters ---
