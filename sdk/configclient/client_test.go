@@ -674,6 +674,51 @@ func TestUpdate_ChecksumMismatchExhaustsRetries(t *testing.T) {
 	}
 }
 
+func TestUpdate_UpdateFnError(t *testing.T) {
+	fnErr := errors.New("fn failed")
+	calls := 0
+	tr := &sequencedTransport{
+		getField: func(_ context.Context, _ *GetFieldRequest) (*GetFieldResponse, error) {
+			calls++
+			return &GetFieldResponse{FieldPath: "f", Value: StringVal("v"), Checksum: "cs"}, nil
+		},
+		setField: func(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+			t.Fatal("Set should not be called when updateFn errors")
+			return nil, nil
+		},
+	}
+	client := New(tr)
+	err := client.Update(context.Background(), "t1", "f", func(string) (string, error) {
+		return "", fnErr
+	})
+	if !errors.Is(err, fnErr) {
+		t.Errorf("expected fnErr, got %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("expected 1 GetField call, got %d", calls)
+	}
+}
+
+func TestUpdate_GetForUpdateError(t *testing.T) {
+	getErr := errors.New("get failed")
+	tr := &sequencedTransport{
+		getField: func(_ context.Context, _ *GetFieldRequest) (*GetFieldResponse, error) {
+			return nil, getErr
+		},
+		setField: func(_ context.Context, _ *SetFieldRequest) (*SetFieldResponse, error) {
+			t.Fatal("Set should not be called when GetForUpdate errors")
+			return nil, nil
+		},
+	}
+	client := New(tr)
+	err := client.Update(context.Background(), "t1", "f", func(s string) (string, error) {
+		return s + "_new", nil
+	})
+	if !errors.Is(err, getErr) {
+		t.Errorf("expected getErr, got %v", err)
+	}
+}
+
 // sequencedTransport is a Transport implementation driven by user-supplied
 // function fields. Used to build stateful call sequences in tests.
 type sequencedTransport struct {
