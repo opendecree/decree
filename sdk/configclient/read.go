@@ -9,7 +9,8 @@ import (
 
 // Get returns the current value of a single configuration field as a string.
 // Any typed value is converted to its string representation.
-// Returns [ErrNotFound] if the field has no value set.
+// Returns "" if the field value is null; use [Client.GetStringNullable] to distinguish null from an empty string.
+// Returns [ErrNotFound] if the field does not exist (originates from the transport).
 func (c *Client) Get(ctx context.Context, tenantID, fieldPath string) (string, error) {
 	return retry(ctx, c, func(ctx context.Context) (string, error) {
 		resp, err := c.transport.GetField(ctx, &GetFieldRequest{
@@ -50,7 +51,9 @@ func (c *Client) GetFields(ctx context.Context, tenantID string, fieldPaths []st
 		}
 		result := make(map[string]string, len(resp.Values))
 		for _, v := range resp.Values {
-			result[v.FieldPath] = v.Value.String()
+			if v.Value != nil {
+				result[v.FieldPath] = v.Value.String()
+			}
 		}
 		return result, nil
 	})

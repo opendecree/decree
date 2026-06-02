@@ -134,6 +134,22 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
+func TestGet_Null(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetField", nil, &GetFieldResponse{FieldPath: "payments.fee", Value: nil}, nil)
+
+	val, err := client.Get(ctx, "t1", "payments.fee")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if val != "" {
+		t.Errorf("got %q, want empty string for null value", val)
+	}
+}
+
 // --- GetAll ---
 
 func TestGetAll_Success(t *testing.T) {
@@ -157,6 +173,33 @@ func TestGetAll_Success(t *testing.T) {
 	want := map[string]string{"a": "1", "b": "2"}
 	if !reflect.DeepEqual(vals, want) {
 		t.Errorf("got %v, want %v", vals, want)
+	}
+}
+
+// --- GetFields ---
+
+func TestGetFields_OmitsNull(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	tr.on("GetFields", nil, &GetFieldsResponse{
+		Values: []ConfigValue{
+			{FieldPath: "a", Value: StringVal("hello")},
+			{FieldPath: "b", Value: nil},
+		},
+	}, nil)
+
+	vals, err := client.GetFields(ctx, "t1", []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := map[string]string{"a": "hello"}
+	if !reflect.DeepEqual(vals, want) {
+		t.Errorf("got %v, want %v", vals, want)
+	}
+	if _, ok := vals["b"]; ok {
+		t.Error("null field b must be omitted from result")
 	}
 }
 
