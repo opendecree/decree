@@ -172,11 +172,16 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 		if constraints.Regex != nil {
 			re, err := regexp.Compile(*constraints.Regex)
 			if err != nil {
-				slog.Default().Error("invalid regex constraint in schema; skipping check",
+				slog.Default().Error("invalid regex constraint in schema; failing closed",
 					"field", fieldPath, "pattern", *constraints.Regex, "error", err)
 				if o.regexErrorCounter != nil {
 					o.regexErrorCounter.Add(context.Background(), 1)
 				}
+				// Fail closed: a broken constraint must not silently accept all values.
+				compileErr := fmt.Errorf("constraint cannot be enforced: invalid regex pattern: %w", err)
+				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
+					return compileErr
+				})
 			} else {
 				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 					val := tv.Kind.(*pb.TypedValue_StringValue).StringValue
@@ -202,7 +207,15 @@ func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, 
 	case pb.FieldType_FIELD_TYPE_JSON:
 		if constraints.JsonSchema != nil {
 			jv, err := newJSONSchemaValidator(*constraints.JsonSchema, o)
-			if err == nil {
+			if err != nil {
+				slog.Default().Error("invalid json_schema constraint in schema; failing closed",
+					"field", fieldPath, "error", err)
+				// Fail closed: a broken constraint must not silently accept all values.
+				compileErr := fmt.Errorf("constraint cannot be enforced: invalid json_schema: %w", err)
+				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
+					return compileErr
+				})
+			} else {
 				v.checks = append(v.checks, func(tv *pb.TypedValue) error {
 					val := tv.Kind.(*pb.TypedValue_JsonValue).JsonValue
 					return jv.validate(val)
