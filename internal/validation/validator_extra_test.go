@@ -2,8 +2,11 @@ package validation
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/internal/storage/domain"
@@ -33,7 +36,23 @@ func TestTypedValueToString(t *testing.T) {
 		{"bool", &pb.TypedValue{Kind: &pb.TypedValue_BoolValue{BoolValue: true}}, "true"},
 		{"url", &pb.TypedValue{Kind: &pb.TypedValue_UrlValue{UrlValue: "https://x.io"}}, "https://x.io"},
 		{"json", &pb.TypedValue{Kind: &pb.TypedValue_JsonValue{JsonValue: "[1]"}}, "[1]"},
-		{"time falls through to default", &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{}}, ""},
+		{"time nil inner", &pb.TypedValue{Kind: &pb.TypedValue_TimeValue{}}, ""},
+		{
+			"time with value",
+			&pb.TypedValue{Kind: &pb.TypedValue_TimeValue{TimeValue: timestamppb.New(time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC))}},
+			"2024-01-02T03:04:05Z",
+		},
+		{"duration nil inner", &pb.TypedValue{Kind: &pb.TypedValue_DurationValue{}}, ""},
+		{
+			"duration with value",
+			&pb.TypedValue{Kind: &pb.TypedValue_DurationValue{DurationValue: durationpb.New(90 * time.Second)}},
+			"1m30s",
+		},
+		{
+			"large number uses f format not g",
+			&pb.TypedValue{Kind: &pb.TypedValue_NumberValue{NumberValue: 1_000_000}},
+			"1000000",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

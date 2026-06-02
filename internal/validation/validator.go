@@ -10,6 +10,8 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"strconv"
+	"time"
 	"unicode/utf8"
 
 	pb "github.com/opendecree/decree/api/centralconfig/v1"
@@ -310,19 +312,32 @@ func addNumericChecks(checks *[]checkFunc, c *pb.FieldConstraints, extract func(
 }
 
 // typedValueToString extracts a string representation for enum comparison.
+// It uses the same canonical format as storage (FormatFloat 'f' for numbers,
+// RFC3339Nano for time, Duration.String() for duration) so that stored values
+// round-trip correctly through enum validation.
 func typedValueToString(tv *pb.TypedValue) string {
 	if tv == nil {
 		return ""
 	}
 	switch v := tv.Kind.(type) {
 	case *pb.TypedValue_IntegerValue:
-		return fmt.Sprintf("%d", v.IntegerValue)
+		return strconv.FormatInt(v.IntegerValue, 10)
 	case *pb.TypedValue_NumberValue:
-		return fmt.Sprintf("%g", v.NumberValue)
+		return strconv.FormatFloat(v.NumberValue, 'f', -1, 64)
 	case *pb.TypedValue_StringValue:
 		return v.StringValue
 	case *pb.TypedValue_BoolValue:
-		return fmt.Sprintf("%t", v.BoolValue)
+		return strconv.FormatBool(v.BoolValue)
+	case *pb.TypedValue_TimeValue:
+		if v.TimeValue != nil {
+			return v.TimeValue.AsTime().Format(time.RFC3339Nano)
+		}
+		return ""
+	case *pb.TypedValue_DurationValue:
+		if v.DurationValue != nil {
+			return v.DurationValue.AsDuration().String()
+		}
+		return ""
 	case *pb.TypedValue_UrlValue:
 		return v.UrlValue
 	case *pb.TypedValue_JsonValue:
