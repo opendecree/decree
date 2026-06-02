@@ -122,6 +122,26 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 		}
 	}
 
+	v.notifyLocked(oldVal, wasNull)
+}
+
+// updateDirect sets the value directly without string parsing.
+func (v *Value[T]) updateDirect(val T) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	oldVal := v.current
+	wasNull := !v.isSet
+
+	v.current = val
+	v.isSet = true
+
+	v.notifyLocked(oldVal, wasNull)
+}
+
+// notifyLocked emits a Change if the effective value or null-state changed.
+// Must be called with v.mu held.
+func (v *Value[T]) notifyLocked(oldVal T, wasNull bool) {
 	// Do not send on a closed channel.
 	if v.closed {
 		return

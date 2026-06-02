@@ -61,8 +61,9 @@ type Watcher struct {
 }
 
 type fieldEntry struct {
-	rawUpdate func(value string, isSet bool)
-	closeFunc func()
+	rawUpdate   func(value string, isSet bool)
+	typedUpdate func(tv *configclient.TypedValue)
+	closeFunc   func()
 }
 
 type options struct {
@@ -188,10 +189,63 @@ func registerField[T any](w *Watcher, fieldPath string, defaultVal T, parse func
 	v.fieldPath = fieldPath
 	v.logger = w.opts.logger
 	w.fields[fieldPath] = &fieldEntry{
-		rawUpdate: func(value string, isSet bool) { v.update(value, isSet) },
-		closeFunc: func() { v.close() },
+		rawUpdate:   func(value string, isSet bool) { v.update(value, isSet) },
+		typedUpdate: typedUpdater(v),
+		closeFunc:   func() { v.close() },
 	}
 	return v, nil
+}
+
+// typedUpdater returns a closure that delivers a *configclient.TypedValue directly
+// to v when the Kind matches T, and falls back to string parsing otherwise.
+func typedUpdater[T any](v *Value[T]) func(tv *configclient.TypedValue) {
+	return func(tv *configclient.TypedValue) {
+		switch tv.Kind() {
+		case configclient.KindInteger:
+			if n, ok := tv.IntValue(); ok {
+				if direct, ok := any(n).(T); ok {
+					v.updateDirect(direct)
+					return
+				}
+			}
+		case configclient.KindNumber:
+			if f, ok := tv.FloatValue(); ok {
+				if direct, ok := any(f).(T); ok {
+					v.updateDirect(direct)
+					return
+				}
+			}
+		case configclient.KindBool:
+			if b, ok := tv.BoolValue(); ok {
+				if direct, ok := any(b).(T); ok {
+					v.updateDirect(direct)
+					return
+				}
+			}
+		case configclient.KindTime:
+			if t, ok := tv.TimeValue(); ok {
+				if direct, ok := any(t).(T); ok {
+					v.updateDirect(direct)
+					return
+				}
+			}
+		case configclient.KindDuration:
+			if d, ok := tv.DurationValue(); ok {
+				if direct, ok := any(d).(T); ok {
+					v.updateDirect(direct)
+					return
+				}
+			}
+		case configclient.KindString, configclient.KindURL, configclient.KindJSON:
+			s := tv.String()
+			if direct, ok := any(s).(T); ok {
+				v.updateDirect(direct)
+				return
+			}
+		}
+		// Kind mismatch or unrecognized kind: fall back to string parsing.
+		v.update(tv.String(), true)
+	}
 }
 
 // --- Lifecycle ---
@@ -295,17 +349,17 @@ func (w *Watcher) loadSnapshot(ctx context.Context) (int32, error) {
 		return 0, err
 	}
 
-	// Build a map of field path → string value.
-	values := make(map[string]string, len(resp.Values))
+	// Build a map of field path → TypedValue.
+	values := make(map[string]*configclient.TypedValue, len(resp.Values))
 	for _, v := range resp.Values {
-		values[v.FieldPath] = v.Value.String()
+		values[v.FieldPath] = v.Value
 	}
 
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	for path, entry := range w.fields {
-		if val, ok := values[path]; ok {
-			entry.rawUpdate(val, true)
+		if tv, ok := values[path]; ok && tv != nil {
+			entry.typedUpdate(tv)
 		} else {
 			entry.rawUpdate("", false)
 		}
@@ -379,7 +433,7 @@ func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string, snapshotVe
 		w.mu.RLock()
 		if entry, ok := w.fields[change.FieldPath]; ok {
 			if change.NewValue != nil {
-				entry.rawUpdate(change.NewValue.String(), true)
+				entry.typedUpdate(change.NewValue)
 			} else {
 				entry.rawUpdate("", false)
 			}

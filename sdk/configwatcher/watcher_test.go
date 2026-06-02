@@ -1164,3 +1164,236 @@ func TestWatcher_ReconnectNoSpuriousChanges(t *testing.T) {
 	cancel()
 	_ = w.Close()
 }
+
+// --- Direct typed-value delivery tests ---
+
+// TestTypedUpdater_DirectInt verifies that an IntVal is delivered to an int field
+// without going through string parsing.
+func TestTypedUpdater_DirectInt(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+	u := typedUpdater(v)
+
+	u(configclient.IntVal(42))
+
+	if got := v.Get(); got != int64(42) {
+		t.Errorf("got %v, want 42", got)
+	}
+	_, ok := v.GetWithNull()
+	if !ok {
+		t.Error("expected isSet=true after direct int update")
+	}
+}
+
+// TestTypedUpdater_DirectFloat verifies that a FloatVal is delivered to a float field
+// without going through string parsing.
+func TestTypedUpdater_DirectFloat(t *testing.T) {
+	v := newValue(0.0, parseFloat)
+	u := typedUpdater(v)
+
+	u(configclient.FloatVal(3.14))
+
+	if got := v.Get(); got != 3.14 {
+		t.Errorf("got %v, want 3.14", got)
+	}
+}
+
+// TestTypedUpdater_DirectBool verifies that a BoolVal is delivered directly.
+func TestTypedUpdater_DirectBool(t *testing.T) {
+	v := newValue(false, parseBool)
+	u := typedUpdater(v)
+
+	u(configclient.BoolVal(true))
+
+	if got := v.Get(); !got {
+		t.Error("got false, want true")
+	}
+}
+
+// TestTypedUpdater_DirectDuration verifies that a DurationVal is delivered directly.
+func TestTypedUpdater_DirectDuration(t *testing.T) {
+	v := newValue(time.Duration(0), parseDuration)
+	u := typedUpdater(v)
+
+	u(configclient.DurationVal(5 * time.Minute))
+
+	if got := v.Get(); got != 5*time.Minute {
+		t.Errorf("got %v, want 5m", got)
+	}
+}
+
+// TestTypedUpdater_DirectTime verifies that a TimeVal is delivered directly.
+func TestTypedUpdater_DirectTime(t *testing.T) {
+	ts := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	v := newValue(time.Time{}, parseTime)
+	u := typedUpdater(v)
+
+	u(configclient.TimeVal(ts))
+
+	if got := v.Get(); !got.Equal(ts) {
+		t.Errorf("got %v, want %v", got, ts)
+	}
+}
+
+// TestTypedUpdater_DirectString verifies that a StringVal is delivered directly.
+func TestTypedUpdater_DirectString(t *testing.T) {
+	v := newValue("", parseString)
+	u := typedUpdater(v)
+
+	u(configclient.StringVal("hello"))
+
+	if got := v.Get(); got != "hello" {
+		t.Errorf("got %q, want %q", got, "hello")
+	}
+}
+
+// TestTypedUpdater_KindMismatchFallback verifies that when the server sends a
+// StringVal for an int field (kind mismatch), the watcher falls back to string
+// parsing. A parseable string succeeds; a non-parseable string falls back to default.
+func TestTypedUpdater_KindMismatchFallback(t *testing.T) {
+	v := newValue(int64(99), parseInt)
+	u := typedUpdater(v)
+
+	// StringVal "7" can be parsed as int64 via string fallback.
+	u(configclient.StringVal("7"))
+	if got := v.Get(); got != int64(7) {
+		t.Errorf("parseable fallback: got %v, want 7", got)
+	}
+
+	// StringVal "bad" cannot be parsed — falls back to default.
+	u(configclient.StringVal("bad"))
+	if got := v.Get(); got != int64(99) {
+		t.Errorf("unparseable fallback: got %v, want default 99", got)
+	}
+}
+
+// TestTypedUpdater_URLAndJSON verifies that URL and JSON typed values are delivered
+// as strings to a string field directly.
+func TestTypedUpdater_URLAndJSON(t *testing.T) {
+	v := newValue("", parseString)
+	u := typedUpdater(v)
+
+	u(configclient.URLVal("https://example.com"))
+	if got := v.Get(); got != "https://example.com" {
+		t.Errorf("URL: got %q, want %q", got, "https://example.com")
+	}
+
+	u(configclient.JSONVal(`{"key":"val"}`))
+	if got := v.Get(); got != `{"key":"val"}` {
+		t.Errorf("JSON: got %q, want %q", got, `{"key":"val"}`)
+	}
+}
+
+// TestValue_UpdateDirect verifies that updateDirect sets the value and emits a Change.
+func TestValue_UpdateDirect(t *testing.T) {
+	v := newValue(int64(0), parseInt)
+
+	v.updateDirect(int64(55))
+
+	if got := v.Get(); got != int64(55) {
+		t.Errorf("got %v, want 55", got)
+	}
+	_, ok := v.GetWithNull()
+	if !ok {
+		t.Error("expected isSet=true after updateDirect")
+	}
+
+	select {
+	case ch := <-v.Changes():
+		if ch.WasNull != true {
+			t.Error("expected WasNull=true on first direct update")
+		}
+		if ch.New != int64(55) {
+			t.Errorf("Change.New: got %v, want 55", ch.New)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected Change on channel after updateDirect")
+	}
+}
+
+// TestWatcher_SnapshotDirectDelivery verifies end-to-end that snapshot values are
+// delivered via the direct path for int and duration kinds.
+func TestWatcher_SnapshotDirectDelivery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{
+				TenantID: "t1",
+				Version:  1,
+				Values: []configclient.ConfigValue{
+					{FieldPath: "a.int", Value: configclient.IntVal(42)},
+					{FieldPath: "b.dur", Value: configclient.DurationVal(30 * time.Second)},
+				},
+			}, nil
+		},
+		subscribeFn: func(ctx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: ctx}, nil
+		},
+	}
+
+	w := New(tr, "t1")
+	n, err := w.Int("a.int", 0)
+	if err != nil {
+		t.Fatalf("Int: %v", err)
+	}
+	d, err := w.Duration("b.dur", 0)
+	if err != nil {
+		t.Fatalf("Duration: %v", err)
+	}
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	if got := n.Get(); got != int64(42) {
+		t.Errorf("int field: got %v, want 42", got)
+	}
+	if got := d.Get(); got != 30*time.Second {
+		t.Errorf("duration field: got %v, want 30s", got)
+	}
+}
+
+// TestWatcher_StreamDirectDelivery verifies that stream updates are delivered
+// via the direct path for int fields.
+func TestWatcher_StreamDirectDelivery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sub := newMockSubscription(ctx)
+
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			return sub, nil
+		},
+	}
+
+	w := New(tr, "t1")
+	n, err := w.Int("x.count", 0)
+	if err != nil {
+		t.Fatalf("Int: %v", err)
+	}
+
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	sub.send(&configclient.ConfigChange{
+		TenantID:  "t1",
+		FieldPath: "x.count",
+		NewValue:  configclient.IntVal(100),
+	})
+
+	select {
+	case <-n.Changes():
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("no Change received")
+	}
+
+	if got := n.Get(); got != int64(100) {
+		t.Errorf("got %v, want 100", got)
+	}
+}
