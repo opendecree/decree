@@ -142,8 +142,9 @@ type VerifyChainResult struct {
 type VerifyChainBreak struct {
 	EntryID  string
 	Position int
-	Got      string // stored entry_hash
-	Want     string // recomputed entry_hash
+	Got      string // stored value (entry_hash or previous_hash)
+	Want     string // expected value
+	Reason   string // human-readable description of the break (e.g. "hash mismatch" or "chain is truncated: ...")
 }
 
 // UsageStats represents aggregated read usage statistics for a field.

@@ -1054,3 +1054,106 @@ func TestVerifyChain_Epoch1_IntactChain(t *testing.T) {
 		t.Errorf("got Total %d, want 2", result.Total)
 	}
 }
+
+// TestVerifyChain_TailTruncation_NonEmptyPreviousHash verifies that a chain whose
+// oldest entry has a non-empty previous_hash is detected as truncated (tail truncation).
+func TestVerifyChain_TailTruncation_NonEmptyPreviousHash(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Second)
+
+	// Simulate a chain that starts at entry id-1 (genesis id-0 was removed).
+	// id-1's PreviousHash is non-empty, indicating the chain was truncated.
+	e0 := &AuditEntry{
+		ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t0,
+	}
+	h0 := computeClientHash("someprevhash", e0)
+	e0.EntryHash = h0
+	e0.PreviousHash = "someprevhash" // oldest entry has non-empty previous_hash
+
+	e1 := &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t1,
+	}
+	h1 := computeClientHash(h0, e1)
+	e1.EntryHash = h1
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		// Server returns newest-first: e1, e0.
+		return &QueryWriteLogResponse{
+			Entries: []*AuditEntry{e1, e0},
+		}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.OK {
+		t.Error("expected OK=false for tail-truncated chain")
+	}
+	// Must have at least one break describing the truncation.
+	found := false
+	for _, b := range result.Breaks {
+		if strings.Contains(b.Reason, "truncated") {
+			found = true
+			if b.EntryID != "id-0" {
+				t.Errorf("truncation break EntryID: got %q, want %q", b.EntryID, "id-0")
+			}
+			if b.Got != "someprevhash" {
+				t.Errorf("truncation break Got: got %q, want %q", b.Got, "someprevhash")
+			}
+			if b.Want != "" {
+				t.Errorf("truncation break Want: got %q, want %q", b.Want, "")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected a break with Reason mentioning 'truncated', got breaks: %v", result.Breaks)
+	}
+}
+
+// TestVerifyChain_IntactChain_GenesisCheck verifies that an intact chain whose oldest
+// entry has previous_hash == "" still reports OK=true.
+func TestVerifyChain_IntactChain_GenesisCheck(t *testing.T) {
+	ma := &mockAuditTransport{}
+	client := New(WithAuditTransport(ma))
+
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Second)
+
+	e0 := &AuditEntry{
+		ID: "id-0", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t0,
+		// PreviousHash is "" — correct genesis entry.
+	}
+	h0 := computeClientHash("", e0)
+	e0.EntryHash = h0
+
+	e1 := &AuditEntry{
+		ID: "id-1", TenantID: "t1", Actor: "actor", Action: "set_field", ObjectKind: "field",
+		CreatedAt: t1,
+	}
+	h1 := computeClientHash(h0, e1)
+	e1.EntryHash = h1
+
+	ma.queryWriteLogFn = func(_ context.Context, _ *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+		return &QueryWriteLogResponse{
+			Entries: []*AuditEntry{e1, e0},
+		}, nil
+	}
+
+	result, err := client.VerifyChain(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.OK {
+		t.Errorf("expected OK=true for intact chain with empty genesis previous_hash, got breaks: %v", result.Breaks)
+	}
+	if result.Total != 2 {
+		t.Errorf("got Total %d, want 2", result.Total)
+	}
+}
