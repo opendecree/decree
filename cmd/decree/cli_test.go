@@ -481,6 +481,71 @@ func TestPrintStatus_WritesToStderrNotStdout(t *testing.T) {
 	}
 }
 
+// --- isOfflineInvocation (#709) ---
+
+func TestIsOfflineInvocation_AlwaysOffline(t *testing.T) {
+	offline := []string{"validate", "version", "gen-docs", "gen-man"}
+	for _, name := range offline {
+		t.Run(name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: name}
+			if !isOfflineInvocation(cmd) {
+				t.Errorf("expected %q to be offline", name)
+			}
+		})
+	}
+}
+
+func TestIsOfflineInvocation_DiffFileMode(t *testing.T) {
+	cmd := &cobra.Command{Use: "diff"}
+	cmd.Flags().String("old", "", "")
+	cmd.Flags().String("new", "", "")
+
+	// Neither flag set → server mode → not offline.
+	if isOfflineInvocation(cmd) {
+		t.Error("expected diff with no flags to be online")
+	}
+
+	// Only --old set → still server mode (error case, but not offline).
+	_ = cmd.Flags().Set("old", "v1.yaml")
+	if isOfflineInvocation(cmd) {
+		t.Error("expected diff with only --old to be online")
+	}
+
+	// Both flags set → file mode → offline.
+	_ = cmd.Flags().Set("new", "v2.yaml")
+	if !isOfflineInvocation(cmd) {
+		t.Error("expected diff with --old and --new to be offline")
+	}
+}
+
+func TestIsOfflineInvocation_DocgenFileMode(t *testing.T) {
+	cmd := &cobra.Command{Use: "docgen"}
+	cmd.Flags().String("file", "", "")
+
+	// No --file → server mode → not offline.
+	if isOfflineInvocation(cmd) {
+		t.Error("expected docgen with no --file to be online")
+	}
+
+	// --file set → offline.
+	_ = cmd.Flags().Set("file", "schema.yaml")
+	if !isOfflineInvocation(cmd) {
+		t.Error("expected docgen with --file to be offline")
+	}
+}
+
+func TestIsOfflineInvocation_OnlineCommands(t *testing.T) {
+	online := []string{"schema", "tenant", "config", "watch", "lock", "audit", "seed", "dump"}
+	for _, name := range online {
+		t.Run(name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: name}
+			if isOfflineInvocation(cmd) {
+				t.Errorf("expected %q to be online", name)
+			}
+		})
+	}
+}
+
 // --- Completions ---
 
 func TestCompletionScripts(t *testing.T) {

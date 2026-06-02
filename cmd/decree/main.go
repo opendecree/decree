@@ -43,7 +43,7 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-		if !flagWait {
+		if !flagWait || isOfflineInvocation(cmd) {
 			return nil
 		}
 		timeout, err := time.ParseDuration(flagWaitTimeout)
@@ -62,6 +62,23 @@ var rootCmd = &cobra.Command{
 		fmt.Fprintf(cmd.ErrOrStderr(), "Server ready.\n")
 		return nil
 	},
+}
+
+// isOfflineInvocation returns true when the given command does not need a
+// server connection and therefore should not block on --wait.
+func isOfflineInvocation(cmd *cobra.Command) bool {
+	switch cmd.Name() {
+	case "validate", "version", "gen-docs", "gen-man":
+		return true
+	case "diff":
+		old, _ := cmd.Flags().GetString("old")
+		new, _ := cmd.Flags().GetString("new")
+		return old != "" && new != ""
+	case "docgen":
+		file, _ := cmd.Flags().GetString("file")
+		return file != ""
+	}
+	return false
 }
 
 func init() {
