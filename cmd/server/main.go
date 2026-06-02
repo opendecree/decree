@@ -298,12 +298,14 @@ func run() int {
 	validationMetrics := telemetry.NewValidationMetrics(otelCfg)
 
 	// Validator factory (shared between schema + config services).
+	// Start from DefaultLimits so fields not wired to env vars (e.g.
+	// RegexMaxLength) keep their safe defaults rather than being zeroed.
+	validationLimits := validation.DefaultLimits()
+	validationLimits.CompileTimeout = cfg.SchemaCompileTimeout
+	validationLimits.MaxDepth = cfg.SchemaMaxRefDepth
+	validationLimits.MaxConcurrentCompiles = cfg.SchemaMaxConcurrentCompiles
 	validatorOpts := []validation.Option{
-		validation.WithLimits(validation.Limits{
-			CompileTimeout:        cfg.SchemaCompileTimeout,
-			MaxDepth:              cfg.SchemaMaxRefDepth,
-			MaxConcurrentCompiles: cfg.SchemaMaxConcurrentCompiles,
-		}),
+		validation.WithLimits(validationLimits),
 	}
 	if counter, ok := validationMetrics.TimeoutCounter(); ok {
 		validatorOpts = append(validatorOpts, validation.WithTimeoutCounter(counter))
@@ -348,15 +350,17 @@ func run() int {
 
 	// Register services.
 	if srv.IsServiceEnabled("schema") {
+		// Start from DefaultLimits so fields not wired to env vars (e.g.
+		// RegexPatternMaxLength) keep their safe defaults rather than being zeroed.
+		schemaLimits := schema.DefaultLimits()
+		schemaLimits.MaxFields = cfg.SchemaMaxFields
+		schemaLimits.MaxDocBytes = cfg.SchemaMaxDocBytes
+		schemaLimits.MaxRemoveFields = cfg.SchemaMaxRemoveFields
 		schemaSvc := schema.NewService(schemaStoreVal,
 			schema.WithLogger(logger),
 			schema.WithMetrics(schemaMetrics),
 			schema.WithValidators(validatorFactory),
-			schema.WithLimits(schema.Limits{
-				MaxFields:       cfg.SchemaMaxFields,
-				MaxDocBytes:     cfg.SchemaMaxDocBytes,
-				MaxRemoveFields: cfg.SchemaMaxRemoveFields,
-			}),
+			schema.WithLimits(schemaLimits),
 		)
 		pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 		srv.SetServiceHealthy("centralconfig.v1.SchemaService")
