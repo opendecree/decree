@@ -659,7 +659,7 @@ func (s *Service) UpdateTenant(ctx context.Context, req *pb.UpdateTenantRequest)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: resolved.ID}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 	tenantID := resolved.ID
@@ -745,7 +745,7 @@ func (s *Service) DeleteTenant(ctx context.Context, req *pb.DeleteTenantRequest)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenant.ID}); err != nil {
+	if err := s.guard.Check(ctx, authz.ActionGlobal, authz.Resource{}); err != nil {
 		return nil, err
 	}
 
