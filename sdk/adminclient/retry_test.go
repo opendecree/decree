@@ -406,3 +406,208 @@ func TestRetry_GetSchema_ContextCancellation(t *testing.T) {
 		t.Errorf("got error %v, want context.Canceled", err)
 	}
 }
+
+// TestRetry_ListSchemas_PerPageRetry verifies that a retryable error on page 2
+// retries only that page and does not restart from page 1.
+func TestRetry_ListSchemas_PerPageRetry(t *testing.T) {
+	// calls tracks the pageToken passed on each invocation.
+	var tokensReceived []string
+	ms := &mockSchemaTransport{
+		listSchemasFn: func(_ context.Context, _ int32, pageToken string) (*ListSchemasResponse, error) {
+			tokensReceived = append(tokensReceived, pageToken)
+			switch pageToken {
+			case "":
+				return &ListSchemasResponse{
+					Schemas:       []*Schema{{ID: "s1"}},
+					NextPageToken: "page2",
+				}, nil
+			case "page2":
+				// Fail twice, then succeed — verifying retries stay on page 2.
+				if len(tokensReceived) < 4 {
+					return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+				}
+				return &ListSchemasResponse{Schemas: []*Schema{{ID: "s2"}}}, nil
+			}
+			return nil, fmt.Errorf("unexpected token %q", pageToken)
+		},
+	}
+	c := New(
+		WithSchemaTransport(ms),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	schemas, err := c.ListSchemas(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(schemas) != 2 {
+		t.Errorf("got %d schemas, want 2", len(schemas))
+	}
+	// Page 1 fetched once; page 2 fetched 3 times (2 failures + 1 success).
+	if len(tokensReceived) != 4 {
+		t.Errorf("got %d calls, want 4 (1 for page1 + 3 for page2)", len(tokensReceived))
+	}
+	// The first call must be page 1, the rest must all be page 2 (no restart).
+	if tokensReceived[0] != "" {
+		t.Errorf("call 0: got token %q, want empty (page 1)", tokensReceived[0])
+	}
+	for i := 1; i < len(tokensReceived); i++ {
+		if tokensReceived[i] != "page2" {
+			t.Errorf("call %d: got token %q, want page2", i, tokensReceived[i])
+		}
+	}
+}
+
+// TestRetry_ListTenants_PerPageRetry verifies per-page retry for ListTenants.
+func TestRetry_ListTenants_PerPageRetry(t *testing.T) {
+	var tokensReceived []string
+	ms := &mockSchemaTransport{
+		listTenantsFn: func(_ context.Context, _ *string, _ int32, pageToken string) (*ListTenantsResponse, error) {
+			tokensReceived = append(tokensReceived, pageToken)
+			switch pageToken {
+			case "":
+				return &ListTenantsResponse{
+					Tenants:       []*Tenant{{ID: "t1"}},
+					NextPageToken: "page2",
+				}, nil
+			case "page2":
+				if len(tokensReceived) < 4 {
+					return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+				}
+				return &ListTenantsResponse{Tenants: []*Tenant{{ID: "t2"}}}, nil
+			}
+			return nil, fmt.Errorf("unexpected token %q", pageToken)
+		},
+	}
+	c := New(
+		WithSchemaTransport(ms),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	tenants, err := c.ListTenants(context.Background(), "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tenants) != 2 {
+		t.Errorf("got %d tenants, want 2", len(tenants))
+	}
+	if len(tokensReceived) != 4 {
+		t.Errorf("got %d calls, want 4", len(tokensReceived))
+	}
+	if tokensReceived[0] != "" {
+		t.Errorf("call 0: got token %q, want empty", tokensReceived[0])
+	}
+	for i := 1; i < len(tokensReceived); i++ {
+		if tokensReceived[i] != "page2" {
+			t.Errorf("call %d: got token %q, want page2", i, tokensReceived[i])
+		}
+	}
+}
+
+// TestRetry_ListConfigVersions_PerPageRetry verifies per-page retry for ListConfigVersions.
+func TestRetry_ListConfigVersions_PerPageRetry(t *testing.T) {
+	var tokensReceived []string
+	mc := &mockConfigTransport{
+		listVersionsFn: func(_ context.Context, _ string, _ int32, pageToken string) (*ListVersionsResponse, error) {
+			tokensReceived = append(tokensReceived, pageToken)
+			switch pageToken {
+			case "":
+				return &ListVersionsResponse{
+					Versions:      []*Version{{Version: 2}},
+					NextPageToken: "page2",
+				}, nil
+			case "page2":
+				if len(tokensReceived) < 4 {
+					return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+				}
+				return &ListVersionsResponse{Versions: []*Version{{Version: 1}}}, nil
+			}
+			return nil, fmt.Errorf("unexpected token %q", pageToken)
+		},
+	}
+	c := New(
+		WithConfigTransport(mc),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	versions, err := c.ListConfigVersions(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Errorf("got %d versions, want 2", len(versions))
+	}
+	if len(tokensReceived) != 4 {
+		t.Errorf("got %d calls, want 4", len(tokensReceived))
+	}
+	if tokensReceived[0] != "" {
+		t.Errorf("call 0: got token %q, want empty", tokensReceived[0])
+	}
+	for i := 1; i < len(tokensReceived); i++ {
+		if tokensReceived[i] != "page2" {
+			t.Errorf("call %d: got token %q, want page2", i, tokensReceived[i])
+		}
+	}
+}
+
+// TestRetry_QueryWriteLog_PerPageRetry verifies per-page retry for QueryWriteLog.
+func TestRetry_QueryWriteLog_PerPageRetry(t *testing.T) {
+	var tokensReceived []string
+	ma := &mockAuditTransport{
+		queryWriteLogFn: func(_ context.Context, req *QueryWriteLogRequest) (*QueryWriteLogResponse, error) {
+			tokensReceived = append(tokensReceived, req.PageToken)
+			switch req.PageToken {
+			case "":
+				return &QueryWriteLogResponse{
+					Entries:       []*AuditEntry{{ID: "e1"}},
+					NextPageToken: "page2",
+				}, nil
+			case "page2":
+				if len(tokensReceived) < 4 {
+					return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+				}
+				return &QueryWriteLogResponse{Entries: []*AuditEntry{{ID: "e2"}}}, nil
+			}
+			return nil, fmt.Errorf("unexpected token %q", req.PageToken)
+		},
+	}
+	c := New(
+		WithAuditTransport(ma),
+		WithRetry(RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     10 * time.Millisecond,
+		}),
+	)
+
+	entries, err := c.QueryWriteLog(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("got %d entries, want 2", len(entries))
+	}
+	if len(tokensReceived) != 4 {
+		t.Errorf("got %d calls, want 4", len(tokensReceived))
+	}
+	if tokensReceived[0] != "" {
+		t.Errorf("call 0: got token %q, want empty", tokensReceived[0])
+	}
+	for i := 1; i < len(tokensReceived); i++ {
+		if tokensReceived[i] != "page2" {
+			t.Errorf("call %d: got token %q, want page2", i, tokensReceived[i])
+		}
+	}
+}

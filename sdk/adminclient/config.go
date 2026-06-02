@@ -27,22 +27,22 @@ func (c *Client) ListConfigVersions(ctx context.Context, tenantID string) ([]*Ve
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
 	}
-	return retry(ctx, c, func(ctx context.Context) ([]*Version, error) {
-		var all []*Version
-		pageToken := ""
-		for {
-			resp, err := c.config.ListVersions(ctx, tenantID, 100, pageToken)
-			if err != nil {
-				return nil, err
-			}
-			all = append(all, resp.Versions...)
-			if resp.NextPageToken == "" {
-				break
-			}
-			pageToken = resp.NextPageToken
+	var all []*Version
+	pageToken := ""
+	for {
+		resp, err := retry(ctx, c, func(ctx context.Context) (*ListVersionsResponse, error) {
+			return c.config.ListVersions(ctx, tenantID, 100, pageToken)
+		})
+		if err != nil {
+			return nil, err
 		}
-		return all, nil
-	})
+		all = append(all, resp.Versions...)
+		if resp.NextPageToken == "" {
+			break
+		}
+		pageToken = resp.NextPageToken
+	}
+	return all, nil
 }
 
 // GetConfigVersion retrieves metadata for a specific config version.
