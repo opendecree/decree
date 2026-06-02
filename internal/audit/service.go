@@ -178,13 +178,13 @@ func (s *Service) GetFieldUsage(ctx context.Context, req *pb.GetFieldUsageReques
 	var totalReads int64
 	var lastReadBy *string
 	var lastReadAt *timestamppb.Timestamp
+	var maxLastReadAt *time.Time
 	for _, stat := range stats {
 		totalReads += stat.ReadCount
-		if stat.LastReadBy != nil {
-			lastReadBy = stat.LastReadBy
-		}
-		if stat.LastReadAt != nil {
+		if stat.LastReadAt != nil && (maxLastReadAt == nil || stat.LastReadAt.After(*maxLastReadAt)) {
+			maxLastReadAt = stat.LastReadAt
 			lastReadAt = timestamppb.New(*stat.LastReadAt)
+			lastReadBy = stat.LastReadBy
 		}
 	}
 
