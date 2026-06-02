@@ -2,8 +2,10 @@ package configwatcher
 
 import (
 	"log/slog"
+	"reflect"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Change represents a value transition for a typed config field.
@@ -30,6 +32,7 @@ type Value[T any] struct {
 	closed     bool // true after close(); guarded by mu
 	defaultVal T
 	parse      func(string) (T, error)
+	equal      func(a, b T) bool // equality check used for dedup
 	changesCh  chan Change[T]
 
 	dropped   atomic.Int64
@@ -43,7 +46,23 @@ func newValue[T any](defaultVal T, parse func(string) (T, error)) *Value[T] {
 		isSet:      false,
 		defaultVal: defaultVal,
 		parse:      parse,
+		equal:      makeEqual[T](),
 		changesCh:  make(chan Change[T], 16),
+	}
+}
+
+// makeEqual returns an equality function for T.
+// time.Time is compared via .Equal() to handle monotonic clock and location
+// differences correctly. All other types fall back to reflect.DeepEqual.
+func makeEqual[T any]() func(a, b T) bool {
+	var zero T
+	if _, ok := any(zero).(time.Time); ok {
+		return func(a, b T) bool {
+			return any(a).(time.Time).Equal(any(b).(time.Time))
+		}
+	}
+	return func(a, b T) bool {
+		return reflect.DeepEqual(a, b)
 	}
 }
 
@@ -105,6 +124,13 @@ func (v *Value[T]) update(rawValue string, isSet bool) {
 
 	// Do not send on a closed channel.
 	if v.closed {
+		return
+	}
+
+	// Skip notification when the effective value and null-state are unchanged.
+	// This prevents flooding consumers on reconnect when the server returns the
+	// same values that were already in effect.
+	if wasNull == !v.isSet && v.equal(oldVal, v.current) {
 		return
 	}
 
