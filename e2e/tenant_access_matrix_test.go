@@ -70,20 +70,6 @@ func writeRPCs() []writeRPCSpec {
 			},
 		},
 		{
-			name: "UpdateTenant",
-			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
-				newName := fmt.Sprintf("m2-rename-%s", randSuffix())
-				_, err := c.admin.UpdateTenant(ctx, tenantID, adminclient.WithTenantName(newName))
-				return err
-			},
-		},
-		{
-			name: "DeleteTenant",
-			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
-				return c.admin.DeleteTenant(ctx, tenantID)
-			},
-		},
-		{
 			name: "RollbackToVersion",
 			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
 				_, err := c.admin.RollbackConfig(ctx, tenantID, 1, "matrix2 rollback")
@@ -109,9 +95,9 @@ func TestTenantAccessMatrix(t *testing.T) {
 		spec := spec
 		t.Run(spec.name, func(t *testing.T) {
 			t.Run("in_scope_allowed", func(t *testing.T) {
-				// Every cell gets a fresh tenant: some RPCs (DeleteTenant,
-				// LockField/UnlockField pair, RollbackToVersion) mutate or
-				// destroy state that would interfere with later cells.
+				// Every cell gets a fresh tenant: some RPCs (LockField/UnlockField
+				// pair, RollbackToVersion) mutate state that would interfere with
+				// later cells.
 				fx := bootstrapMatrixFixture(t, "m2-in")
 				caller := scopedClients(t, conn, roleAdmin, fx.tenantID)
 

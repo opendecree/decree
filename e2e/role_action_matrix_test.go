@@ -167,7 +167,7 @@ func allRPCs() []rpcSpec {
 		},
 		{
 			name:   "UpdateTenant",
-			policy: adminOrAbove,
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				newName := fmt.Sprintf("m1-upd-%s", randSuffix())
 				_, err := c.admin.UpdateTenant(ctx, fx.tenantID, adminclient.WithTenantName(newName))
@@ -176,7 +176,7 @@ func allRPCs() []rpcSpec {
 		},
 		{
 			name:   "DeleteTenant",
-			policy: adminOrAbove,
+			policy: superadminOnly,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
 				// Delete a throwaway tenant. Rebuild the caller's scope to
 				// include the throwaway tenant UUID so CheckTenantAccess passes;
