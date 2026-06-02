@@ -456,6 +456,43 @@ func TestDeleteTenant_CrossTenantRejected(t *testing.T) {
 	store.AssertExpectations(t)
 }
 
+// --- Tenant admin cannot delete/rename own tenant (issue #675) ---
+
+func TestDeleteTenant_TenantAdminPermissionDenied(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	// Admin scoped to testTenantID; tries to delete their own tenant.
+	// Must get PermissionDenied — only superadmin may delete a tenant.
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID, Name: "my-tenant"}, nil)
+
+	_, err := svc.DeleteTenant(ctx, &pb.DeleteTenantRequest{Id: testTenantID})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
+func TestUpdateTenant_TenantAdminPermissionDenied(t *testing.T) {
+	store := &mockStore{}
+	svc := NewService(store, WithLogger(testLogger))
+	// Admin scoped to testTenantID; tries to rename their own tenant.
+	// Must get PermissionDenied — only superadmin may rename a tenant.
+	ctx := adminCtxWithTenants(testTenantID)
+
+	store.On("GetTenantByID", ctx, testTenantID).
+		Return(domain.Tenant{ID: testTenantID, Name: "my-tenant"}, nil)
+
+	newName := "renamed-tenant"
+	_, err := svc.UpdateTenant(ctx, &pb.UpdateTenantRequest{Id: testTenantID, Name: &newName})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	store.AssertExpectations(t)
+}
+
 // --- Empty FieldPath validation (issue #447) ---
 
 func TestLockField_EmptyFieldPath(t *testing.T) {
