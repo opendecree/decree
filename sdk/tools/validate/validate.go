@@ -23,13 +23,15 @@ import (
 
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
-	SpecVersion string              `yaml:"spec_version"`
-	Schema      string              `yaml:"$schema,omitempty"`
-	ID          string              `yaml:"$id,omitempty"`
-	Name        string              `yaml:"name"`
-	Description string              `yaml:"description,omitempty"`
-	Info        any                 `yaml:"info,omitempty"`
-	Fields      map[string]FieldDef `yaml:"fields"`
+	SpecVersion        string              `yaml:"spec_version"`
+	Schema             string              `yaml:"$schema,omitempty"`
+	ID                 string              `yaml:"$id,omitempty"`
+	Name               string              `yaml:"name"`
+	Description        string              `yaml:"description,omitempty"`
+	Version            int32               `yaml:"version,omitempty"`
+	VersionDescription string              `yaml:"version_description,omitempty"`
+	Info               any                 `yaml:"info,omitempty"`
+	Fields             map[string]FieldDef `yaml:"fields"`
 }
 
 // FieldDef describes a single field in the schema YAML.

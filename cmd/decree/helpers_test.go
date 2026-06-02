@@ -214,7 +214,8 @@ func TestAdminSchemaToDocgen_NoConstraints(t *testing.T) {
 // --- schemaFromYAML ---
 
 func TestSchemaFromYAML(t *testing.T) {
-	yaml := `name: payments
+	yaml := `spec_version: v1
+name: payments
 description: Payment config
 version: 1
 fields:
@@ -279,15 +280,16 @@ func TestSchemaFromYAML_Invalid(t *testing.T) {
 	}
 }
 
-func TestSchemaFromYAML_Empty(t *testing.T) {
-	s, err := schemaFromYAML([]byte("name: test\n"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestSchemaFromYAML_MissingSpecVersion(t *testing.T) {
+	_, err := schemaFromYAML([]byte("name: test\nfields:\n  x:\n    type: string\n"))
+	if err == nil {
+		t.Fatal("expected error for missing spec_version, got nil")
 	}
-	if got := s.Name; got != "test" {
-		t.Errorf("got %v, want %v", got, "test")
-	}
-	if len(s.Fields) != 0 {
-		t.Errorf("expected empty, got %v", s.Fields)
+}
+
+func TestSchemaFromYAML_NoFields(t *testing.T) {
+	_, err := schemaFromYAML([]byte("spec_version: v1\nname: test\n"))
+	if err == nil {
+		t.Fatal("expected error for missing fields, got nil")
 	}
 }
