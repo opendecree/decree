@@ -31,6 +31,13 @@ var (
 	// ErrAlreadyExists is returned when attempting to create a resource that already exists.
 	ErrAlreadyExists = errors.New("already exists")
 
+	// ErrRateLimited is returned when the server has exhausted a rate limit
+	// for the caller. Unlike transient errors, the server may attach a
+	// RetryInfo detail with a backoff hint; callers should honor that hint
+	// rather than retrying immediately. This error is intentionally NOT
+	// wrapped as RetryableError so automatic retry loops do not fire.
+	ErrRateLimited = errors.New("rate limited")
+
 	// ErrTypeMismatch is returned when a typed getter is called on a field
 	// whose value type doesn't match (e.g. GetInt on a string field).
 	ErrTypeMismatch = errors.New("value type mismatch")

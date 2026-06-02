@@ -30,7 +30,13 @@ func mapConfigError(err error) error {
 		return configclient.ErrAlreadyExists
 	case codes.InvalidArgument:
 		return configclient.InvalidArgumentError(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+	case codes.ResourceExhausted:
+		// ResourceExhausted signals a rate limit. The server attaches a RetryInfo
+		// detail with a hard backoff hint; wrapping as RetryableError would discard
+		// that hint and cause retry loops to hammer the limiter. Return ErrRateLimited
+		// (non-retryable) so callers can inspect the hint and back off correctly.
+		return configclient.ErrRateLimited
+	case codes.Unavailable, codes.DeadlineExceeded:
 		return &configclient.RetryableError{Err: err}
 	default:
 		return err
@@ -57,7 +63,13 @@ func mapAdminError(err error) error {
 		return adminclient.ErrPermissionDenied
 	case codes.InvalidArgument:
 		return adminclient.InvalidArgumentError(st.Message())
-	case codes.Unavailable, codes.DeadlineExceeded, codes.ResourceExhausted:
+	case codes.ResourceExhausted:
+		// ResourceExhausted signals a rate limit. The server attaches a RetryInfo
+		// detail with a hard backoff hint; wrapping as RetryableError would discard
+		// that hint and cause retry loops to hammer the limiter. Return ErrRateLimited
+		// (non-retryable) so callers can inspect the hint and back off correctly.
+		return adminclient.ErrRateLimited
+	case codes.Unavailable, codes.DeadlineExceeded:
 		return &adminclient.RetryableError{Err: err}
 	default:
 		return err

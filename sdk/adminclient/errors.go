@@ -21,6 +21,13 @@ var (
 	// role or tenant access to perform an administrative operation.
 	ErrPermissionDenied = errors.New("permission denied")
 
+	// ErrRateLimited is returned when the server has exhausted a rate limit
+	// for the caller. Unlike transient errors, the server may attach a
+	// RetryInfo detail with a backoff hint; callers should honor that hint
+	// rather than retrying immediately. This error is intentionally NOT
+	// wrapped as RetryableError so automatic retry loops do not fire.
+	ErrRateLimited = errors.New("rate limited")
+
 	// ErrInvalidArgument is returned when the server rejects a request due to
 	// invalid input (e.g. a malformed regex constraint in a schema import).
 	ErrInvalidArgument = errors.New("invalid argument")

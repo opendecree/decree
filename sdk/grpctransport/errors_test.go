@@ -107,11 +107,14 @@ func TestMapConfigError_DeadlineExceeded_IsRetryable(t *testing.T) {
 	}
 }
 
-func TestMapConfigError_ResourceExhausted_IsRetryable(t *testing.T) {
+func TestMapConfigError_ResourceExhausted_IsRateLimited_NotRetryable(t *testing.T) {
 	err := mapConfigError(status.Error(codes.ResourceExhausted, "rate limit"))
+	if !errors.Is(err, configclient.ErrRateLimited) {
+		t.Errorf("got %v, want ErrRateLimited", err)
+	}
 	var re *configclient.RetryableError
-	if !errors.As(err, &re) {
-		t.Errorf("got %v, want *RetryableError", err)
+	if errors.As(err, &re) {
+		t.Error("ResourceExhausted must NOT be wrapped as RetryableError")
 	}
 }
 
@@ -182,11 +185,14 @@ func TestMapAdminError_DeadlineExceeded_IsRetryable(t *testing.T) {
 	}
 }
 
-func TestMapAdminError_ResourceExhausted_IsRetryable(t *testing.T) {
+func TestMapAdminError_ResourceExhausted_IsRateLimited_NotRetryable(t *testing.T) {
 	err := mapAdminError(status.Error(codes.ResourceExhausted, "rate limit"))
+	if !errors.Is(err, adminclient.ErrRateLimited) {
+		t.Errorf("got %v, want ErrRateLimited", err)
+	}
 	var re *adminclient.RetryableError
-	if !errors.As(err, &re) {
-		t.Errorf("got %v, want *RetryableError", err)
+	if errors.As(err, &re) {
+		t.Error("ResourceExhausted must NOT be wrapped as RetryableError")
 	}
 }
 
