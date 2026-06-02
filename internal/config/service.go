@@ -1085,9 +1085,10 @@ func (s *Service) Subscribe(req *pb.SubscribeRequest, stream grpc.ServerStreamin
 	if req.StartVersion != nil {
 		// Determine the latest version at subscribe time so we know where replay ends.
 		latestCV, latestErr := s.store.GetLatestConfigVersion(ctx, tenantID)
-		if latestErr == nil {
-			watermark = latestCV.Version
+		if latestErr != nil {
+			return status.Error(codes.Internal, "failed to determine latest version for replay")
 		}
+		watermark = latestCV.Version
 
 		rows, replayErr := s.store.GetConfigValuesSince(ctx, GetConfigValuesSinceParams{
 			TenantID:     tenantID,

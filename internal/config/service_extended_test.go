@@ -909,3 +909,33 @@ func TestSubscribe_WatermarkDeduplicatesReplayedVersions(t *testing.T) {
 	assert.Equal(t, int32(4), stream.sent[0].Change.Version) // replay
 	assert.Equal(t, int32(5), stream.sent[1].Change.Version) // live, new
 }
+
+// TestSubscribe_VersionLookupError ensures that when GetLatestConfigVersion
+// fails during replay setup the Subscribe call returns codes.Internal and does
+// not swallow the error (which would leave watermark at 0 and deliver all live
+// events as duplicates).
+func TestSubscribe_VersionLookupError(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	sub := &mockSubscriber{}
+	svc.subscriber = sub
+
+	ch := make(chan pubsub.ConfigChangeEvent)
+	cancel := func() {}
+
+	ctx := auth.WithoutAuth(context.Background())
+	stream := &mockServerStream{ctx: ctx}
+
+	sub.On("Subscribe", mock.Anything, tenantID1).
+		Return((<-chan pubsub.ConfigChangeEvent)(ch), context.CancelFunc(cancel), nil)
+
+	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
+		Return(domain.ConfigVersion{}, errors.New("db unavailable"))
+
+	setupNoSensitiveFields(store)
+
+	startVersion := int32(1)
+	err := svc.Subscribe(&pb.SubscribeRequest{TenantId: tenantID1, StartVersion: &startVersion}, stream)
+	assert.Equal(t, codes.Internal, status.Code(err))
+	// No events must have been sent.
+	assert.Empty(t, stream.sent)
+}
