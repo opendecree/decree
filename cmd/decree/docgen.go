@@ -5,10 +5,10 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/opendecree/decree/sdk/adminclient"
 	"github.com/opendecree/decree/sdk/tools/docgen"
+	"github.com/opendecree/decree/sdk/tools/validate"
 )
 
 var docgenCmd = &cobra.Command{
@@ -126,42 +126,19 @@ func adminSchemaToDocgen(s *adminclient.Schema) docgen.Schema {
 	return ds
 }
 
-// schemaFromYAML parses a schema YAML file into a docgen.Schema.
+// schemaFromYAML parses a schema YAML file into a docgen.Schema using the
+// shared validate.ParseSchema helper (enforces spec_version:"v1").
 func schemaFromYAML(data []byte) (*docgen.Schema, error) {
-	var doc struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
-		Version     int32  `yaml:"version"`
-		Fields      map[string]struct {
-			Type        string `yaml:"type"`
-			Description string `yaml:"description"`
-			Default     string `yaml:"default"`
-			Nullable    bool   `yaml:"nullable"`
-			Deprecated  bool   `yaml:"deprecated"`
-			RedirectTo  string `yaml:"redirect_to"`
-			Constraints *struct {
-				Minimum          *float64 `yaml:"minimum"`
-				Maximum          *float64 `yaml:"maximum"`
-				ExclusiveMinimum *float64 `yaml:"exclusiveMinimum"`
-				ExclusiveMaximum *float64 `yaml:"exclusiveMaximum"`
-				MinLength        *int32   `yaml:"minLength"`
-				MaxLength        *int32   `yaml:"maxLength"`
-				Pattern          string   `yaml:"pattern"`
-				Enum             []string `yaml:"enum"`
-				JSONSchema       string   `yaml:"json_schema"`
-			} `yaml:"constraints"`
-		} `yaml:"fields"`
-	}
-	if err := yaml.Unmarshal(data, &doc); err != nil {
+	sf, err := validate.ParseSchema(data)
+	if err != nil {
 		return nil, fmt.Errorf("invalid schema YAML: %w", err)
 	}
-
 	s := &docgen.Schema{
-		Name:        doc.Name,
-		Description: doc.Description,
-		Version:     doc.Version,
+		Name:        sf.Name,
+		Description: sf.Description,
+		Version:     sf.Version,
 	}
-	for path, f := range doc.Fields {
+	for path, f := range sf.Fields {
 		df := docgen.Field{
 			Path:        path,
 			Type:        f.Type,
@@ -170,6 +147,13 @@ func schemaFromYAML(data []byte) (*docgen.Schema, error) {
 			Nullable:    f.Nullable,
 			Deprecated:  f.Deprecated,
 			RedirectTo:  f.RedirectTo,
+			Title:       f.Title,
+			Example:     f.Example,
+			Tags:        f.Tags,
+			Format:      f.Format,
+			ReadOnly:    f.ReadOnly,
+			WriteOnce:   f.WriteOnce,
+			Sensitive:   f.Sensitive,
 		}
 		if f.Constraints != nil {
 			df.Constraints = &docgen.Constraints{
