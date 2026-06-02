@@ -4,23 +4,62 @@ package retry
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/rand/v2"
 	"time"
 )
 
+// RetryableError wraps an error to indicate the operation may succeed on retry.
+// Transport implementations should wrap transient errors (e.g., network issues,
+// server overload) in RetryableError.
+type RetryableError struct {
+	Err error
+}
+
+func (e *RetryableError) Error() string { return e.Err.Error() }
+func (e *RetryableError) Unwrap() error { return e.Err }
+
+// IsRetryable reports whether err is marked as retryable by the transport.
+func IsRetryable(err error) bool {
+	var re *RetryableError
+	return errors.As(err, &re)
+}
+
 // Config holds the parameters for the retry loop.
 type Config struct {
 	// MaxAttempts is the maximum number of attempts (including the first).
+	// Default: 3.
 	MaxAttempts int
 	// InitialBackoff is the delay before the first retry.
+	// Default: 100ms.
 	InitialBackoff time.Duration
 	// MaxBackoff caps the backoff duration.
+	// Default: 5s.
 	MaxBackoff time.Duration
 	// Jitter adds randomness to the backoff to avoid thundering herd.
+	// Default: false.
 	Jitter bool
 	// RetryableCheck reports whether an error is retryable.
+	// If nil, defaults to checking for [RetryableError].
 	RetryableCheck func(err error) bool
+}
+
+// WithDefaults returns a copy of c with zero fields replaced by sensible defaults.
+func (c Config) WithDefaults() Config {
+	if c.MaxAttempts <= 0 {
+		c.MaxAttempts = 3
+	}
+	if c.InitialBackoff <= 0 {
+		c.InitialBackoff = 100 * time.Millisecond
+	}
+	if c.MaxBackoff <= 0 {
+		c.MaxBackoff = 5 * time.Second
+	}
+	if c.RetryableCheck == nil {
+		c.RetryableCheck = IsRetryable
+	}
+	return c
 }
 
 // Run executes fn with exponential-backoff retry when enabled is true.
