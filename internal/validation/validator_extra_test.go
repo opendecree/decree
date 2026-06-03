@@ -13,11 +13,11 @@ import (
 )
 
 func TestFieldValidator_DomainFieldTypeAndSensitive(t *testing.T) {
-	v := NewFieldValidator("secret.token", pb.FieldType_FIELD_TYPE_STRING, false, true, nil)
+	v := NewFieldValidator("secret.token", pb.FieldType_FIELD_TYPE_STRING, WithSensitive())
 	assert.Equal(t, domain.FieldTypeString, v.DomainFieldType())
 	assert.True(t, v.Sensitive())
 
-	plain := NewFieldValidator("plain", pb.FieldType_FIELD_TYPE_INT, false, false, nil)
+	plain := NewFieldValidator("plain", pb.FieldType_FIELD_TYPE_INT)
 	assert.Equal(t, domain.FieldTypeInteger, plain.DomainFieldType())
 	assert.False(t, plain.Sensitive())
 }
