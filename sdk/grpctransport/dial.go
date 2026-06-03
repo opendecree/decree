@@ -61,6 +61,9 @@ func WithKeepalive(params keepalive.ClientParameters) DialOption {
 
 // Dial opens a gRPC connection to target with TLS and system roots by default.
 //
+// The caller owns the returned [*grpc.ClientConn] and must call Close on it
+// when done, even if the connection was also passed to a transport constructor.
+//
 // Keepalive is enabled by default (Time=30s, Timeout=10s,
 // PermitWithoutStream=true) to prevent silent connection drops on long-lived
 // watch streams. Override with [WithKeepalive].
@@ -89,6 +92,9 @@ func Dial(target string, opts ...DialOption) (*grpc.ClientConn, error) {
 	case cfg.customCA != nil:
 		creds = credentials.NewTLS(&tls.Config{RootCAs: cfg.customCA})
 	default:
+		// An empty tls.Config uses system roots, derives the SNI from the target
+		// address, and enables full certificate verification. This is the secure
+		// default for production connections.
 		creds = credentials.NewTLS(&tls.Config{})
 	}
 
