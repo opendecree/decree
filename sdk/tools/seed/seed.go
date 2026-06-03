@@ -158,8 +158,10 @@ type Client interface {
 
 // --- Parse ---
 
-// ParseFile parses and validates a seed YAML file. Validation depends on which
-// top-level sections are present; see the package docs for the valid shapes.
+// ParseFile parses a seed YAML file and performs structural validation (required
+// fields, valid section combinations). It does not perform type or value
+// validation of field values — use the validate package for that. See the
+// package docs for the valid section combinations.
 func ParseFile(data []byte) (*File, error) {
 	var f File
 	if err := yaml.Unmarshal(data, &f); err != nil {
@@ -334,6 +336,10 @@ func resolveSchemaRef(ctx context.Context, client Client, file *File, result *Re
 		for _, s := range schemas {
 			if s.Name == file.Tenant.Schema {
 				result.SchemaID = s.ID
+				// NOTE: schema_version is taken from the seed file as-is after
+				// confirming the schema name exists. The version number is not
+				// verified against the server, so a bad version will propagate
+				// to CreateTenant and fail there with a server-side error.
 				result.SchemaVersion = *file.Tenant.SchemaVersion
 				return nil
 			}
