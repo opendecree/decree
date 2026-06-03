@@ -311,6 +311,58 @@ func TestMemoryStore_BulkSetConfigValues(t *testing.T) {
 	assert.Len(t, valuesAfterNoop, 2)
 }
 
+func TestMemoryStore_RunInTx_ClonesAllFields(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	// Pre-populate every map field so all for-loop bodies in clone() execute.
+
+	// configVersions
+	cv, err := s.CreateConfigVersion(ctx, CreateConfigVersionParams{
+		TenantID: "t1", Version: 1, CreatedBy: "admin",
+	})
+	require.NoError(t, err)
+
+	// configValues
+	val := "hello"
+	require.NoError(t, s.SetConfigValue(ctx, SetConfigValueParams{
+		ConfigVersionID: cv.ID, FieldPath: "app.name", Value: &val,
+	}))
+
+	// tenants
+	s.SetTenant(domain.Tenant{ID: "t1", Name: "acme"})
+
+	// schemaVersions
+	s.SetSchemaVersion(domain.SchemaVersion{ID: "sv1", SchemaID: "s1", Version: 1})
+
+	// schemaFields
+	s.SetSchemaFields("sv1", []domain.SchemaField{{Path: "x", FieldType: "string"}})
+
+	// fieldLocks (written directly since GetFieldLocks has no setter — use auditLog via Insert)
+	s.mu.Lock()
+	s.fieldLocks["t1"] = []domain.TenantFieldLock{{TenantID: "t1", FieldPath: "db.host"}}
+	s.mu.Unlock()
+
+	// auditLog
+	require.NoError(t, s.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+		TenantID: "t1", Actor: "admin", Action: "set_field",
+	}))
+
+	// RunInTx should clone all non-empty maps and commit.
+	err = s.RunInTx(ctx, func(tx Store) error {
+		_, err := tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
+			TenantID: "t1", Version: 2, CreatedBy: "admin",
+		})
+		return err
+	})
+	require.NoError(t, err)
+
+	// Version 2 must be committed.
+	v, err := s.GetLatestConfigVersion(ctx, "t1")
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), v.Version)
+}
+
 func TestMemoryStore_BulkInsertAuditWriteLog(t *testing.T) {
 	s := NewMemoryStore()
 	ctx := context.Background()
