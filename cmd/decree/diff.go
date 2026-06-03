@@ -22,8 +22,8 @@ Server mode (compare two versions of a tenant's config):
 File mode (compare two local config YAML files):
   decree diff --old config-v1.yaml --new config-v2.yaml`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		oldFile, _ := cmd.Flags().GetString("old")
-		newFile, _ := cmd.Flags().GetString("new")
+		oldFile := mustGetString(cmd, "old")
+		newFile := mustGetString(cmd, "new")
 
 		var oldValues, newValues map[string]string
 
@@ -37,8 +37,14 @@ File mode (compare two local config YAML files):
 			if err != nil {
 				return fmt.Errorf("read new file: %w", err)
 			}
-			oldValues = parseConfigValues(oldData)
-			newValues = parseConfigValues(newData)
+			oldValues, err = parseConfigValues(oldData)
+			if err != nil {
+				return fmt.Errorf("parse old file: %w", err)
+			}
+			newValues, err = parseConfigValues(newData)
+			if err != nil {
+				return fmt.Errorf("parse new file: %w", err)
+			}
 		} else {
 			// Server mode: compare two versions.
 			if len(args) != 3 {
@@ -75,8 +81,14 @@ File mode (compare two local config YAML files):
 			if err != nil {
 				return fmt.Errorf("export version %d: %w", vB, err)
 			}
-			oldValues = parseConfigValues(oldYAML)
-			newValues = parseConfigValues(newYAML)
+			oldValues, err = parseConfigValues(oldYAML)
+			if err != nil {
+				return fmt.Errorf("parse version %d: %w", vA, err)
+			}
+			newValues, err = parseConfigValues(newYAML)
+			if err != nil {
+				return fmt.Errorf("parse version %d: %w", vB, err)
+			}
 		}
 
 		result := diff.Compare(oldValues, newValues)
@@ -91,20 +103,22 @@ File mode (compare two local config YAML files):
 }
 
 // parseConfigValues extracts field→value as strings from a config YAML export.
-func parseConfigValues(data []byte) map[string]string {
+// Note: values are stringified via fmt.Sprintf("%v"), so numeric representations
+// like 1.0 vs 1, or map key ordering, may produce false diffs in file mode.
+func parseConfigValues(data []byte) (map[string]string, error) {
 	var doc struct {
 		Values map[string]struct {
 			Value any `yaml:"value"`
 		} `yaml:"values"`
 	}
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil
+		return nil, err
 	}
 	m := make(map[string]string, len(doc.Values))
 	for k, v := range doc.Values {
 		m[k] = fmt.Sprintf("%v", v.Value)
 	}
-	return m
+	return m, nil
 }
 
 func init() {

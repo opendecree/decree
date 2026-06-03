@@ -16,9 +16,9 @@ var tenantCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new tenant on a published schema version",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name, _ := cmd.Flags().GetString("name")
-		schemaID, _ := cmd.Flags().GetString("schema")
-		version, _ := cmd.Flags().GetInt32("schema-version")
+		name := mustGetString(cmd, "name")
+		schemaID := mustGetString(cmd, "schema")
+		version := mustGetInt32(cmd, "schema-version")
 		conn, err := dialServer()
 		if err != nil {
 			return err
@@ -76,7 +76,7 @@ var tenantListCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		schemaID, _ := cmd.Flags().GetString("schema")
+		schemaID := mustGetString(cmd, "schema")
 		admin, err := newAdminClient(conn)
 		if err != nil {
 			return err

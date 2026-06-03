@@ -17,8 +17,8 @@ var docgenCmd = &cobra.Command{
 	Long:  "Generate markdown documentation from a schema. Provide a schema-id to fetch from the server, or --file to use a local YAML file.",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		file, _ := cmd.Flags().GetString("file")
-		outputFile, _ := cmd.Flags().GetString("output-file")
+		file := mustGetString(cmd, "file")
+		outputFile := mustGetString(cmd, "output-file")
 
 		var schema docgen.Schema
 
@@ -48,7 +48,7 @@ var docgenCmd = &cobra.Command{
 				return err
 			}
 
-			version, _ := cmd.Flags().GetInt32("version")
+			version := mustGetInt32(cmd, "version")
 			var s *adminclient.Schema
 			if version > 0 {
 				s, err = admin.GetSchemaVersion(cmd.Context(), args[0], version)
@@ -62,20 +62,21 @@ var docgenCmd = &cobra.Command{
 		}
 
 		var opts []docgen.Option
-		if noDeprecated, _ := cmd.Flags().GetBool("no-deprecated"); noDeprecated {
+		if mustGetBool(cmd, "no-deprecated") {
 			opts = append(opts, docgen.WithoutDeprecated())
 		}
-		if noConstraints, _ := cmd.Flags().GetBool("no-constraints"); noConstraints {
+		if mustGetBool(cmd, "no-constraints") {
 			opts = append(opts, docgen.WithoutConstraints())
 		}
-		if noGrouping, _ := cmd.Flags().GetBool("no-grouping"); noGrouping {
+		if mustGetBool(cmd, "no-grouping") {
 			opts = append(opts, docgen.WithoutGrouping())
 		}
 
 		md := docgen.Generate(schema, opts...)
 
 		if outputFile != "" {
-			return os.WriteFile(outputFile, []byte(md), 0o644)
+			force := mustGetBool(cmd, "force")
+			return writeFileExclusive(outputFile, []byte(md), force)
 		}
 		fmt.Print(md)
 		return nil
@@ -86,6 +87,7 @@ func init() {
 	docgenCmd.Flags().String("file", "", "schema YAML file (offline mode)")
 	docgenCmd.Flags().Int32("version", 0, "schema version (default: latest)")
 	docgenCmd.Flags().String("output-file", "", "write output to file instead of stdout")
+	docgenCmd.Flags().Bool("force", false, "overwrite output file if it already exists")
 	docgenCmd.Flags().Bool("no-deprecated", false, "exclude deprecated fields")
 	docgenCmd.Flags().Bool("no-constraints", false, "omit constraint details")
 	docgenCmd.Flags().Bool("no-grouping", false, "flat list instead of grouped by prefix")

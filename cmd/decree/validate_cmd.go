@@ -13,8 +13,8 @@ var validateCmd = &cobra.Command{
 	Use:   "validate",
 	Short: "Validate a config YAML against a schema YAML (offline)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		schemaFile, _ := cmd.Flags().GetString("schema")
-		configFile, _ := cmd.Flags().GetString("config")
+		schemaFile := mustGetString(cmd, "schema")
+		configFile := mustGetString(cmd, "config")
 
 		schemaData, err := os.ReadFile(schemaFile)
 		if err != nil {
@@ -26,7 +26,7 @@ var validateCmd = &cobra.Command{
 		}
 
 		var opts []validate.Option
-		if strict, _ := cmd.Flags().GetBool("strict"); strict {
+		if strict := mustGetBool(cmd, "strict"); strict {
 			opts = append(opts, validate.Strict())
 		}
 

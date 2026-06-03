@@ -141,7 +141,7 @@ var configSetManyCmd = &cobra.Command{
 			}
 			rawValues[parts[0]] = parts[1]
 		}
-		desc, _ := cmd.Flags().GetString("description")
+		desc := mustGetString(cmd, "description")
 
 		conn, err := dialServer()
 		if err != nil {
@@ -232,7 +232,7 @@ var configRollbackCmd = &cobra.Command{
 			return fmt.Errorf("invalid version: %s", args[1])
 		}
 		version := int32(parsedVersion)
-		desc, _ := cmd.Flags().GetString("description")
+		desc := mustGetString(cmd, "description")
 
 		conn, err := dialServer()
 		if err != nil {
@@ -265,7 +265,7 @@ var configExportCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		var version *int32
-		if v, _ := cmd.Flags().GetInt32("version"); v > 0 {
+		if v := mustGetInt32(cmd, "version"); v > 0 {
 			version = &v
 		}
 		admin, err := newAdminClient(conn)
@@ -290,8 +290,8 @@ var configImportCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("read file: %w", err)
 		}
-		desc, _ := cmd.Flags().GetString("description")
-		modeStr, _ := cmd.Flags().GetString("mode")
+		desc := mustGetString(cmd, "description")
+		modeStr := mustGetString(cmd, "mode")
 
 		var mode adminclient.ImportMode
 		switch modeStr {
@@ -302,7 +302,7 @@ var configImportCmd = &cobra.Command{
 		case "defaults":
 			mode = adminclient.ImportModeDefaults
 		default:
-			mode = adminclient.ImportModeMerge
+			return fmt.Errorf("unknown --mode %q: must be merge, replace, or defaults", modeStr)
 		}
 
 		conn, err := dialServer()

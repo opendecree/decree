@@ -96,7 +96,10 @@ values:
   app.enabled:
     value: true
 `
-	m := parseConfigValues([]byte(yaml))
+	m, err := parseConfigValues([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if m == nil {
 		t.Fatal("expected non-nil")
 	}
@@ -112,14 +115,17 @@ values:
 }
 
 func TestParseConfigValues_Invalid(t *testing.T) {
-	m := parseConfigValues([]byte("not: [valid: yaml"))
-	if m != nil {
-		t.Errorf("expected nil, got %v", m)
+	_, err := parseConfigValues([]byte("not: [valid: yaml"))
+	if err == nil {
+		t.Errorf("expected error, got nil")
 	}
 }
 
 func TestParseConfigValues_Empty(t *testing.T) {
-	m := parseConfigValues([]byte("spec_version: v1\n"))
+	m, err := parseConfigValues([]byte("spec_version: v1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if m == nil {
 		t.Fatal("expected non-nil")
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"google.golang.org/grpc"
 
@@ -24,7 +25,20 @@ func dialServer() (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
-func authOptions() []grpctransport.Option {
+// resolveToken returns the effective bearer token. --token-file takes
+// precedence over --token; the file content is trimmed of surrounding whitespace.
+func resolveToken() (string, error) {
+	if flagTokenFile != "" {
+		data, err := os.ReadFile(flagTokenFile)
+		if err != nil {
+			return "", fmt.Errorf("read token file: %w", err)
+		}
+		return strings.TrimSpace(string(data)), nil
+	}
+	return flagToken, nil
+}
+
+func authOptions() ([]grpctransport.Option, error) {
 	var opts []grpctransport.Option
 	if flagSubject != "" {
 		opts = append(opts, grpctransport.WithSubject(flagSubject))
@@ -35,20 +49,36 @@ func authOptions() []grpctransport.Option {
 	if flagTenantID != "" {
 		opts = append(opts, grpctransport.WithTenantID(flagTenantID))
 	}
-	if flagToken != "" {
-		opts = append(opts, grpctransport.WithBearerToken(flagToken))
+	token, err := resolveToken()
+	if err != nil {
+		return nil, err
 	}
-	return opts
+	if token != "" {
+		opts = append(opts, grpctransport.WithBearerToken(token))
+	}
+	return opts, nil
 }
 
 func newAdminClient(conn *grpc.ClientConn) (*adminclient.Client, error) {
-	return grpctransport.NewAdminClient(conn, authOptions()...)
+	opts, err := authOptions()
+	if err != nil {
+		return nil, err
+	}
+	return grpctransport.NewAdminClient(conn, opts...)
 }
 
 func newConfigClient(conn *grpc.ClientConn) (*configclient.Client, error) {
-	return grpctransport.NewConfigClient(conn, authOptions()...)
+	opts, err := authOptions()
+	if err != nil {
+		return nil, err
+	}
+	return grpctransport.NewConfigClient(conn, opts...)
 }
 
 func newConfigTransport(conn *grpc.ClientConn) (*grpctransport.ConfigTransport, error) {
-	return grpctransport.NewConfigTransport(conn, authOptions()...)
+	opts, err := authOptions()
+	if err != nil {
+		return nil, err
+	}
+	return grpctransport.NewConfigTransport(conn, opts...)
 }

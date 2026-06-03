@@ -31,7 +31,7 @@ var schemaGetCmd = &cobra.Command{
 			return err
 		}
 
-		version, _ := cmd.Flags().GetInt32("version")
+		version := mustGetInt32(cmd, "version")
 		var s *adminclient.Schema
 		if version > 0 {
 			s, err = admin.GetSchemaVersion(cmd.Context(), args[0], version)
@@ -140,7 +140,7 @@ var schemaExportCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		var version *int32
-		if v, _ := cmd.Flags().GetInt32("version"); v > 0 {
+		if v := mustGetInt32(cmd, "version"); v > 0 {
 			version = &v
 		}
 		admin, err := newAdminClient(conn)
@@ -171,7 +171,7 @@ var schemaImportCmd = &cobra.Command{
 		}
 		defer func() { _ = conn.Close() }()
 
-		publish, _ := cmd.Flags().GetBool("publish")
+		publish := mustGetBool(cmd, "publish")
 		admin, err := newAdminClient(conn)
 		if err != nil {
 			return err

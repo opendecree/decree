@@ -17,6 +17,7 @@ var (
 	flagRole        string
 	flagTenantID    string
 	flagToken       string
+	flagTokenFile   string
 	flagOutput      string
 	flagInsecure    bool
 	flagWait        bool
@@ -87,7 +88,8 @@ func init() {
 	pf.StringVar(&flagSubject, "subject", envOrDefault("DECREE_SUBJECT", ""), "actor identity (x-subject header)")
 	pf.StringVar(&flagRole, "role", envOrDefault("DECREE_ROLE", "superadmin"), "actor role (x-role header)")
 	pf.StringVar(&flagTenantID, "tenant-id", envOrDefault("DECREE_TENANT_ID", ""), "auth tenant ID (x-tenant-id header)")
-	pf.StringVar(&flagToken, "token", envOrDefault("DECREE_TOKEN", ""), "JWT bearer token")
+	pf.StringVar(&flagToken, "token", envOrDefault("DECREE_TOKEN", ""), "JWT bearer token (prefer DECREE_TOKEN env var to avoid shell history exposure)")
+	pf.StringVar(&flagTokenFile, "token-file", "", "path to a file containing the JWT bearer token (takes precedence over --token)")
 	pf.StringVarP(&flagOutput, "output", "o", "table", "output format: table, json, yaml")
 	pf.BoolVar(&flagInsecure, "insecure", envOrDefault("DECREE_INSECURE", "false") == "true", "disable TLS (plaintext); for local development only")
 	pf.BoolVar(&flagWait, "wait", false, "wait for the server to be ready before executing the command")

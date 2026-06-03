@@ -43,7 +43,6 @@ var genDocsCmd = &cobra.Command{
 			return strings.ToLower(name)
 		}
 
-		rootCmd.DisableAutoGenTag = true
 		if err := doc.GenMarkdownTreeCustom(rootCmd, outDir, prepender, linkHandler); err != nil {
 			return fmt.Errorf("generate docs: %w", err)
 		}
@@ -76,7 +75,6 @@ var genManCmd = &cobra.Command{
 			Date:    &manPageDate,
 		}
 
-		rootCmd.DisableAutoGenTag = true
 		if err := doc.GenManTree(rootCmd, header, outDir); err != nil {
 			return fmt.Errorf("generate man pages: %w", err)
 		}
@@ -87,6 +85,9 @@ var genManCmd = &cobra.Command{
 }
 
 func init() {
+	// Set once here so RunE bodies don't mutate global state on every invocation.
+	rootCmd.DisableAutoGenTag = true
+
 	rootCmd.AddCommand(genDocsCmd)
 	rootCmd.AddCommand(genManCmd)
 }
