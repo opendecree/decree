@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/spf13/cobra"
 )
@@ -36,9 +37,14 @@ var serverInfoCmd = &cobra.Command{
 		fmt.Println()
 
 		rows := tableRows([]string{"FEATURE", "ENABLED"})
-		for name, enabled := range info.Features {
+		names := make([]string, 0, len(info.Features))
+		for name := range info.Features {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
 			val := "no"
-			if enabled {
+			if info.Features[name] {
 				val = "yes"
 			}
 			rows = append(rows, []string{name, val})

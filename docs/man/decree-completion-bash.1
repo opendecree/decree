@@ -75,7 +75,11 @@ You will need to start a new shell for this setup to take effect.
 
 .PP
 \fB--token\fP=""
-	JWT bearer token
+	JWT bearer token (prefer DECREE_TOKEN env var to avoid shell history exposure)
+
+.PP
+\fB--token-file\fP=""
+	path to a file containing the JWT bearer token (takes precedence over --token)
 
 .PP
 \fB--wait\fP[=false]

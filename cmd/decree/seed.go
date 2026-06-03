@@ -43,7 +43,7 @@ The operation is idempotent: importing a schema with identical fields, or a conf
 		defer func() { _ = conn.Close() }()
 
 		var opts []seed.Option
-		if publish, _ := cmd.Flags().GetBool("auto-publish"); publish {
+		if publish := mustGetBool(cmd, "auto-publish"); publish {
 			opts = append(opts, seed.AutoPublish())
 		}
 

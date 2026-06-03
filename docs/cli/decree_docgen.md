@@ -18,6 +18,7 @@ decree docgen [schema-id] [flags]
 
 ```
       --file string          schema YAML file (offline mode)
+      --force                overwrite output file if it already exists
   -h, --help                 help for docgen
       --no-constraints       omit constraint details
       --no-deprecated        exclude deprecated fields
@@ -35,7 +36,8 @@ decree docgen [schema-id] [flags]
       --server string         gRPC server address (default "localhost:9090")
       --subject string        actor identity (x-subject header)
       --tenant-id string      auth tenant ID (x-tenant-id header)
-      --token string          JWT bearer token
+      --token string          JWT bearer token (prefer DECREE_TOKEN env var to avoid shell history exposure)
+      --token-file string     path to a file containing the JWT bearer token (takes precedence over --token)
       --wait                  wait for the server to be ready before executing the command
       --wait-timeout string   maximum time to wait for server readiness (default "60s")
 ```

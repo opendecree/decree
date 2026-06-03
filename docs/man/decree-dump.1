@@ -14,6 +14,10 @@ Dump exports a tenant's schema, configuration, and field locks as a single YAML 
 
 
 .SH OPTIONS
+\fB--force\fP[=false]
+	overwrite output file if it already exists
+
+.PP
 \fB-h\fP, \fB--help\fP[=false]
 	help for dump
 
@@ -56,7 +60,11 @@ Dump exports a tenant's schema, configuration, and field locks as a single YAML 
 
 .PP
 \fB--token\fP=""
-	JWT bearer token
+	JWT bearer token (prefer DECREE_TOKEN env var to avoid shell history exposure)
+
+.PP
+\fB--token-file\fP=""
+	path to a file containing the JWT bearer token (takes precedence over --token)
 
 .PP
 \fB--wait\fP[=false]

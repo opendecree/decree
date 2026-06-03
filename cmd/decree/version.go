@@ -15,8 +15,9 @@ var (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the CLI version",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Printf("decree %s (commit %s)\n", cliVersion, cliCommit)
+		return nil
 	},
 }
 

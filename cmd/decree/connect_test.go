@@ -133,6 +133,61 @@ func TestDialServer_Insecure_PrintsWarning(t *testing.T) {
 	}
 }
 
+// --- resolveToken ---
+
+func TestResolveToken_FlagToken(t *testing.T) {
+	origToken := flagToken
+	origFile := flagTokenFile
+	t.Cleanup(func() { flagToken = origToken; flagTokenFile = origFile })
+
+	flagToken = "my-jwt"
+	flagTokenFile = ""
+
+	got, err := resolveToken()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "my-jwt" {
+		t.Errorf("got %q, want %q", got, "my-jwt")
+	}
+}
+
+func TestResolveToken_TokenFile(t *testing.T) {
+	origToken := flagToken
+	origFile := flagTokenFile
+	t.Cleanup(func() { flagToken = origToken; flagTokenFile = origFile })
+
+	f, err := os.CreateTemp(t.TempDir(), "token-*")
+	if err != nil {
+		t.Fatalf("create temp: %v", err)
+	}
+	f.WriteString("  file-token\n") //nolint:errcheck
+	f.Close()
+
+	flagToken = "ignored"
+	flagTokenFile = f.Name()
+
+	got, err := resolveToken()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "file-token" {
+		t.Errorf("got %q, want %q", got, "file-token")
+	}
+}
+
+func TestResolveToken_TokenFile_Missing(t *testing.T) {
+	origFile := flagTokenFile
+	t.Cleanup(func() { flagTokenFile = origFile })
+
+	flagTokenFile = "/nonexistent/path/token.txt"
+
+	_, err := resolveToken()
+	if err == nil {
+		t.Error("expected error for missing token file, got nil")
+	}
+}
+
 // TestFlagInsecure_DefaultIsFalse verifies the --insecure flag defaults to false,
 // ensuring TLS is used by default.
 func TestFlagInsecure_DefaultIsFalse(t *testing.T) {

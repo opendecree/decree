@@ -21,10 +21,10 @@ var dumpCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		var opts []dump.Option
-		if noLocks, _ := cmd.Flags().GetBool("no-locks"); noLocks {
+		if mustGetBool(cmd, "no-locks") {
 			opts = append(opts, dump.WithoutLocks())
 		}
-		if v, _ := cmd.Flags().GetInt32("version"); v > 0 {
+		if v := mustGetInt32(cmd, "version"); v > 0 {
 			opts = append(opts, dump.WithConfigVersion(v))
 		}
 
@@ -42,9 +42,10 @@ var dumpCmd = &cobra.Command{
 			return err
 		}
 
-		outputFile, _ := cmd.Flags().GetString("output-file")
+		outputFile := mustGetString(cmd, "output-file")
 		if outputFile != "" {
-			return os.WriteFile(outputFile, data, 0o644)
+			force := mustGetBool(cmd, "force")
+			return writeFileExclusive(outputFile, data, force)
 		}
 		_, err = os.Stdout.Write(data)
 		return err
@@ -55,4 +56,5 @@ func init() {
 	dumpCmd.Flags().Int32("version", 0, "config version (default: latest)")
 	dumpCmd.Flags().Bool("no-locks", false, "exclude field locks")
 	dumpCmd.Flags().String("output-file", "", "write to file instead of stdout")
+	dumpCmd.Flags().Bool("force", false, "overwrite output file if it already exists")
 }
