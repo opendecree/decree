@@ -49,7 +49,7 @@ func TestRetryOnVersionConflict_ConcurrentSetField(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	memCache := cache.NewMemoryCache(0)
+	memCache := cache.NewMemoryCache(context.Background(), 0)
 	memPub := pubsub.NewMemoryPubSub()
 	svc := NewService(cfgStore, memCache, memPub, memPub, WithLogger(testLogger))
 
