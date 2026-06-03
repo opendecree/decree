@@ -94,16 +94,6 @@ func EncodeCursorToken(cursor PageCursor) string {
 	return base64.StdEncoding.EncodeToString([]byte(raw))
 }
 
-// NextCursorToken returns the cursor token for the next keyset page.
-// lastTime and lastID come from entries[pageSize-1] after fetching pageSize+1 rows.
-// Returns empty string if there are no more results.
-func NextCursorToken(pageSize, resultCount int32, lastTime time.Time, lastID string) string {
-	if resultCount <= pageSize {
-		return ""
-	}
-	return EncodeCursorToken(PageCursor{Time: lastTime, ID: lastID})
-}
-
 // ClampPageSize returns a page size within [1, maxSize], defaulting to
 // defaultSize when the requested size is zero or negative.
 func ClampPageSize(requested, defaultSize, maxSize int32) int32 {

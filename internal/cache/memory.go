@@ -44,6 +44,7 @@ type MemoryCache struct {
 	maxEntries    int
 	sweepInterval time.Duration
 	stopSweep     chan struct{}
+	stopOnce      sync.Once
 }
 
 type memoryCacheEntry struct {
@@ -158,9 +159,9 @@ func (c *MemoryCache) Len() int {
 	return len(c.entries)
 }
 
-// Stop stops the background sweep goroutine.
+// Stop stops the background sweep goroutine. Safe to call more than once.
 func (c *MemoryCache) Stop() {
-	close(c.stopSweep)
+	c.stopOnce.Do(func() { close(c.stopSweep) })
 }
 
 // deleteEntry removes an entry and its LRU tracking. Caller must hold mu.

@@ -151,6 +151,16 @@ func TestSetField_EmptyFieldPath(t *testing.T) {
 	store.AssertNotCalled(t, "SetConfigValue")
 }
 
+func TestSetFields_EmptyUpdates(t *testing.T) {
+	svc, _, _, _ := newTestService()
+	ctx := superadminCtx()
+	_, err := svc.SetFields(ctx, &pb.SetFieldsRequest{
+		TenantId: tenantID1,
+		Updates:  nil,
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 func TestSetFields_EmptyFieldPath(t *testing.T) {
 	tests := []struct {
 		name     string

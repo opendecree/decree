@@ -202,35 +202,6 @@ func TestDecodeTokenKind_Invalid(t *testing.T) {
 	}
 }
 
-func TestNextCursorToken_HasMore(t *testing.T) {
-	ts := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
-	id := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-	token := NextCursorToken(10, 11, ts, id)
-	if token == "" {
-		t.Fatal("expected non-empty cursor token")
-	}
-	kind, _, cur, err := DecodeTokenKind(token)
-	if err != nil {
-		t.Fatalf("DecodeTokenKind: %v", err)
-	}
-	if kind != KindCursor {
-		t.Errorf("got kind %v, want KindCursor", kind)
-	}
-	if !cur.Time.Equal(ts) {
-		t.Errorf("got time %v, want %v", cur.Time, ts)
-	}
-}
-
-func TestNextCursorToken_NoMore(t *testing.T) {
-	ts := time.Now()
-	if token := NextCursorToken(10, 10, ts, "some-id"); token != "" {
-		t.Errorf("expected empty token for exact page, got %q", token)
-	}
-	if token := NextCursorToken(10, 5, ts, "some-id"); token != "" {
-		t.Errorf("expected empty token for partial page, got %q", token)
-	}
-}
-
 // --- Iter ---
 
 func TestIter_FullIteration(t *testing.T) {

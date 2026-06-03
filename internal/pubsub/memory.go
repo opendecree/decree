@@ -14,12 +14,21 @@ import (
 // Safe for concurrent use.
 type MemoryPubSub struct {
 	mu          sync.RWMutex
-	subscribers map[string][]chan ConfigChangeEvent // tenantID → channels
+	subscribers map[string][]*memSub // tenantID → subscriptions
 	logger      *slog.Logger
 	drops       metric.Int64Counter
 	dropsOK     bool
 	seq         atomic.Int64
 }
+
+// memSub pairs a subscriber channel with a sync.Once so the channel is closed
+// exactly once regardless of whether cancel() or Close() runs first.
+type memSub struct {
+	ch        chan ConfigChangeEvent
+	closeOnce sync.Once
+}
+
+func (s *memSub) closeChannel() { s.closeOnce.Do(func() { close(s.ch) }) }
 
 // MemoryOption configures a MemoryPubSub.
 type MemoryOption func(*MemoryPubSub)
@@ -40,7 +49,7 @@ func WithDroppedCounter(c metric.Int64Counter) MemoryOption {
 // NewMemoryPubSub creates a new in-memory pub/sub.
 func NewMemoryPubSub(opts ...MemoryOption) *MemoryPubSub {
 	ps := &MemoryPubSub{
-		subscribers: make(map[string][]chan ConfigChangeEvent),
+		subscribers: make(map[string][]*memSub),
 		logger:      slog.Default(),
 	}
 	for _, o := range opts {
@@ -64,9 +73,9 @@ func (ps *MemoryPubSub) Publish(_ context.Context, event ConfigChangeEvent) erro
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 
-	for _, ch := range ps.subscribers[event.TenantID] {
+	for _, sub := range ps.subscribers[event.TenantID] {
 		select {
-		case ch <- event:
+		case sub.ch <- event:
 		default:
 			ps.logger.Debug("pubsub: dropped event — subscriber channel full",
 				"tenant_id", event.TenantID,
@@ -81,10 +90,10 @@ func (ps *MemoryPubSub) Publish(_ context.Context, event ConfigChangeEvent) erro
 }
 
 func (ps *MemoryPubSub) Subscribe(_ context.Context, tenantID string) (<-chan ConfigChangeEvent, context.CancelFunc, error) {
-	ch := make(chan ConfigChangeEvent, 64)
+	sub := &memSub{ch: make(chan ConfigChangeEvent, 64)}
 
 	ps.mu.Lock()
-	ps.subscribers[tenantID] = append(ps.subscribers[tenantID], ch)
+	ps.subscribers[tenantID] = append(ps.subscribers[tenantID], sub)
 	ps.mu.Unlock()
 
 	cancel := func() {
@@ -93,15 +102,15 @@ func (ps *MemoryPubSub) Subscribe(_ context.Context, tenantID string) (<-chan Co
 
 		subs := ps.subscribers[tenantID]
 		for i, s := range subs {
-			if s == ch {
+			if s == sub {
 				ps.subscribers[tenantID] = append(subs[:i], subs[i+1:]...)
 				break
 			}
 		}
-		close(ch)
+		sub.closeChannel()
 	}
 
-	return ch, cancel, nil
+	return sub.ch, cancel, nil
 }
 
 func (ps *MemoryPubSub) Close() error {
@@ -109,8 +118,8 @@ func (ps *MemoryPubSub) Close() error {
 	defer ps.mu.Unlock()
 
 	for tenantID, subs := range ps.subscribers {
-		for _, ch := range subs {
-			close(ch)
+		for _, sub := range subs {
+			sub.closeChannel()
 		}
 		delete(ps.subscribers, tenantID)
 	}

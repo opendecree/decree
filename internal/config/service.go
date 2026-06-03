@@ -689,6 +689,9 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
+	if len(req.Updates) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "updates must not be empty")
+	}
 	if s.limits.MaxListLen > 0 && len(req.Updates) > s.limits.MaxListLen {
 		return nil, status.Errorf(codes.InvalidArgument, "request has %d updates, exceeds limit of %d", len(req.Updates), s.limits.MaxListLen)
 	}
