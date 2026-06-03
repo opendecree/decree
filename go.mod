@@ -1,6 +1,6 @@
 module github.com/opendecree/decree
 
-go 1.25.7
+go 1.25.11
 
 require (
 	github.com/MicahParks/keyfunc/v3 v3.8.0
