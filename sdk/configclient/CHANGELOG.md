@@ -10,6 +10,13 @@ This project uses semantic versioning with an `-alpha.N` suffix during alpha; th
 ### Added
 
 - `description`, `value_description`, and `expected_checksum` fields on write operation results (#606)
+- `InvalidArgumentError` typed struct with `Is()` support; use `errors.As` to extract the `Message` field (#246)
+- `NewInvalidArgumentError(message string) *InvalidArgumentError` constructor (#246)
+
+### Changed
+
+- **BREAKING** `ErrInvalidArgument` is now `*InvalidArgumentError` instead of an `errors.New` sentinel; `errors.Is(err, ErrInvalidArgument)` still works via the `Is()` method (#246)
+- **BREAKING** The `InvalidArgumentError(message string) error` helper function is removed; replace with `NewInvalidArgumentError(message string)` (#246)
 
 ### Fixed
 

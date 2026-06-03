@@ -7,7 +7,6 @@ package configclient
 
 import (
 	"errors"
-	"fmt"
 
 	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
@@ -44,14 +43,41 @@ var (
 	// whose value type doesn't match (e.g. GetInt on a string field).
 	ErrTypeMismatch = errors.New("value type mismatch")
 
-	// ErrInvalidArgument is returned when a value fails server-side validation
-	// (type mismatch, constraint violation, or unknown field in strict mode).
-	ErrInvalidArgument = errors.New("invalid argument")
+	// ErrInvalidArgument is the sentinel for errors.Is matching against any
+	// InvalidArgumentError, regardless of message. Use errors.As to access
+	// the structured Message field.
+	//
+	// Breaking change (alpha): previously errors.New("invalid argument");
+	// now *InvalidArgumentError. errors.Is still works via Is().
+	ErrInvalidArgument = &InvalidArgumentError{}
 )
 
-// InvalidArgumentError wraps ErrInvalidArgument with a server message.
-func InvalidArgumentError(message string) error {
-	return fmt.Errorf("%w: %s", ErrInvalidArgument, message)
+// InvalidArgumentError carries structured validation details from the server.
+// Use [NewInvalidArgumentError] to construct one, [ErrInvalidArgument] as the
+// sentinel target for errors.Is, and errors.As to extract the Message field.
+//
+// Breaking change (alpha): the package-level InvalidArgumentError() function
+// has been removed. Replace calls with NewInvalidArgumentError().
+type InvalidArgumentError struct {
+	// Message is the server-supplied validation detail (e.g. "field app.name
+	// must match ^[a-z]+$").
+	Message string
+}
+
+// Error implements the error interface.
+func (e *InvalidArgumentError) Error() string { return "invalid argument: " + e.Message }
+
+// Is reports true for any *InvalidArgumentError target, enabling
+// errors.Is(err, ErrInvalidArgument) regardless of Message value.
+func (e *InvalidArgumentError) Is(target error) bool {
+	_, ok := target.(*InvalidArgumentError)
+	return ok
+}
+
+// NewInvalidArgumentError constructs an InvalidArgumentError with the given
+// server message. This replaces the old InvalidArgumentError() helper function.
+func NewInvalidArgumentError(message string) *InvalidArgumentError {
+	return &InvalidArgumentError{Message: message}
 }
 
 // RetryableError wraps an error to indicate the operation may succeed on retry.
