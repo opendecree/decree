@@ -43,7 +43,7 @@ type MemoryCache struct {
 	lruIndex      map[string]*list.Element // key → list element for O(1) removal
 	maxEntries    int
 	sweepInterval time.Duration
-	stopSweep     chan struct{}
+	cancel        context.CancelFunc
 	stopOnce      sync.Once
 }
 
@@ -54,7 +54,8 @@ type memoryCacheEntry struct {
 
 // NewMemoryCache creates a new in-memory config cache.
 // maxEntries sets the upper bound on cached entries (0 uses default of 10000).
-func NewMemoryCache(maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
+// The background sweep goroutine stops when ctx is cancelled or Stop is called.
+func NewMemoryCache(ctx context.Context, maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
 	if maxEntries <= 0 {
 		maxEntries = defaultMaxEntries
 	}
@@ -62,6 +63,7 @@ func NewMemoryCache(maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
 	for _, o := range opts {
 		o(&cfg)
 	}
+	sweepCtx, cancel := context.WithCancel(ctx)
 	c := &MemoryCache{
 		entries:       make(map[string]memoryCacheEntry),
 		negEntries:    make(map[string]time.Time),
@@ -69,9 +71,9 @@ func NewMemoryCache(maxEntries int, opts ...MemoryCacheOption) *MemoryCache {
 		lruIndex:      make(map[string]*list.Element),
 		maxEntries:    maxEntries,
 		sweepInterval: cfg.sweepInterval,
-		stopSweep:     make(chan struct{}),
+		cancel:        cancel,
 	}
-	go c.sweepLoop()
+	go c.sweepLoop(sweepCtx)
 	return c
 }
 
@@ -161,7 +163,7 @@ func (c *MemoryCache) Len() int {
 
 // Stop stops the background sweep goroutine. Safe to call more than once.
 func (c *MemoryCache) Stop() {
-	c.stopOnce.Do(func() { close(c.stopSweep) })
+	c.stopOnce.Do(c.cancel)
 }
 
 // deleteEntry removes an entry and its LRU tracking. Caller must hold mu.
@@ -221,8 +223,8 @@ func (c *MemoryIdempotencyCache) Claim(_ context.Context, key string, ttl time.D
 
 // sweepLoop periodically removes expired entries. Each iteration adds ±10%
 // jitter to the configured interval to prevent synchronized sweeps when many
-// instances share the same configuration.
-func (c *MemoryCache) sweepLoop() {
+// instances share the same configuration. The loop exits when ctx is cancelled.
+func (c *MemoryCache) sweepLoop(ctx context.Context) {
 	for {
 		half := c.sweepInterval / 10
 		jitter := time.Duration(rand.Int64N(int64(2*half))) - half
@@ -230,7 +232,7 @@ func (c *MemoryCache) sweepLoop() {
 		select {
 		case <-timer.C:
 			c.sweep()
-		case <-c.stopSweep:
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		}

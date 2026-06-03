@@ -27,11 +27,15 @@ func mapConfigError(err error) error {
 	case codes.FailedPrecondition:
 		return configclient.ErrLocked
 	case codes.Aborted:
+		// Aborted is dual-purpose: it fires for checksum mismatches (optimistic
+		// concurrency) AND for concurrent-write conflicts where no checksum was
+		// supplied. The server does not yet use a distinct code or status detail
+		// to distinguish the two cases, so both map to ErrChecksumMismatch.
 		return configclient.ErrChecksumMismatch
 	case codes.AlreadyExists:
 		return configclient.ErrAlreadyExists
 	case codes.InvalidArgument:
-		return configclient.InvalidArgumentError(st.Message())
+		return configclient.NewInvalidArgumentError(st.Message())
 	case codes.ResourceExhausted:
 		// ResourceExhausted signals a rate limit. The server attaches a RetryInfo
 		// detail with a hard backoff hint; wrapping as RetryableError would discard

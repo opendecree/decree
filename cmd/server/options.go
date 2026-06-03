@@ -6,7 +6,6 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/opendecree/decree/internal/ratelimit"
 	"github.com/opendecree/decree/internal/server"
 )
 
@@ -28,8 +27,8 @@ func buildServerOptions(
 	logger *slog.Logger,
 	extraGRPCOpts []grpc.ServerOption,
 	serverTLS *server.TLSConfig,
-	rl *ratelimit.Interceptor,
-	preAuth *ratelimit.Interceptor,
+	rl server.GRPCInterceptor,
+	preAuth server.GRPCInterceptor,
 ) serverOptionsBuild {
 	out := serverOptionsBuild{
 		Opts: []server.Option{

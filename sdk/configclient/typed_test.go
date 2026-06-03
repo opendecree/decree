@@ -368,7 +368,7 @@ func TestSnapshot_GetFields(t *testing.T) {
 // --- Error types ---
 
 func TestInvalidArgumentError(t *testing.T) {
-	err := InvalidArgumentError("bad value")
+	err := NewInvalidArgumentError("bad value")
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Errorf("expected ErrInvalidArgument, got %v", err)
 	}
