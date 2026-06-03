@@ -857,5 +857,37 @@ func TestMemoryStore_ListTenantsBySchema_KeysetCursor(t *testing.T) {
 	assert.Equal(t, tA.ID, page2[0].ID)
 }
 
+func TestMemoryStore_RunInTx(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	err := store.RunInTx(ctx, func(tx Store) error {
+		_, err := tx.CreateSchema(ctx, CreateSchemaParams{Name: "tx-schema"})
+		return err
+	})
+	require.NoError(t, err)
+
+	// Schema must be visible after successful transaction.
+	got, err := store.GetSchemaByName(ctx, "tx-schema")
+	require.NoError(t, err)
+	assert.Equal(t, "tx-schema", got.Name)
+}
+
+func TestMemoryStore_RunInTx_Rollback(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	sentinel := errors.New("force rollback")
+	err := store.RunInTx(ctx, func(tx Store) error {
+		_, _ = tx.CreateSchema(ctx, CreateSchemaParams{Name: "should-not-exist"})
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+
+	// Schema must not be visible after rollback.
+	_, err = store.GetSchemaByName(ctx, "should-not-exist")
+	require.ErrorIs(t, err, domain.ErrNotFound)
+}
+
 // Verify MemoryStore implements Store at compile time.
 var _ Store = (*MemoryStore)(nil)

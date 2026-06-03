@@ -38,7 +38,67 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (m *MemoryStore) RunInTx(_ context.Context, fn func(Store) error) error {
-	return fn(m)
+	// Clone current state into a temporary store.
+	m.mu.Lock()
+	tmp := m.clone()
+	m.mu.Unlock()
+
+	if err := fn(tmp); err != nil {
+		return err // discard tmp — rollback
+	}
+
+	// Commit: atomically swap tmp's state into m.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.mergeFrom(tmp)
+	return nil
+}
+
+// clone returns a shallow copy of m with all map and slice fields deep-copied.
+// Caller must hold m.mu before calling.
+func (m *MemoryStore) clone() *MemoryStore {
+	tmp := &MemoryStore{
+		schemas:        make(map[string]domain.Schema, len(m.schemas)),
+		schemaVersions: make(map[string]domain.SchemaVersion, len(m.schemaVersions)),
+		schemaFields:   make(map[string][]domain.SchemaField, len(m.schemaFields)),
+		tenants:        make(map[string]domain.Tenant, len(m.tenants)),
+		fieldLocks:     make(map[string][]domain.TenantFieldLock, len(m.fieldLocks)),
+		auditLog:       make([]domain.AuditWriteLog, len(m.auditLog)),
+	}
+	for k, v := range m.schemas {
+		tmp.schemas[k] = v
+	}
+	for k, v := range m.schemaVersions {
+		tmp.schemaVersions[k] = v
+	}
+	for k, fs := range m.schemaFields {
+		cp := make([]domain.SchemaField, len(fs))
+		copy(cp, fs)
+		tmp.schemaFields[k] = cp
+	}
+	for k, v := range m.tenants {
+		tmp.tenants[k] = v
+	}
+	for k, ls := range m.fieldLocks {
+		cp := make([]domain.TenantFieldLock, len(ls))
+		copy(cp, ls)
+		tmp.fieldLocks[k] = cp
+	}
+	copy(tmp.auditLog, m.auditLog)
+	return tmp
+}
+
+// mergeFrom copies all state from src into m.
+// Caller must hold m.mu before calling.
+func (m *MemoryStore) mergeFrom(src *MemoryStore) {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	m.schemas = src.schemas
+	m.schemaVersions = src.schemaVersions
+	m.schemaFields = src.schemaFields
+	m.tenants = src.tenants
+	m.fieldLocks = src.fieldLocks
+	m.auditLog = src.auditLog
 }
 
 func (m *MemoryStore) InsertAuditWriteLog(_ context.Context, arg InsertAuditWriteLogParams) error {

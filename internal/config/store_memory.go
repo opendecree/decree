@@ -51,8 +51,74 @@ func (s *MemoryStore) nextID() string {
 }
 
 func (s *MemoryStore) RunInTx(_ context.Context, fn func(Store) error) error {
-	// Serialized execution — the mutex is already held for writes.
-	return fn(s)
+	// Clone current state into a temporary store.
+	s.mu.Lock()
+	tmp := s.clone()
+	s.mu.Unlock()
+
+	if err := fn(tmp); err != nil {
+		return err // discard tmp — rollback
+	}
+
+	// Commit: atomically swap tmp's state into s.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mergeFrom(tmp)
+	return nil
+}
+
+// clone returns a shallow copy of s with all map fields deep-copied.
+// Caller must hold s.mu before calling.
+func (s *MemoryStore) clone() *MemoryStore {
+	tmp := &MemoryStore{
+		configVersions: make(map[string]domain.ConfigVersion, len(s.configVersions)),
+		configValues:   make(map[string][]domain.ConfigValue, len(s.configValues)),
+		tenants:        make(map[string]domain.Tenant, len(s.tenants)),
+		schemaVersions: make(map[string]domain.SchemaVersion, len(s.schemaVersions)),
+		schemaFields:   make(map[string][]domain.SchemaField, len(s.schemaFields)),
+		fieldLocks:     make(map[string][]domain.TenantFieldLock, len(s.fieldLocks)),
+		auditLog:       make([]auditEntry, len(s.auditLog)),
+	}
+	for k, v := range s.configVersions {
+		tmp.configVersions[k] = v
+	}
+	for k, vs := range s.configValues {
+		cp := make([]domain.ConfigValue, len(vs))
+		copy(cp, vs)
+		tmp.configValues[k] = cp
+	}
+	for k, v := range s.tenants {
+		tmp.tenants[k] = v
+	}
+	for k, v := range s.schemaVersions {
+		tmp.schemaVersions[k] = v
+	}
+	for k, fs := range s.schemaFields {
+		cp := make([]domain.SchemaField, len(fs))
+		copy(cp, fs)
+		tmp.schemaFields[k] = cp
+	}
+	for k, ls := range s.fieldLocks {
+		cp := make([]domain.TenantFieldLock, len(ls))
+		copy(cp, ls)
+		tmp.fieldLocks[k] = cp
+	}
+	copy(tmp.auditLog, s.auditLog)
+	return tmp
+}
+
+// mergeFrom copies all state from src into s.
+// Caller must hold s.mu before calling.
+func (s *MemoryStore) mergeFrom(src *MemoryStore) {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	s.configVersions = src.configVersions
+	s.configValues = src.configValues
+	s.tenants = src.tenants
+	s.schemaVersions = src.schemaVersions
+	s.schemaFields = src.schemaFields
+	s.fieldLocks = src.fieldLocks
+	s.auditLog = src.auditLog
 }
 
 // --- Config versions ---

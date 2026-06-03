@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -238,6 +239,24 @@ func TestMemoryStore_RunInTx(t *testing.T) {
 	v, err := s.GetLatestConfigVersion(ctx, "t1")
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), v.Version)
+}
+
+func TestMemoryStore_RunInTx_Rollback(t *testing.T) {
+	s := NewMemoryStore()
+	ctx := context.Background()
+
+	sentinel := errors.New("force rollback")
+	err := s.RunInTx(ctx, func(tx Store) error {
+		_, _ = tx.CreateConfigVersion(ctx, CreateConfigVersionParams{
+			TenantID: "t1", Version: 1, CreatedBy: "admin",
+		})
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+
+	// Version must not be visible after rollback.
+	_, err = s.GetLatestConfigVersion(ctx, "t1")
+	require.ErrorIs(t, err, domain.ErrNotFound)
 }
 
 func TestMemoryStore_BulkSetConfigValues(t *testing.T) {
