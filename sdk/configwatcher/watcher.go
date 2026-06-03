@@ -388,7 +388,7 @@ func (w *Watcher) subscriptionLoop(ctx context.Context, snapshotVersion int32) {
 			return // Context cancelled — clean shutdown.
 		}
 
-		if err == nil || err == io.EOF {
+		if err == nil || errors.Is(err, io.EOF) {
 			w.opts.logger.InfoContext(ctx, "subscription stream closed by server, reconnecting",
 				"backoff", backoff)
 		} else {
@@ -434,9 +434,6 @@ func (w *Watcher) subscribe(ctx context.Context, fieldPaths []string, snapshotVe
 		change, err := sub.Recv()
 		if err != nil {
 			return err
-		}
-		if change == nil {
-			continue
 		}
 
 		w.mu.RLock()

@@ -9,6 +9,12 @@ import (
 )
 
 // Change represents a value transition for a typed config field.
+//
+// When the [Value.Changes] channel is full and a new update arrives, the oldest
+// buffered Change is dropped so that the newest value is always delivered. This
+// means consumers that fall behind may observe a gap in the Old→New chain: the
+// Old of the next received Change may not match the New of the previously
+// received Change.
 type Change[T any] struct {
 	// Old is the previous value (or the default if WasNull is true).
 	Old T
@@ -76,6 +82,10 @@ func (v *Value[T]) DroppedCount() int64 {
 // Get returns the current value of the field. If the field is null or missing,
 // the default value provided during registration is returned.
 //
+// Get acquires a read-lock on each call. For high-frequency reads on a hot flag
+// consider caching the value locally and subscribing via [Value.Changes] instead
+// of polling Get in a tight loop.
+//
 // Get never blocks and is safe for concurrent use.
 func (v *Value[T]) Get() T {
 	v.mu.RLock()
@@ -94,7 +104,14 @@ func (v *Value[T]) GetWithNull() (val T, ok bool) {
 // Changes returns a channel that receives [Change] events whenever the field
 // value is updated via the subscription stream. The channel is buffered (capacity 16).
 //
-// The channel is closed when the [Watcher] is closed.
+// If the channel is full when a new update arrives, the oldest buffered Change
+// is evicted so the newest value is always delivered. See [Change] for how this
+// affects the Old→New chain. Use [Value.DroppedCount] to monitor how often this
+// occurs.
+//
+// The channel is closed exactly once by [Watcher.Close]. Any send that races
+// with Close is suppressed; callers must not send on the returned channel after
+// Close has been called.
 func (v *Value[T]) Changes() <-chan Change[T] {
 	return v.changesCh
 }
