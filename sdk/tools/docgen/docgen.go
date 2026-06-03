@@ -13,9 +13,11 @@ import (
 type Schema struct {
 	Name        string
 	Description string
-	Version     int32
-	Info        *SchemaInfo
-	Fields      []Field
+	// Version is the schema version number. A value of 0 means the version is
+	// not set and will be omitted from the generated documentation.
+	Version int32
+	Info    *SchemaInfo
+	Fields  []Field
 }
 
 // SchemaInfo contains optional schema-level metadata.
@@ -176,6 +178,10 @@ type fieldGroup struct {
 	fields []Field
 }
 
+// groupByPrefix groups fields by their top-level path prefix. Deterministic
+// group order relies on the caller having sorted fields by Path beforehand (as
+// Generate does via sort.Slice), so the first occurrence of each prefix
+// establishes insertion order.
 func groupByPrefix(fields []Field) []fieldGroup {
 	var groups []fieldGroup
 	groupMap := make(map[string]int) // prefix → index in groups
@@ -338,6 +344,10 @@ func yesNo(v bool) string {
 	return "no"
 }
 
+// formatFloat formats a float64 for display, omitting the decimal point when
+// the value is a whole number.
+// TODO: this is byte-identical to validate.formatFloat; if a shared internal
+// package is added to sdk/tools, hoist both copies there.
 func formatFloat(f float64) string {
 	if f == float64(int64(f)) {
 		return fmt.Sprintf("%d", int64(f))

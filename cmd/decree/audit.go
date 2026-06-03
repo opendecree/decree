@@ -27,17 +27,17 @@ var auditQueryCmd = &cobra.Command{
 		defer func() { _ = conn.Close() }()
 
 		var filters []adminclient.AuditFilter
-		if v, _ := cmd.Flags().GetString("tenant"); v != "" {
+		if v := mustGetString(cmd, "tenant"); v != "" {
 			filters = append(filters, adminclient.WithAuditTenant(v))
 		}
-		if v, _ := cmd.Flags().GetString("actor"); v != "" {
+		if v := mustGetString(cmd, "actor"); v != "" {
 			filters = append(filters, adminclient.WithAuditActor(v))
 		}
-		if v, _ := cmd.Flags().GetString("field"); v != "" {
+		if v := mustGetString(cmd, "field"); v != "" {
 			filters = append(filters, adminclient.WithAuditField(v))
 		}
-		if v, _ := cmd.Flags().GetString("since"); v != "" {
-			d, err := time.ParseDuration(v)
+		if v := mustGetString(cmd, "since"); v != "" {
+			d, err := parseDuration(v)
 			if err != nil {
 				return fmt.Errorf("invalid --since duration: %w", err)
 			}
@@ -104,7 +104,7 @@ Requires migration 002_audit_tamper_evident to be applied.`,
 		}
 		defer func() { _ = conn.Close() }()
 
-		tenantID, _ := cmd.Flags().GetString("tenant")
+		tenantID := mustGetString(cmd, "tenant")
 		admin, err := newAdminClient(conn)
 		if err != nil {
 			return err
@@ -188,10 +188,19 @@ func printVerifyResult(w io.Writer, result adminclient.VerifyChainResult) error 
 }
 
 // parseDuration extends time.ParseDuration with day support (e.g. "7d").
+// It rejects inputs like "7dd" or "7d1h" that look day-like but have trailing
+// characters — callers must use standard Go duration syntax for those.
 func parseDuration(s string) (time.Duration, error) {
 	if len(s) > 1 && s[len(s)-1] == 'd' {
+		prefix := s[:len(s)-1]
 		var n float64
-		if _, err := fmt.Sscanf(s[:len(s)-1], "%f", &n); err == nil {
+		var rest string
+		if _, err := fmt.Sscanf(prefix, "%f%s", &n, &rest); err == nil {
+			// Sscanf consumed a number but left trailing characters — reject.
+			return 0, fmt.Errorf("invalid duration %q: unexpected characters after day count", s)
+		}
+		// Only a number before 'd' — valid.
+		if _, err := fmt.Sscanf(prefix, "%f", &n); err == nil {
 			return time.Duration(n * float64(24*time.Hour)), nil
 		}
 	}

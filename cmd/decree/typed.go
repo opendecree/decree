@@ -51,9 +51,8 @@ func parseTypedValue(fieldType, raw string) (*configclient.TypedValue, error) {
 	case "url":
 		return configclient.URLVal(raw), nil
 	case "json":
-		var tmp any
-		if err := json.Unmarshal([]byte(raw), &tmp); err != nil {
-			return nil, fmt.Errorf("invalid json value: %w", err)
+		if !json.Valid([]byte(raw)) {
+			return nil, fmt.Errorf("invalid json value: %s", raw)
 		}
 		return configclient.JSONVal(raw), nil
 	default:

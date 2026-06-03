@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -43,6 +45,81 @@ func TestTypedValueDisplay_Time(t *testing.T) {
 	tv := configclient.TimeVal(ts)
 	if !strings.Contains(typedValueDisplay(tv), "2026-03-30") {
 		t.Errorf("expected %q to contain %q", typedValueDisplay(tv), "2026-03-30")
+	}
+}
+
+// --- printOutput (exercises the flagOutput switch) ---
+
+func TestPrintOutput_JSON(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "json"
+
+	// Redirect stdout.
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput(map[string]string{"k": "v"})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"k"`) {
+		t.Errorf("expected JSON output, got: %q", buf.String())
+	}
+}
+
+func TestPrintOutput_YAML(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "yaml"
+
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput(map[string]string{"k": "v"})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "k:") {
+		t.Errorf("expected YAML output, got: %q", buf.String())
+	}
+}
+
+func TestPrintOutput_Table(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "table"
+
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput([][]string{{"HEADER"}, {"row"}})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "HEADER") {
+		t.Errorf("expected table output, got: %q", buf.String())
 	}
 }
 
@@ -96,7 +173,10 @@ values:
   app.enabled:
     value: true
 `
-	m := parseConfigValues([]byte(yaml))
+	m, err := parseConfigValues([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if m == nil {
 		t.Fatal("expected non-nil")
 	}
@@ -112,14 +192,17 @@ values:
 }
 
 func TestParseConfigValues_Invalid(t *testing.T) {
-	m := parseConfigValues([]byte("not: [valid: yaml"))
-	if m != nil {
-		t.Errorf("expected nil, got %v", m)
+	_, err := parseConfigValues([]byte("not: [valid: yaml"))
+	if err == nil {
+		t.Errorf("expected error, got nil")
 	}
 }
 
 func TestParseConfigValues_Empty(t *testing.T) {
-	m := parseConfigValues([]byte("spec_version: v1\n"))
+	m, err := parseConfigValues([]byte("spec_version: v1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if m == nil {
 		t.Fatal("expected non-nil")
 	}
