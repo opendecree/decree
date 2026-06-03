@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/metric"
+
+	pb "github.com/opendecree/decree/api/centralconfig/v1"
 )
 
 // Limits caps JSON-Schema compilation cost. Zero values mean "no limit"
@@ -64,6 +66,9 @@ type options struct {
 	celCapCounter     metric.Int64Counter       // nil when metrics are disabled
 	celSoftErrCounter metric.Int64Counter       // nil when metrics are disabled
 	compileSem        chan struct{}             // nil when MaxConcurrentCompiles == 0
+	nullable          bool
+	sensitive         bool
+	constraints       *pb.FieldConstraints
 }
 
 // WithLimits sets the JSON-Schema compile limits. Defaults to
@@ -116,6 +121,25 @@ func WithCelCapCounter(c metric.Int64Counter) Option {
 // "validation.cel_soft_error_total". Pass nil to disable.
 func WithCelSoftErrCounter(c metric.Int64Counter) Option {
 	return func(o *options) { o.celSoftErrCounter = c }
+}
+
+// WithNullable marks the field as nullable. When set, a nil or empty
+// [pb.TypedValue] is accepted. Defaults to false (not nullable).
+func WithNullable() Option {
+	return func(o *options) { o.nullable = true }
+}
+
+// WithSensitive marks the field as sensitive. When set, error messages omit
+// the offending value to avoid leaking secrets in logs or responses.
+// Defaults to false.
+func WithSensitive() Option {
+	return func(o *options) { o.sensitive = true }
+}
+
+// WithConstraints attaches field constraints (min/max, regex, enum, JSON
+// Schema, etc.) to the validator. Defaults to nil (no constraints).
+func WithConstraints(c *pb.FieldConstraints) Option {
+	return func(o *options) { o.constraints = c }
 }
 
 func resolveOptions(opts []Option) options {

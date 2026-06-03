@@ -71,18 +71,20 @@ func (v *FieldValidator) Validate(tv *pb.TypedValue) error {
 	return nil
 }
 
-// NewFieldValidator creates a validator for a schema field. Pass
-// [WithLimits] to override the JSON-Schema compile defaults; without it,
-// [DefaultLimits] is used.
-func NewFieldValidator(fieldPath string, fieldType pb.FieldType, nullable bool, sensitive bool, constraints *pb.FieldConstraints, opts ...Option) *FieldValidator {
+// NewFieldValidator creates a validator for a schema field.
+// fieldPath and fieldType are required. All other parameters are optional:
+// use [WithNullable], [WithSensitive], [WithConstraints], and [WithLimits].
+// Without [WithLimits], [DefaultLimits] is used.
+func NewFieldValidator(fieldPath string, fieldType pb.FieldType, opts ...Option) *FieldValidator {
 	o := resolveOptions(opts)
 	v := &FieldValidator{
 		fieldPath:       fieldPath,
 		fieldType:       fieldType,
 		domainFieldType: domain.FieldTypeFromProto(fieldType),
-		nullable:        nullable,
-		sensitive:       sensitive,
+		nullable:        o.nullable,
+		sensitive:       o.sensitive,
 	}
+	constraints := o.constraints
 
 	// Number finiteness check is always applied (not constraint-dependent).
 	if fieldType == pb.FieldType_FIELD_TYPE_NUMBER {
