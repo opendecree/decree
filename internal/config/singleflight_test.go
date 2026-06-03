@@ -34,7 +34,7 @@ func TestGetConfig_NegativeCacheHit(t *testing.T) {
 	store.On("GetLatestConfigVersion", mock.Anything, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 
-	c := cache.NewMemoryCache(0)
+	c := cache.NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := auth.WithoutAuth(context.Background())
 	require.NoError(t, c.SetNegative(ctx, tenantID1, 1, time.Minute))
@@ -62,7 +62,7 @@ func TestGetConfig_EmptyConfig_SetsNegativeCache(t *testing.T) {
 	}).Return([]GetFullConfigAtVersionRow{}, nil)
 	setupNoSensitiveFields(store)
 
-	c := cache.NewMemoryCache(0)
+	c := cache.NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := auth.WithoutAuth(context.Background())
 
@@ -114,7 +114,7 @@ func TestGetConfig_SingleflightDeduplicatesDBFetches(t *testing.T) {
 		}, nil)
 	setupNoSensitiveFields(store)
 
-	c := cache.NewMemoryCache(0)
+	c := cache.NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 
 	pub := &mockPublisher{}

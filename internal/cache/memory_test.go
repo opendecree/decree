@@ -10,7 +10,7 @@ import (
 )
 
 func TestMemoryCache_SetAndGet(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1", "b": "2"}, time.Minute))
@@ -22,14 +22,14 @@ func TestMemoryCache_SetAndGet(t *testing.T) {
 }
 
 func TestMemoryCache_Miss(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	got, err := c.Get(context.Background(), "t1", 1)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
 
 func TestMemoryCache_TTLExpiry(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Millisecond))
@@ -41,7 +41,7 @@ func TestMemoryCache_TTLExpiry(t *testing.T) {
 }
 
 func TestMemoryCache_Invalidate(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
@@ -61,7 +61,7 @@ func TestMemoryCache_Invalidate(t *testing.T) {
 }
 
 func TestMemoryCache_ReturnsCopy(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "1"}, time.Minute))
@@ -74,7 +74,7 @@ func TestMemoryCache_ReturnsCopy(t *testing.T) {
 }
 
 func TestMemoryCache_DifferentVersions(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.Set(ctx, "t1", 1, map[string]string{"a": "v1"}, time.Minute))
@@ -87,7 +87,7 @@ func TestMemoryCache_DifferentVersions(t *testing.T) {
 }
 
 func TestMemoryCache_EvictsOldestWhenFull(t *testing.T) {
-	c := NewMemoryCache(3)
+	c := NewMemoryCache(context.Background(), 3)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -108,7 +108,7 @@ func TestMemoryCache_EvictsOldestWhenFull(t *testing.T) {
 }
 
 func TestMemoryCache_EvictsExpiredBeforeOldest(t *testing.T) {
-	c := NewMemoryCache(3)
+	c := NewMemoryCache(context.Background(), 3)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -127,7 +127,7 @@ func TestMemoryCache_EvictsExpiredBeforeOldest(t *testing.T) {
 }
 
 func TestMemoryCache_Sweep_RemovesExpiredEntries(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -146,7 +146,7 @@ func TestMemoryCache_Sweep_RemovesExpiredEntries(t *testing.T) {
 }
 
 func TestMemoryCache_Sweep_NoExpired_NoOp(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -158,7 +158,7 @@ func TestMemoryCache_Sweep_NoExpired_NoOp(t *testing.T) {
 }
 
 func TestMemoryCache_UpdateExistingDoesNotGrow(t *testing.T) {
-	c := NewMemoryCache(2)
+	c := NewMemoryCache(context.Background(), 2)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -178,7 +178,7 @@ func TestMemoryCache_UpdateExistingDoesNotGrow(t *testing.T) {
 
 func TestMemoryCache_WithSweepInterval_SweepsOnSchedule(t *testing.T) {
 	interval := 50 * time.Millisecond
-	c := NewMemoryCache(0, WithSweepInterval(interval))
+	c := NewMemoryCache(context.Background(), 0, WithSweepInterval(interval))
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -234,7 +234,7 @@ func TestMemoryIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
 // --- Negative cache ---
 
 func TestMemoryCache_NegativeCache_SetAndGet(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	neg, err := c.GetNegative(ctx, "t1", 1)
@@ -249,7 +249,7 @@ func TestMemoryCache_NegativeCache_SetAndGet(t *testing.T) {
 }
 
 func TestMemoryCache_NegativeCache_TTLExpiry(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Millisecond))
@@ -261,7 +261,7 @@ func TestMemoryCache_NegativeCache_TTLExpiry(t *testing.T) {
 }
 
 func TestMemoryCache_NegativeCache_InvalidateClears(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	require.NoError(t, c.SetNegative(ctx, "t1", 1, time.Minute))
@@ -280,7 +280,7 @@ func TestMemoryCache_NegativeCache_InvalidateClears(t *testing.T) {
 }
 
 func TestMemoryCache_NegativeCache_Sweep_RemovesExpired(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := context.Background()
 
@@ -297,7 +297,7 @@ func TestMemoryCache_NegativeCache_Sweep_RemovesExpired(t *testing.T) {
 }
 
 func TestMemoryCache_NegativeCache_IndependentFromPositive(t *testing.T) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	ctx := context.Background()
 
 	// Set positive entry and negative entry for same key.

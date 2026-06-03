@@ -63,7 +63,7 @@ func BenchmarkServerColdStart(b *testing.B) {
 			schema.WithMetrics(telemetry.NewSchemaMetrics(noopCfg)),
 			schema.WithValidators(validatorFactory),
 		))
-		configSvc := config.NewService(memConfig, cache.NewMemoryCache(0), memPubSub, memPubSub,
+		configSvc := config.NewService(memConfig, cache.NewMemoryCache(context.Background(), 0), memPubSub, memPubSub,
 			config.WithLogger(nullLog),
 			config.WithCacheMetrics(telemetry.NewCacheMetrics(noopCfg)),
 			config.WithMetrics(telemetry.NewConfigMetrics(noopCfg)),

@@ -99,7 +99,7 @@ func run() int {
 		configStore = memConfig
 		schemaStoreVal = memSchema
 		auditStoreVal = audit.NewMemoryStore()
-		configCache = cache.NewMemoryCache(0)
+		configCache = cache.NewMemoryCache(ctx, 0)
 		idempotencyCache = cache.NewMemoryIdempotencyCache()
 		memOpts := []pubsub.MemoryOption{pubsub.WithLogger(logger)}
 		if counter, ok := pubSubMetrics.DroppedCounter(); ok {

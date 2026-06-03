@@ -11,7 +11,7 @@ import (
 )
 
 func BenchmarkMemoryCache_Hit(b *testing.B) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := context.Background()
 	_ = c.Set(ctx, "t1", 1, map[string]string{"a": "1", "b": "2", "c": "3"}, time.Minute)
@@ -22,7 +22,7 @@ func BenchmarkMemoryCache_Hit(b *testing.B) {
 }
 
 func BenchmarkMemoryCache_Miss(b *testing.B) {
-	c := NewMemoryCache(0)
+	c := NewMemoryCache(context.Background(), 0)
 	defer c.Stop()
 	ctx := context.Background()
 	b.ReportAllocs()
@@ -33,7 +33,7 @@ func BenchmarkMemoryCache_Miss(b *testing.B) {
 
 func BenchmarkMemoryCache_SetEvictsOldest(b *testing.B) {
 	const cap = 100
-	c := NewMemoryCache(cap)
+	c := NewMemoryCache(context.Background(), cap)
 	defer c.Stop()
 	ctx := context.Background()
 	for i := range cap {
