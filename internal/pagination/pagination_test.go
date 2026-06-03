@@ -6,13 +6,13 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/opendecree/decree/internal/testutil"
 )
 
 func TestDecodePageToken_Empty(t *testing.T) {
 	offset, err := DecodePageToken("")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	offset = testutil.Must(t, offset, err)
 	if offset != 0 {
 		t.Errorf("got %d, want 0", offset)
 	}
@@ -22,9 +22,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	for _, offset := range []int32{0, 1, 50, 100, 999} {
 		token := EncodePageToken(offset)
 		got, err := DecodePageToken(token)
-		if err != nil {
-			t.Fatalf("DecodePageToken(%q): %v", token, err)
-		}
+		got = testutil.Must(t, got, err)
 		if got != offset {
 			t.Errorf("round-trip offset %d: got %d", offset, got)
 		}
@@ -120,9 +118,7 @@ func TestNextPageToken(t *testing.T) {
 	// Second page token encodes correct offset
 	token := NextPageToken(50, 51, 0)
 	offset, err := DecodePageToken(token)
-	if err != nil {
-		t.Fatalf("DecodePageToken: %v", err)
-	}
+	offset = testutil.Must(t, offset, err)
 	if offset != 50 {
 		t.Errorf("got offset %d, want 50", offset)
 	}
@@ -130,9 +126,7 @@ func TestNextPageToken(t *testing.T) {
 	// Third page from offset 50
 	token = NextPageToken(50, 51, 50)
 	offset, err = DecodePageToken(token)
-	if err != nil {
-		t.Fatalf("DecodePageToken: %v", err)
-	}
+	offset = testutil.Must(t, offset, err)
 	if offset != 100 {
 		t.Errorf("got offset %d, want 100", offset)
 	}
