@@ -303,6 +303,28 @@ func TestParseDuration_Invalid(t *testing.T) {
 	}
 }
 
+func TestParseDuration_TrailingChars(t *testing.T) {
+	_, err := parseDuration("7dd")
+	if err == nil {
+		t.Fatal("expected error for '7dd', got nil")
+	}
+}
+
+// --- envOrDefault ---
+
+func TestEnvOrDefault_EnvSet(t *testing.T) {
+	t.Setenv("DECREE_TEST_KEY_XYZ", "from-env")
+	if got := envOrDefault("DECREE_TEST_KEY_XYZ", "fallback"); got != "from-env" {
+		t.Errorf("got %q, want %q", got, "from-env")
+	}
+}
+
+func TestEnvOrDefault_EnvNotSet(t *testing.T) {
+	if got := envOrDefault("DECREE_TEST_KEY_UNSET_XYZ", "fallback"); got != "fallback" {
+		t.Errorf("got %q, want %q", got, "fallback")
+	}
+}
+
 // --- SilenceUsage / SilenceErrors (#707) ---
 
 func TestRootCmd_SilenceUsage(t *testing.T) {

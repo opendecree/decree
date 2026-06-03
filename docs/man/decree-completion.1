@@ -45,7 +45,11 @@ See each sub-command's help for details on how to use the generated script.
 
 .PP
 \fB--token\fP=""
-	JWT bearer token
+	JWT bearer token (prefer DECREE_TOKEN env var to avoid shell history exposure)
+
+.PP
+\fB--token-file\fP=""
+	path to a file containing the JWT bearer token (takes precedence over --token)
 
 .PP
 \fB--wait\fP[=false]

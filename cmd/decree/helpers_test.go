@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -43,6 +45,81 @@ func TestTypedValueDisplay_Time(t *testing.T) {
 	tv := configclient.TimeVal(ts)
 	if !strings.Contains(typedValueDisplay(tv), "2026-03-30") {
 		t.Errorf("expected %q to contain %q", typedValueDisplay(tv), "2026-03-30")
+	}
+}
+
+// --- printOutput (exercises the flagOutput switch) ---
+
+func TestPrintOutput_JSON(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "json"
+
+	// Redirect stdout.
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput(map[string]string{"k": "v"})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"k"`) {
+		t.Errorf("expected JSON output, got: %q", buf.String())
+	}
+}
+
+func TestPrintOutput_YAML(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "yaml"
+
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput(map[string]string{"k": "v"})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "k:") {
+		t.Errorf("expected YAML output, got: %q", buf.String())
+	}
+}
+
+func TestPrintOutput_Table(t *testing.T) {
+	orig := flagOutput
+	t.Cleanup(func() { flagOutput = orig })
+	flagOutput = "table"
+
+	r, w, _ := os.Pipe()
+	origStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = origStdout })
+
+	err := printOutput([][]string{{"HEADER"}, {"row"}})
+	w.Close()
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r) //nolint:errcheck
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "HEADER") {
+		t.Errorf("expected table output, got: %q", buf.String())
 	}
 }
 
