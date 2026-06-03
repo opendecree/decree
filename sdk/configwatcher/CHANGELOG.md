@@ -9,7 +9,7 @@ This project uses semantic versioning with an `-alpha.N` suffix during alpha; th
 
 ### Added
 
-- `WithReconnectTimeout` bounds the `loadSnapshot` call during reconnect with an explicit timeout (#410)
+- `WithSnapshotTimeout` bounds the `loadSnapshot` call during reconnect with an explicit timeout (#410)
 - Subscribe stream-end reconnect semantics documented in package godoc
 
 ### Fixed

@@ -62,7 +62,7 @@ func ExampleWatcher_Start() {
 	if err := w.Start(ctx); err != nil {
 		fmt.Println("start error:", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	// Get returns the current value; defaults are returned until the first snapshot.
 	fmt.Println(timeout.Get())
@@ -105,7 +105,7 @@ func ExampleWithReconnectBackoff() {
 	if err := w.Start(ctx); err != nil {
 		fmt.Println("start error:", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	fmt.Println(flag.Get())
 	// Output: false

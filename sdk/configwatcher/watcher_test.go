@@ -227,15 +227,13 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		NewValue:  configclient.FloatVal(0.05),
 	})
 
-	// Wait for change to propagate.
+	// Gate on the Changes() event — the value is applied before the event is sent.
 	select {
-	case ch := <-fee.Changes():
-		_ = ch
+	case <-fee.Changes():
 	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected change event on fee.Changes()")
 	}
 
-	// Read updated value.
-	time.Sleep(10 * time.Millisecond) // let stream update propagate
 	if got := fee.Get(); got != 0.05 {
 		t.Errorf("got %v, want %v", got, 0.05)
 	}
