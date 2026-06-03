@@ -1145,6 +1145,74 @@ values:
 	store.AssertNotCalled(t, "GetFullConfigAtVersion")
 }
 
+func TestImportConfig_DefaultsMode_SnapshotFetchError_FallsBackToAll(t *testing.T) {
+	// When GetFullConfigAtVersion returns an error, filterByImportMode falls
+	// back to including all values (safe degradation) and the import proceeds.
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`
+spec_version: "v1"
+values:
+  app.alpha:
+    value: "a"
+  app.beta:
+    value: "b"
+`)
+
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.alpha", FieldType: domain.FieldTypeString},
+			{Path: "app.beta", FieldType: domain.FieldTypeString},
+		}, nil)
+	store.On("GetFieldLocks", ctx, tenantID1).
+		Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 2}, nil)
+
+	// Snapshot fetch fails — should log a warning and include all values.
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
+		TenantID: tenantID1,
+		Version:  2,
+	}).Return([]GetFullConfigAtVersionRow{}, errors.New("db connection lost"))
+
+	// Both fields are included (fallback) — changeG old-value lookups follow.
+	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
+		return p.TenantID == tenantID1
+	})).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
+
+	newVersionID := versionID20
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: newVersionID, TenantID: tenantID1, Version: 3, CreatedBy: "unknown"}, nil)
+	store.On("BulkSetConfigValues", ctx, mock.MatchedBy(func(args []SetConfigValueParams) bool {
+		return len(args) == 2 // both fields written despite fetch error
+	})).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.MatchedBy(func(args []InsertAuditWriteLogParams) bool {
+		return len(args) == 2
+	})).Return(nil)
+	cache := &mockCache{}
+	pub := &mockPublisher{}
+	svc.cache = cache
+	svc.publisher = pub
+	cache.On("Invalidate", ctx, tenantID1).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_DEFAULTS,
+	})
+
+	require.NoError(t, err)
+	// Both fields written — fallback included all values despite the fetch error.
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
+	store.AssertNumberOfCalls(t, "GetFullConfigAtVersion", 1)
+}
+
 // --- Usage Recording ---
 
 func TestGetField_RecordsUsage(t *testing.T) {
