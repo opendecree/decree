@@ -284,7 +284,17 @@ func run() int {
 		logger.WarnContext(ctx, "ENABLE_REFLECTION=1 set — gRPC server reflection enabled (not recommended for production)")
 	}
 
-	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rlInterceptor, preAuthInterceptor)
+	// Convert concrete rate-limiter pointers to the GRPCInterceptor interface
+	// using explicit nil guards — a nil *ratelimit.Interceptor assigned directly
+	// to an interface would produce a non-nil interface wrapping a nil pointer.
+	var rl, preAuth server.GRPCInterceptor
+	if rlInterceptor != nil {
+		rl = rlInterceptor
+	}
+	if preAuthInterceptor != nil {
+		preAuth = preAuthInterceptor
+	}
+	srvBuild := buildServerOptions(cfg, logger, extraOpts, serverTLS, rl, preAuth)
 	srv, err := server.New(cfg.GRPCPort, authInterceptor, srvBuild.Opts...)
 	if err != nil {
 		logger.ErrorContext(ctx, "failed to create server", "error", err)

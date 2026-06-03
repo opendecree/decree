@@ -13,7 +13,6 @@ import (
 )
 
 func ptrF64(f float64) *float64 { return &f }
-func ptrI32(i int32) *int32     { return &i }
 
 // --- TypedValue round-trips ---
 
@@ -653,5 +652,4 @@ func TestSchemaFromProto_Basic(t *testing.T) {
 	}
 }
 
-// ptrF64 and ptrI32 are used in TestConstraintsRoundTrip_ExclusiveMinMax.
-var _ = ptrI32
+// ptrF64 is used in TestConstraintsRoundTrip_ExclusiveMinMax.
