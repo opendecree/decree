@@ -1478,24 +1478,32 @@ func (s *Service) filterByImportMode(ctx context.Context, tenantID string, lates
 		return values
 
 	case pb.ImportMode_IMPORT_MODE_DEFAULTS:
-		// Defaults: only include values for fields that have no current value.
+		// Defaults: only include values for fields that have no row in the
+		// current snapshot. Fetch the full snapshot once and filter in-memory
+		// to avoid N+1 (previously 2N) per-field round-trips.
+		if latestVersion == 0 {
+			return values // No existing config — include all.
+		}
+		rows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
+			TenantID: tenantID,
+			Version:  latestVersion,
+		})
+		if err != nil {
+			// On error, fall back to including all values (safe: worst case we
+			// overwrite defaults that are already set, which DEFAULTS mode
+			// normally prevents, but a DB error here is unexpected anyway).
+			s.logger.WarnContext(ctx, "filterByImportMode: failed to fetch snapshot for DEFAULTS filter, including all values", "error", err)
+			return values
+		}
+		existing := make(map[string]struct{}, len(rows))
+		for _, r := range rows {
+			existing[r.FieldPath] = struct{}{}
+		}
 		var filtered []configValueImport
 		for _, v := range values {
-			current := s.getCurrentValue(ctx, tenantID, v.FieldPath, latestVersion)
-			if current == "" {
-				// Check if the field truly has no value (not just empty string).
-				_, err := s.store.GetConfigValueAtVersion(ctx, GetConfigValueAtVersionParams{
-					TenantID:  tenantID,
-					FieldPath: v.FieldPath,
-					Version:   latestVersion,
-				})
-				if err != nil {
-					// Field doesn't exist — include it.
-					filtered = append(filtered, v)
-				}
-				// Field exists (even if empty) — skip.
+			if _, ok := existing[v.FieldPath]; !ok {
+				filtered = append(filtered, v)
 			}
-			// Field has a non-empty value — skip.
 		}
 		return filtered
 

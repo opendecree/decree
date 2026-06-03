@@ -995,12 +995,17 @@ values:
 	store.On("GetLatestConfigVersion", ctx, tenantID1).
 		Return(domain.ConfigVersion{Version: 1}, nil)
 
-	// app.existing has a value -> should be skipped in defaults mode
-	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
-		return p.FieldPath == "app.existing"
-	})).Return(GetConfigValueAtVersionRow{Value: strPtr("already-set")}, nil)
+	// DEFAULTS filter: one bulk snapshot fetch instead of N per-field calls.
+	// app.existing is present in the snapshot → skipped by the filter.
+	// app.missing is absent from the snapshot → included.
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
+		TenantID: tenantID1,
+		Version:  1,
+	}).Return([]GetFullConfigAtVersionRow{
+		{FieldPath: "app.existing", Value: strPtr("already-set")},
+	}, nil)
 
-	// app.missing has no value -> should be included
+	// changeG old-value lookup: only app.missing survives the filter.
 	store.On("GetConfigValueAtVersion", mock.Anything, mock.MatchedBy(func(p GetConfigValueAtVersionParams) bool {
 		return p.FieldPath == "app.missing"
 	})).Return(GetConfigValueAtVersionRow{}, domain.ErrNotFound)
@@ -1028,8 +1033,116 @@ values:
 	})
 
 	require.NoError(t, err)
-	// Only app.missing should be set
+	// Only app.missing should be set — app.existing was already in the snapshot.
 	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
+	// Verify exactly one bulk snapshot fetch was made (no N+1).
+	store.AssertNumberOfCalls(t, "GetFullConfigAtVersion", 1)
+}
+
+func TestImportConfig_DefaultsMode_AllExistingReturnsAlreadyExists(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`
+spec_version: "v1"
+values:
+  app.foo:
+    value: "from-yaml"
+  app.bar:
+    value: "from-yaml"
+`)
+
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.foo", FieldType: domain.FieldTypeString},
+			{Path: "app.bar", FieldType: domain.FieldTypeString},
+		}, nil)
+	store.On("GetFieldLocks", ctx, tenantID1).
+		Return([]domain.TenantFieldLock{}, nil)
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{Version: 3}, nil)
+
+	// Both fields exist in the snapshot — nothing should be written.
+	store.On("GetFullConfigAtVersion", mock.Anything, GetFullConfigAtVersionParams{
+		TenantID: tenantID1,
+		Version:  3,
+	}).Return([]GetFullConfigAtVersionRow{
+		{FieldPath: "app.foo", Value: strPtr("existing-foo")},
+		{FieldPath: "app.bar", Value: strPtr("existing-bar")},
+	}, nil)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_DEFAULTS,
+	})
+
+	require.Error(t, err)
+	assert.Equal(t, codes.AlreadyExists, status.Code(err), "all fields exist → AlreadyExists")
+	store.AssertNumberOfCalls(t, "GetFullConfigAtVersion", 1)
+	store.AssertNotCalled(t, "CreateConfigVersion")
+}
+
+func TestImportConfig_DefaultsMode_NoExistingConfig_IncludesAll(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := superadminCtx()
+
+	yamlContent := []byte(`
+spec_version: "v1"
+values:
+  app.alpha:
+    value: "a"
+  app.beta:
+    value: "b"
+`)
+
+	store.On("GetTenantByID", ctx, tenantID1).
+		Return(domain.Tenant{SchemaID: schemaID10, SchemaVersion: 1}, nil)
+	store.On("GetSchemaVersion", ctx, domain.SchemaVersionKey{SchemaID: schemaID10, Version: 1}).
+		Return(domain.SchemaVersion{ID: schemaVersionID}, nil)
+	store.On("GetSchemaFields", ctx, schemaVersionID).
+		Return([]domain.SchemaField{
+			{Path: "app.alpha", FieldType: domain.FieldTypeString},
+			{Path: "app.beta", FieldType: domain.FieldTypeString},
+		}, nil)
+	store.On("GetFieldLocks", ctx, tenantID1).
+		Return([]domain.TenantFieldLock{}, nil)
+	// Version 0 means no existing config.
+	store.On("GetLatestConfigVersion", ctx, tenantID1).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+
+	// No snapshot fetch should occur when latestVersion == 0.
+	newVersionID := versionID20
+	store.On("CreateConfigVersion", ctx, mock.AnythingOfType("config.CreateConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: newVersionID, TenantID: tenantID1, Version: 1, CreatedBy: "unknown"}, nil)
+	store.On("BulkSetConfigValues", ctx, mock.MatchedBy(func(args []SetConfigValueParams) bool {
+		return len(args) == 2
+	})).Return(nil)
+	store.On("BulkInsertAuditWriteLog", ctx, mock.MatchedBy(func(args []InsertAuditWriteLogParams) bool {
+		return len(args) == 2
+	})).Return(nil)
+	cache := &mockCache{}
+	pub := &mockPublisher{}
+	svc.cache = cache
+	svc.publisher = pub
+	cache.On("Invalidate", ctx, tenantID1).Return(nil)
+	pub.On("Publish", ctx, mock.AnythingOfType("pubsub.ConfigChangeEvent")).Return(nil)
+
+	_, err := svc.ImportConfig(ctx, &pb.ImportConfigRequest{
+		TenantId:    tenantID1,
+		YamlContent: yamlContent,
+		Mode:        pb.ImportMode_IMPORT_MODE_DEFAULTS,
+	})
+
+	require.NoError(t, err)
+	// All fields included (no existing config).
+	store.AssertCalled(t, "BulkSetConfigValues", ctx, mock.Anything)
+	// No bulk snapshot fetch — latestVersion was 0.
+	store.AssertNotCalled(t, "GetFullConfigAtVersion")
 }
 
 // --- Usage Recording ---
