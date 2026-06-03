@@ -88,6 +88,7 @@ func AllowedTenantIDs(ctx context.Context) []string {
 
 // IsSuperAdmin reports whether the caller has the superadmin role.
 // Returns true for internal callers marked with WithoutAuth.
+// Callers using this for write-gating must ensure WithoutAuth is only set in trusted internal contexts.
 func IsSuperAdmin(ctx context.Context) bool {
 	claims, ok := ClaimsFromContext(ctx)
 	if !ok {

@@ -201,6 +201,7 @@ func (r *UsageRecorder) Stop() {
 }
 
 // Flush swaps the pending buffer and writes all accumulated stats to the store.
+// The buffer is cleared before the DB write; counts are lost on error (at-most-once delivery).
 // Exported for testing.
 func (r *UsageRecorder) Flush(ctx context.Context) error {
 	if r == nil {

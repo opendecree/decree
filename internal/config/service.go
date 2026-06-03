@@ -689,13 +689,17 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
 	}
-	if s.limits.MaxListLen > 0 && len(req.Updates) > s.limits.MaxListLen {
-		return nil, status.Errorf(codes.InvalidArgument, "request has %d updates, exceeds limit of %d", len(req.Updates), s.limits.MaxListLen)
-	}
-	// Upfront role + tenant check before the per-field loop (loop may be empty).
+	// Upfront role + tenant check before request validation so that unauthorized
+	// callers always get PermissionDenied regardless of request contents.
 	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionWrite)
 	if err != nil {
 		return nil, err
+	}
+	if len(req.Updates) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "updates must not be empty")
+	}
+	if s.limits.MaxListLen > 0 && len(req.Updates) > s.limits.MaxListLen {
+		return nil, status.Errorf(codes.InvalidArgument, "request has %d updates, exceeds limit of %d", len(req.Updates), s.limits.MaxListLen)
 	}
 
 	if key := req.GetIdempotencyKey(); key != "" && s.idempotencyCache != nil {

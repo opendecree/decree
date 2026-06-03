@@ -344,7 +344,7 @@ func (s *PGStore) BulkSetConfigValues(ctx context.Context, args []SetConfigValue
 			return fmt.Errorf("bulk set config value: %w", err)
 		}
 	}
-	return br.Close()
+	return nil
 }
 
 const bulkInsertAuditWriteLogSQL = `INSERT INTO audit_write_log (id, tenant_id, actor, action, field_path, old_value, new_value, config_version, metadata, object_kind, previous_hash, entry_hash, created_at, chain_epoch) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
