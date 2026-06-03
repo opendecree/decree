@@ -49,13 +49,7 @@ func (c *Client) GetFields(ctx context.Context, tenantID string, fieldPaths []st
 		if err != nil {
 			return nil, err
 		}
-		result := make(map[string]string, len(resp.Values))
-		for _, v := range resp.Values {
-			if v.Value != nil {
-				result[v.FieldPath] = v.Value.String()
-			}
-		}
-		return result, nil
+		return valuesToMap(resp.Values), nil
 	})
 }
 
@@ -242,9 +236,17 @@ func configToMap(resp *GetConfigResponse) map[string]string {
 	if resp == nil || len(resp.Values) == 0 {
 		return nil
 	}
-	m := make(map[string]string, len(resp.Values))
-	for _, v := range resp.Values {
-		m[v.FieldPath] = v.Value.String()
+	return valuesToMap(resp.Values)
+}
+
+// valuesToMap converts a slice of ConfigValues to a field-path → string map.
+// Null values (nil Value) are omitted from the result.
+func valuesToMap(values []ConfigValue) map[string]string {
+	m := make(map[string]string, len(values))
+	for _, v := range values {
+		if v.Value != nil {
+			m[v.FieldPath] = v.Value.String()
+		}
 	}
 	return m
 }

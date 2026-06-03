@@ -10,6 +10,9 @@ type Transport interface {
 	GetFields(ctx context.Context, req *GetFieldsRequest) (*GetFieldsResponse, error)
 	SetField(ctx context.Context, req *SetFieldRequest) (*SetFieldResponse, error)
 	SetFields(ctx context.Context, req *SetFieldsRequest) (*SetFieldsResponse, error)
+	// Subscribe and Subscription are defined here (rather than in configwatcher)
+	// so that the grpctransport package has a single implementation point for
+	// both clients. configwatcher depends on configclient and uses these types.
 	Subscribe(ctx context.Context, req *SubscribeRequest) (Subscription, error)
 }
 
@@ -24,7 +27,9 @@ type Subscription interface {
 type GetFieldRequest struct {
 	TenantID  string
 	FieldPath string
-	Version   *int32
+	// Version pins the read to a specific config version.
+	// nil means "latest".
+	Version *int32
 }
 
 // GetFieldResponse is the output of [Transport.GetField].
@@ -37,7 +42,9 @@ type GetFieldResponse struct {
 // GetConfigRequest is the input for [Transport.GetConfig].
 type GetConfigRequest struct {
 	TenantID string
-	Version  *int32
+	// Version pins the read to a specific config version.
+	// nil means "latest".
+	Version *int32
 }
 
 // GetConfigResponse is the output of [Transport.GetConfig].
@@ -58,7 +65,9 @@ type ConfigValue struct {
 type GetFieldsRequest struct {
 	TenantID   string
 	FieldPaths []string
-	Version    *int32
+	// Version pins the read to a specific config version.
+	// nil means "latest".
+	Version *int32
 }
 
 // GetFieldsResponse is the output of [Transport.GetFields].

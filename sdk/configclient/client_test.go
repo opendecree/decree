@@ -93,9 +93,9 @@ func (m *mockTransport) SetFields(_ context.Context, req *SetFieldsRequest) (*Se
 	return r[0].(*SetFieldsResponse), errOrNil(r[1])
 }
 
+// Subscribe satisfies the Transport interface; Client never calls it in this package.
 func (m *mockTransport) Subscribe(_ context.Context, _ *SubscribeRequest) (Subscription, error) {
-	r := m.call("Subscribe")
-	return nil, errOrNil(r[0])
+	panic("mockTransport: Subscribe not used by Client")
 }
 
 // --- Get ---

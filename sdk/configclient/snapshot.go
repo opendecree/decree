@@ -57,11 +57,10 @@ func (s *Snapshot) Get(ctx context.Context, fieldPath string) (string, error) {
 
 // GetAll returns all configuration values at the pinned version.
 func (s *Snapshot) GetAll(ctx context.Context) (map[string]string, error) {
-	v := s.version
 	return retry(ctx, s.client, func(ctx context.Context) (map[string]string, error) {
 		resp, err := s.client.transport.GetConfig(ctx, &GetConfigRequest{
 			TenantID: s.tenantID,
-			Version:  &v,
+			Version:  &s.version,
 		})
 		if err != nil {
 			return nil, err
@@ -82,10 +81,6 @@ func (s *Snapshot) GetFields(ctx context.Context, fieldPaths []string) (map[stri
 		if err != nil {
 			return nil, err
 		}
-		result := make(map[string]string, len(resp.Values))
-		for _, v := range resp.Values {
-			result[v.FieldPath] = v.Value.String()
-		}
-		return result, nil
+		return valuesToMap(resp.Values), nil
 	})
 }

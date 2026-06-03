@@ -53,7 +53,7 @@ func ExampleClient_Get() {
 	client := configclient.New(&fakeTransport{})
 	ctx := context.Background()
 
-	env, err := client.GetString(ctx, "tenant-1", "app.environment")
+	env, err := client.Get(ctx, "tenant-1", "app.environment")
 	if err != nil {
 		fmt.Println("error:", err)
 		return

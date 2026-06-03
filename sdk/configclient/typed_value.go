@@ -1,7 +1,6 @@
 package configclient
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 )
@@ -10,14 +9,16 @@ import (
 type ValueKind int8
 
 const (
-	KindString   ValueKind = iota + 1 // string
-	KindInteger                       // int64
-	KindNumber                        // float64
-	KindBool                          // bool
-	KindTime                          // time.Time
-	KindDuration                      // time.Duration
-	KindURL                           // URL (stored as string)
-	KindJSON                          // JSON (stored as string)
+	// KindInvalid is the zero value of ValueKind, making the zero TypedValue self-describing.
+	KindInvalid  ValueKind = iota // zero value sentinel
+	KindString                    // string
+	KindInteger                   // int64
+	KindNumber                    // float64
+	KindBool                      // bool
+	KindTime                      // time.Time
+	KindDuration                  // time.Duration
+	KindURL                       // URL (stored as string)
+	KindJSON                      // JSON (stored as string)
 )
 
 // TypedValue holds a configuration value with its type information.
@@ -33,7 +34,13 @@ type TypedValue struct {
 }
 
 // Kind returns the value's type.
-func (tv *TypedValue) Kind() ValueKind { return tv.kind }
+// Returns [KindInvalid] if tv is nil.
+func (tv *TypedValue) Kind() ValueKind {
+	if tv == nil {
+		return KindInvalid
+	}
+	return tv.kind
+}
 
 // StringValue returns the string value and true if Kind is KindString, otherwise "", false.
 func (tv *TypedValue) StringValue() (string, bool) {
@@ -172,9 +179,10 @@ func (tv *TypedValue) String() string {
 	case KindString:
 		return tv.str
 	case KindInteger:
-		return fmt.Sprintf("%d", tv.i)
+		return strconv.FormatInt(tv.i, 10)
 	case KindNumber:
-		return strconv.FormatFloat(tv.num, 'f', -1, 64)
+		// 'g' uses the shortest representation and handles NaN/Inf correctly.
+		return strconv.FormatFloat(tv.num, 'g', -1, 64)
 	case KindBool:
 		return strconv.FormatBool(tv.b)
 	case KindTime:
