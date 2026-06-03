@@ -22,6 +22,9 @@ func NewServerTransport(conn grpc.ClientConnInterface) *ServerTransport {
 	return &ServerTransport{rpc: pb.NewServerServiceClient(conn)}
 }
 
+// GetServerInfo is intentionally auth-exempt: the server bypasses auth checks
+// for this endpoint so callers can retrieve version/feature information before
+// establishing credentials.
 func (t *ServerTransport) GetServerInfo(ctx context.Context) (*adminclient.ServerInfo, error) {
 	resp, err := t.rpc.GetServerInfo(ctx, &pb.GetServerInfoRequest{})
 	if err != nil {

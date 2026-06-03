@@ -18,6 +18,11 @@ func TestDial_DefaultTLS(t *testing.T) {
 	conn.Close()
 }
 
+// TODO: There is no test that verifies WithInsecure yields a plaintext
+// connection vs a TLS one. grpc.NewClient is lazy — it does not dial until
+// the first RPC, so we cannot inspect transport-level security without a live
+// server. Add a round-trip integration test (e.g. using an in-process server)
+// when the e2e harness is extended to cover transport configuration.
 func TestDial_WithInsecure(t *testing.T) {
 	conn, err := grpctransport.Dial("passthrough:///localhost:9999", grpctransport.WithInsecure())
 	if err != nil {
