@@ -60,7 +60,7 @@ func TestMemoryBackend_Integration(t *testing.T) {
 	)
 	pb.RegisterSchemaServiceServer(srv.GRPCServer(), schemaSvc)
 
-	configSvc := config.NewService(memConfig, cache.NewMemoryCache(0), memPubSub, memPubSub,
+	configSvc := config.NewService(memConfig, cache.NewMemoryCache(context.Background(), 0), memPubSub, memPubSub,
 		config.WithLogger(slog.Default()),
 		config.WithCacheMetrics(telemetry.NewCacheMetrics(telemetry.Config{})),
 		config.WithMetrics(telemetry.NewConfigMetrics(telemetry.Config{})),

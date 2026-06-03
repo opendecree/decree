@@ -77,7 +77,7 @@ type UsageRecorder struct {
 	mu      sync.Mutex
 	pending map[usageKey]*usageBucket
 
-	done chan struct{}
+	wg sync.WaitGroup
 }
 
 // NewUsageRecorder creates a new recorder. Call Start to begin the background flush goroutine.
@@ -99,7 +99,7 @@ func NewUsageRecorder(store Store, opts ...Option) *UsageRecorder {
 	if o.logger == nil {
 		o.logger = slog.Default()
 	}
-	return &UsageRecorder{
+	r := &UsageRecorder{
 		store:               store,
 		logger:              o.logger,
 		interval:            o.flushInterval,
@@ -107,8 +107,12 @@ func NewUsageRecorder(store Store, opts ...Option) *UsageRecorder {
 		dbErrCounter:        o.dbErrCounter,
 		flushTimeoutCounter: o.flushTimeoutCounter,
 		pending:             make(map[usageKey]*usageBucket),
-		done:                make(chan struct{}),
 	}
+	// wg starts at 1 — decremented by the final-flush goroutine registered in
+	// Start via context.AfterFunc. Stop() blocks on wg.Wait() so it correctly
+	// waits whether or not Start() has been scheduled by the time cancel() fires.
+	r.wg.Add(1)
+	return r
 }
 
 // RecordRead records a single config field read. Non-blocking.
@@ -154,15 +158,36 @@ func (r *UsageRecorder) RecordReads(tenantID string, fieldPaths []string, actor 
 	r.mu.Unlock()
 }
 
-// Start runs the background flush loop. Blocks until ctx is cancelled, then
-// performs a final flush bounded by the shutdown timeout (default 5s) before
-// returning. If the flush exceeds the deadline, Start logs a warning, increments
-// the flush-timeout counter (if configured), and returns without blocking further.
+// Start runs the background flush loop. Blocks until ctx is cancelled.
+// When ctx is cancelled, a final flush bounded by the shutdown timeout (default 5s)
+// runs in a separate goroutine (via context.AfterFunc). Call Stop to wait for that
+// flush to complete. If the flush exceeds the deadline, Start logs a warning and
+// increments the flush-timeout counter (if configured).
 // GracefulStop callers must account for up to shutdownTimeout of additional delay.
 func (r *UsageRecorder) Start(ctx context.Context) {
 	if r == nil {
 		return
 	}
+
+	// Register the final-flush goroutine to run when ctx is cancelled.
+	// wg was incremented in NewUsageRecorder so Stop() blocks even if cancel()
+	// fires before this goroutine has been scheduled.
+	context.AfterFunc(ctx, func() {
+		defer r.wg.Done()
+		flushCtx, cancel := context.WithTimeout(context.Background(), r.shutdownTimeout)
+		defer cancel()
+		if err := r.Flush(flushCtx); err != nil {
+			if flushCtx.Err() != nil {
+				r.logger.Warn("usage stats final flush timed out", "timeout", r.shutdownTimeout)
+				if r.flushTimeoutCounter != nil {
+					r.flushTimeoutCounter.Add(context.Background(), 1)
+				}
+			} else {
+				r.logger.Warn("usage stats final flush failed", "error", err)
+			}
+		}
+	})
+
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
@@ -173,31 +198,19 @@ func (r *UsageRecorder) Start(ctx context.Context) {
 				r.logger.WarnContext(ctx, "usage stats flush failed", "error", err)
 			}
 		case <-ctx.Done():
-			flushCtx, cancel := context.WithTimeout(context.Background(), r.shutdownTimeout)
-			defer cancel()
-			if err := r.Flush(flushCtx); err != nil {
-				if flushCtx.Err() != nil {
-					r.logger.Warn("usage stats final flush timed out", "timeout", r.shutdownTimeout)
-					if r.flushTimeoutCounter != nil {
-						r.flushTimeoutCounter.Add(context.Background(), 1)
-					}
-				} else {
-					r.logger.Warn("usage stats final flush failed", "error", err)
-				}
-			}
-			close(r.done)
 			return
 		}
 	}
 }
 
-// Stop waits for the background goroutine to finish its final flush.
-// The caller must cancel the context passed to Start before calling Stop.
+// Stop waits for the final-flush goroutine (registered via context.AfterFunc in Start)
+// to finish. The caller must cancel the context passed to Start before calling Stop.
+// Safe to call on a nil *UsageRecorder.
 func (r *UsageRecorder) Stop() {
 	if r == nil {
 		return
 	}
-	<-r.done
+	r.wg.Wait()
 }
 
 // Flush swaps the pending buffer and writes all accumulated stats to the store.

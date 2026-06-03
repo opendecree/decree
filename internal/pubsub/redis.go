@@ -85,9 +85,13 @@ func (s *RedisSubscriber) Subscribe(ctx context.Context, tenantID string) (<-cha
 	subCtx, cancel := context.WithCancel(ctx)
 	ch := make(chan ConfigChangeEvent, 64)
 
+	// Close the Redis subscription when subCtx is cancelled. This causes
+	// sub.Channel() to be closed, which unblocks the goroutine below without
+	// relying solely on the Done channel select case.
+	context.AfterFunc(subCtx, func() { _ = sub.Close() })
+
 	go func() {
 		defer close(ch)
-		defer func() { _ = sub.Close() }()
 
 		msgCh := sub.Channel()
 		for {
