@@ -17,7 +17,10 @@ type RetryableError struct {
 	Err error
 }
 
+// Error returns the underlying error message.
 func (e *RetryableError) Error() string { return e.Err.Error() }
+
+// Unwrap returns the wrapped error for use with [errors.As] and [errors.Is].
 func (e *RetryableError) Unwrap() error { return e.Err }
 
 // IsRetryable reports whether err is marked as retryable by the transport.

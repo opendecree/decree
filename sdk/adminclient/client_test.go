@@ -189,7 +189,7 @@ func TestCreateSchema_Success(t *testing.T) {
 		return &Schema{ID: "s1", Name: "payments", Version: 1, CreatedAt: time.Now()}, nil
 	}
 
-	s, err := client.CreateSchema(ctx, "payments", []Field{{Path: "a", Type: "STRING"}}, "test")
+	s, err := client.CreateSchema(ctx, "payments", []Field{{Path: "a", Type: FieldTypeString}}, "test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
