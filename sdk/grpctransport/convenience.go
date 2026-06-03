@@ -3,7 +3,6 @@ package grpctransport
 import (
 	"google.golang.org/grpc"
 
-	pb "github.com/opendecree/decree/api/centralconfig/v1"
 	"github.com/opendecree/decree/sdk/adminclient"
 	"github.com/opendecree/decree/sdk/configclient"
 	"github.com/opendecree/decree/sdk/configwatcher"
@@ -21,9 +20,9 @@ func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) (*configclie
 	if err != nil {
 		return nil, err
 	}
-	transport := &ConfigTransport{
-		rpc:  pb.NewConfigServiceClient(conn),
-		auth: newAuthApplier(cfg.auth),
+	transport, err := NewConfigTransport(conn, opts...)
+	if err != nil {
+		return nil, err
 	}
 	return configclient.New(transport, cfg.clientOpts...), nil
 }
@@ -37,15 +36,23 @@ func NewConfigClient(conn grpc.ClientConnInterface, opts ...Option) (*configclie
 //	conn, _ := grpctransport.Dial("localhost:50051", grpctransport.WithInsecure())
 //	client, err := grpctransport.NewAdminClient(conn, grpctransport.WithSubject("admin"), grpctransport.WithRole("superadmin"))
 func NewAdminClient(conn grpc.ClientConnInterface, opts ...Option) (*adminclient.Client, error) {
-	cfg, err := buildConfig(opts)
+	schemaTr, err := NewSchemaTransport(conn, opts...)
+	if err != nil {
+		return nil, err
+	}
+	configTr, err := NewAdminConfigTransport(conn, opts...)
+	if err != nil {
+		return nil, err
+	}
+	auditTr, err := NewAuditTransport(conn, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return adminclient.New(
-		adminclient.WithSchemaTransport(&SchemaTransport{rpc: pb.NewSchemaServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
-		adminclient.WithConfigTransport(&AdminConfigTransport{rpc: pb.NewConfigServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
-		adminclient.WithAuditTransport(&AuditTransport{rpc: pb.NewAuditServiceClient(conn), auth: newAuthApplier(cfg.auth)}),
-		adminclient.WithServerTransport(&ServerTransport{rpc: pb.NewServerServiceClient(conn)}),
+		adminclient.WithSchemaTransport(schemaTr),
+		adminclient.WithConfigTransport(configTr),
+		adminclient.WithAuditTransport(auditTr),
+		adminclient.WithServerTransport(NewServerTransport(conn)),
 	), nil
 }
 
@@ -61,9 +68,9 @@ func NewWatcher(conn grpc.ClientConnInterface, tenantID string, opts ...Option) 
 	if err != nil {
 		return nil, err
 	}
-	transport := &ConfigTransport{
-		rpc:  pb.NewConfigServiceClient(conn),
-		auth: newAuthApplier(cfg.auth),
+	transport, err := NewConfigTransport(conn, opts...)
+	if err != nil {
+		return nil, err
 	}
 	return configwatcher.New(transport, tenantID, cfg.watcherOpts...), nil
 }
