@@ -15,6 +15,7 @@ import (
 // We exercise this by executing the root command with an already-cancelled
 // context and confirming the command returns without panicking.
 func TestMain_UsesSignalContext(t *testing.T) {
+	resetRootCmd(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // simulate Ctrl-C before execution
 
