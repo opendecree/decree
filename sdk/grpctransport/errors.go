@@ -35,7 +35,7 @@ func mapConfigError(err error) error {
 	case codes.AlreadyExists:
 		return configclient.ErrAlreadyExists
 	case codes.InvalidArgument:
-		return configclient.InvalidArgumentError(st.Message())
+		return configclient.NewInvalidArgumentError(st.Message())
 	case codes.ResourceExhausted:
 		// ResourceExhausted signals a rate limit. The server attaches a RetryInfo
 		// detail with a hard backoff hint; wrapping as RetryableError would discard
