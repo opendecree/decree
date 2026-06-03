@@ -70,6 +70,11 @@ func Run(ctx context.Context, client Client, tenantID string, opts ...Option) (*
 		return nil, fmt.Errorf("exporting config: %w", err)
 	}
 
+	// NOTE: the exported YAML is unmarshaled into an anonymous struct that only
+	// captures fields representable by seed.ConfigValueDef (value + description).
+	// Any additional top-level keys in the exported YAML (e.g. spec_version,
+	// metadata) are silently dropped. This is intentional — the dump only
+	// preserves the data that seed.Run can re-apply.
 	var configDoc struct {
 		Values map[string]seed.ConfigValueDef `yaml:"values"`
 	}
@@ -118,7 +123,15 @@ func buildSchemaDef(s *adminclient.Schema) seed.SchemaDef {
 	}
 
 	for _, f := range s.Fields {
+		// NOTE: Fields is keyed by f.Path. If the server ever returns duplicate
+		// paths the later entry silently overwrites the earlier one. This mirrors
+		// the server's own uniqueness guarantee, but if that breaks the dump will
+		// be incomplete without any error.
 		fd := seed.FieldDef{
+			// f.Type is cast directly to string. An empty or unrecognised
+			// FieldType (e.g. from a server running a newer schema format)
+			// will produce `type: ""` in the YAML, which seed.ParseFile will
+			// accept but the server will reject on re-import.
 			Type:        string(f.Type),
 			Description: f.Description,
 			Default:     f.Default,
