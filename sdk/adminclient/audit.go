@@ -74,6 +74,11 @@ func (c *Client) QueryWriteLog(ctx context.Context, filters ...AuditFilter) ([]*
 // or a transport error occurs. After C is closed, read Err to check for errors.
 //
 // Memory usage is bounded to one page of entries at a time.
+//
+// Goroutine leak: the background goroutine blocks on sends to C. Callers must
+// either drain C to completion or cancel the context; otherwise the goroutine
+// leaks. Err is buffered (capacity 1) so the goroutine can always write its
+// error and exit once ctx is cancelled.
 type AuditIterator struct {
 	// C receives audit entries in server-returned order (newest first by default).
 	C chan *AuditEntry

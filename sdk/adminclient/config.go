@@ -55,8 +55,9 @@ func (c *Client) GetConfigVersion(ctx context.Context, tenantID string, version 
 	})
 }
 
-// RollbackConfig creates a new config version with the values from a previous version.
-// The description is optional — pass an empty string to use the default.
+// RollbackConfig requests the server to create a new config version populated
+// with the values from the specified previous version.
+// The description is optional — pass an empty string to use the server default.
 func (c *Client) RollbackConfig(ctx context.Context, tenantID string, targetVersion int32, description string) (*Version, error) {
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured
@@ -95,13 +96,16 @@ type importConfigOptions struct {
 }
 
 // WithImportMode sets the import mode. Defaults to [ImportModeMerge] if not specified.
+// Note: passing the zero value (0) silently overrides the default — use an
+// explicit constant ([ImportModeMerge], [ImportModeReplace], [ImportModeDefaults]).
 func WithImportMode(mode ImportMode) ImportConfigOption {
 	return func(o *importConfigOptions) { o.mode = mode }
 }
 
-// ImportConfig applies configuration values from YAML, creating a new version.
-// The description is optional — pass an empty string to use the default.
-// Mode defaults to [ImportModeMerge] unless [WithImportMode] is passed.
+// ImportConfig sends YAML configuration to the server, which applies the values
+// and creates a new version. The description is optional — pass an empty string
+// to use the server default. Mode defaults to [ImportModeMerge] unless
+// [WithImportMode] is passed.
 func (c *Client) ImportConfig(ctx context.Context, tenantID string, yamlContent []byte, description string, opts ...ImportConfigOption) (*Version, error) {
 	if c.config == nil {
 		return nil, ErrServiceNotConfigured

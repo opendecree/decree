@@ -73,7 +73,7 @@ func TestUpdateSchema_Success(t *testing.T) {
 		return &Schema{ID: "s1", Version: 2, CreatedAt: time.Now()}, nil
 	}
 
-	s, err := client.UpdateSchema(context.Background(), "s1", []Field{{Path: "new", Type: "STRING"}}, []string{"old"}, "v2")
+	s, err := client.UpdateSchema(context.Background(), "s1", []Field{{Path: "new", Type: FieldTypeString}}, []string{"old"}, "v2")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
