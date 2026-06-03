@@ -501,7 +501,7 @@ jobs:
         # golang/govulncheck-action@v1
         uses: golang/govulncheck-action@b625fbe08f3bccbe446d94fbf87fcc875a4f50ee
         with:
-          go-version-file: go.mod
+          go-version-input: "1.25"
           work-dir: .
 
   # Validates every checked-in *.decree.schema.yaml and *.decree.config.yaml
