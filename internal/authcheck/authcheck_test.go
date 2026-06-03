@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/opendecree/decree/internal/testutil"
 )
 
 // allowlist contains exported method names that are intentionally exempt from
@@ -49,9 +51,7 @@ func TestAllHandlersHaveMustHaveClaims(t *testing.T) {
 		path := filepath.Join(dir, rel)
 		fset := token.NewFileSet()
 		f, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			t.Fatalf("parse %s: %v", path, err)
-		}
+		f = testutil.Must(t, f, err)
 
 		for _, decl := range f.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
