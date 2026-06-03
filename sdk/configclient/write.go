@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -166,11 +167,17 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts .
 func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+		// Sort by FieldPath for deterministic request ordering.
+		paths := make([]string, 0, len(values))
+		for path := range values {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
 		updates := make([]FieldUpdate, 0, len(values))
-		for path, val := range values {
+		for _, path := range paths {
 			u := FieldUpdate{
 				FieldPath:        path,
-				Value:            StringVal(val),
+				Value:            StringVal(values[path]),
 				ValueDescription: wo.valueDescriptions[path],
 			}
 			if chk := wo.fieldChecksums[path]; chk != "" {
@@ -197,11 +204,17 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+		// Sort by FieldPath for deterministic request ordering.
+		paths := make([]string, 0, len(values))
+		for path := range values {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
 		updates := make([]FieldUpdate, 0, len(values))
-		for path, v := range values {
+		for _, path := range paths {
 			u := FieldUpdate{
 				FieldPath:        path,
-				Value:            v,
+				Value:            values[path],
 				ValueDescription: wo.valueDescriptions[path],
 			}
 			if chk := wo.fieldChecksums[path]; chk != "" {
@@ -306,7 +319,8 @@ const updateMaxAttempts = 3
 //
 // Returns [ErrChecksumMismatch] if the value was still being concurrently modified
 // after all retry attempts.
-// Returns [ErrNotFound] if the field has no value set.
+// If the field exists but has a null value, updateFn receives "" (not [ErrNotFound]).
+// [ErrNotFound] is only returned when the field does not exist at all (transport error).
 func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateFn func(current string) (string, error), opts ...WriteOption) error {
 	for attempt := range updateMaxAttempts {
 		lv, err := c.GetForUpdate(ctx, tenantID, fieldPath)
@@ -333,29 +347,25 @@ func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateF
 
 // SetInt writes an integer configuration value.
 func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64, opts ...WriteOption) error {
-	return c.setTyped(ctx, tenantID, fieldPath, IntVal(value), opts...)
+	return c.SetTyped(ctx, tenantID, fieldPath, IntVal(value), opts...)
 }
 
 // SetFloat writes a floating-point configuration value.
 func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64, opts ...WriteOption) error {
-	return c.setTyped(ctx, tenantID, fieldPath, FloatVal(value), opts...)
+	return c.SetTyped(ctx, tenantID, fieldPath, FloatVal(value), opts...)
 }
 
 // SetBool writes a boolean configuration value.
 func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool, opts ...WriteOption) error {
-	return c.setTyped(ctx, tenantID, fieldPath, BoolVal(value), opts...)
+	return c.SetTyped(ctx, tenantID, fieldPath, BoolVal(value), opts...)
 }
 
 // SetTime writes a timestamp configuration value.
 func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time, opts ...WriteOption) error {
-	return c.setTyped(ctx, tenantID, fieldPath, TimeVal(value), opts...)
+	return c.SetTyped(ctx, tenantID, fieldPath, TimeVal(value), opts...)
 }
 
 // SetDuration writes a duration configuration value.
 func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration, opts ...WriteOption) error {
-	return c.setTyped(ctx, tenantID, fieldPath, DurationVal(value), opts...)
-}
-
-func (c *Client) setTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) error {
-	return c.SetTyped(ctx, tenantID, fieldPath, value, opts...)
+	return c.SetTyped(ctx, tenantID, fieldPath, DurationVal(value), opts...)
 }

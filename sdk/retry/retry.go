@@ -5,7 +5,6 @@ package retry
 import (
 	"context"
 	"errors"
-	"math"
 	"math/rand/v2"
 	"time"
 )
@@ -18,10 +17,22 @@ type RetryableError struct {
 }
 
 // Error returns the underlying error message.
-func (e *RetryableError) Error() string { return e.Err.Error() }
+// Returns "<nil>" if Err is nil.
+func (e *RetryableError) Error() string {
+	if e.Err == nil {
+		return "<nil>"
+	}
+	return e.Err.Error()
+}
 
 // Unwrap returns the wrapped error for use with [errors.As] and [errors.Is].
-func (e *RetryableError) Unwrap() error { return e.Err }
+// Returns nil if Err is nil.
+func (e *RetryableError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // IsRetryable reports whether err is marked as retryable by the transport.
 func IsRetryable(err error) bool {
@@ -41,7 +52,7 @@ type Config struct {
 	// Default: 5s.
 	MaxBackoff time.Duration
 	// Jitter adds randomness to the backoff to avoid thundering herd.
-	// Default: false.
+	// The zero value (false) means no jitter; WithDefaults does not change it.
 	Jitter bool
 	// RetryableCheck reports whether an error is retryable.
 	// If nil, defaults to checking for [RetryableError].
@@ -90,10 +101,7 @@ func Run[T any](ctx context.Context, enabled bool, cfg Config, fn func(ctx conte
 			break
 		}
 
-		if ctx.Err() != nil {
-			return zero, ctx.Err()
-		}
-
+		// ctx.Done() check is inside the select below; no need to poll ctx.Err() here.
 		backoff := BackoffDuration(attempt, cfg.InitialBackoff, cfg.MaxBackoff, cfg.Jitter)
 		select {
 		case <-ctx.Done():
@@ -114,9 +122,15 @@ func RunDo(ctx context.Context, enabled bool, cfg Config, fn func(ctx context.Co
 }
 
 // BackoffDuration computes exponential backoff with optional jitter.
+// The exponent is computed with an integer bit-shift; it is clamped to 62 to
+// avoid overflow before the max-duration clamp takes effect.
 func BackoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
-	backoff := time.Duration(float64(initial) * math.Pow(2, float64(attempt)))
-	if backoff > max {
+	shift := attempt
+	if shift > 62 {
+		shift = 62
+	}
+	backoff := initial << shift
+	if backoff > max || backoff < 0 { // negative means overflow past int64 max
 		backoff = max
 	}
 	if jitter && backoff > 0 {
