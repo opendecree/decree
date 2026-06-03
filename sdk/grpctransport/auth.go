@@ -1,6 +1,3 @@
-// Package grpctransport implements the configclient.Transport,
-// adminclient.SchemaTransport, adminclient.ConfigTransport, and
-// adminclient.AuditTransport interfaces using gRPC.
 package grpctransport
 
 import (
@@ -35,16 +32,19 @@ type authConfig struct {
 }
 
 // WithSubject sets the x-subject metadata header.
+// Ignored when [WithBearerToken] or [WithTokenSource] is set.
 func WithSubject(s string) Option {
 	return func(c *config) { c.auth.subject = s }
 }
 
 // WithRole sets the x-role metadata header.
+// Ignored when [WithBearerToken] or [WithTokenSource] is set.
 func WithRole(r string) Option {
 	return func(c *config) { c.auth.role = r }
 }
 
 // WithTenantID sets the x-tenant-id metadata header.
+// Ignored when [WithBearerToken] or [WithTokenSource] is set.
 func WithTenantID(id string) Option {
 	return func(c *config) { c.auth.tenantID = id }
 }
@@ -123,6 +123,11 @@ func (t tokenSourceCreds) GetRequestMetadata(ctx context.Context, _ ...string) (
 	tok, err := t.source(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if tok == "" {
+		// Skip setting the Authorization header rather than sending a malformed
+		// "Bearer " credential. The server will treat the request as unauthenticated.
+		return nil, nil
 	}
 	return map[string]string{"authorization": "Bearer " + tok}, nil
 }

@@ -41,11 +41,11 @@ func (t *ConfigTransport) GetField(ctx context.Context, req *configclient.GetFie
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
-	cv := resp.GetValue()
+	cv := configValueFromProto(resp.GetValue())
 	return &configclient.GetFieldResponse{
-		FieldPath: cv.GetFieldPath(),
-		Value:     typedValueFromProto(cv.GetValue()),
-		Checksum:  cv.GetChecksum(),
+		FieldPath: cv.FieldPath,
+		Value:     cv.Value,
+		Checksum:  cv.Checksum,
 	}, nil
 }
 

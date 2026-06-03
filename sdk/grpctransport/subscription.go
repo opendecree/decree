@@ -22,7 +22,9 @@ func (s *grpcSubscription) Recv() (*configclient.ConfigChange, error) {
 	}
 	change := resp.GetChange()
 	if change == nil {
-		return &configclient.ConfigChange{}, nil
+		// A nil proto change has no meaningful data; return nil so the watcher's
+		// nil-skip logic can engage rather than delivering an empty ConfigChange.
+		return nil, nil
 	}
 	return &configclient.ConfigChange{
 		TenantID:  change.GetTenantId(),

@@ -73,6 +73,12 @@ func typedValueToProto(tv *configclient.TypedValue) *pb.TypedValue {
 
 // --- ConfigValue conversion ---
 
+// configValueFromProto converts a proto ConfigValue to the SDK type.
+//
+// TODO: pb.ConfigValue.Description is dropped here and the post-write
+// ConfigVersion returned by SetField/SetFields is discarded into empty DTOs.
+// Notify configclient owners if Description or post-write version info is
+// ever needed by callers.
 func configValueFromProto(cv *pb.ConfigValue) configclient.ConfigValue {
 	return configclient.ConfigValue{
 		FieldPath: cv.GetFieldPath(),
