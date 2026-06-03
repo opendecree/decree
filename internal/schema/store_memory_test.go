@@ -857,5 +857,94 @@ func TestMemoryStore_ListTenantsBySchema_KeysetCursor(t *testing.T) {
 	assert.Equal(t, tA.ID, page2[0].ID)
 }
 
+func TestMemoryStore_RunInTx(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	err := store.RunInTx(ctx, func(tx Store) error {
+		_, err := tx.CreateSchema(ctx, CreateSchemaParams{Name: "tx-schema"})
+		return err
+	})
+	require.NoError(t, err)
+
+	// Schema must be visible after successful transaction.
+	got, err := store.GetSchemaByName(ctx, "tx-schema")
+	require.NoError(t, err)
+	assert.Equal(t, "tx-schema", got.Name)
+}
+
+func TestMemoryStore_RunInTx_Rollback(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	sentinel := errors.New("force rollback")
+	err := store.RunInTx(ctx, func(tx Store) error {
+		_, _ = tx.CreateSchema(ctx, CreateSchemaParams{Name: "should-not-exist"})
+		return sentinel
+	})
+	require.ErrorIs(t, err, sentinel)
+
+	// Schema must not be visible after rollback.
+	_, err = store.GetSchemaByName(ctx, "should-not-exist")
+	require.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestMemoryStore_RunInTx_ClonesAllFields(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+
+	// Pre-populate every map field so all for-loop bodies in clone() execute.
+
+	// schemas
+	s, err := store.CreateSchema(ctx, CreateSchemaParams{Name: "clone-test"})
+	require.NoError(t, err)
+
+	// schemaVersions
+	sv, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+		SchemaID: s.ID, Version: 1, Checksum: "abc",
+	})
+	require.NoError(t, err)
+
+	// schemaFields
+	_, err = store.CreateSchemaField(ctx, CreateSchemaFieldParams{
+		SchemaVersionID: sv.ID, Path: "app.name", FieldType: domain.FieldTypeString,
+	})
+	require.NoError(t, err)
+
+	// tenants
+	tenant, err := store.CreateTenant(ctx, CreateTenantParams{
+		Name: "clone-tenant", SchemaID: s.ID, SchemaVersion: 1,
+	})
+	require.NoError(t, err)
+
+	// fieldLocks
+	err = store.CreateFieldLock(ctx, CreateFieldLockParams{
+		TenantID: tenant.ID, FieldPath: "db.host", LockedValues: []byte(`["localhost"]`),
+	})
+	require.NoError(t, err)
+
+	// auditLog
+	err = store.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{
+		TenantID: tenant.ID, Actor: "admin", Action: "create_schema",
+	})
+	require.NoError(t, err)
+
+	// RunInTx should clone all non-empty maps and commit.
+	err = store.RunInTx(ctx, func(tx Store) error {
+		_, err := tx.CreateSchema(ctx, CreateSchemaParams{Name: "tx-in-clone-test"})
+		return err
+	})
+	require.NoError(t, err)
+
+	// New schema must be committed.
+	got, err := store.GetSchemaByName(ctx, "tx-in-clone-test")
+	require.NoError(t, err)
+	assert.Equal(t, "tx-in-clone-test", got.Name)
+
+	// Existing data must still be intact.
+	_, err = store.GetSchemaByName(ctx, "clone-test")
+	require.NoError(t, err)
+}
+
 // Verify MemoryStore implements Store at compile time.
 var _ Store = (*MemoryStore)(nil)

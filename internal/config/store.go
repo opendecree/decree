@@ -106,8 +106,13 @@ type InsertAuditWriteLogParams struct {
 // Implementations must return [domain.ErrNotFound] when an entity is not found.
 type Store interface {
 	// RunInTx executes fn within a database transaction.
-	// The Store passed to fn is bound to the transaction.
-	// If fn returns nil the transaction is committed; otherwise it is rolled back.
+	// The Store passed to fn is bound to that transaction; all reads and writes
+	// inside fn observe the same isolated view. If fn returns a non-nil error,
+	// the transaction is rolled back and that error is returned unchanged. If fn
+	// returns nil, the transaction is committed.
+	//
+	// Implementations must guarantee atomicity: either all writes from fn are
+	// visible after a successful return, or none are (on error).
 	RunInTx(ctx context.Context, fn func(Store) error) error
 
 	// Config versions.
