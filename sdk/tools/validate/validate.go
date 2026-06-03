@@ -23,35 +23,41 @@ import (
 
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
-	SpecVersion        string              `yaml:"spec_version"`
-	Schema             string              `yaml:"$schema,omitempty"`
-	ID                 string              `yaml:"$id,omitempty"`
-	Name               string              `yaml:"name"`
-	Description        string              `yaml:"description,omitempty"`
-	Version            int32               `yaml:"version,omitempty"`
-	VersionDescription string              `yaml:"version_description,omitempty"`
-	Info               any                 `yaml:"info,omitempty"`
-	Fields             map[string]FieldDef `yaml:"fields"`
+	SpecVersion        string `yaml:"spec_version"`
+	Schema             string `yaml:"$schema,omitempty"`
+	ID                 string `yaml:"$id,omitempty"`
+	Name               string `yaml:"name"`
+	Description        string `yaml:"description,omitempty"`
+	Version            int32  `yaml:"version,omitempty"`
+	VersionDescription string `yaml:"version_description,omitempty"`
+	// Info is accepted for forward-compatibility with richer schema formats but
+	// is not used by the offline validator.
+	Info   any                 `yaml:"info,omitempty"`
+	Fields map[string]FieldDef `yaml:"fields"`
 }
 
 // FieldDef describes a single field in the schema YAML.
 type FieldDef struct {
-	Type         string          `yaml:"type"`
-	Description  string          `yaml:"description,omitempty"`
-	Default      string          `yaml:"default,omitempty"`
-	Nullable     bool            `yaml:"nullable,omitempty"`
-	Deprecated   bool            `yaml:"deprecated,omitempty"`
-	RedirectTo   string          `yaml:"redirect_to,omitempty"`
-	Constraints  *ConstraintsDef `yaml:"constraints,omitempty"`
-	Title        string          `yaml:"title,omitempty"`
-	Example      string          `yaml:"example,omitempty"`
-	Examples     any             `yaml:"examples,omitempty"`
-	ExternalDocs any             `yaml:"externalDocs,omitempty"`
-	Tags         []string        `yaml:"tags,omitempty"`
-	Format       string          `yaml:"format,omitempty"`
-	ReadOnly     bool            `yaml:"readOnly,omitempty"`
-	WriteOnce    bool            `yaml:"writeOnce,omitempty"`
-	Sensitive    bool            `yaml:"sensitive,omitempty"`
+	Type        string          `yaml:"type"`
+	Description string          `yaml:"description,omitempty"`
+	Default     string          `yaml:"default,omitempty"`
+	Nullable    bool            `yaml:"nullable,omitempty"`
+	Deprecated  bool            `yaml:"deprecated,omitempty"`
+	RedirectTo  string          `yaml:"redirect_to,omitempty"`
+	Constraints *ConstraintsDef `yaml:"constraints,omitempty"`
+	Title       string          `yaml:"title,omitempty"`
+	Example     string          `yaml:"example,omitempty"`
+	// Examples and ExternalDocs are accepted for forward-compatibility but are
+	// not used by the offline validator.
+	Examples     any      `yaml:"examples,omitempty"`
+	ExternalDocs any      `yaml:"externalDocs,omitempty"`
+	Tags         []string `yaml:"tags,omitempty"`
+	// Format is accepted for forward-compatibility but is not used by the
+	// offline validator.
+	Format    string `yaml:"format,omitempty"`
+	ReadOnly  bool   `yaml:"readOnly,omitempty"`
+	WriteOnce bool   `yaml:"writeOnce,omitempty"`
+	Sensitive bool   `yaml:"sensitive,omitempty"`
 }
 
 // ConstraintsDef uses OAS-style naming for field constraints.
@@ -191,11 +197,6 @@ func ParseConfig(data []byte) (*ConfigFile, error) {
 // Validate checks a config file against a schema file.
 // Both are provided as raw YAML bytes.
 func Validate(schemaYAML, configYAML []byte, opts ...Option) (*Result, error) {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
-	}
-
 	schema, err := ParseSchema(schemaYAML)
 	if err != nil {
 		return nil, fmt.Errorf("schema: %w", err)
@@ -258,32 +259,41 @@ func validateValue(result *Result, path string, value any, fd FieldDef) {
 		return
 	}
 
+	// typeOK tracks whether the base type check passed. If it did not, the enum
+	// check is skipped to avoid a second, misleading violation for the same bad value.
+	typeOK := true
 	switch fd.Type {
 	case "integer":
-		validateInteger(result, path, value, fd.Constraints)
+		typeOK = validateInteger(result, path, value, fd.Constraints)
 	case "number":
-		validateNumber(result, path, value, fd.Constraints)
+		typeOK = validateNumber(result, path, value, fd.Constraints)
 	case "string":
-		validateString(result, path, value, fd.Constraints)
+		typeOK = validateString(result, path, value, fd.Constraints)
 	case "bool":
-		validateBool(result, path, value)
+		typeOK = validateBool(result, path, value)
 	case "time":
-		validateStringType(result, path, value, "time")
+		typeOK = validateStringType(result, path, value, "time")
 	case "duration":
-		validateDuration(result, path, value, fd.Constraints)
+		typeOK = validateDuration(result, path, value, fd.Constraints)
 	case "url":
-		validateURL(result, path, value)
+		typeOK = validateURL(result, path, value)
 	case "json":
 		validateJSON(result, path, value)
+		// json values may be maps or slices; enum on json is not meaningful, so
+		// always skip the enum check for json fields regardless of typeOK.
+		return
 	}
 
-	// Enum check applies to any type.
-	if fd.Constraints != nil && len(fd.Constraints.Enum) > 0 {
+	// Enum check applies to scalar types (integer, number, string, bool, time,
+	// duration, url). It is skipped when the base type validation already failed,
+	// since comparing a mistyped value against the enum list yields a redundant
+	// violation.
+	if typeOK && fd.Constraints != nil && len(fd.Constraints.Enum) > 0 {
 		validateEnum(result, path, value, fd.Constraints.Enum)
 	}
 }
 
-func validateInteger(result *Result, path string, value any, c *ConstraintsDef) {
+func validateInteger(result *Result, path string, value any, c *ConstraintsDef) bool {
 	var n float64
 	switch v := value.(type) {
 	case int:
@@ -297,19 +307,20 @@ func validateInteger(result *Result, path string, value any, c *ConstraintsDef) 
 	case float64:
 		if v != math.Trunc(v) {
 			result.add(path, fmt.Sprintf("expected integer, got %v", v))
-			return
+			return false
 		}
 		n = v
 	default:
 		result.add(path, fmt.Sprintf("expected integer, got %T", value))
-		return
+		return false
 	}
 	if c != nil {
 		validateNumericConstraints(result, path, n, c)
 	}
+	return true
 }
 
-func validateNumber(result *Result, path string, value any, c *ConstraintsDef) {
+func validateNumber(result *Result, path string, value any, c *ConstraintsDef) bool {
 	var n float64
 	switch v := value.(type) {
 	case int:
@@ -324,21 +335,22 @@ func validateNumber(result *Result, path string, value any, c *ConstraintsDef) {
 		n = v
 	default:
 		result.add(path, fmt.Sprintf("expected number, got %T", value))
-		return
+		return false
 	}
 	if c != nil {
 		validateNumericConstraints(result, path, n, c)
 	}
+	return true
 }
 
-func validateString(result *Result, path string, value any, c *ConstraintsDef) {
+func validateString(result *Result, path string, value any, c *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected string, got %T", value))
-		return
+		return false
 	}
 	if c == nil {
-		return
+		return true
 	}
 	if c.MinLength != nil && int32(len([]rune(s))) < *c.MinLength {
 		result.add(path, fmt.Sprintf("length %d is less than minLength %d", len([]rune(s)), *c.MinLength))
@@ -354,50 +366,56 @@ func validateString(result *Result, path string, value any, c *ConstraintsDef) {
 			result.add(path, fmt.Sprintf("value %q does not match pattern %q", s, c.Pattern))
 		}
 	}
+	return true
 }
 
-func validateBool(result *Result, path string, value any) {
+func validateBool(result *Result, path string, value any) bool {
 	if _, ok := value.(bool); !ok {
 		result.add(path, fmt.Sprintf("expected bool, got %T", value))
+		return false
 	}
+	return true
 }
 
-func validateStringType(result *Result, path string, value any, typeName string) {
+func validateStringType(result *Result, path string, value any, typeName string) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected %s (string), got %T", typeName, value))
-		return
+		return false
 	}
 	if typeName == "time" {
 		if _, err := time.Parse(time.RFC3339, s); err != nil {
 			result.add(path, fmt.Sprintf("invalid time value %q: must be RFC3339 format", s))
 		}
 	}
+	return true
 }
 
-func validateDuration(result *Result, path string, value any, _ *ConstraintsDef) {
+func validateDuration(result *Result, path string, value any, _ *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected duration (string), got %T", value))
-		return
+		return false
 	}
 	if _, err := time.ParseDuration(s); err != nil {
 		result.add(path, fmt.Sprintf("invalid duration value %q: %v", s, err))
 	}
 	// Numeric constraints on duration are validated server-side after parsing;
 	// offline validation only checks the type and syntax.
+	return true
 }
 
-func validateURL(result *Result, path string, value any) {
+func validateURL(result *Result, path string, value any) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected url (string), got %T", value))
-		return
+		return false
 	}
 	u, err := url.Parse(s)
 	if err != nil || !u.IsAbs() {
 		result.add(path, fmt.Sprintf("invalid absolute URL: %q", s))
 	}
+	return true
 }
 
 func validateJSON(result *Result, path string, value any) {

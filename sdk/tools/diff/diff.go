@@ -87,13 +87,13 @@ func (r *Result) Format() string {
 // Compare computes the diff between two config snapshots.
 // Each snapshot is a map of field-path to value (as strings).
 // Results are sorted by path for deterministic output.
-func Compare(old, new map[string]string) *Result {
+func Compare(old, updated map[string]string) *Result {
 	// Collect all unique paths.
-	paths := make(map[string]struct{}, len(old)+len(new))
+	paths := make(map[string]struct{}, len(old)+len(updated))
 	for p := range old {
 		paths[p] = struct{}{}
 	}
-	for p := range new {
+	for p := range updated {
 		paths[p] = struct{}{}
 	}
 
@@ -106,7 +106,7 @@ func Compare(old, new map[string]string) *Result {
 	var changes []FieldChange
 	for _, p := range sorted {
 		oldVal, inOld := old[p]
-		newVal, inNew := new[p]
+		newVal, inNew := updated[p]
 
 		switch {
 		case inOld && !inNew:
