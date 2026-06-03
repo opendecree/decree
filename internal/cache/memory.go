@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"container/list"
 	"context"
 	"fmt"
 	"maps"
@@ -37,10 +36,8 @@ func WithSweepInterval(d time.Duration) MemoryCacheOption {
 // sweeps expired entries.
 type MemoryCache struct {
 	mu            sync.RWMutex
-	entries       map[string]memoryCacheEntry
-	negEntries    map[string]time.Time     // negative-cache: key → expiry
-	lru           *list.List               // front = oldest, back = newest
-	lruIndex      map[string]*list.Element // key → list element for O(1) removal
+	lru           *LRU[string, memoryCacheEntry]
+	negEntries    map[string]time.Time // negative-cache: key → expiry
 	maxEntries    int
 	sweepInterval time.Duration
 	cancel        context.CancelFunc
@@ -65,10 +62,8 @@ func NewMemoryCache(ctx context.Context, maxEntries int, opts ...MemoryCacheOpti
 	}
 	sweepCtx, cancel := context.WithCancel(ctx)
 	c := &MemoryCache{
-		entries:       make(map[string]memoryCacheEntry),
+		lru:           NewLRU[string, memoryCacheEntry](maxEntries),
 		negEntries:    make(map[string]time.Time),
-		lru:           list.New(),
-		lruIndex:      make(map[string]*list.Element),
 		maxEntries:    maxEntries,
 		sweepInterval: cfg.sweepInterval,
 		cancel:        cancel,
@@ -85,7 +80,7 @@ func (c *MemoryCache) Get(_ context.Context, tenantID string, version int32) (ma
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, ok := c.entries[c.key(tenantID, version)]
+	entry, ok := c.lru.Peek(c.key(tenantID, version))
 	if !ok || time.Now().After(entry.expiresAt) {
 		return nil, nil
 	}
@@ -102,20 +97,20 @@ func (c *MemoryCache) Set(_ context.Context, tenantID string, version int32, val
 
 	k := c.key(tenantID, version)
 
-	// If key already exists, just update it (no new LRU entry).
-	if _, exists := c.entries[k]; !exists {
-		c.evictIfNeeded()
-		c.lruIndex[k] = c.lru.PushBack(k)
+	// If key does not exist and we are at capacity, try to evict expired entries
+	// first; if still full, LRU.Set will auto-evict the LRU entry.
+	if _, exists := c.lru.Peek(k); !exists && c.lru.Len() >= c.maxEntries {
+		c.evictExpired()
 	}
 
 	// Copy values to prevent external mutation.
 	copied := make(map[string]string, len(values))
 	maps.Copy(copied, values)
 
-	c.entries[k] = memoryCacheEntry{
+	c.lru.Set(k, memoryCacheEntry{
 		values:    copied,
 		expiresAt: time.Now().Add(ttl),
-	}
+	})
 	return nil
 }
 
@@ -124,11 +119,11 @@ func (c *MemoryCache) Invalidate(_ context.Context, tenantID string) error {
 	defer c.mu.Unlock()
 
 	prefix := tenantID + ":"
-	for k := range c.entries {
+	c.lru.Range(func(k string, _ memoryCacheEntry) {
 		if strings.HasPrefix(k, prefix) {
-			c.deleteEntry(k)
+			c.lru.Delete(k)
 		}
-	}
+	})
 	for k := range c.negEntries {
 		if strings.HasPrefix(k, prefix) {
 			delete(c.negEntries, k)
@@ -158,7 +153,7 @@ func (c *MemoryCache) GetNegative(_ context.Context, tenantID string, version in
 func (c *MemoryCache) Len() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return len(c.entries)
+	return c.lru.Len()
 }
 
 // Stop stops the background sweep goroutine. Safe to call more than once.
@@ -166,36 +161,12 @@ func (c *MemoryCache) Stop() {
 	c.stopOnce.Do(c.cancel)
 }
 
-// deleteEntry removes an entry and its LRU tracking. Caller must hold mu.
-func (c *MemoryCache) deleteEntry(k string) {
-	delete(c.entries, k)
-	if elem, ok := c.lruIndex[k]; ok {
-		c.lru.Remove(elem)
-		delete(c.lruIndex, k)
-	}
-}
-
-// evictIfNeeded removes entries when at capacity. Caller must hold mu.
-func (c *MemoryCache) evictIfNeeded() {
-	if len(c.entries) < c.maxEntries {
-		return
-	}
-
-	// First pass: remove expired entries.
+// evictExpired removes expired entries. Caller must hold mu.
+func (c *MemoryCache) evictExpired() {
 	now := time.Now()
-	for k, e := range c.entries {
-		if now.After(e.expiresAt) {
-			c.deleteEntry(k)
-		}
-	}
-	if len(c.entries) < c.maxEntries {
-		return
-	}
-
-	// Still full: evict oldest (front of LRU list).
-	if front := c.lru.Front(); front != nil {
-		c.deleteEntry(front.Value.(string))
-	}
+	c.lru.DeleteWhere(func(_ string, e memoryCacheEntry) bool {
+		return now.After(e.expiresAt)
+	})
 }
 
 // MemoryIdempotencyCache implements IdempotencyCache with an in-memory map.
@@ -243,12 +214,9 @@ func (c *MemoryCache) sweep() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.evictExpired()
+
 	now := time.Now()
-	for k, e := range c.entries {
-		if now.After(e.expiresAt) {
-			c.deleteEntry(k)
-		}
-	}
 	for k, exp := range c.negEntries {
 		if now.After(exp) {
 			delete(c.negEntries, k)
