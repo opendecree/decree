@@ -570,6 +570,27 @@ values:
 		}
 		assertViolation(t, result, "payload", "json schema validation failed")
 	})
+
+	t.Run("invalid json_schema constraint string reports error", func(t *testing.T) {
+		badSchema := `spec_version: "v1"
+name: test
+fields:
+  payload:
+    type: json
+    constraints:
+      json_schema: 'not valid json'
+`
+		config := `spec_version: "v1"
+values:
+  payload:
+    value: '{"name":"Alice"}'
+`
+		result, err := Validate([]byte(badSchema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "payload", "invalid json_schema constraint")
+	})
 }
 
 func TestValidate_JSON(t *testing.T) {
