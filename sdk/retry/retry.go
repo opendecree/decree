@@ -53,7 +53,15 @@ type Config struct {
 	// Default: 5s.
 	MaxBackoff time.Duration
 	// Jitter adds randomness to the backoff to avoid thundering herd.
-	// The zero value (false) means no jitter; WithDefaults does not change it.
+	//
+	// When true, [BackoffDuration] applies full jitter: the computed backoff is
+	// replaced by a uniform random value in [0, backoff). There is no minimum
+	// floor, so a 5 s exponential backoff can jitter all the way down to near
+	// zero. This is intentional — the goal is to spread load, not guarantee a
+	// minimum wait.
+	//
+	// The zero value (false) means no jitter; [Config.WithDefaults] does not
+	// change it, so callers must set it explicitly if they want jitter.
 	Jitter bool
 	// RetryableCheck reports whether an error is retryable.
 	// If nil, defaults to checking for [RetryableError].
@@ -122,7 +130,15 @@ func RunDo(ctx context.Context, enabled bool, cfg Config, fn func(ctx context.Co
 	return err
 }
 
-// BackoffDuration computes exponential backoff with optional jitter.
+// BackoffDuration computes exponential backoff with optional full jitter.
+//
+// The base duration for attempt n is initial * 2^n, capped at max.
+//
+// When jitter is true, the result is a uniform random value in [0, backoff)
+// — full jitter with no minimum floor. A 5 s capped backoff can therefore
+// jitter down to near-zero on any given attempt. If a guaranteed minimum wait
+// is required, callers should apply their own floor after this function
+// returns.
 //
 // The exponent is computed with an integer bit-shift. To avoid wrap-around
 // overflow (which can produce a zero or negative duration that bypasses the
