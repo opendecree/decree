@@ -219,6 +219,14 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		t.Error("expected enabled to be true after snapshot")
 	}
 
+	// Drain the snapshot change notification (0.01 → 0.025) so the next receive
+	// below corresponds to the stream change, not the snapshot change.
+	select {
+	case <-fee.Changes():
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected snapshot change event on fee.Changes()")
+	}
+
 	// Simulate a stream change.
 	sub.send(&configclient.ConfigChange{
 		TenantID:  "t1",
@@ -227,11 +235,11 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		NewValue:  configclient.FloatVal(0.05),
 	})
 
-	// Gate on the Changes() event — the value is applied before the event is sent.
+	// Gate on the stream Changes() event — the value is applied before the event is sent.
 	select {
 	case <-fee.Changes():
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected change event on fee.Changes()")
+		t.Fatal("expected stream change event on fee.Changes()")
 	}
 
 	if got := fee.Get(); got != 0.05 {
