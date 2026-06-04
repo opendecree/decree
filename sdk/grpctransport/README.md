@@ -50,6 +50,31 @@ watcher, err := grpctransport.NewWatcher(conn, tenantID,
 |--------|----------|
 | `WithRole(r)` | Metadata-header auth (default mode) |
 | `WithSubject(s)` | Identifies the calling service |
-| `WithBearerToken(t)` | JWT auth (opt-in) |
+| `WithTenantID(id)` | Pins a tenant via the `x-tenant-id` header |
+| `WithBearerToken(t)` | Static JWT bearer token (opt-in) |
+| `WithTokenSource(fn)` | Dynamic token source; called on every RPC — use for OAuth2 / short-lived JWTs |
 
-`WithRole` or `WithBearerToken` is required; construction returns an error if omitted.
+`WithRole`, `WithBearerToken`, or `WithTokenSource` is required; construction returns an error if omitted.
+When `WithBearerToken` or `WithTokenSource` is set, the `x-subject`, `x-role`, and `x-tenant-id` headers are not sent.
+
+## gRPC status → SDK error mapping
+
+The transport translates gRPC status codes to typed sentinel errors so callers can use `errors.Is`:
+
+| gRPC status | configclient error | adminclient error |
+|-------------|-------------------|-------------------|
+| `NotFound` | `ErrNotFound` | `ErrNotFound` |
+| `PermissionDenied` | `ErrPermissionDenied` | `ErrPermissionDenied` |
+| `Unauthenticated` | `ErrUnauthenticated` | `ErrUnauthenticated` |
+| `FailedPrecondition` | `ErrLocked` | `ErrFailedPrecondition` |
+| `Aborted` | `ErrChecksumMismatch` | — |
+| `AlreadyExists` | `ErrAlreadyExists` | `ErrAlreadyExists` |
+| `InvalidArgument` | `InvalidArgumentError` | `InvalidArgumentError` |
+| `ResourceExhausted` | `ErrRateLimited` (wrapped) | `ErrRateLimited` (wrapped) |
+| `Unavailable` / `DeadlineExceeded` | `*RetryableError` | `*RetryableError` |
+
+## Related packages
+
+- [`configclient`](../configclient) — typed reads and writes
+- [`adminclient`](../adminclient) — schema, tenant, lock, and audit operations
+- [`configwatcher`](../configwatcher) — live, auto-refreshing values

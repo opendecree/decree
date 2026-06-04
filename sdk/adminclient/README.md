@@ -24,7 +24,7 @@ ctx := context.Background()
 
 ```go
 // Import a schema from YAML and auto-publish it.
-schema, _ := client.ImportSchema(ctx, yamlContent, true)
+schema, _ := client.ImportSchema(ctx, yamlContent, adminclient.WithAutoPublish())
 
 // Or build one programmatically.
 schema, _ = client.CreateSchema(ctx, "app-config", []adminclient.Field{
@@ -56,14 +56,17 @@ locks, _ := client.ListFieldLocks(ctx, tenant.ID)
 
 ```go
 versions, _ := client.ListConfigVersions(ctx, tenant.ID)
-_ = client.RollbackConfig(ctx, tenant.ID, versions[1].Version, "revert bad deploy")
+newVer, _ := client.RollbackConfig(ctx, tenant.ID, versions[1].Version, "revert bad deploy")
+_ = newVer
 ```
 
 ## Config import/export
 
 ```go
 yaml, _ := client.ExportConfig(ctx, tenant.ID, nil) // nil = latest
-_, _ = client.ImportConfig(ctx, tenant.ID, yaml, "seed", adminclient.ImportModeMerge)
+// Mode defaults to ImportModeMerge. Pass WithImportMode to override.
+_, _ = client.ImportConfig(ctx, tenant.ID, yaml, "seed")
+_, _ = client.ImportConfig(ctx, tenant.ID, yaml, "replace", adminclient.WithImportMode(adminclient.ImportModeReplace))
 ```
 
 ## Related packages
