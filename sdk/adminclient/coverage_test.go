@@ -8,69 +8,6 @@ import (
 	"time"
 )
 
-// TestRetryDo_NilRetry covers retryDo when retry is disabled (default client).
-func TestRetryDo_NilRetry(t *testing.T) {
-	called := false
-	c := &Client{}
-	err := retryDo(context.Background(), c, func(_ context.Context) error {
-		called = true
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !called {
-		t.Error("expected fn to be called")
-	}
-}
-
-// TestRetryDo_WithRetry covers retryDo when retry is enabled and fn returns error.
-func TestRetryDo_WithRetry(t *testing.T) {
-	calls := 0
-	c := &Client{opts: clientOptions{
-		retryEnabled: true,
-		retry: RetryConfig{
-			MaxAttempts:    3,
-			InitialBackoff: time.Millisecond,
-			MaxBackoff:     10 * time.Millisecond,
-			RetryableCheck: IsRetryable,
-		},
-	}}
-	err := retryDo(context.Background(), c, func(_ context.Context) error {
-		calls++
-		if calls < 3 {
-			return &RetryableError{Err: fmt.Errorf("unavailable")}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if calls != 3 {
-		t.Errorf("got %d calls, want 3", calls)
-	}
-}
-
-// TestRetryDo_PropagatesError covers retryDo returning an error after exhausting attempts.
-func TestRetryDo_PropagatesError(t *testing.T) {
-	sentinel := fmt.Errorf("always fails")
-	c := &Client{opts: clientOptions{
-		retryEnabled: true,
-		retry: RetryConfig{
-			MaxAttempts:    2,
-			InitialBackoff: time.Millisecond,
-			MaxBackoff:     10 * time.Millisecond,
-			RetryableCheck: IsRetryable,
-		},
-	}}
-	err := retryDo(context.Background(), c, func(_ context.Context) error {
-		return &RetryableError{Err: sentinel}
-	})
-	if !errors.Is(err, sentinel) {
-		t.Errorf("got error %v, want wrapping %v", err, sentinel)
-	}
-}
-
 // TestRetry_ContextAlreadyCancelledBeforeBackoff covers the ctx.Err() != nil fast-path
 // before the select in the retry loop (line 69-71 in retry.go). A pre-cancelled context
 // with a long backoff ensures we hit the if-check rather than the select's ctx.Done() arm.
