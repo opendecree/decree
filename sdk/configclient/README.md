@@ -38,14 +38,16 @@ _ = client.SetMany(ctx, tenantID, map[string]string{
 
 ## Typed accessors
 
-| Method | Go type |
-|--------|---------|
-| `GetString` / `SetString` | `string` |
-| `GetInt` / `SetInt` | `int64` |
-| `GetFloat` / `SetFloat` | `float64` |
-| `GetBool` / `SetBool` | `bool` |
-| `GetTime` / `SetTime` | `time.Time` |
-| `GetDuration` / `SetDuration` | `time.Duration` |
+| Read method | Write method | Go type |
+|-------------|--------------|---------|
+| `GetString` | `Set` (string overload) | `string` |
+| `GetInt` | `SetInt` | `int64` |
+| `GetFloat` | `SetFloat` | `float64` |
+| `GetBool` | `SetBool` | `bool` |
+| `GetTime` | `SetTime` | `time.Time` |
+| `GetDuration` | `SetDuration` | `time.Duration` |
+
+Note: there is no `SetString` convenience method — use `Set(ctx, tenantID, path, value)` for string writes.
 
 ## Optimistic concurrency
 
@@ -53,7 +55,7 @@ Use `GetForUpdate` + `LockedValue.Set` to perform a read-modify-write without lo
 
 ```go
 lv, _ := client.GetForUpdate(ctx, tenantID, "counters.visits")
-_ = lv.Set(ctx, client, strconv.Itoa(visits+1))
+_ = lv.Set(ctx, strconv.Itoa(visits+1))
 ```
 
 Or use the higher-level helper that retries on conflict:
