@@ -144,6 +144,7 @@ func TestRetry_ContextCancellationStopsRetry(t *testing.T) {
 		retry: RetryConfig{
 			MaxAttempts:    10,
 			InitialBackoff: time.Second,
+			MaxBackoff:     5 * time.Second,
 			RetryableCheck: IsRetryable,
 		},
 	}}
