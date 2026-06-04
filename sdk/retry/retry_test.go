@@ -51,6 +51,21 @@ func TestConfig_WithDefaults(t *testing.T) {
 	}
 }
 
+// TestBackoffDuration_NegativeAttempt verifies that negative attempt values do
+// not panic and are treated as attempt 0 (returning initial).
+func TestBackoffDuration_NegativeAttempt(t *testing.T) {
+	initial := 100 * time.Millisecond
+	max := time.Second
+
+	cases := []int{-1, -99}
+	for _, attempt := range cases {
+		got := BackoffDuration(attempt, initial, max, false)
+		if got != initial {
+			t.Errorf("attempt %d: got %v, want %v", attempt, got, initial)
+		}
+	}
+}
+
 func TestBackoffDuration_NormalProgression(t *testing.T) {
 	initial := 100 * time.Millisecond
 	max := 5 * time.Second
@@ -95,7 +110,7 @@ func TestBackoffDuration_JitterBound(t *testing.T) {
 
 	for attempt := 0; attempt <= 10; attempt++ {
 		noJitter := BackoffDuration(attempt, initial, max, false)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			got := BackoffDuration(attempt, initial, max, true)
 			if got < 0 || (noJitter > 0 && got >= noJitter) {
 				t.Errorf("attempt %d iter %d: jitter result %v out of [0, %v)", attempt, i, got, noJitter)
@@ -114,7 +129,7 @@ func TestBackoffDuration_HighAttemptsJitter(t *testing.T) {
 	// What we can assert is that it is non-negative (no wrap-around to negative)
 	// and strictly less than max (jitter always reduces).
 	for attempt := 56; attempt <= 62; attempt++ {
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			got := BackoffDuration(attempt, initial, max, true)
 			if got < 0 {
 				t.Errorf("attempt %d: jitter produced negative duration %v", attempt, got)
