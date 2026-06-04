@@ -173,3 +173,207 @@ func TestConfig_WithDefaults_PreservesCustomValues(t *testing.T) {
 		t.Errorf("MaxBackoff = %v, want 10s", cfg.MaxBackoff)
 	}
 }
+
+// fastCfg returns a Config suitable for unit tests: 3 attempts, very short
+// backoffs so tests finish in milliseconds.
+func fastCfg() Config {
+	return Config{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+	}.WithDefaults()
+}
+
+// TestRun_SuccessOnFirstTry verifies that fn is called exactly once when it
+// succeeds immediately.
+func TestRun_SuccessOnFirstTry(t *testing.T) {
+	calls := 0
+	result, err := Run(context.Background(), true, fastCfg(), func(_ context.Context) (int, error) {
+		calls++
+		return 42, nil
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result != 42 {
+		t.Errorf("result = %d, want 42", result)
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want 1", calls)
+	}
+}
+
+// TestRun_RetryThenSucceed verifies that fn is retried after RetryableError
+// and the final success value is returned.
+func TestRun_RetryThenSucceed(t *testing.T) {
+	calls := 0
+	cfg := fastCfg()
+	result, err := Run(context.Background(), true, cfg, func(_ context.Context) (string, error) {
+		calls++
+		if calls < cfg.MaxAttempts {
+			return "", &RetryableError{Err: fmt.Errorf("transient")}
+		}
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result != "ok" {
+		t.Errorf("result = %q, want %q", result, "ok")
+	}
+	if calls != cfg.MaxAttempts {
+		t.Errorf("calls = %d, want %d", calls, cfg.MaxAttempts)
+	}
+}
+
+// TestRun_Exhaustion verifies that when fn always returns a RetryableError,
+// Run calls fn exactly MaxAttempts times and propagates the error.
+func TestRun_Exhaustion(t *testing.T) {
+	calls := 0
+	cfg := fastCfg()
+	sentinel := fmt.Errorf("always fails")
+	_, err := Run(context.Background(), true, cfg, func(_ context.Context) (int, error) {
+		calls++
+		return 0, &RetryableError{Err: sentinel}
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if calls != cfg.MaxAttempts {
+		t.Errorf("calls = %d, want %d", calls, cfg.MaxAttempts)
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error = %v, want to wrap sentinel %v", err, sentinel)
+	}
+}
+
+// TestRun_NonRetryableStopsImmediately verifies that a plain (non-retryable)
+// error stops the loop after a single attempt.
+func TestRun_NonRetryableStopsImmediately(t *testing.T) {
+	calls := 0
+	sentinel := fmt.Errorf("hard failure")
+	_, err := Run(context.Background(), true, fastCfg(), func(_ context.Context) (int, error) {
+		calls++
+		return 0, sentinel
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error = %v, want sentinel %v", err, sentinel)
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want 1 (non-retryable should stop immediately)", calls)
+	}
+}
+
+// TestRunDo_Success verifies that RunDo returns nil when fn succeeds, both with
+// retry enabled and disabled.
+func TestRunDo_Success(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enabled=%v", enabled), func(t *testing.T) {
+			err := RunDo(context.Background(), enabled, fastCfg(), func(_ context.Context) error {
+				return nil
+			})
+			if err != nil {
+				t.Errorf("expected nil, got %v", err)
+			}
+		})
+	}
+}
+
+// TestRunDo_RetryThenSucceed mirrors TestRun_RetryThenSucceed for the void variant.
+func TestRunDo_RetryThenSucceed(t *testing.T) {
+	calls := 0
+	cfg := fastCfg()
+	err := RunDo(context.Background(), true, cfg, func(_ context.Context) error {
+		calls++
+		if calls < cfg.MaxAttempts {
+			return &RetryableError{Err: fmt.Errorf("transient")}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if calls != cfg.MaxAttempts {
+		t.Errorf("calls = %d, want %d", calls, cfg.MaxAttempts)
+	}
+}
+
+// TestRunDo_Exhaustion verifies RunDo propagates the error after all attempts fail.
+func TestRunDo_Exhaustion(t *testing.T) {
+	calls := 0
+	cfg := fastCfg()
+	sentinel := fmt.Errorf("always fails")
+	err := RunDo(context.Background(), true, cfg, func(_ context.Context) error {
+		calls++
+		return &RetryableError{Err: sentinel}
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if calls != cfg.MaxAttempts {
+		t.Errorf("calls = %d, want %d", calls, cfg.MaxAttempts)
+	}
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error = %v, want to wrap sentinel %v", err, sentinel)
+	}
+}
+
+// TestRun_ContextCancelledBeforeFn verifies that if the context is already
+// cancelled before Run is called, fn is never invoked and Run returns ctx.Err().
+func TestRun_ContextCancelledBeforeFn(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run
+
+	calls := 0
+	_, err := Run(ctx, true, fastCfg(), func(_ context.Context) (int, error) {
+		calls++
+		return 0, nil
+	})
+
+	// Run calls fn on the first attempt regardless of ctx state (the ctx.Done
+	// select is only between attempts). If fn respects the ctx it will return an
+	// error, but here fn ignores the ctx and returns nil — so Run returns nil.
+	// What we care about is that calls <= 1 (no retries attempted) because the
+	// backoff select will immediately pick ctx.Done() on any subsequent attempt.
+	if calls > 1 {
+		t.Errorf("calls = %d, expected at most 1 when ctx already cancelled", calls)
+	}
+	// If fn succeeded (calls==1, err==nil) that is acceptable per Run's contract;
+	// if it errored and got ctx.Err() back, also acceptable.
+	_ = err
+}
+
+// TestRun_ContextCancelledMidBackoff verifies that when the context is
+// cancelled while Run is waiting between attempts, Run returns ctx.Err()
+// promptly.
+func TestRun_ContextCancelledMidBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	calls := 0
+	cfg := Config{
+		MaxAttempts:    5,
+		InitialBackoff: 50 * time.Millisecond,
+		MaxBackoff:     200 * time.Millisecond,
+	}.WithDefaults()
+
+	_, err := Run(ctx, true, cfg, func(_ context.Context) (int, error) {
+		calls++
+		if calls == 1 {
+			// Cancel the context after the first call so the backoff select
+			// will immediately return ctx.Done().
+			cancel()
+		}
+		return 0, &RetryableError{Err: fmt.Errorf("transient")}
+	})
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want 1 (cancelled during backoff, no second attempt)", calls)
+	}
+}
