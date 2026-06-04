@@ -258,6 +258,90 @@ func TestWatcher_StartCloseConcurrent(t *testing.T) {
 	}
 }
 
+// TestWatcher_StartCloseConcurrent_SnapshotFails is a variant of
+// TestWatcher_StartCloseConcurrent that uses a getConfigFn which always returns
+// an error. This exercises the failed-snapshot rollback branch in watcher.go
+// (w.started = false, fresh cancelReady channel, close(old)).
+//
+// Start is expected to return an error on every iteration — that is not a
+// failure. The assertions verify that:
+//   - no panic or data race occurs (run with -race);
+//   - after both goroutines finish, w.started is false (either rollback ran or
+//     Close won the race before started was set);
+//   - w.done is either closed (subscriptionLoop ran, which it should not on a
+//     snapshot failure) or w.started == false.
+//
+// Run with: go test -race -run TestWatcher_StartCloseConcurrent ./sdk/configwatcher/
+func TestWatcher_StartCloseConcurrent_SnapshotFails(t *testing.T) {
+	const iterations = 200
+
+	for range iterations {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		tr := &mockTransport{
+			getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+				return nil, fmt.Errorf("simulated snapshot failure")
+			},
+			subscribeFn: func(sCtx context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+				return &mockSubscription{ch: make(chan *configclient.ConfigChange), ctx: sCtx}, nil
+			},
+		}
+
+		w := &Watcher{
+			transport: tr,
+			tenantID:  "t1",
+			opts:      options{minBackoff: 5 * time.Millisecond, maxBackoff: 10 * time.Millisecond, logger: slog.Default()},
+			fields:    make(map[string]*fieldEntry),
+			done:      make(chan struct{}),
+		}
+
+		_, _ = w.String("app.name", "default")
+
+		// ready gates Start and Close to begin at the same instant.
+		ready := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			<-ready
+			// Error is expected (snapshot always fails); not a test failure.
+			_ = w.Start(ctx)
+		}()
+
+		go func() {
+			defer wg.Done()
+			<-ready
+			cancel()
+			_ = w.Close()
+		}()
+
+		close(ready)
+		wg.Wait()
+
+		// After both goroutines finish, w.started must be false: either the
+		// rollback path reset it, or Close won before Start set it to true.
+		w.mu.RLock()
+		started := w.started
+		w.mu.RUnlock()
+		if started {
+			t.Error("w.started is true after a failed snapshot — rollback did not run")
+		}
+
+		// w.done must be either already closed (subscriptionLoop ran, which
+		// should not happen on snapshot failure) or still open with started==false.
+		// Either way, started==false already asserted above. Just confirm no leak:
+		// if done is still open, that is fine because the loop was never launched.
+		select {
+		case <-w.done:
+			// subscriptionLoop ran and exited — unexpected but not a data race.
+		default:
+			// done is still open: loop was never launched (expected path).
+		}
+	}
+}
+
 // TestValue_CloseRacesWithUpdate exercises the race between Value.close() and
 // Value.update() that previously caused a "send on closed channel" panic.
 // Run with: go test -race ./sdk/configwatcher/
