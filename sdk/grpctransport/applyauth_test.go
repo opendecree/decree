@@ -138,6 +138,17 @@ func TestApplyAuth_TokenSource_ErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestTokenSourceCreds_EmptyToken(t *testing.T) {
+	creds := tokenSourceCreds{source: func(context.Context) (string, error) { return "", nil }}
+	_, err := creds.GetRequestMetadata(context.Background())
+	if err == nil {
+		t.Fatal("expected error when token source returns empty string, got nil")
+	}
+	if !errors.Is(err, ErrEmptyToken) {
+		t.Errorf("expected errors.Is(err, ErrEmptyToken) to be true; got: %v", err)
+	}
+}
+
 func TestApplyAuth_TokenSource_TakesPrecedenceOverBearerToken(t *testing.T) {
 	// Both tokenSource and bearerToken set: tokenSource wins (it's checked first).
 	_, callOpts, err := applyAuth(context.Background(), authConfig{

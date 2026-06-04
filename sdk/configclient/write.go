@@ -75,11 +75,14 @@ func WithFieldChecksums(checksums map[string]string) WriteOption {
 	return func(o *writeOptions) { o.fieldChecksums = checksums }
 }
 
-// doWrite executes a write operation. Without an idempotency key or expected
-// checksum, the call is made exactly once. With either (both make the write
-// idempotent) and retry enabled on the client, transient errors trigger retry.
+// doWrite executes a write operation. Without an idempotency key, expected
+// checksum, or field checksums, the call is made exactly once. With any of
+// those options (all make the write idempotent) and retry enabled on the
+// client, transient errors trigger retry. [WithFieldChecksums] on batch writes
+// (SetMany/SetManyTyped) also enables retry because per-field checksums make
+// the operation idempotent.
 func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) error) error {
-	if (wo.idempotencyKey != "" || wo.expectedChecksum != "") && c.opts.retryEnabled {
+	if (wo.idempotencyKey != "" || wo.expectedChecksum != "" || len(wo.fieldChecksums) > 0) && c.opts.retryEnabled {
 		return retryDo(ctx, c, fn)
 	}
 	return fn(ctx)
@@ -166,6 +169,10 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts .
 // to opt in to safe retry with server-side deduplication.
 func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	effectiveDescription := description
+	if effectiveDescription == "" {
+		effectiveDescription = wo.description
+	}
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
@@ -188,7 +195,7 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
-			Description:    description,
+			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
@@ -203,6 +210,10 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 // to opt in to safe retry with server-side deduplication.
 func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	effectiveDescription := description
+	if effectiveDescription == "" {
+		effectiveDescription = wo.description
+	}
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
@@ -225,7 +236,7 @@ func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[s
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
-			Description:    description,
+			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
