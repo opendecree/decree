@@ -260,6 +260,9 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 		if err != nil {
 			return nil, err
 		}
+		if resp == nil {
+			return nil, ErrInvalidTransportResponse
+		}
 		return &LockedValue{
 			FieldPath: fieldPath,
 			Value:     resp.Value.String(),

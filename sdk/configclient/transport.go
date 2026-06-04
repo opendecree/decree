@@ -4,6 +4,10 @@ import "context"
 
 // Transport abstracts the underlying RPC mechanism for config operations.
 // The default implementation uses gRPC (see the grpctransport package).
+//
+// Contract: when a method returns a nil error it MUST return a non-nil
+// response pointer. Returning (nil, nil) is a violation of this contract and
+// will cause the client to return [ErrInvalidTransportResponse].
 type Transport interface {
 	GetField(ctx context.Context, req *GetFieldRequest) (*GetFieldResponse, error)
 	GetConfig(ctx context.Context, req *GetConfigRequest) (*GetConfigResponse, error)

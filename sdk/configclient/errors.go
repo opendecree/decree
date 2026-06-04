@@ -49,6 +49,11 @@ var (
 	// whose value type doesn't match (e.g. GetInt on a string field).
 	ErrTypeMismatch = errors.New("value type mismatch")
 
+	// ErrInvalidTransportResponse is returned when a Transport method returns
+	// (nil, nil), violating the contract that a non-nil response must accompany
+	// a nil error. This is a bug in the Transport implementation.
+	ErrInvalidTransportResponse = errors.New("transport returned nil response with nil error")
+
 	// ErrInvalidArgument is the sentinel for errors.Is matching against any
 	// InvalidArgumentError, regardless of message. Use errors.As to access
 	// the structured Message field.
