@@ -262,3 +262,30 @@ func ExampleClient_RollbackConfig() {
 	fmt.Println(v.Version > 0)
 	// Output: true
 }
+
+func ExampleClient_ImportConfig() {
+	client := newFullClient()
+	ctx := context.Background()
+
+	yaml := []byte("spec_version: \"v1\"\nvalues:\n  app.env:\n    value: production\n")
+
+	// Default mode is ImportModeMerge.
+	v, err := client.ImportConfig(ctx, "tenant-1", yaml, "seed from YAML")
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(v.Version > 0)
+
+	// Override mode explicitly.
+	v, err = client.ImportConfig(ctx, "tenant-1", yaml, "full replace",
+		adminclient.WithImportMode(adminclient.ImportModeReplace))
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	fmt.Println(v.Version > 0)
+	// Output:
+	// true
+	// true
+}

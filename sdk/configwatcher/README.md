@@ -17,10 +17,10 @@ w, _ := grpctransport.NewWatcher(conn, tenantID,
     grpctransport.WithRole("user"),
 )
 
-// Register fields before Start — each returns a live *Value[T].
-maxConn := w.Int("limits.max_connections", 100)
-debug   := w.Bool("app.debug", false)
-timeout := w.Duration("jobs.timeout", 30*time.Second)
+// Register fields before Start — each returns (*Value[T], error).
+maxConn, _ := w.Int("limits.max_connections", 100)
+debug, _   := w.Bool("app.debug", false)
+timeout, _ := w.Duration("jobs.timeout", 30*time.Second)
 
 // Start loads the snapshot and begins streaming updates.
 if err := w.Start(ctx); err != nil {
