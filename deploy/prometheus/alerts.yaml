@@ -1,0 +1,78 @@
+groups:
+  - name: decree.db
+    rules:
+      - alert: DecreeDBPoolExhaustion
+        expr: db_pool_acquired_connections / db_pool_max_connections > 0.95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DB pool near exhaustion"
+          description: "DB {{ $labels.pool }} pool at {{ $value | humanizePercentage }} utilization"
+
+      - alert: DecreeDBPoolHighUtilization
+        expr: db_pool_acquired_connections / db_pool_max_connections > 0.80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DB pool utilization high"
+          description: "DB {{ $labels.pool }} pool at {{ $value | humanizePercentage }} utilization"
+
+  - name: decree.cache
+    rules:
+      - alert: DecreeCacheMissRateHigh
+        expr: >
+          (
+            rate(config_cache_misses_total[5m])
+            /
+            (rate(config_cache_hits_total[5m]) + rate(config_cache_misses_total[5m]))
+          ) > 0.5
+          and
+          (rate(config_cache_hits_total[5m]) + rate(config_cache_misses_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Config cache miss rate is high"
+          description: "Cache miss rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+  - name: decree.reliability
+    rules:
+      - alert: DecreePubSubDropped
+        expr: rate(pubsub_dropped_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pub/sub events are being dropped"
+          description: "Pub/sub events are being dropped — subscriber channel full"
+
+      - alert: DecreeRateLimitRejectionHigh
+        expr: rate(ratelimit_rejected_total[5m]) * 60 > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit rejection rate is high"
+          description: "Rate limiter is rejecting {{ $value | humanize }} requests/min"
+
+      - alert: DecreeJWKSRefreshFailing
+        expr: increase(auth_jwks_refresh_failures_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "JWKS refresh is failing"
+          description: "JWKS endpoint has not refreshed successfully in the last 10 minutes"
+
+  - name: decree.validation
+    rules:
+      - alert: DecreeCELCostCapExceeded
+        expr: rate(validation_cel_aggregate_cost_cap_exceeded_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CEL validation cost cap is being exceeded"
+          description: "CEL aggregate cost cap is exceeded — validation rules may be too expensive"
