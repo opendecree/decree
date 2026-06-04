@@ -1468,6 +1468,69 @@ func TestSetMany_WithValueDescriptionsAndChecksums(t *testing.T) {
 	}
 }
 
+func TestSetMany_WithDescription_honored(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	var capturedDesc string
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		capturedDesc = r.Description
+		return true
+	}, &SetFieldsResponse{}, nil)
+
+	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithDescription("via-option"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedDesc != "via-option" {
+		t.Errorf("description: got %q, want %q", capturedDesc, "via-option")
+	}
+}
+
+func TestSetManyTyped_WithDescription_honored(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	var capturedDesc string
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		capturedDesc = r.Description
+		return true
+	}, &SetFieldsResponse{}, nil)
+
+	err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{"a": IntVal(1)}, "", WithDescription("via-option"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedDesc != "via-option" {
+		t.Errorf("description: got %q, want %q", capturedDesc, "via-option")
+	}
+}
+
+func TestSetMany_positional_beats_option(t *testing.T) {
+	tr := &mockTransport{}
+	client := New(tr)
+	ctx := context.Background()
+
+	var capturedDesc string
+	tr.on("SetFields", func(args ...any) bool {
+		r := args[0].(*SetFieldsRequest)
+		capturedDesc = r.Description
+		return true
+	}, &SetFieldsResponse{}, nil)
+
+	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "positional", WithDescription("via-option"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedDesc != "positional" {
+		t.Errorf("description: got %q, want %q", capturedDesc, "positional")
+	}
+}
+
 func TestLockedValue_Set_WithDescription(t *testing.T) {
 	tr := &mockTransport{}
 	client := New(tr)
