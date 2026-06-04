@@ -277,8 +277,13 @@ func (w *Watcher) Start(ctx context.Context) error {
 		// Roll back so the caller can retry.
 		w.mu.Lock()
 		w.started = false
-		w.cancelReady = make(chan struct{}) // reset for next attempt
+		// Close the old cancelReady before replacing it so that any concurrent
+		// Close that already captured this channel is unblocked. Close checks
+		// w.cancel after the wait; it will be nil here, so it skips cancel().
+		old := w.cancelReady
+		w.cancelReady = make(chan struct{}) // fresh channel for the next Start attempt
 		w.mu.Unlock()
+		close(old)
 		return err
 	}
 

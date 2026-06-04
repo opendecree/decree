@@ -380,3 +380,92 @@ func TestWatcher_CloseWhileStreamSends(t *testing.T) {
 
 	<-drainDone
 }
+
+// TestWatcher_CloseDoesNotHangOnFailedStart verifies that Close returns promptly
+// when it races a Start whose snapshot call fails.
+//
+// Before the fix, Start's rollback path replaced w.cancelReady with a new channel
+// without closing the old one. A concurrent Close that had already captured the old
+// channel would block on it forever. The fix closes the old channel during rollback
+// so Close is always unblocked.
+//
+// The test is deterministic: startedReady is closed by the snapshot function right
+// after Start has set w.started=true (and before loadSnapshot returns), guaranteeing
+// that Close captures the cancelReady channel that the rollback is about to swap out.
+//
+// Run with: go test -race -timeout 30s -run TestWatcher_CloseDoesNotHangOnFailedStart ./sdk/configwatcher/
+func TestWatcher_CloseDoesNotHangOnFailedStart(t *testing.T) {
+	const iterations = 200
+
+	for range iterations {
+		// startedReady is closed by the snapshot fn once w.started=true is set;
+		// this gates the Close goroutine so it races the rollback window.
+		startedReady := make(chan struct{})
+		// unblockSnapshot is closed by the Close goroutine to release loadSnapshot.
+		unblockSnapshot := make(chan struct{})
+
+		tr := &mockTransport{
+			getConfigFn: func(ctx context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+				// Notify Close goroutine that w.started=true has been set.
+				close(startedReady)
+				// Block until Close goroutine has called Close() and is waiting.
+				select {
+				case <-unblockSnapshot:
+				case <-ctx.Done():
+				}
+				return nil, fmt.Errorf("snapshot failed")
+			},
+			subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+				panic("subscribe must never be reached on a failed snapshot")
+			},
+		}
+
+		w := &Watcher{
+			transport: tr,
+			tenantID:  "t1",
+			opts:      options{minBackoff: 5 * time.Millisecond, maxBackoff: 10 * time.Millisecond},
+			fields:    make(map[string]*fieldEntry),
+			done:      make(chan struct{}),
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// Goroutine 1: calls Start; the snapshot fn will fail.
+		go func() {
+			defer wg.Done()
+			_ = w.Start(context.Background())
+		}()
+
+		// Goroutine 2: waits until Start is inside loadSnapshot, then calls Close.
+		closeDone := make(chan struct{})
+		go func() {
+			defer wg.Done()
+			defer close(closeDone)
+
+			// Wait until w.started=true has been committed inside Start.
+			select {
+			case <-startedReady:
+			case <-time.After(5 * time.Second):
+				t.Errorf("timed out waiting for Start to enter loadSnapshot")
+				return
+			}
+
+			// Allow Start to proceed and fail while we race it with Close.
+			close(unblockSnapshot)
+
+			// This must not block forever (regression for #807).
+			_ = w.Close()
+		}()
+
+		// Close must return within a generous deadline.
+		select {
+		case <-closeDone:
+			// Good: Close returned promptly.
+		case <-time.After(5 * time.Second):
+			t.Fatal("Close blocked forever while racing a failed Start (deadlock regression — #807)")
+		}
+
+		wg.Wait()
+	}
+}
