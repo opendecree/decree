@@ -669,6 +669,24 @@ func TestImportConfig_DefaultMode(t *testing.T) {
 	}
 }
 
+func TestImportConfig_ZeroModeIsNoOp(t *testing.T) {
+	mc := &mockConfigTransport{}
+	client := New(WithConfigTransport(mc))
+
+	mc.importConfigFn = func(_ context.Context, req *ImportConfigRequest) (*Version, error) {
+		if req.Mode != ImportModeMerge {
+			t.Errorf("WithImportMode(0) changed mode to %v; want default ImportModeMerge (%v)", req.Mode, ImportModeMerge)
+		}
+		return &Version{Version: 2, CreatedAt: time.Now()}, nil
+	}
+
+	// Passing 0 must be a no-op — the default merge mode must survive.
+	_, err := client.ImportConfig(context.Background(), "t1", []byte("yaml"), "", WithImportMode(0))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // --- Error propagation ---
 
 func TestTransportError_Propagated(t *testing.T) {
