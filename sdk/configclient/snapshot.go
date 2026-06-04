@@ -24,6 +24,9 @@ func (c *Client) Snapshot(ctx context.Context, tenantID string) (*Snapshot, erro
 		if err != nil {
 			return nil, err
 		}
+		if resp == nil {
+			return nil, ErrInvalidTransportResponse
+		}
 		return &Snapshot{client: c, tenantID: tenantID, version: resp.Version}, nil
 	})
 }
