@@ -166,6 +166,10 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts .
 // to opt in to safe retry with server-side deduplication.
 func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	effectiveDescription := description
+	if effectiveDescription == "" {
+		effectiveDescription = wo.description
+	}
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
@@ -188,7 +192,7 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
-			Description:    description,
+			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
@@ -203,6 +207,10 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 // to opt in to safe retry with server-side deduplication.
 func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) error {
 	wo := applyWriteOptions(opts)
+	effectiveDescription := description
+	if effectiveDescription == "" {
+		effectiveDescription = wo.description
+	}
 	return doWrite(ctx, c, wo, func(ctx context.Context) error {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
@@ -225,7 +233,7 @@ func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[s
 		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
-			Description:    description,
+			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
 		return err
