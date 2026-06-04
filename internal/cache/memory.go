@@ -37,7 +37,7 @@ func WithSweepInterval(d time.Duration) MemoryCacheOption {
 type MemoryCache struct {
 	mu            sync.RWMutex
 	lru           *LRU[string, memoryCacheEntry]
-	negEntries    map[string]time.Time // negative-cache: key → expiry
+	negEntries    *LRU[string, time.Time] // negative-cache: key → expiry; LRU-bounded to maxEntries
 	maxEntries    int
 	sweepInterval time.Duration
 	cancel        context.CancelFunc
@@ -63,7 +63,7 @@ func NewMemoryCache(ctx context.Context, maxEntries int, opts ...MemoryCacheOpti
 	sweepCtx, cancel := context.WithCancel(ctx)
 	c := &MemoryCache{
 		lru:           NewLRU[string, memoryCacheEntry](maxEntries),
-		negEntries:    make(map[string]time.Time),
+		negEntries:    NewLRU[string, time.Time](maxEntries),
 		maxEntries:    maxEntries,
 		sweepInterval: cfg.sweepInterval,
 		cancel:        cancel,
@@ -124,25 +124,25 @@ func (c *MemoryCache) Invalidate(_ context.Context, tenantID string) error {
 			c.lru.Delete(k)
 		}
 	})
-	for k := range c.negEntries {
+	c.negEntries.Range(func(k string, _ time.Time) {
 		if strings.HasPrefix(k, prefix) {
-			delete(c.negEntries, k)
+			c.negEntries.Delete(k)
 		}
-	}
+	})
 	return nil
 }
 
 func (c *MemoryCache) SetNegative(_ context.Context, tenantID string, version int32, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.negEntries[c.key(tenantID, version)] = time.Now().Add(ttl)
+	c.negEntries.Set(c.key(tenantID, version), time.Now().Add(ttl))
 	return nil
 }
 
 func (c *MemoryCache) GetNegative(_ context.Context, tenantID string, version int32) (bool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	exp, ok := c.negEntries[c.key(tenantID, version)]
+	exp, ok := c.negEntries.Peek(c.key(tenantID, version))
 	if !ok || time.Now().After(exp) {
 		return false, nil
 	}
@@ -167,29 +167,6 @@ func (c *MemoryCache) evictExpired() {
 	c.lru.DeleteWhere(func(_ string, e memoryCacheEntry) bool {
 		return now.After(e.expiresAt)
 	})
-}
-
-// MemoryIdempotencyCache implements IdempotencyCache with an in-memory map.
-// Suitable for single-instance dev/test deployments; does not share state across
-// server replicas. Use RedisIdempotencyCache in production.
-type MemoryIdempotencyCache struct {
-	mu      sync.Mutex
-	entries map[string]time.Time
-}
-
-// NewMemoryIdempotencyCache creates an in-memory idempotency cache.
-func NewMemoryIdempotencyCache() *MemoryIdempotencyCache {
-	return &MemoryIdempotencyCache{entries: make(map[string]time.Time)}
-}
-
-func (c *MemoryIdempotencyCache) Claim(_ context.Context, key string, ttl time.Duration) (bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if exp, ok := c.entries[key]; ok && time.Now().Before(exp) {
-		return false, nil
-	}
-	c.entries[key] = time.Now().Add(ttl)
-	return true, nil
 }
 
 // sweepLoop periodically removes expired entries. Each iteration adds ±10%
@@ -217,9 +194,101 @@ func (c *MemoryCache) sweep() {
 	c.evictExpired()
 
 	now := time.Now()
-	for k, exp := range c.negEntries {
-		if now.After(exp) {
-			delete(c.negEntries, k)
+	c.negEntries.DeleteWhere(func(_ string, exp time.Time) bool {
+		return now.After(exp)
+	})
+}
+
+// MemoryIdempotencyOption configures optional MemoryIdempotencyCache settings.
+type MemoryIdempotencyOption func(*memoryIdempotencyConfig)
+
+type memoryIdempotencyConfig struct {
+	sweepInterval time.Duration
+}
+
+// WithIdempotencySweepInterval sets the base sweep interval for the idempotency cache.
+func WithIdempotencySweepInterval(d time.Duration) MemoryIdempotencyOption {
+	return func(cfg *memoryIdempotencyConfig) {
+		cfg.sweepInterval = d
+	}
+}
+
+// MemoryIdempotencyCache implements IdempotencyCache with an in-memory LRU.
+// Suitable for single-instance dev/test deployments; does not share state across
+// server replicas. Use RedisIdempotencyCache in production.
+type MemoryIdempotencyCache struct {
+	mu            sync.Mutex
+	lru           *LRU[string, time.Time]
+	maxEntries    int
+	sweepInterval time.Duration
+	cancel        context.CancelFunc
+	stopOnce      sync.Once
+}
+
+// NewMemoryIdempotencyCache creates an in-memory idempotency cache.
+// maxEntries bounds the number of live claims (0 uses default of 10000).
+// The background sweep goroutine stops when ctx is cancelled or Stop is called.
+func NewMemoryIdempotencyCache(ctx context.Context, maxEntries int, opts ...MemoryIdempotencyOption) *MemoryIdempotencyCache {
+	if maxEntries <= 0 {
+		maxEntries = defaultMaxEntries
+	}
+	cfg := memoryIdempotencyConfig{sweepInterval: defaultSweepInterval}
+	for _, o := range opts {
+		o(&cfg)
+	}
+	sweepCtx, cancel := context.WithCancel(ctx)
+	c := &MemoryIdempotencyCache{
+		lru:           NewLRU[string, time.Time](maxEntries),
+		maxEntries:    maxEntries,
+		sweepInterval: cfg.sweepInterval,
+		cancel:        cancel,
+	}
+	go c.sweepLoop(sweepCtx)
+	return c
+}
+
+func (c *MemoryIdempotencyCache) Claim(_ context.Context, key string, ttl time.Duration) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if exp, ok := c.lru.Peek(key); ok && time.Now().Before(exp) {
+		return false, nil
+	}
+	c.lru.Set(key, time.Now().Add(ttl))
+	return true, nil
+}
+
+// Len returns the number of live claims in the cache.
+func (c *MemoryIdempotencyCache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lru.Len()
+}
+
+// Stop stops the background sweep goroutine. Safe to call more than once.
+func (c *MemoryIdempotencyCache) Stop() {
+	c.stopOnce.Do(c.cancel)
+}
+
+func (c *MemoryIdempotencyCache) sweepLoop(ctx context.Context) {
+	for {
+		half := c.sweepInterval / 10
+		jitter := time.Duration(rand.Int64N(int64(2*half))) - half
+		timer := time.NewTimer(c.sweepInterval + jitter)
+		select {
+		case <-timer.C:
+			c.sweepExpired()
+		case <-ctx.Done():
+			timer.Stop()
+			return
 		}
 	}
+}
+
+func (c *MemoryIdempotencyCache) sweepExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	c.lru.DeleteWhere(func(_ string, exp time.Time) bool {
+		return now.After(exp)
+	})
 }
