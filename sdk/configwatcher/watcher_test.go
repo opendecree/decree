@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1357,6 +1358,80 @@ func TestWatcher_SnapshotDirectDelivery(t *testing.T) {
 	}
 	if got := d.Get(); got != 30*time.Second {
 		t.Errorf("duration field: got %v, want 30s", got)
+	}
+}
+
+// TestWatcher_StartAfterClose verifies that calling Start on an already-closed
+// watcher returns ErrClosed without spawning a subscription goroutine.
+func TestWatcher_StartAfterClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var subscribeCalls int
+	sub := newMockSubscription(ctx)
+	tr := &mockTransport{
+		getConfigFn: func(_ context.Context, _ *configclient.GetConfigRequest) (*configclient.GetConfigResponse, error) {
+			return &configclient.GetConfigResponse{TenantID: "t1", Version: 1}, nil
+		},
+		subscribeFn: func(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
+			subscribeCalls++
+			return sub, nil
+		},
+	}
+
+	w := &Watcher{
+		transport:   tr,
+		tenantID:    "t1",
+		opts:        options{minBackoff: 10 * time.Millisecond, maxBackoff: 50 * time.Millisecond},
+		fields:      make(map[string]*fieldEntry),
+		cancelReady: make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+
+	_, _ = w.String("app.name", "default")
+
+	// First Start must succeed.
+	if err := w.Start(ctx); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+
+	// Allow the subscription loop time to call Subscribe.
+	time.Sleep(20 * time.Millisecond)
+
+	goroutinesBefore := runtime.NumGoroutine()
+
+	// Close the watcher.
+	cancel()
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	// Goroutine count should drop back after Close (subscriptionLoop exited).
+	time.Sleep(20 * time.Millisecond)
+	goroutinesAfterClose := runtime.NumGoroutine()
+
+	// Second Start on a closed watcher must return ErrClosed.
+	err := w.Start(context.Background())
+	if err == nil {
+		t.Fatal("expected ErrClosed from Start after Close, got nil")
+	}
+	if err != ErrClosed {
+		t.Errorf("got %v, want ErrClosed", err)
+	}
+
+	// No additional goroutines must have been spawned.
+	time.Sleep(20 * time.Millisecond)
+	goroutinesAfterSecondStart := runtime.NumGoroutine()
+
+	// subscribeCalls must be exactly 1 — the second Start must not reach Subscribe.
+	if subscribeCalls != 1 {
+		t.Errorf("Subscribe called %d times, want exactly 1", subscribeCalls)
+	}
+
+	// Goroutine count must not have increased after the rejected Start.
+	if goroutinesAfterSecondStart > goroutinesAfterClose+1 {
+		t.Errorf("goroutine leak: count before second Start=%d, after=%d (goroutinesBefore=%d)",
+			goroutinesAfterClose, goroutinesAfterSecondStart, goroutinesBefore)
 	}
 }
 

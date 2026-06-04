@@ -42,6 +42,10 @@ import (
 // stream updates.
 var ErrStarted = errors.New("configwatcher: cannot register field after Start")
 
+// ErrClosed is returned by [Watcher.Start] when the watcher has already been
+// closed. A closed watcher cannot be restarted; create a new one instead.
+var ErrClosed = errors.New("configwatcher: watcher is closed")
+
 // Watcher monitors a tenant's configuration via a subscription stream.
 // Register typed field accessors before calling [Watcher.Start].
 type Watcher struct {
@@ -256,10 +260,15 @@ func typedUpdater[T any](v *Value[T]) func(tv *configclient.TypedValue) {
 // are closed.
 //
 // Start is idempotent: a second call returns nil without starting another loop.
+// Start returns [ErrClosed] if the watcher has already been closed.
 //
 // Fields must be registered (via String, Int, Bool, etc.) before calling Start.
 func (w *Watcher) Start(ctx context.Context) error {
 	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return ErrClosed
+	}
 	if w.started {
 		w.mu.Unlock()
 		return nil
