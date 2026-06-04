@@ -152,7 +152,7 @@ func TestWithIdempotencyCache(t *testing.T) {
 	c := &mockCache{}
 	pub := &mockPublisher{}
 	sub := &mockSubscriber{}
-	idc := cache.NewMemoryIdempotencyCache()
+	idc := cache.NewMemoryIdempotencyCache(context.Background(), 0)
 	svc := NewService(store, c, pub, sub, WithLogger(testLogger), WithIdempotencyCache(idc))
 	assert.NotNil(t, svc.idempotencyCache)
 }

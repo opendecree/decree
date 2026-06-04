@@ -100,7 +100,7 @@ func run() int {
 		schemaStoreVal = memSchema
 		auditStoreVal = audit.NewMemoryStore()
 		configCache = cache.NewMemoryCache(ctx, 0)
-		idempotencyCache = cache.NewMemoryIdempotencyCache()
+		idempotencyCache = cache.NewMemoryIdempotencyCache(ctx, 0)
 		memOpts := []pubsub.MemoryOption{pubsub.WithLogger(logger)}
 		if counter, ok := pubSubMetrics.DroppedCounter(); ok {
 			memOpts = append(memOpts, pubsub.WithDroppedCounter(counter))

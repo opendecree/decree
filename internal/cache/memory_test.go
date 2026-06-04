@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -196,14 +197,16 @@ func TestMemoryCache_WithSweepInterval_SweepsOnSchedule(t *testing.T) {
 // --- MemoryIdempotencyCache ---
 
 func TestMemoryIdempotencyCache_FirstClaimReturnsTrue(t *testing.T) {
-	c := NewMemoryIdempotencyCache()
+	c := NewMemoryIdempotencyCache(context.Background(), 0)
+	defer c.Stop()
 	first, err := c.Claim(context.Background(), "k1", time.Minute)
 	require.NoError(t, err)
 	assert.True(t, first)
 }
 
 func TestMemoryIdempotencyCache_SecondClaimReturnsFalse(t *testing.T) {
-	c := NewMemoryIdempotencyCache()
+	c := NewMemoryIdempotencyCache(context.Background(), 0)
+	defer c.Stop()
 	ctx := context.Background()
 	first, _ := c.Claim(ctx, "k1", time.Minute)
 	require.True(t, first)
@@ -213,7 +216,8 @@ func TestMemoryIdempotencyCache_SecondClaimReturnsFalse(t *testing.T) {
 }
 
 func TestMemoryIdempotencyCache_ExpiredKeyAllowsReclaim(t *testing.T) {
-	c := NewMemoryIdempotencyCache()
+	c := NewMemoryIdempotencyCache(context.Background(), 0)
+	defer c.Stop()
 	ctx := context.Background()
 	_, _ = c.Claim(ctx, "k1", time.Millisecond)
 	time.Sleep(5 * time.Millisecond)
@@ -223,12 +227,41 @@ func TestMemoryIdempotencyCache_ExpiredKeyAllowsReclaim(t *testing.T) {
 }
 
 func TestMemoryIdempotencyCache_DifferentKeysAreIndependent(t *testing.T) {
-	c := NewMemoryIdempotencyCache()
+	c := NewMemoryIdempotencyCache(context.Background(), 0)
+	defer c.Stop()
 	ctx := context.Background()
 	a, _ := c.Claim(ctx, "a", time.Minute)
 	b, _ := c.Claim(ctx, "b", time.Minute)
 	assert.True(t, a)
 	assert.True(t, b)
+}
+
+func TestMemoryIdempotencyCache_DoesNotGrowBeyondCap(t *testing.T) {
+	const cap = 5
+	c := NewMemoryIdempotencyCache(context.Background(), cap)
+	defer c.Stop()
+	ctx := context.Background()
+
+	// Claim cap+10 unique keys with long TTL; LRU eviction keeps size ≤ cap.
+	for i := range cap + 10 {
+		_, err := c.Claim(ctx, fmt.Sprintf("key-%d", i), time.Hour)
+		require.NoError(t, err)
+	}
+	assert.LessOrEqual(t, c.Len(), cap)
+}
+
+func TestMemoryIdempotencyCache_SweepRemovesExpired(t *testing.T) {
+	c := NewMemoryIdempotencyCache(context.Background(), 0,
+		WithIdempotencySweepInterval(50*time.Millisecond))
+	defer c.Stop()
+	ctx := context.Background()
+
+	_, _ = c.Claim(ctx, "short", time.Millisecond)
+	_, _ = c.Claim(ctx, "long", time.Hour)
+
+	time.Sleep(200 * time.Millisecond)
+
+	assert.Equal(t, 1, c.Len(), "expired entry should be swept")
 }
 
 // --- Negative cache ---
@@ -317,4 +350,25 @@ func TestMemoryCache_NegativeCache_IndependentFromPositive(t *testing.T) {
 	assert.False(t, neg1)
 	pos2, _ := c.Get(ctx, "t1", 2)
 	assert.Nil(t, pos2)
+}
+
+func TestMemoryCache_NegativeCache_DoesNotGrowBeyondCap(t *testing.T) {
+	const cap = 5
+	c := NewMemoryCache(context.Background(), cap)
+	defer c.Stop()
+	ctx := context.Background()
+
+	// Spray cap+10 unique version numbers; LRU eviction keeps size ≤ cap.
+	for i := range int32(cap + 10) {
+		require.NoError(t, c.SetNegative(ctx, "t1", i, time.Hour))
+	}
+	// Verify via GetNegative: only the most-recently-set entries survive.
+	live := 0
+	for i := range int32(cap + 10) {
+		ok, _ := c.GetNegative(ctx, "t1", i)
+		if ok {
+			live++
+		}
+	}
+	assert.LessOrEqual(t, live, cap)
 }
