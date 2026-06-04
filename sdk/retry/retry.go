@@ -5,6 +5,7 @@ package retry
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand/v2"
 	"time"
 )
@@ -122,15 +123,30 @@ func RunDo(ctx context.Context, enabled bool, cfg Config, fn func(ctx context.Co
 }
 
 // BackoffDuration computes exponential backoff with optional jitter.
-// The exponent is computed with an integer bit-shift; it is clamped to 62 to
-// avoid overflow before the max-duration clamp takes effect.
+//
+// The exponent is computed with an integer bit-shift. To avoid wrap-around
+// overflow (which can produce a zero or negative duration that bypasses the
+// max-duration clamp), the shift is pre-checked: if left-shifting initial by
+// shift bits would exceed math.MaxInt64, the result is clamped to max directly
+// without performing the shift.
 func BackoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
 	shift := attempt
 	if shift > 62 {
 		shift = 62
 	}
-	backoff := initial << shift
-	if backoff > max || backoff < 0 { // negative means overflow past int64 max
+
+	// Guard against left-shift overflow. When initial << shift would exceed
+	// int64 max, the Go runtime wraps the value (it can go negative or wrap to
+	// zero), which bypasses the backoff > max and backoff < 0 clamps below.
+	// Pre-check using the equivalent inequality initial > MaxInt64 >> shift.
+	var backoff time.Duration
+	if shift > 0 && initial > time.Duration(math.MaxInt64)>>shift {
+		backoff = max
+	} else {
+		backoff = initial << shift
+	}
+
+	if backoff > max || backoff < 0 {
 		backoff = max
 	}
 	if jitter && backoff > 0 {
