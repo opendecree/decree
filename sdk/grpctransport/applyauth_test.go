@@ -14,10 +14,8 @@ import (
 )
 
 func TestApplyAuth_BearerToken_ReturnsPerRPCCredentials(t *testing.T) {
-	_, callOpts, err := applyAuth(context.Background(), authConfig{bearerToken: "mytoken"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{bearerToken: "mytoken"})
+	_, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 1 {
 		t.Fatalf("expected 1 call option, got %d", len(callOpts))
 	}
@@ -47,10 +45,8 @@ func TestApplyAuth_BearerToken_PerRPCCredentials_SetsHeader(t *testing.T) {
 func TestApplyAuth_BearerToken_NoOutgoingMetadata(t *testing.T) {
 	// Bearer path must NOT touch outgoing context metadata (no clobbering).
 	ctx := context.Background()
-	retCtx, _, err := applyAuth(ctx, authConfig{bearerToken: "tok"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{bearerToken: "tok"})
+	retCtx, _ := applier.apply(ctx)
 	if _, ok := metadata.FromOutgoingContext(retCtx); ok {
 		t.Error("bearer token path must not set outgoing context metadata")
 	}
@@ -59,15 +55,13 @@ func TestApplyAuth_BearerToken_NoOutgoingMetadata(t *testing.T) {
 func TestApplyAuth_BearerToken_NoMetadataHeaders(t *testing.T) {
 	// With a bearer token, x-subject/x-role/x-tenant-id must NOT appear in
 	// outgoing metadata (they go via PerRPCCredentials, not context headers).
-	retCtx, _, err := applyAuth(context.Background(), authConfig{
+	applier := newAuthApplier(authConfig{
 		bearerToken: "tok",
 		subject:     "alice",
 		role:        "admin",
 		tenantID:    "acme",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	retCtx, _ := applier.apply(context.Background())
 	md, ok := metadata.FromOutgoingContext(retCtx)
 	if !ok {
 		return // no metadata is correct
@@ -89,17 +83,15 @@ func TestApplyAuth_TokenSource_ReturnsPerRPCCredentials(t *testing.T) {
 		called = true
 		return "dynamic-tok", nil
 	}
-	_, callOpts, err := applyAuth(context.Background(), authConfig{tokenSource: src})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{tokenSource: src})
+	_, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 1 {
 		t.Fatalf("expected 1 call option, got %d", len(callOpts))
 	}
 	_ = callOpts[0]
-	// Token source is called lazily by gRPC on each RPC, not at applyAuth time.
+	// Token source is called lazily by gRPC on each RPC, not at apply time.
 	if called {
-		t.Error("token source must not be called at applyAuth time")
+		t.Error("token source must not be called at apply time")
 	}
 }
 
@@ -151,13 +143,11 @@ func TestTokenSourceCreds_EmptyToken(t *testing.T) {
 
 func TestApplyAuth_TokenSource_TakesPrecedenceOverBearerToken(t *testing.T) {
 	// Both tokenSource and bearerToken set: tokenSource wins (it's checked first).
-	_, callOpts, err := applyAuth(context.Background(), authConfig{
+	applier := newAuthApplier(authConfig{
 		tokenSource: func(context.Context) (string, error) { return "source-tok", nil },
 		bearerToken: "static-tok",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	_, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 1 {
 		t.Fatalf("expected 1 call option, got %d", len(callOpts))
 	}
@@ -172,14 +162,12 @@ func TestApplyAuth_TokenSource_TakesPrecedenceOverBearerToken(t *testing.T) {
 }
 
 func TestApplyAuth_MetadataHeaders_AllFields(t *testing.T) {
-	ctx, callOpts, err := applyAuth(context.Background(), authConfig{
+	applier := newAuthApplier(authConfig{
 		subject:  "alice",
 		role:     "admin",
 		tenantID: "acme",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	ctx, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 0 {
 		t.Errorf("metadata-header path must return no call options, got %d", len(callOpts))
 	}
@@ -200,10 +188,8 @@ func TestApplyAuth_MetadataHeaders_AllFields(t *testing.T) {
 }
 
 func TestApplyAuth_MetadataHeaders_OnlyRoleSet(t *testing.T) {
-	ctx, callOpts, err := applyAuth(context.Background(), authConfig{role: "viewer"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{role: "viewer"})
+	ctx, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 0 {
 		t.Errorf("metadata-header path must return no call options, got %d", len(callOpts))
 	}
@@ -226,10 +212,8 @@ func TestApplyAuth_MetadataHeaders_PreservesCallerMetadata(t *testing.T) {
 	// AppendToOutgoingContext must not clobber pre-existing caller metadata.
 	base := metadata.Pairs("x-existing", "keep-me")
 	ctx := metadata.NewOutgoingContext(context.Background(), base)
-	ctx, _, err := applyAuth(ctx, authConfig{role: "admin"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{role: "admin"})
+	ctx, _ = applier.apply(ctx)
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		t.Fatal("no outgoing metadata")
@@ -250,14 +234,12 @@ func TestApplyAuth_MetadataHeaders_PreservesMultipleCallerKeys(t *testing.T) {
 		"x-baggage", "k=v",
 	)
 	ctx := metadata.NewOutgoingContext(context.Background(), base)
-	ctx, _, err := applyAuth(ctx, authConfig{
+	applier := newAuthApplier(authConfig{
 		subject:  "alice",
 		role:     "admin",
 		tenantID: "acme",
 	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	ctx, _ = applier.apply(ctx)
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		t.Fatal("no outgoing metadata")
@@ -282,10 +264,8 @@ func TestApplyAuth_MetadataHeaders_PreservesMultipleCallerKeys(t *testing.T) {
 }
 
 func TestApplyAuth_EmptyConfig_SetsNoHeaders(t *testing.T) {
-	ctx, callOpts, err := applyAuth(context.Background(), authConfig{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	applier := newAuthApplier(authConfig{})
+	ctx, callOpts := applier.apply(context.Background())
 	if len(callOpts) != 0 {
 		t.Errorf("empty config must return no call options, got %d", len(callOpts))
 	}
