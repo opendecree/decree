@@ -39,17 +39,18 @@ func LintValidations(rules []*pb.ValidationRule, fields []*pb.SchemaField) error
 		return fmt.Errorf("build CEL env: %w", err)
 	}
 	leafPaths, parentPaths := buildPathSets(fields)
+	leafTypes := selfDescriptor(fields)
 
 	var errs []error
 	for i, r := range rules {
-		if err := lintOne(env, leafPaths, parentPaths, r); err != nil {
+		if err := lintOne(env, leafPaths, parentPaths, leafTypes, r); err != nil {
 			errs = append(errs, fmt.Errorf("validations[%d]: %w", i, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func lintOne(env *cel.Env, leaves, parents map[string]struct{}, r *pb.ValidationRule) error {
+func lintOne(env *cel.Env, leaves, parents map[string]struct{}, leafTypes map[string]*cel.Type, r *pb.ValidationRule) error {
 	celAst, issues := env.Compile(r.GetRule())
 	if issues != nil && issues.Err() != nil {
 		return issues.Err()
@@ -77,6 +78,11 @@ func lintOne(env *cel.Env, leaves, parents map[string]struct{}, r *pb.Validation
 	if suggestion, sub := patternSubstitutable(root); sub {
 		resolutionErrs = append(resolutionErrs, fmt.Errorf("rule is expressible with a native constraint — %s", suggestion))
 	}
+
+	// Rule 3 (type half): the dyn env defers type checking to runtime, so walk
+	// the AST and reject operand/operator type mismatches at import time instead
+	// of letting them fail every config write with an opaque "no such overload".
+	resolutionErrs = append(resolutionErrs, checkRuleTypes(root, leafTypes)...)
 
 	return errors.Join(resolutionErrs...)
 }
