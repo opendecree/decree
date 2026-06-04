@@ -449,6 +449,12 @@ func (s *Service) DeleteSchema(ctx context.Context, req *pb.DeleteSchemaRequest)
 		return nil, errToStatus(err, "schema not found", "failed to delete schema")
 	}
 
+	// Drop the deleted schema's compiled CEL programs from the shared cache;
+	// they are permanently dead and would otherwise linger for the process life.
+	if s.validator != nil {
+		s.validator.InvalidateSchemaPrograms(schema.ID)
+	}
+
 	return &pb.DeleteSchemaResponse{}, nil
 }
 

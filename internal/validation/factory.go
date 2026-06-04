@@ -71,17 +71,29 @@ func (f *ValidatorFactory) Cache() *ValidatorCache {
 	return f.cache
 }
 
-// InvalidateRules drops every cached rule-derived artifact for a tenant:
-// dependentRequired bytes, validations slice, the cel.Env, and the
-// compiled cel.Program slice. Call this alongside Cache().Invalidate()
-// whenever a tenant's schema version changes. Compiled programs that
-// remain in the celCache are also dropped so a stale env reference cannot
-// be reached on the next compile.
+// InvalidateRules drops every per-tenant rule-derived artifact: the
+// dependentRequired bytes, the validations slice, the cel.Env, and the
+// tenant's compiled cel.Program slice. Call this alongside Cache().Invalidate()
+// whenever a tenant's schema version changes; the next access re-fetches the
+// rules and re-binds the programs for the new version.
+//
+// This does NOT touch the shared program cache (celCache), which is keyed by
+// (schemaID, version, ruleIndex): a version change yields a fresh key, so a
+// stale program is never served — it merely lingers until the schema is
+// deleted. InvalidateSchemaPrograms drops those entries.
 func (f *ValidatorFactory) InvalidateRules(tenantID string) {
 	f.rulesCache.Delete(tenantID)
 	f.validationsCache.Delete(tenantID)
 	f.celEnvCache.Delete(tenantID)
 	f.celProgramsCache.Delete(tenantID)
+}
+
+// InvalidateSchemaPrograms drops every compiled program in the shared cache
+// that belongs to schemaID. Call it when a schema is deleted, so its programs —
+// permanently dead once the schema is gone — do not accumulate in the cache for
+// the lifetime of the process. Safe to call when the schema had no CEL rules.
+func (f *ValidatorFactory) InvalidateSchemaPrograms(schemaID string) {
+	f.celCache.InvalidateSchema(schemaID)
 }
 
 // GetDependentRequired returns the raw JSON-encoded dependentRequired rules
