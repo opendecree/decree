@@ -241,13 +241,16 @@ jobs:
 
       - name: SDK + CLI + tools tests
         run: |
-          cd sdk/configclient && go test ./... -count=1 -coverprofile=../../cov-configclient.out -covermode=atomic &
-          cd sdk/adminclient && go test ./... -count=1 -coverprofile=../../cov-adminclient.out -covermode=atomic &
-          cd sdk/configwatcher && go test ./... -count=1 -coverprofile=../../cov-configwatcher.out -covermode=atomic &
-          cd sdk/grpctransport && go test ./... -count=1 -coverprofile=../../cov-grpctransport.out -covermode=atomic &
-          cd sdk/tools && go test ./... -count=1 -coverprofile=../../cov-tools.out -covermode=atomic &
-          cd cmd/decree && go test ./... -count=1 -coverprofile=../../cov-decree.out -covermode=atomic &
-          wait
+          pids=()
+          cd sdk/configclient && go test ./... -count=1 -coverprofile=../../cov-configclient.out -covermode=atomic & pids+=($!)
+          cd sdk/adminclient && go test ./... -count=1 -coverprofile=../../cov-adminclient.out -covermode=atomic & pids+=($!)
+          cd sdk/configwatcher && go test ./... -count=1 -coverprofile=../../cov-configwatcher.out -covermode=atomic & pids+=($!)
+          cd sdk/grpctransport && go test ./... -count=1 -coverprofile=../../cov-grpctransport.out -covermode=atomic & pids+=($!)
+          cd sdk/tools && go test ./... -count=1 -coverprofile=../../cov-tools.out -covermode=atomic & pids+=($!)
+          cd cmd/decree && go test ./... -count=1 -coverprofile=../../cov-decree.out -covermode=atomic & pids+=($!)
+          fail=0
+          for pid in "${pids[@]}"; do wait "$pid" || fail=1; done
+          exit $fail
 
       - name: Coverage ratchet
         run: |
