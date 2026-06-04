@@ -3,10 +3,14 @@ package grpctransport
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"github.com/opendecree/decree/sdk/configclient"
 )
 
 func TestApplyAuth_BearerToken_ReturnsPerRPCCredentials(t *testing.T) {
@@ -287,3 +291,87 @@ func TestApplyAuth_EmptyConfig_SetsNoHeaders(t *testing.T) {
 
 // Compile-time check: grpc.PerRPCCredentials returns a grpc.CallOption.
 var _ grpc.CallOption = grpc.PerRPCCredentials(bearerToken{})
+
+// Tests for buildConfig option routing (WithRetry, WithReconnectBackoff, WithLogger).
+
+func TestWithRetry_PopulatesClientOpts(t *testing.T) {
+	cfg, err := buildConfig([]Option{
+		WithRole("admin"),
+		WithRetry(configclient.RetryConfig{MaxAttempts: 3}),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.clientOpts) != 1 {
+		t.Errorf("clientOpts: got %d, want 1", len(cfg.clientOpts))
+	}
+	if len(cfg.watcherOpts) != 0 {
+		t.Errorf("watcherOpts: got %d, want 0 (WithRetry must not bleed into watcherOpts)", len(cfg.watcherOpts))
+	}
+}
+
+func TestWithReconnectBackoff_PopulatesWatcherOpts(t *testing.T) {
+	cfg, err := buildConfig([]Option{
+		WithRole("admin"),
+		WithReconnectBackoff(100*time.Millisecond, time.Second),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.watcherOpts) != 1 {
+		t.Errorf("watcherOpts: got %d, want 1", len(cfg.watcherOpts))
+	}
+	if len(cfg.clientOpts) != 0 {
+		t.Errorf("clientOpts: got %d, want 0 (WithReconnectBackoff must not bleed into clientOpts)", len(cfg.clientOpts))
+	}
+}
+
+func TestWithLogger_PopulatesWatcherOpts(t *testing.T) {
+	cfg, err := buildConfig([]Option{
+		WithRole("admin"),
+		WithLogger(slog.Default()),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.watcherOpts) != 1 {
+		t.Errorf("watcherOpts: got %d, want 1", len(cfg.watcherOpts))
+	}
+	if len(cfg.clientOpts) != 0 {
+		t.Errorf("clientOpts: got %d, want 0 (WithLogger must not bleed into clientOpts)", len(cfg.clientOpts))
+	}
+}
+
+func TestWithRetryAndWithLogger_BothPresent(t *testing.T) {
+	cfg, err := buildConfig([]Option{
+		WithRole("admin"),
+		WithRetry(configclient.RetryConfig{MaxAttempts: 5}),
+		WithLogger(slog.Default()),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.clientOpts) != 1 {
+		t.Errorf("clientOpts: got %d, want 1", len(cfg.clientOpts))
+	}
+	if len(cfg.watcherOpts) != 1 {
+		t.Errorf("watcherOpts: got %d, want 1", len(cfg.watcherOpts))
+	}
+}
+
+func TestWithReconnectBackoffAndWithLogger_Both(t *testing.T) {
+	cfg, err := buildConfig([]Option{
+		WithRole("admin"),
+		WithReconnectBackoff(50*time.Millisecond, 500*time.Millisecond),
+		WithLogger(slog.Default()),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.watcherOpts) != 2 {
+		t.Errorf("watcherOpts: got %d, want 2", len(cfg.watcherOpts))
+	}
+	if len(cfg.clientOpts) != 0 {
+		t.Errorf("clientOpts: got %d, want 0 (neither option must touch clientOpts)", len(cfg.clientOpts))
+	}
+}
