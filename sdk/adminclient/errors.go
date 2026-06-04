@@ -23,6 +23,12 @@ var (
 	// role or tenant access to perform an administrative operation.
 	ErrPermissionDenied = errors.New("permission denied")
 
+	// ErrUnauthenticated is returned when the caller has not provided valid
+	// credentials (e.g. missing or invalid auth token). This is distinct from
+	// ErrPermissionDenied, which indicates the caller is authenticated but
+	// lacks the required role or access.
+	ErrUnauthenticated = errors.New("unauthenticated")
+
 	// ErrRateLimited is returned when the server has exhausted a rate limit
 	// for the caller. Unlike transient errors, the server may attach a
 	// RetryInfo detail with a backoff hint; callers should honor that hint

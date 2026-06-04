@@ -129,9 +129,13 @@ func TestInsecureConn_WithBearerToken_RPCRejected(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected RPC to fail on insecure connection with bearer token, got nil error")
 	}
-	// gRPC returns: "transport: cannot send secure credentials on an insecure connection"
-	errMsg := rpcErr.Error()
-	if !strings.Contains(errMsg, "insecure connection") && !strings.Contains(errMsg, "transport security") {
-		t.Errorf("expected error to mention insecure connection or transport security; got: %v", rpcErr)
+	// gRPC either rejects at the transport layer ("cannot send secure credentials on an
+	// insecure connection") or the server rejects the missing token as Unauthenticated.
+	// Both outcomes confirm that bearer tokens are not silently sent over plaintext.
+	if !errors.Is(rpcErr, configclient.ErrUnauthenticated) {
+		errMsg := rpcErr.Error()
+		if !strings.Contains(errMsg, "insecure connection") && !strings.Contains(errMsg, "transport security") {
+			t.Errorf("expected error to mention insecure connection or transport security, or ErrUnauthenticated; got: %v", rpcErr)
+		}
 	}
 }

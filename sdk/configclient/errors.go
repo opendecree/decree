@@ -25,6 +25,12 @@ var (
 	// ErrLocked, which indicates an administratively locked field.
 	ErrPermissionDenied = errors.New("permission denied")
 
+	// ErrUnauthenticated is returned when the caller has not provided valid
+	// credentials (e.g. missing or invalid auth token). This is distinct from
+	// ErrPermissionDenied, which indicates the caller is authenticated but
+	// lacks the required role or access.
+	ErrUnauthenticated = errors.New("unauthenticated")
+
 	// ErrChecksumMismatch is returned when an optimistic concurrency check fails
 	// because the value was modified between read and write.
 	ErrChecksumMismatch = errors.New("checksum mismatch: value was modified")

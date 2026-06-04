@@ -146,6 +146,16 @@ func TestMapConfigError_Default_PassThrough(t *testing.T) {
 	}
 }
 
+func TestMapConfigError_Unauthenticated_ReturnsErrUnauthenticated(t *testing.T) {
+	err := mapConfigError(status.Error(codes.Unauthenticated, "missing credentials"))
+	if !errors.Is(err, configclient.ErrUnauthenticated) {
+		t.Errorf("got %v, want ErrUnauthenticated", err)
+	}
+	if errors.Is(err, configclient.ErrPermissionDenied) {
+		t.Error("Unauthenticated must NOT map to ErrPermissionDenied")
+	}
+}
+
 func TestMapAdminError_PermissionDenied_ReturnsErrPermissionDenied(t *testing.T) {
 	err := mapAdminError(status.Error(codes.PermissionDenied, "insufficient role"))
 	if !errors.Is(err, adminclient.ErrPermissionDenied) {
@@ -221,5 +231,15 @@ func TestMapAdminError_Default_PassThrough(t *testing.T) {
 	err := mapAdminError(orig)
 	if err != orig {
 		t.Errorf("got %v, want original gRPC error passed through for default code", err)
+	}
+}
+
+func TestMapAdminError_Unauthenticated_ReturnsErrUnauthenticated(t *testing.T) {
+	err := mapAdminError(status.Error(codes.Unauthenticated, "missing credentials"))
+	if !errors.Is(err, adminclient.ErrUnauthenticated) {
+		t.Errorf("got %v, want ErrUnauthenticated", err)
+	}
+	if errors.Is(err, adminclient.ErrPermissionDenied) {
+		t.Error("Unauthenticated must NOT map to ErrPermissionDenied")
 	}
 }

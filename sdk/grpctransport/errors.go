@@ -24,6 +24,8 @@ func mapConfigError(err error) error {
 		return configclient.ErrNotFound
 	case codes.PermissionDenied:
 		return configclient.ErrPermissionDenied
+	case codes.Unauthenticated:
+		return configclient.ErrUnauthenticated
 	case codes.FailedPrecondition:
 		return configclient.ErrLocked
 	case codes.Aborted:
@@ -68,6 +70,8 @@ func mapAdminError(err error) error {
 		return adminclient.ErrFailedPrecondition
 	case codes.PermissionDenied:
 		return adminclient.ErrPermissionDenied
+	case codes.Unauthenticated:
+		return adminclient.ErrUnauthenticated
 	case codes.InvalidArgument:
 		return adminclient.InvalidArgumentError(st.Message())
 	case codes.ResourceExhausted:
