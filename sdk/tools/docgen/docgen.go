@@ -347,7 +347,7 @@ func yesNo(v bool) string {
 // formatFloat formats a float64 for display, omitting the decimal point when
 // the value is a whole number.
 // TODO: this is byte-identical to validate.formatFloat; if a shared internal
-// package is added to sdk/tools, hoist both copies there.
+// package is added to sdk/tools, hoist both copies there. (#852)
 func formatFloat(f float64) string {
 	if f == float64(int64(f)) {
 		return fmt.Sprintf("%d", int64(f))
