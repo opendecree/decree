@@ -36,7 +36,7 @@ while IFS= read -r line; do
   [[ "$ref" == ./* ]] && continue
   # Trusted orgs may continue to pin by tag
   case "$ref" in
-    actions/*|github/*|docker/*) continue ;;
+    actions/*|github/*|docker/*|opendecree/*) continue ;;
   esac
   # Ref must look like owner/repo[/path]@<sha>
   sha="${ref##*@}"
