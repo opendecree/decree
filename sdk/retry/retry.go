@@ -134,6 +134,9 @@ func RunDo(ctx context.Context, enabled bool, cfg Config, fn func(ctx context.Co
 //
 // The base duration for attempt n is initial * 2^n, capped at max.
 //
+// Negative attempt values are treated as 0: the function returns initial (or
+// its jittered equivalent) without panicking.
+//
 // When jitter is true, the result is a uniform random value in [0, backoff)
 // — full jitter with no minimum floor. A 5 s capped backoff can therefore
 // jitter down to near-zero on any given attempt. If a guaranteed minimum wait
@@ -147,6 +150,9 @@ func RunDo(ctx context.Context, enabled bool, cfg Config, fn func(ctx context.Co
 // without performing the shift.
 func BackoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
 	shift := attempt
+	if shift < 0 {
+		shift = 0
+	}
 	if shift > 62 {
 		shift = 62
 	}
