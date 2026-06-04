@@ -96,10 +96,15 @@ type importConfigOptions struct {
 }
 
 // WithImportMode sets the import mode. Defaults to [ImportModeMerge] if not specified.
-// Note: passing the zero value (0) silently overrides the default — use an
-// explicit constant ([ImportModeMerge], [ImportModeReplace], [ImportModeDefaults]).
+// A zero value is ignored so callers that conditionally construct options cannot
+// accidentally clobber the default.
 func WithImportMode(mode ImportMode) ImportConfigOption {
-	return func(o *importConfigOptions) { o.mode = mode }
+	return func(o *importConfigOptions) {
+		if mode == 0 {
+			return
+		}
+		o.mode = mode
+	}
 }
 
 // ImportConfig sends YAML configuration to the server, which applies the values

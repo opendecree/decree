@@ -1483,6 +1483,44 @@ func TestLockedValue_Set_ForwardsIdempotencyKey(t *testing.T) {
 	}
 }
 
+// --- nil Transport response guards (issue #827) ---
+
+// nilRespTransport is a minimal Transport that returns (nil, nil) for the
+// two methods that callers dereference without a guard.
+type nilRespTransport struct {
+	mockTransport
+}
+
+func (n *nilRespTransport) GetField(_ context.Context, _ *GetFieldRequest) (*GetFieldResponse, error) {
+	return nil, nil
+}
+
+func (n *nilRespTransport) GetConfig(_ context.Context, _ *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, nil
+}
+
+func TestGetForUpdate_NilTransportResponse(t *testing.T) {
+	client := New(&nilRespTransport{})
+	_, err := client.GetForUpdate(context.Background(), "t1", "field.path")
+	if err == nil {
+		t.Fatal("expected error for nil transport response, got nil")
+	}
+	if !errors.Is(err, ErrInvalidTransportResponse) {
+		t.Errorf("got %v, want ErrInvalidTransportResponse", err)
+	}
+}
+
+func TestSnapshot_NilTransportResponse(t *testing.T) {
+	client := New(&nilRespTransport{})
+	_, err := client.Snapshot(context.Background(), "t1")
+	if err == nil {
+		t.Fatal("expected error for nil transport response, got nil")
+	}
+	if !errors.Is(err, ErrInvalidTransportResponse) {
+		t.Errorf("got %v, want ErrInvalidTransportResponse", err)
+	}
+}
+
 func TestLockedValue_Set_RejectsUnsupportedOptions(t *testing.T) {
 	tr := &mockTransport{}
 	client := New(tr)
