@@ -220,12 +220,14 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		t.Error("expected enabled to be true after snapshot")
 	}
 
-	// Drain the snapshot change notification (0.01 → 0.025) so the next receive
-	// below corresponds to the stream change, not the snapshot change.
+	// loadSnapshot emits a Change event per field (default → snapshot value) via
+	// notifyLocked. Drain fee's buffered event so the gate below observes the
+	// stream change, not the buffered snapshot event. Other tests in this file
+	// use the same idiom (see ~L993, ~L1022, ~L1045).
 	select {
 	case <-fee.Changes():
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected snapshot change event on fee.Changes()")
+		t.Fatal("expected initial snapshot change event on fee.Changes()")
 	}
 
 	// Simulate a stream change.
