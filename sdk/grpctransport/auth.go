@@ -142,44 +142,6 @@ func (t tokenSourceCreds) GetRequestMetadata(ctx context.Context, _ ...string) (
 
 func (t tokenSourceCreds) RequireTransportSecurity() bool { return true }
 
-// applyAuth injects authentication metadata into the outgoing gRPC context
-// and returns any per-RPC call options required.
-//
-// For bearer-token and token-source auth, it returns a
-// [grpc.PerRPCCredentials] call option backed by a
-// [credentials.PerRPCCredentials] implementation whose
-// RequireTransportSecurity method returns true — gRPC will refuse to send
-// the credential if the connection is not TLS-protected.
-//
-// For metadata-header auth (x-subject / x-role / x-tenant-id), headers are
-// appended to the existing outgoing metadata so the caller's metadata is
-// preserved.
-func applyAuth(ctx context.Context, auth authConfig) (context.Context, []grpc.CallOption, error) {
-	switch {
-	case auth.tokenSource != nil:
-		creds := tokenSourceCreds{source: auth.tokenSource}
-		return ctx, []grpc.CallOption{grpc.PerRPCCredentials(creds)}, nil
-	case auth.bearerToken != "":
-		creds := bearerToken{token: auth.bearerToken}
-		return ctx, []grpc.CallOption{grpc.PerRPCCredentials(creds)}, nil
-	default:
-		pairs := make([]string, 0, 6)
-		if auth.subject != "" {
-			pairs = append(pairs, "x-subject", auth.subject)
-		}
-		if auth.role != "" {
-			pairs = append(pairs, "x-role", auth.role)
-		}
-		if auth.tenantID != "" {
-			pairs = append(pairs, "x-tenant-id", auth.tenantID)
-		}
-		if len(pairs) > 0 {
-			ctx = metadata.AppendToOutgoingContext(ctx, pairs...)
-		}
-		return ctx, nil, nil
-	}
-}
-
 // authApplier holds pre-computed auth state so that per-RPC credential
 // objects and metadata key-value pairs are built once at construction time
 // rather than on every method call.
