@@ -59,6 +59,10 @@ func WithBearerToken(token string) Option {
 // every RPC and its return value is used as the Bearer token. Use this
 // instead of [WithBearerToken] when tokens can expire (e.g. OAuth2,
 // short-lived JWTs).
+//
+// If the token source cannot obtain a token, it must return a non-nil error.
+// Returning an empty string with a nil error is treated as an error:
+// [ErrEmptyToken] is returned and the RPC is not sent.
 func WithTokenSource(fn func(context.Context) (string, error)) Option {
 	return func(c *config) { c.auth.tokenSource = fn }
 }
@@ -87,6 +91,12 @@ func WithLogger(l *slog.Logger) Option {
 // ErrRoleRequired is returned by transport constructors when neither
 // WithRole, WithBearerToken, nor WithTokenSource is provided.
 var ErrRoleRequired = errors.New("grpctransport: WithRole is required when not using WithBearerToken or WithTokenSource")
+
+// ErrEmptyToken is returned by [tokenSourceCreds.GetRequestMetadata] when the
+// token source returns an empty string. Callers that cannot obtain a token
+// should return a non-nil error from their token source function rather than
+// returning an empty string.
+var ErrEmptyToken = errors.New("grpctransport: TokenSource returned an empty token")
 
 func buildConfig(opts []Option) (config, error) {
 	var cfg config
@@ -125,9 +135,7 @@ func (t tokenSourceCreds) GetRequestMetadata(ctx context.Context, _ ...string) (
 		return nil, err
 	}
 	if tok == "" {
-		// Skip setting the Authorization header rather than sending a malformed
-		// "Bearer " credential. The server will treat the request as unauthenticated.
-		return nil, nil
+		return nil, ErrEmptyToken
 	}
 	return map[string]string{"authorization": "Bearer " + tok}, nil
 }
