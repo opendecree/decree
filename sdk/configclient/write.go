@@ -75,11 +75,14 @@ func WithFieldChecksums(checksums map[string]string) WriteOption {
 	return func(o *writeOptions) { o.fieldChecksums = checksums }
 }
 
-// doWrite executes a write operation. Without an idempotency key or expected
-// checksum, the call is made exactly once. With either (both make the write
-// idempotent) and retry enabled on the client, transient errors trigger retry.
+// doWrite executes a write operation. Without an idempotency key, expected
+// checksum, or field checksums, the call is made exactly once. With any of
+// those options (all make the write idempotent) and retry enabled on the
+// client, transient errors trigger retry. [WithFieldChecksums] on batch writes
+// (SetMany/SetManyTyped) also enables retry because per-field checksums make
+// the operation idempotent.
 func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) error) error {
-	if (wo.idempotencyKey != "" || wo.expectedChecksum != "") && c.opts.retryEnabled {
+	if (wo.idempotencyKey != "" || wo.expectedChecksum != "" || len(wo.fieldChecksums) > 0) && c.opts.retryEnabled {
 		return retryDo(ctx, c, fn)
 	}
 	return fn(ctx)

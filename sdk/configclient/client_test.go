@@ -1366,6 +1366,43 @@ func (t *countingWriteTransport) SetField(_ context.Context, _ *SetFieldRequest)
 	return &SetFieldResponse{}, nil
 }
 
+// countingBatchWriteTransport is a minimal Transport that fails the first N
+// SetFields calls with a RetryableError and succeeds thereafter.
+type countingBatchWriteTransport struct {
+	mockTransport
+	failUntil int
+	calls     int
+}
+
+func (t *countingBatchWriteTransport) SetFields(_ context.Context, _ *SetFieldsRequest) (*SetFieldsResponse, error) {
+	t.calls++
+	if t.calls <= t.failUntil {
+		return nil, &RetryableError{Err: fmt.Errorf("unavailable")}
+	}
+	return &SetFieldsResponse{}, nil
+}
+
+func TestDoWrite_FieldChecksums_Retries(t *testing.T) {
+	ctx := context.Background()
+	tr := &countingBatchWriteTransport{failUntil: 2}
+	client := New(tr, WithRetry(RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     10 * time.Millisecond,
+		RetryableCheck: IsRetryable,
+	}))
+
+	err := client.SetMany(ctx, "t1", map[string]string{"field": "value"}, "",
+		WithFieldChecksums(map[string]string{"field": "chk-abc"}),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if tr.calls != 3 {
+		t.Errorf("SetMany with WithFieldChecksums should retry: got %d calls, want 3", tr.calls)
+	}
+}
+
 // --- WriteOption tests ---
 
 func TestSet_WithDescription(t *testing.T) {
