@@ -219,6 +219,15 @@ func TestWatcher_SnapshotAndStream(t *testing.T) {
 		t.Error("expected enabled to be true after snapshot")
 	}
 
+	// The initial snapshot emits a Change (default -> snapshot value) on each
+	// field's channel. Drain fee's so the gate below observes the stream change,
+	// not the buffered snapshot event.
+	select {
+	case <-fee.Changes():
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected initial snapshot change on fee.Changes()")
+	}
+
 	// Simulate a stream change.
 	sub.send(&configclient.ConfigChange{
 		TenantID:  "t1",
