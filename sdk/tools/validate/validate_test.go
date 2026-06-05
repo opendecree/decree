@@ -382,6 +382,215 @@ values:
 		}
 		assertViolation(t, result, "endpoint", "invalid absolute URL")
 	})
+
+	t.Run("mailto scheme rejected by default", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  endpoint:
+    value: "mailto:user@example.com"
+`
+		result, err := Validate([]byte(schemaYAML), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "endpoint", "not in the allowed list")
+	})
+
+	t.Run("javascript scheme rejected by default", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  endpoint:
+    value: "javascript:alert(1)"
+`
+		result, err := Validate([]byte(schemaYAML), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "endpoint", "not in the allowed list")
+	})
+
+	t.Run("ftp accepted with custom allowed_schemes", func(t *testing.T) {
+		schema := `spec_version: "v1"
+name: test
+fields:
+  link:
+    type: url
+    constraints:
+      allowed_schemes: [ftp]
+`
+		config := `spec_version: "v1"
+values:
+  link:
+    value: "ftp://files.example.com/pub"
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.IsValid() {
+			t.Errorf("expected valid for ftp with allowed_schemes=[ftp], got: %s", result.Error())
+		}
+	})
+
+	t.Run("http rejected with custom allowed_schemes ftp only", func(t *testing.T) {
+		schema := `spec_version: "v1"
+name: test
+fields:
+  link:
+    type: url
+    constraints:
+      allowed_schemes: [ftp]
+`
+		config := `spec_version: "v1"
+values:
+  link:
+    value: "http://example.com"
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "link", "not in the allowed list")
+	})
+}
+
+func TestValidate_NumberFiniteness(t *testing.T) {
+	schema := `spec_version: "v1"
+name: test
+fields:
+  rate:
+    type: number
+`
+	t.Run("NaN rejected", func(t *testing.T) {
+		s := &SchemaFile{
+			SpecVersion: "v1",
+			Name:        "test",
+			Fields:      map[string]FieldDef{"rate": {Type: "number"}},
+		}
+		c := &ConfigFile{
+			SpecVersion: "v1",
+			Values:      map[string]ConfigValueDef{"rate": {Value: math.NaN()}},
+		}
+		result := ValidateParsed(s, c)
+		assertViolation(t, result, "rate", "not a finite number")
+	})
+
+	t.Run("positive Inf rejected", func(t *testing.T) {
+		s := &SchemaFile{
+			SpecVersion: "v1",
+			Name:        "test",
+			Fields:      map[string]FieldDef{"rate": {Type: "number"}},
+		}
+		c := &ConfigFile{
+			SpecVersion: "v1",
+			Values:      map[string]ConfigValueDef{"rate": {Value: math.Inf(1)}},
+		}
+		result := ValidateParsed(s, c)
+		assertViolation(t, result, "rate", "not a finite number")
+	})
+
+	t.Run("finite value accepted", func(t *testing.T) {
+		result, err := Validate([]byte(schema), []byte(`spec_version: "v1"
+values:
+  rate:
+    value: 3.14
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.IsValid() {
+			t.Errorf("expected valid for finite number, got: %s", result.Error())
+		}
+	})
+}
+
+func TestValidate_JSONSchema(t *testing.T) {
+	schema := `spec_version: "v1"
+name: test
+fields:
+  payload:
+    type: json
+    constraints:
+      json_schema: '{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}'
+`
+	t.Run("valid JSON matching schema passes", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  payload:
+    value: '{"name":"Alice"}'
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.IsValid() {
+			t.Errorf("expected valid, got: %s", result.Error())
+		}
+	})
+
+	t.Run("JSON missing required property fails", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  payload:
+    value: '{"age":30}'
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "payload", "json schema validation failed")
+	})
+
+	t.Run("structured YAML matching schema passes", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  payload:
+    value:
+      name: Bob
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.IsValid() {
+			t.Errorf("expected valid, got: %s", result.Error())
+		}
+	})
+
+	t.Run("structured YAML failing schema fails", func(t *testing.T) {
+		config := `spec_version: "v1"
+values:
+  payload:
+    value:
+      age: 30
+`
+		result, err := Validate([]byte(schema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "payload", "json schema validation failed")
+	})
+
+	t.Run("invalid json_schema constraint string reports error", func(t *testing.T) {
+		badSchema := `spec_version: "v1"
+name: test
+fields:
+  payload:
+    type: json
+    constraints:
+      json_schema: 'not valid json'
+`
+		config := `spec_version: "v1"
+values:
+  payload:
+    value: '{"name":"Alice"}'
+`
+		result, err := Validate([]byte(badSchema), []byte(config))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertViolation(t, result, "payload", "invalid json_schema constraint")
+	})
 }
 
 func TestValidate_JSON(t *testing.T) {

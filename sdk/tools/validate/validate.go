@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
 
@@ -71,6 +72,7 @@ type ConstraintsDef struct {
 	Pattern          string   `yaml:"pattern,omitempty"`
 	Enum             []string `yaml:"enum,omitempty"`
 	JSONSchema       string   `yaml:"json_schema,omitempty"`
+	AllowedSchemes   []string `yaml:"allowed_schemes,omitempty"`
 }
 
 // ConfigFile is the parsed representation of a config YAML file.
@@ -276,9 +278,9 @@ func validateValue(result *Result, path string, value any, fd FieldDef) {
 	case "duration":
 		typeOK = validateDuration(result, path, value, fd.Constraints)
 	case "url":
-		typeOK = validateURL(result, path, value)
+		typeOK = validateURL(result, path, value, fd.Constraints)
 	case "json":
-		validateJSON(result, path, value)
+		validateJSON(result, path, value, fd.Constraints)
 		// json values may be maps or slices; enum on json is not meaningful, so
 		// always skip the enum check for json fields regardless of typeOK.
 		return
@@ -335,6 +337,10 @@ func validateNumber(result *Result, path string, value any, c *ConstraintsDef) b
 		n = v
 	default:
 		result.add(path, fmt.Sprintf("expected number, got %T", value))
+		return false
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		result.add(path, "value is not a finite number")
 		return false
 	}
 	if c != nil {
@@ -405,7 +411,7 @@ func validateDuration(result *Result, path string, value any, _ *ConstraintsDef)
 	return true
 }
 
-func validateURL(result *Result, path string, value any) bool {
+func validateURL(result *Result, path string, value any, c *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected url (string), got %T", value))
@@ -414,20 +420,69 @@ func validateURL(result *Result, path string, value any) bool {
 	u, err := url.Parse(s)
 	if err != nil || !u.IsAbs() {
 		result.add(path, fmt.Sprintf("invalid absolute URL: %q", s))
+		return true
+	}
+	schemes := []string{"http", "https"}
+	if c != nil && len(c.AllowedSchemes) > 0 {
+		schemes = c.AllowedSchemes
+	}
+	allowed := make(map[string]struct{}, len(schemes))
+	for _, sc := range schemes {
+		allowed[sc] = struct{}{}
+	}
+	if _, ok := allowed[u.Scheme]; !ok {
+		result.add(path, fmt.Sprintf("URL scheme %q is not in the allowed list %v", u.Scheme, schemes))
 	}
 	return true
 }
 
-func validateJSON(result *Result, path string, value any) {
+func validateJSON(result *Result, path string, value any, c *ConstraintsDef) {
+	var jsonStr string
 	switch v := value.(type) {
 	case string:
 		if !json.Valid([]byte(v)) {
 			result.add(path, "invalid JSON string")
+			return
 		}
+		jsonStr = v
 	case map[string]any, []any:
 		// Structured YAML value — valid JSON representation.
+		// Marshal to JSON string for schema validation.
+		b, err := json.Marshal(v)
+		if err != nil {
+			result.add(path, fmt.Sprintf("could not marshal JSON value: %v", err))
+			return
+		}
+		jsonStr = string(b)
 	default:
 		result.add(path, fmt.Sprintf("expected JSON (string or structured), got %T", value))
+		return
+	}
+
+	if c != nil && c.JSONSchema != "" {
+		compiler := jsonschema.NewCompiler()
+		doc, err := jsonschema.UnmarshalJSON(strings.NewReader(c.JSONSchema))
+		if err != nil {
+			result.add(path, fmt.Sprintf("invalid json_schema constraint: %v", err))
+			return
+		}
+		if err := compiler.AddResource("schema.json", doc); err != nil {
+			result.add(path, fmt.Sprintf("invalid json_schema constraint: %v", err))
+			return
+		}
+		schema, err := compiler.Compile("schema.json")
+		if err != nil {
+			result.add(path, fmt.Sprintf("invalid json_schema constraint: %v", err))
+			return
+		}
+		inst, err := jsonschema.UnmarshalJSON(strings.NewReader(jsonStr))
+		if err != nil {
+			result.add(path, fmt.Sprintf("invalid JSON: %v", err))
+			return
+		}
+		if err := schema.Validate(inst); err != nil {
+			result.add(path, fmt.Sprintf("json schema validation failed: %v", err))
+		}
 	}
 }
 
