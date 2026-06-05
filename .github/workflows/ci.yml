@@ -257,6 +257,7 @@ jobs:
           cd sdk/configwatcher && go test ./... -count=1 -coverprofile=../../cov-configwatcher.out -covermode=atomic & pids+=($!)
           cd sdk/grpctransport && go test ./... -count=1 -coverprofile=../../cov-grpctransport.out -covermode=atomic & pids+=($!)
           cd sdk/tools && go test ./... -count=1 -coverprofile=../../cov-tools.out -covermode=atomic & pids+=($!)
+          cd sdk/contrib/viper && go test ./... -count=1 -coverprofile=../../cov-contrib-viper.out -covermode=atomic & pids+=($!)
           cd cmd/decree && go test ./... -count=1 -coverprofile=../../cov-decree.out -covermode=atomic & pids+=($!)
           fail=0
           for pid in "${pids[@]}"; do wait "$pid" || fail=1; done
@@ -276,7 +277,7 @@ jobs:
       - name: Merge coverage profiles
         run: |
           echo "mode: atomic" > coverage.out
-          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-grpctransport.out cov-tools.out cov-decree.out; do
+          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-grpctransport.out cov-tools.out cov-contrib-viper.out cov-decree.out; do
             [ -f "$f" ] && grep -v "^mode:" "$f" >> coverage.out || true
           done
 
