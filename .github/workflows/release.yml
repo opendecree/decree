@@ -461,3 +461,39 @@ jobs:
           path: |
             bench-e2e.txt
             bench-e2e-stats.txt
+
+  # Fires repository_dispatch events to decree-python, decree-typescript,
+  # and demos so they can regenerate proto stubs and open PRs automatically.
+  dispatch-sdk-regen:
+    name: Dispatch SDK stub regen
+    needs: [binaries, release-notes]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Dispatch to decree-python
+        # peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        with:
+          token: ${{ secrets.PROJECT_TOKEN }}
+          repository: opendecree/decree-python
+          event-type: decree-released
+          client-payload: '{"version": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}'
+
+      - name: Dispatch to decree-typescript
+        # peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        with:
+          token: ${{ secrets.PROJECT_TOKEN }}
+          repository: opendecree/decree-typescript
+          event-type: decree-released
+          client-payload: '{"version": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}'
+
+      - name: Dispatch to demos
+        # peter-evans/repository-dispatch@v3
+        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        with:
+          token: ${{ secrets.PROJECT_TOKEN }}
+          repository: opendecree/demos
+          event-type: decree-released
+          client-payload: '{"version": "${{ github.ref_name }}", "sha": "${{ github.sha }}"}'
