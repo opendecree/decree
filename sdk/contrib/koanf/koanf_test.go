@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	koanfcontrib "github.com/opendecree/decree/sdk/contrib/koanf"
 	"github.com/opendecree/decree/sdk/configclient"
+	koanfcontrib "github.com/opendecree/decree/sdk/contrib/koanf"
 )
 
 // fakeTransport is a minimal Transport implementation for tests.
