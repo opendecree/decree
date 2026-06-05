@@ -1,0 +1,92 @@
+name: Duplicate discussion check
+
+on:
+  discussion:
+    types: [created]
+
+permissions:
+  discussions: write
+
+jobs:
+  check-duplicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Find similar discussions
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const discussion = context.payload.discussion;
+            const title = discussion.title || '';
+
+            // Extract meaningful keywords from the title
+            const STOP_WORDS = new Set([
+              'is', 'a', 'the', 'for', 'in', 'on', 'with', 'how', 'do',
+              'does', 'can', 'to', 'of', 'and', 'or', 'it', 'at', 'by',
+              'an', 'be', 'as', 'from', 'that', 'this', 'what', 'why',
+              'when', 'where', 'which', 'who', 'will', 'are', 'was',
+              'not', 'my', 'we', 'i', 'you',
+            ]);
+
+            const keywords = title
+              .toLowerCase()
+              .replace(/[^a-z0-9\s]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w.length > 1 && !STOP_WORDS.has(w))
+              .slice(0, 5);
+
+            if (keywords.length < 2) {
+              core.info('Title too short or no meaningful keywords; skipping duplicate check.');
+              return;
+            }
+
+            const searchQuery = `repo:opendecree/decree is:discussion ${keywords.join(' ')}`;
+            core.info(`Search query: ${searchQuery}`);
+
+            let items;
+            try {
+              const results = await github.rest.search.issuesAndPullRequests({
+                q: searchQuery,
+                per_page: 5,
+              });
+              items = results.data.items;
+            } catch (err) {
+              core.warning(`Search API error (skipping): ${err.message}`);
+              return;
+            }
+
+            // Filter out the current discussion
+            const matches = items
+              .filter(item => item.number !== discussion.number)
+              .slice(0, 3);
+
+            if (matches.length === 0) {
+              core.info('No similar discussions found; no comment posted.');
+              return;
+            }
+
+            const bulletList = matches
+              .map(item => `- [${item.title}](${item.html_url})`)
+              .join('\n');
+
+            const commentBody = [
+              '👋 Before the community answers, here are some existing discussions that might cover your question:',
+              '',
+              bulletList,
+              '',
+              'If none of these answer your question, feel free to continue the discussion!',
+            ].join('\n');
+
+            await github.graphql(`
+              mutation AddComment($discussionId: ID!, $body: String!) {
+                addDiscussionComment(input: {discussionId: $discussionId, body: $body}) {
+                  comment { id }
+                }
+              }
+            `, {
+              discussionId: discussion.node_id,
+              body: commentBody,
+            });
+
+            core.info(`Posted duplicate-discussion comment on discussion #${discussion.number}`);

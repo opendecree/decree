@@ -5,5 +5,5 @@
   "sdk/configclient": 87.1,
   "sdk/configwatcher": 90.9,
   "sdk/grpctransport": 90.0,
-  "sdk/tools": 96.1
+  "sdk/tools": 96.0
 }

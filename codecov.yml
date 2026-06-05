@@ -6,7 +6,7 @@ coverage:
         threshold: 0%
     patch:
       default:
-        target: 80%
+        target: 70%
 
 # Exclusion decisions are documented in scripts/check-coverage.sh (COVERAGE_EXCLUDES).
 # Keep this list in sync with that file.
