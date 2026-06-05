@@ -95,8 +95,12 @@ func TestGroup_Fill_TypeMismatch(t *testing.T) {
 		},
 	}
 	w := New(tr, "t1")
-	type A struct{ X string `decree:"x"` }
-	type B struct{ X string `decree:"x"` }
+	type A struct {
+		X string `decree:"x"`
+	}
+	type B struct {
+		X string `decree:"x"`
+	}
 
 	g, err := w.NewGroup(&A{})
 	if err != nil {
