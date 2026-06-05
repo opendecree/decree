@@ -21,6 +21,15 @@ The gRPC service is now available at `localhost:9090`. No JWT setup needed — t
 
 ## 2. Install the CLI
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap opendecree/tap
+brew install decree
+```
+
+### Go install
+
 ```bash
 go install github.com/opendecree/decree/cmd/decree@latest
 ```
