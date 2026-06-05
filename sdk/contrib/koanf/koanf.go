@@ -1,4 +1,4 @@
-// Package koanfcontrib provides a koanf provider backed by an OpenDecree
+// Package koanfcontrib provides a koanf v2 provider backed by an OpenDecree
 // configclient. It implements the koanf.Provider interface so that decree
 // configuration values can be loaded directly into a koanf instance.
 //
