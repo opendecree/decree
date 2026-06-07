@@ -11,17 +11,21 @@ By default, OpenDecree trusts identity from gRPC metadata headers. This is desig
 | Header | Required | Description |
 |--------|----------|-------------|
 | `x-subject` | Yes | Actor identity (e.g., `admin@example.com`) |
-| `x-role` | No | `superadmin` (default), `admin`, or `user` |
+| `x-role` | No | `superadmin`, `admin`, or `user` (default `user`) |
 | `x-tenant-id` | Conditional | Required for `admin` and `user` roles |
 
-When `x-role` is omitted, the request defaults to `superadmin`. This makes local development frictionless -- you only need to set `x-subject`.
+When `x-role` is omitted, the request defaults to `user` -- the least-privileged role. This is the safe default: a caller that forgets to set a role gets read-only access, not full control. Because `user` is tenant-scoped, a request that sends **only** `x-subject` (no `x-role`, no `x-tenant-id`) is **rejected** with `PermissionDenied` (`x-tenant-id required for non-superadmin`).
 
-With the CLI:
+To act as a superadmin you must set `x-role: superadmin` explicitly.
+
+> **Restoring the old default (discouraged).** Earlier versions defaulted a missing `x-role` to `superadmin`. To restore that behaviour during a migration window, set `DECREE_INSECURE_DEFAULT_SUPERADMIN=1` on the server. This is insecure -- any client that omits `x-role` is silently granted superadmin -- and logs a `WARN` on startup and on every request that uses the fallback. Never enable it in production; remove it once callers send explicit roles. See [Server Configuration](../server/configuration.md#authentication) and the [Migration Guide](../../MIGRATION.md).
+
+With the CLI, local development stays frictionless because the `decree` CLI defaults `--role` to `superadmin` (overridable via the `--role` flag or `DECREE_ROLE` env var) -- so a superadmin role is sent for you. This is a CLI default, not a server default; raw gRPC clients get `user` unless they set `x-role` themselves.
 
 ```bash
 export DECREE_SUBJECT=admin@example.com    # x-subject
-export DECREE_ROLE=admin                   # x-role (optional)
-export DECREE_TENANT=<tenant-id>           # x-tenant-id (optional)
+export DECREE_ROLE=admin                   # x-role (optional; CLI default is superadmin)
+export DECREE_TENANT_ID=<tenant-id>        # x-tenant-id (required for admin/user)
 ```
 
 ### JWT (Opt-in)
@@ -83,12 +87,14 @@ The admin can still change the field to other allowed enum values (e.g., USD, EU
 
 ### For Local Development
 
-No configuration needed. Metadata auth is the default:
+No server configuration needed -- metadata auth is the default. The `decree` CLI sends `x-role: superadmin` by default (see [Two Auth Modes](#metadata-headers-default) above), so you only need to set a subject:
 
 ```bash
 export DECREE_SUBJECT=dev@example.com
 decree config get-all <tenant-id>
 ```
+
+A raw gRPC client gets the `user` role unless it sets `x-role`, so it must also send `x-tenant-id` (or set `x-role: superadmin`) to avoid a `PermissionDenied` rejection.
 
 ### For Staging / Internal Services
 
