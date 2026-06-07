@@ -28,6 +28,9 @@ services:
 
   migrate:
     image: ${TOOLS_IMAGE:-decree-tools}
+    build:
+      context: .
+      dockerfile: build/Dockerfile.tools
     depends_on:
       postgres:
         condition: service_healthy

@@ -7,7 +7,9 @@ OpenDecree integrates with OpenTelemetry for distributed tracing, metrics, and l
 Enable everything with Docker Compose:
 
 ```bash
-# Start the service with OTel Collector and Jaeger
+# Start the service with OTel Collector and Jaeger.
+# The first run builds the server and migration images from source
+# (a few minutes); later runs reuse the cached images.
 docker compose up -d --wait service otel-collector jaeger
 ```
 
