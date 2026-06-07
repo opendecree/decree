@@ -48,10 +48,10 @@ nav:
   - API Reference: api/api-reference.md
   - SDKs: sdk.md
   - CLI Reference:
+      - Guide: cli/guide.md
       - decree: cli/decree.md
       - Schema:
           - decree schema: cli/decree_schema.md
-          - decree schema create: cli/decree_schema_create.md
           - decree schema get: cli/decree_schema_get.md
           - decree schema list: cli/decree_schema_list.md
           - decree schema publish: cli/decree_schema_publish.md
@@ -85,6 +85,22 @@ nav:
           - decree audit query: cli/decree_audit_query.md
           - decree audit usage: cli/decree_audit_usage.md
           - decree audit unused: cli/decree_audit_unused.md
+          - decree audit verify: cli/decree_audit_verify.md
+      - Server:
+          - decree server: cli/decree_server.md
+          - decree server info: cli/decree_server_info.md
+      - decree diff: cli/decree_diff.md
+      - decree docgen: cli/decree_docgen.md
+      - decree validate: cli/decree_validate.md
+      - decree seed: cli/decree_seed.md
+      - decree dump: cli/decree_dump.md
+      - decree version: cli/decree_version.md
+      - Completion:
+          - decree completion: cli/decree_completion.md
+          - decree completion bash: cli/decree_completion_bash.md
+          - decree completion zsh: cli/decree_completion_zsh.md
+          - decree completion fish: cli/decree_completion_fish.md
+          - decree completion powershell: cli/decree_completion_powershell.md
   - Use Cases:
       - Config as Code: usecases/config-as-code.md
   - Server:

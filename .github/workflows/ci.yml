@@ -361,6 +361,10 @@ jobs:
 
       - name: Regenerate docs
         run: |
+          # Wipe generated CLI + man dirs first so removed commands leave no
+          # orphan pages — gen-docs only writes, never deletes, so without this
+          # the freshness diff below cannot detect deletions.
+          rm -rf docs/cli docs/man
           buf generate --template buf.gen.doc.yaml
           make docs-cli docs-man
 
