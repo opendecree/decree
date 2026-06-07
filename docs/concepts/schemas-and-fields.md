@@ -81,7 +81,7 @@ See [Typed Values](typed-values.md) for the wire-level `TypedValue` oneof and [S
 Two complementary mechanisms cover cross-field invariants:
 
 - **`dependentRequired:`** — declarative "if A is set, B must also be set". Free, no expression engine. Use for the simple cases.
-- **`validations:`** — reserved for cross-field rules expressed in [CEL](https://github.com/google/cel-spec). Use for arithmetic comparisons (`min < max`) and other invariants `dependentRequired` cannot express. The runtime engine ships in Phase 2; v0.1.0 reserves the key.
+- **`validations:`** — cross-field rules expressed in [CEL](https://github.com/google/cel-spec). Use for arithmetic comparisons (`min < max`) and other invariants `dependentRequired` cannot express. Compiled and linted at import and enforced on every config write — a failing rule rejects the write.
 
 See [Schema Format — Cross-field rules](schema-format.md#cross-field-rules) for syntax and semantics.
 

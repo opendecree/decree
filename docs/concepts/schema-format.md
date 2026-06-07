@@ -47,7 +47,7 @@ fields:                                         # required, ≥1 entry
 dependentRequired:                              # optional
   payments.refunds_enabled: [payments.refund_window]
 
-validations:                                    # optional, reserved for Phase 2
+validations:                                    # optional, CEL cross-field rules (enforced on write)
   - path: payments
     rule: "self.payments.min < self.payments.max"
     message: "min must be less than max"
@@ -69,7 +69,7 @@ x-vendor-key: "any extension data"              # x-* allowed at every level
 | `version_description` | optional | Description of what changed in this version. |
 | `info` | optional | Ownership metadata — see [Info Object](#info-object). |
 | `dependentRequired` | optional | Cross-field "B required when A present" rules — see [Cross-field rules](#cross-field-rules). |
-| `validations` | optional | Reserved for CEL expression rules; engine ships in Phase 2 (issue [#76](https://github.com/opendecree/decree/issues/76)). |
+| `validations` | optional | CEL expression rules for cross-field invariants. Compiled and linted at import, enforced on every config write — see [validations (CEL)](#validations-cel). |
 
 Unknown top-level keys are rejected at import unless they begin with the `x-` prefix.
 
@@ -216,7 +216,7 @@ Semantics:
 
 ### validations (CEL)
 
-Reserved for cross-field rules expressed in [Common Expression Language](https://github.com/google/cel-spec). The schema-format key is reserved in v0.1.0; the runtime engine ships in Phase 2 (issue [#76](https://github.com/opendecree/decree/issues/76)). v0.1.0 schemas with `validations:` parse and persist; rules become no-ops at write time until the engine ships.
+Cross-field rules expressed in [Common Expression Language](https://github.com/google/cel-spec). Rules are compiled and linted at `ImportSchema` and **enforced on every config write** — a failing rule rejects the write with `InvalidArgument`.
 
 ```yaml
 validations:
@@ -228,6 +228,29 @@ validations:
 ```
 
 Reach for `validations:` when `dependentRequired:` cannot express the rule — typically arithmetic comparisons (`min < max`), conditional requirement based on a value (`if env == "prod" then audit_url required`), or multi-field invariants. See [`.agents/context/cel-validation.md`](https://github.com/opendecree/decree/blob/main/.agents/context/cel-validation.md) for the full design.
+
+#### Rule fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `rule` | required | CEL expression. Must evaluate to a `bool` and reference at least one `self.*` field. A rule that returns `true` passes; `false` rejects the write. |
+| `message` | required | Human-readable failure message returned to the writer when the rule rejects a write. |
+| `path` | optional | Path prefix scoping the rule to a group of fields. Empty means schema scope. |
+| `severity` | optional | `error` (default) or `warning`. Validated at import. **Note:** the runtime currently treats every failing rule as blocking regardless of `severity` — the non-blocking `warning` path is not yet wired, so a `severity: warning` rule still rejects the write today. |
+| `reason` | optional | Machine-readable failure code for SDK consumers that want to branch on outcome. Stored and round-tripped on the rule; it is not (yet) included in the `InvalidArgument` error text — surface `message` to the writer. |
+
+#### Bindings available to a rule
+
+| Binding | Shape | Notes |
+|---------|-------|-------|
+| `self` | nested map keyed by dotted-path segments | The post-merge config snapshot, typed per the field's declared type. An unset field surfaces as CEL `null`. Guard optional fields with `self.x == null` rather than `has(self.x)`. |
+| `tenant` | `{id, name}` | Tenant metadata as strings. |
+
+#### Enforcement
+
+- **Lint at import.** `ImportSchema` rejects rules that fail to compile, do not reference any `self.*` field, reference a `self.<path>` that does not resolve to a declared field, or could be expressed with a native constraint or `dependentRequired` entry instead. Invalid rules are rejected with `InvalidArgument` and the schema is not stored.
+- **Runtime enforcement.** Every config write (`SetField`, `SetFields`, `ImportConfig`, `RollbackToVersion`) evaluates all rules against the post-merge state inside the same transaction. Any rule that returns `false`, errors at runtime, or returns a non-bool value rejects the write with `InvalidArgument`; the failing rules' messages are aggregated into the error.
+- **DoS guards.** Per-rule and aggregate cost limits bound evaluation time and are tunable via the `DECREE_CEL_*` environment variables — see [Server Configuration — Server](../server/configuration.md#server).
 
 ## Named examples
 
