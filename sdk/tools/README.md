@@ -79,12 +79,19 @@ config:
 
 ### dump — export a tenant backup as a seed file
 
-Exports a tenant's schema, config, and (optionally) field locks to a seed-compatible YAML file. The output can be fed directly into `seed.Run` to recreate the tenant elsewhere.
+Returns a `*seed.File` with a tenant's schema, config, and — by default — field locks. Marshal it to YAML with `dump.Marshal`, or pass the `*seed.File` straight to `seed.Run` to recreate the tenant elsewhere.
 
 ```go
 import "github.com/opendecree/decree/sdk/tools/dump"
 
-data, err := dump.Run(ctx, adminClient, tenantID, dump.WithLocks())
+// Field locks are included by default; pass dump.WithoutLocks() to omit them.
+file, err := dump.Run(ctx, adminClient, tenantID)
+if err != nil {
+    log.Fatal(err)
+}
+
+// dump.Run returns a *seed.File. Marshal it to YAML, or hand it to seed.Run directly.
+data, err := dump.Marshal(file)
 if err != nil {
     log.Fatal(err)
 }

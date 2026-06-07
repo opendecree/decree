@@ -43,11 +43,14 @@ tenants, _ := client.ListTenants(ctx, schema.ID)
 
 ## Field locks
 
-Locks prevent tenants from overriding a field beyond a set of allowed values:
+Locks prevent non-superadmin users from modifying a field. Omit the values to lock the whole field, or pass specific enum values to lock only those (a block-list — the listed values can no longer be set; an empty list locks the entire field):
 
 ```go
-// Lock app.tier to "free" — prevents runtime override above the free plan.
-_ = client.LockField(ctx, tenant.ID, "app.tier", "free")
+// Lock the entire app.tier field — non-superadmins can no longer change it.
+_ = client.LockField(ctx, tenant.ID, "app.tier")
+
+// Or lock specific enum values only — here, block setting app.tier to "enterprise".
+_ = client.LockField(ctx, tenant.ID, "app.tier", "enterprise")
 
 locks, _ := client.ListFieldLocks(ctx, tenant.ID)
 ```
