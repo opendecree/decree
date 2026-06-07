@@ -25,9 +25,9 @@ The `chain_epoch` column controls which fields are included in the hash:
 | `0` | Structural fields only: `previous_hash`, `id`, `tenant_id`, `actor`, `action`, `object_kind`, `created_at` |
 | `1` | All of epoch 0 plus payload: `field_path`, `old_value`, `new_value`, `config_version`, `metadata` |
 
-Rows created before migration `003_audit_chain_epoch.sql` have `chain_epoch = 0`
-and retain their original hashes. All new rows use epoch 1, so payload changes
-are detectable.
+Rows written under the epoch-0 hash scheme have `chain_epoch = 0` and retain
+their original hashes. All new rows use epoch 1, so payload changes are
+detectable.
 
 ## Concurrency and linearisation
 
@@ -49,7 +49,7 @@ is always linear.
 
 ```bash
 # Via gRPC (CLI)
-decree admin verify-chain --tenant <tenant-id>
+decree audit verify --tenant <tenant-id>
 
 # Via API
 grpcurl -d '{"tenant_id":"<id>"}' <host> centralconfig.v1.AuditService/VerifyChain

@@ -32,7 +32,7 @@ flowchart TD
     Resolve["Resolved at v3\nenabled = true ← v1\nfee_rate = 0.03 ← v3\ncurrency = USD ← v2"]
 ```
 
-When you read the full config at version 3, the server resolves it by layering all deltas — later versions override earlier ones for the same field. This resolution happens automatically -- `GetAllFields` and `GetField` always return the fully resolved config at the requested version.
+When you read the full config at version 3, the server resolves it by layering all deltas — later versions override earlier ones for the same field. This resolution happens automatically -- `GetConfig` and `GetField` always return the fully resolved config at the requested version.
 
 ## Version Descriptions
 
@@ -58,7 +58,7 @@ You can read config at any past version:
 decree config get-all <tenant-id>
 
 # Config as it was at version 2
-decree config get-all <tenant-id> --version 2
+decree config export <tenant-id> --version 2
 ```
 
 In the SDK:
