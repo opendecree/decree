@@ -225,8 +225,9 @@ Each instance must have access to the same PostgreSQL database and Redis instanc
 |----------|-------------|---------|----------|
 | `JWT_JWKS_URL` | JWKS endpoint URL for JWT validation. Setting this enables JWT auth mode. When unset, the server uses metadata-based auth. | -- | No |
 | `JWT_ISSUER` | Expected JWT `iss` claim. When set, tokens with a different issuer are rejected. | -- | No |
+| `DECREE_INSECURE_DEFAULT_SUPERADMIN` | Set to `1` to restore the pre-v0.10 behaviour where a metadata request with no `x-role` defaults to `superadmin` instead of `user`. **Insecure — migration window only.** Logs a `WARN` on startup and on every request that uses the fallback. Never enable in production. | -- | No |
 
-When `JWT_JWKS_URL` is not set, the server operates in **metadata auth mode** — identity is passed via gRPC metadata headers (`x-subject`, `x-role`, `x-tenant-id`). See [Auth](../concepts/auth.md) for details on both modes.
+When `JWT_JWKS_URL` is not set, the server operates in **metadata auth mode** — identity is passed via gRPC metadata headers (`x-subject`, `x-role`, `x-tenant-id`). A missing `x-role` defaults to the least-privileged `user` role. See [Auth](../concepts/auth.md) for details on both modes.
 
 ## Observability (OpenTelemetry)
 
