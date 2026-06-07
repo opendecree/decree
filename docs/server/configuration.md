@@ -27,14 +27,21 @@ OpenDecree is configured entirely through environment variables. No config files
 | `SCHEMA_MAX_DOC_BYTES` | Maximum serialized YAML document size accepted by `ImportSchema`, in bytes. Requests above this return `InvalidArgument`. Set to `0` to disable. | `5242880` (5 MiB) | No |
 | `SCHEMA_COMPILE_TIMEOUT` | Wall-clock cap on a single JSON-Schema compile (per-field constraint). Format: Go duration (e.g., `5s`, `2s`). Set to `0` to disable the timeout. | `5s` | No |
 | `SCHEMA_MAX_REF_DEPTH` | Maximum structural nesting depth of a JSON-Schema constraint document. Schemas deeper than this are rejected before compilation. Set to `0` to disable. | `64` | No |
+| `SCHEMA_MAX_REMOVE_FIELDS` | Maximum number of fields a single schema update may remove in one request. Requests above this return `InvalidArgument`. Set to `0` to disable. | `1000` | No |
+| `SCHEMA_MAX_CONCURRENT_COMPILES` | Maximum number of JSON-Schema compiles running concurrently across requests. Additional compiles block until a slot frees or the compile timeout fires, bounding goroutine growth under malicious input. Set to `0` to disable the cap. | `32` | No |
+| `CONFIG_MAX_LIST_LEN` | Maximum number of entries in a single batched config request (e.g. `GetFields.field_paths`, `SetFields.updates`). Requests above this return `InvalidArgument`. Set to `0` to disable. | `1000` | No |
+| `CONFIG_MAX_DOC_BYTES` | Maximum serialized YAML document size accepted by `ImportConfig`, in bytes. Requests above this return `InvalidArgument`. Set to `0` to disable. | `5242880` (5 MiB) | No |
+| `CONFIG_MAX_FIELD_VALUE_BYTES` | Maximum size of an individual field value at `ImportConfig`, in bytes. Values above this return `InvalidArgument`. Set to `0` to disable. | `1048576` (1 MiB) | No |
 | `DECREE_CEL_COST_LIMIT` | DoS guard for CEL `validations:` rules. `cel.CostLimit` value used when building each `cel.Program`; evaluation aborts when the rule's internal cost counter exceeds this limit. | `100000` | No |
 | `DECREE_CEL_INTERRUPT_FREQ` | How often the CEL cost counter is sampled while a rule's loops or comprehensions run. Lower values catch runaway evaluation sooner at small per-evaluation overhead. | `100` | No |
+| `DECREE_CEL_AGGREGATE_COST_CAP` | DoS guard bounding the summed CEL cost across all `validations:` rules evaluated in a single write. Evaluation aborts once the running total exceeds this cap, preventing many cheap rules from collectively exhausting CPU. | `1000000` | No |
 
 ## gRPC Server Options
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `ENABLE_REFLECTION` | Set to `1` to enable gRPC server reflection. Allows tools like `grpcurl` to introspect the server's service schema. **Never enable in production** — reflection exposes the full API to any caller regardless of auth. | disabled | No |
+| `GRPC_DEFAULT_TIMEOUT` | Server-side deadline applied to every request whose client did not supply one. Format: Go duration (e.g., `30s`, `5s`). `0` (default) disables the feature. | -- | No |
 
 ## Transport Security (TLS)
 
@@ -177,6 +184,9 @@ Rate limiting is **enabled by default** using an in-process token-bucket limiter
 | `RATE_LIMIT_ANON_RPS` | Requests per second for unauthenticated callers (shared global bucket per method). | `10` | No |
 | `RATE_LIMIT_AUTHED_RPS` | Requests per second per tenant for authenticated callers. | `100` | No |
 | `RATE_LIMIT_SUPERADMIN_RPS` | Requests per second per superadmin identity. `0` = unlimited. | `0` | No |
+| `RATE_LIMIT_GLOBAL_RPS` | Requests per second for a single process-wide bucket per method, applied across all callers before role-specific limits. `0` = no global cap. | `0` | No |
+| `RATE_LIMIT_PREAUTH_RPS` | Requests per second for an anonymous, per-IP limiter applied before authentication runs (protects the auth path itself). `0` = disabled. | `0` | No |
+| `RATE_LIMIT_TRUSTED_PROXY` | Set to `1` to derive the anonymous caller's IP from the `x-forwarded-for` header (first hop) instead of the gRPC peer address. **⚠️ Security-sensitive** — see [Security-Sensitive Settings](#security-sensitive-settings). | -- | No |
 | `RATE_LIMIT_BURST` | Token bucket burst size (applies to all role classes). | `10` | No |
 
 Rejected requests return `codes.ResourceExhausted` with a `RetryInfo` detail (1 s retry hint). The in-process limiter does not share state across replicas; for multi-replica deployments, implement the `Limiter` interface backed by Redis.
@@ -199,6 +209,20 @@ HTTP_PORT=8080 decree-server
 
 # Access Swagger UI
 open http://localhost:8080/docs
+```
+
+### Admin GUI
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `ENABLE_UI` | Set to `1` to serve the embedded admin GUI at `/admin/` (with SPA client-side routing). Requires the REST/JSON gateway (`HTTP_PORT`) to be enabled. | disabled | No |
+
+```bash
+# Enable the admin GUI alongside the gateway
+HTTP_PORT=8080 ENABLE_UI=1 decree-server
+
+# Open the GUI
+open http://localhost:8080/admin/
 ```
 
 ### Split Read/Write Database
@@ -225,9 +249,29 @@ Each instance must have access to the same PostgreSQL database and Redis instanc
 |----------|-------------|---------|----------|
 | `JWT_JWKS_URL` | JWKS endpoint URL for JWT validation. Setting this enables JWT auth mode. When unset, the server uses metadata-based auth. | -- | No |
 | `JWT_ISSUER` | Expected JWT `iss` claim. When set, tokens with a different issuer are rejected. | -- | No |
-| `DECREE_INSECURE_DEFAULT_SUPERADMIN` | Set to `1` to restore the pre-v0.10 behaviour where a metadata request with no `x-role` defaults to `superadmin` instead of `user`. **Insecure — migration window only.** Logs a `WARN` on startup and on every request that uses the fallback. Never enable in production. | -- | No |
+| `JWT_AUDIENCE` | Expected JWT `aud` claim. When set, tokens whose audience does not match are rejected. Only applies in JWT auth mode. | -- | No |
+| `JWT_LEEWAY` | Clock-skew tolerance applied to the `exp`, `nbf`, and `iat` claims. Format: Go duration (e.g., `30s`, `1m`). When unset, a `60s` default applies. Only used in JWT auth mode. | `60s` | No |
+| `DECREE_INSECURE_DEFAULT_SUPERADMIN` | Set to `1` to restore the pre-v0.10 behaviour where a metadata request with no `x-role` defaults to `superadmin` instead of `user`. **⚠️ Insecure — migration window only.** Logs a `WARN` on startup and on every request that uses the fallback. Never enable in production. See [Security-Sensitive Settings](#security-sensitive-settings). | -- | No |
 
 When `JWT_JWKS_URL` is not set, the server operates in **metadata auth mode** — identity is passed via gRPC metadata headers (`x-subject`, `x-role`, `x-tenant-id`). A missing `x-role` defaults to the least-privileged `user` role. See [Auth](../concepts/auth.md) for details on both modes.
+
+## Security-Sensitive Settings
+
+A handful of settings weaken the server's default security posture and must only be enabled when you understand the trade-off. Two in particular trust client-supplied input and should **never** be enabled in production without a correctly configured upstream.
+
+### `RATE_LIMIT_TRUSTED_PROXY`
+
+When set to `1`, the anonymous rate limiter derives the caller's IP from the `x-forwarded-for` request header (first hop) instead of the real gRPC peer address. This is correct **only** when a trusted reverse proxy sits in front of the server and *overwrites* `x-forwarded-for` with the true client IP.
+
+**Risk:** if no such proxy is in place (or it appends rather than overwrites the header), any caller can spoof `x-forwarded-for` to present a unique IP per request and **completely bypass per-IP anonymous rate limiting** — including the pre-auth limiter (`RATE_LIMIT_PREAUTH_RPS`) that protects the authentication path. Leave this **unset** unless you control the proxy in front of the server.
+
+### `DECREE_INSECURE_DEFAULT_SUPERADMIN`
+
+When set to `1`, a metadata-mode request that omits `x-role` is treated as `superadmin` instead of the default least-privileged `user`. This restores the pre-v0.10 behaviour and exists only as a short-term migration aid.
+
+**Risk:** any caller that can reach the server with no `x-role` header gains **full superadmin privileges**. The server logs a `WARN` on startup and on every request that uses the fallback. This is a migration-window-only escape hatch — **never enable it in production**, and remove it as soon as all clients send an explicit `x-role`.
+
+> This project is **alpha** — security defaults and the settings above are subject to change.
 
 ## Observability (OpenTelemetry)
 
