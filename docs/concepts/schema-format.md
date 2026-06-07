@@ -17,7 +17,7 @@ Place the modeline on line 1 of every file so editors with [yaml-language-server
 # yaml-language-server: $schema=https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json
 ```
 
-The CLI is filename-agnostic — `decree apply some-other-name.yaml` keeps working. The convention drives editor discovery only.
+The CLI is filename-agnostic — `decree schema import some-other-name.yaml` keeps working. The convention drives editor discovery only.
 
 ## Top-level shape
 

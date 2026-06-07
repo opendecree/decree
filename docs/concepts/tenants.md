@@ -60,10 +60,11 @@ This matters because schema versions can add, remove, or change fields. Pinning 
 
 ## Upgrading Schema Versions
 
-To upgrade a tenant to a newer schema version:
+To upgrade a tenant to a newer schema version, use the admin SDK (or the `UpdateTenant` gRPC RPC directly):
 
-```bash
-decree tenant update <tenant-id> --schema-version 2
+```go
+// Upgrade the tenant to schema version 2
+tenant, err := admin.UpdateTenantSchema(ctx, tenantID, 2)
 ```
 
 What happens during an upgrade:

@@ -36,7 +36,7 @@ The simplest way to watch for changes:
 decree watch <tenant-id>
 
 # Watch specific fields
-decree watch <tenant-id> --fields payments.fee_rate,payments.enabled
+decree watch <tenant-id> payments.fee_rate payments.enabled
 ```
 
 The CLI prints each change as it happens, showing the field path, old value, new value, who made the change, and when.
