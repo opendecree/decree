@@ -7,7 +7,10 @@ OpenDecree is a single Go binary with two external dependencies: PostgreSQL and 
 Run with in-memory storage — zero external dependencies:
 
 ```bash
+# go install names the server binary "server" after its directory; the canonical
+# name is decree-server, matching the release archives and Docker image.
 go install github.com/opendecree/decree/cmd/server@latest
+mv "$(go env GOPATH)/bin/server" "$(go env GOPATH)/bin/decree-server"
 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
 
 # Swagger UI: http://localhost:8080/docs
