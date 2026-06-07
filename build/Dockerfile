@@ -15,14 +15,14 @@ ARG COMMIT=unknown
 COPY . .
 RUN CGO_ENABLED=0 go build \
     -ldflags "-s -w -X github.com/opendecree/decree/internal/version.Version=${VERSION} -X github.com/opendecree/decree/internal/version.Commit=${COMMIT}" \
-    -o /bin/decree ./cmd/server
+    -o /bin/decree-server ./cmd/server
 
 # Runtime stage
 # gcr.io/distroless/static-debian12:nonroot
 FROM gcr.io/distroless/static-debian12@sha256:9c346e4be81b5ca7ff31a0d89eaeade58b0f95cfd3baed1f36083ddb47ca3160
 
-COPY --from=builder /bin/decree /bin/decree
+COPY --from=builder /bin/decree-server /bin/decree-server
 
 USER nonroot:nonroot
 
-ENTRYPOINT ["/bin/decree"]
+ENTRYPOINT ["/bin/decree-server"]
