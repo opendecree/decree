@@ -15,7 +15,11 @@
   <a href="https://codespaces.new/opendecree/decree"><img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces"></a>
 </p>
 
-<p align="center"><strong>Define your config schema once. Get validation, APIs, type-safe SDKs, admin UI, and audit trail — automatically.</strong></p>
+<p align="center"><strong>Stop hard-coding fees, limits, and business rules — and redeploying every time one changes.</strong></p>
+
+<p align="center">Define your business-config schema once and get validation, gRPC + REST APIs, type-safe SDKs, an admin UI, and a full audit trail — automatically.</p>
+
+<p align="center"><em>Typed business configuration: the layer between feature flags and infrastructure config.</em></p>
 
 > **Alpha Software** — OpenDecree is under active development. APIs, proto definitions, configuration formats, and behavior may change without notice between versions. Not recommended for production use yet.
 
@@ -82,6 +86,28 @@ const enabled = await client.get(tenantId, "payments.enabled", Boolean);
 
 ---
 
+## Why OpenDecree?
+
+OpenDecree manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters: the config that lives between your infrastructure settings and your application code. It sits between feature flags (release toggles) and infrastructure config (low-level key-value), purpose-built for **typed business configuration**.
+
+| Capability | Feature Flags | Infrastructure Config\* | **OpenDecree** |
+|---|---|---|---|
+| Typed values | bool / variant only | strings only | ✓ native types (int, number, string, bool, time, duration, url, json) |
+| Schema validation | ✗ | ✗ | ✓ constraints + JSON Schema, enforced on every write |
+| Multi-tenant | limited (segments) | ✗ | ✓ first-class, with field-level locking |
+| Audit trail | limited | ✗ | ✓ full who/what/when/why history |
+| Real-time updates | ✓ SDK polling/SSE | ✓ watch APIs | ✓ gRPC streaming subscriptions |
+| Admin UI | ✓ (vendor-hosted) | ✗ | ✓ open-source admin GUI |
+| Versioning + rollback | limited | ✗ | ✓ every change versioned, rollback to any state |
+
+\* Cloud config services (AWS AppConfig, Azure App Configuration) offer limited validation, but lack schema registries, multi-tenancy, and gRPC streaming — and are vendor-locked. Examples by category: feature flags (LaunchDarkly, ConfigCat, Flagsmith); infrastructure config (etcd, Consul, Spring Cloud Config, AWS AppConfig, Azure App Configuration).
+
+**What makes OpenDecree unique:** no other open-source tool combines schema-first typed configuration with native multi-tenancy, field-level locking, gRPC streaming, and versioned rollback in a single Go binary.
+
+Beyond the table, OpenDecree also includes **import/export** of portable YAML schemas and configs, **optimistic concurrency** (checksum-validated read-modify-write), and **first-class null support** (null and empty string are distinct values).
+
+---
+
 ## Quick Start
 
 ### Try it instantly (no Docker needed)
@@ -126,42 +152,6 @@ brew install opendecree/tap/decree
 # Download binary
 # https://github.com/opendecree/decree/releases/latest
 ```
-
----
-
-## What is this?
-
-OpenDecree manages **business-oriented configuration** — approval rules, fee structures, settlement windows, feature parameters — the kind of config that lives between your infrastructure settings and your application code.
-
-OpenDecree sits between feature flags (release toggles) and infrastructure config (low-level key-value) — purpose-built for **typed business configuration**.
-
-| Capability | Feature Flags | Infrastructure Config\* | **OpenDecree** |
-|---|---|---|---|
-| Typed values | bool / variant only | strings only | ✓ native types (int, number, string, bool, time, duration, url, json) |
-| Schema validation | ✗ | ✗ | ✓ constraints + JSON Schema, enforced on every write |
-| Multi-tenant | limited (segments) | ✗ | ✓ first-class, with field-level locking |
-| Audit trail | limited | ✗ | ✓ full who/what/when/why history |
-| Real-time updates | ✓ SDK polling/SSE | ✓ watch APIs | ✓ gRPC streaming subscriptions |
-| Admin UI | ✓ (vendor-hosted) | ✗ | ✓ open-source admin GUI |
-| Versioning + rollback | limited | ✗ | ✓ every change versioned, rollback to any state |
-
-Examples by category: feature flags (LaunchDarkly, ConfigCat, Flagsmith), infrastructure config (etcd, Consul, Spring Cloud Config, AWS AppConfig, Azure App Configuration).
-
-\* Cloud config services (AWS AppConfig, Azure App Configuration) offer limited validation, but lack schema registries, multi-tenancy, and gRPC streaming — and are vendor-locked.
-
-**What makes OpenDecree unique:** no other open-source tool combines schema-first typed configuration with native multi-tenancy, field-level locking, gRPC streaming, and versioned rollback in a single Go binary.
-
-### Features
-
-- **Typed values** — native proto types (integer, number, string, bool, timestamp, duration, url, json) with wire-level type safety
-- **Schema validation** — constraints (min/max, pattern, enum, JSON Schema) enforced on every write
-- **Multi-tenancy** — apply schemas to tenants with role-based access and field-level locking
-- **Versioned configs** — every change creates a version; rollback to any previous state
-- **Real-time subscriptions** — gRPC streaming pushes changes to consumers instantly
-- **Audit trail** — full history of who changed what, when, and why
-- **Import/Export** — portable schemas and configs in YAML format
-- **Optimistic concurrency** — safe read-modify-write with checksum validation
-- **Null support** — null and empty string are distinct values
 
 ---
 
