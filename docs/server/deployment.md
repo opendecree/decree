@@ -25,7 +25,9 @@ The repository includes a `docker-compose.yml` that starts the full stack:
 git clone https://github.com/opendecree/decree.git
 cd decree
 
-# Start everything: PostgreSQL, Redis, migrations, and the service
+# Start everything: PostgreSQL, Redis, migrations, and the service.
+# The first run builds the server and migration images from source
+# (a few minutes); later runs reuse the cached images.
 docker compose up -d --wait service
 ```
 

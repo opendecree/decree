@@ -13,7 +13,9 @@ This guide walks you through setting up OpenDecree, creating your first schema a
 git clone https://github.com/opendecree/decree.git
 cd decree
 
-# Start PostgreSQL, Redis, run migrations, and start the service
+# Start PostgreSQL, Redis, run migrations, and start the service.
+# The first run builds the server and migration images from source,
+# so it may take a few minutes; subsequent runs reuse the cached images.
 docker compose up -d --wait service
 ```
 
