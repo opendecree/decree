@@ -199,7 +199,8 @@ func (c *Client) GetUnusedFields(ctx context.Context, tenantID string, since tim
 // authoritative head hash; VerifyChain does not attempt to detect it.
 //
 // Note: entry_hash and previous_hash fields require the server to be running
-// with migration 002_audit_tamper_evident applied.
+// with its database schema up to date so the tamper-evident hash columns are
+// populated.
 func (c *Client) VerifyChain(ctx context.Context, tenantID string) (VerifyChainResult, error) {
 	if c.audit == nil {
 		return VerifyChainResult{}, ErrServiceNotConfigured
