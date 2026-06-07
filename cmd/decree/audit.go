@@ -96,7 +96,8 @@ var auditVerifyCmd = &cobra.Command{
 	Long: `Fetches all audit entries for the tenant (or the global chain if --tenant is
 omitted), recomputes each entry_hash, and reports any breaks.
 
-Requires migration 002_audit_tamper_evident to be applied.`,
+Requires the server's database schema to be up to date so that the tamper-evident
+hash columns are populated.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		conn, err := dialServer()
 		if err != nil {
