@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opendecree/decree/sdk/tools/internal/format"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
@@ -498,16 +499,16 @@ func validateEnum(result *Result, path string, value any, enum []string) {
 
 func validateNumericConstraints(result *Result, path string, n float64, c *ConstraintsDef) {
 	if c.Minimum != nil && n < *c.Minimum {
-		result.add(path, fmt.Sprintf("value %s is less than minimum %s", formatFloat(n), formatFloat(*c.Minimum)))
+		result.add(path, fmt.Sprintf("value %s is less than minimum %s", format.Float(n), format.Float(*c.Minimum)))
 	}
 	if c.Maximum != nil && n > *c.Maximum {
-		result.add(path, fmt.Sprintf("value %s exceeds maximum %s", formatFloat(n), formatFloat(*c.Maximum)))
+		result.add(path, fmt.Sprintf("value %s exceeds maximum %s", format.Float(n), format.Float(*c.Maximum)))
 	}
 	if c.ExclusiveMinimum != nil && n <= *c.ExclusiveMinimum {
-		result.add(path, fmt.Sprintf("value %s must be greater than %s", formatFloat(n), formatFloat(*c.ExclusiveMinimum)))
+		result.add(path, fmt.Sprintf("value %s must be greater than %s", format.Float(n), format.Float(*c.ExclusiveMinimum)))
 	}
 	if c.ExclusiveMaximum != nil && n >= *c.ExclusiveMaximum {
-		result.add(path, fmt.Sprintf("value %s must be less than %s", formatFloat(n), formatFloat(*c.ExclusiveMaximum)))
+		result.add(path, fmt.Sprintf("value %s must be less than %s", format.Float(n), format.Float(*c.ExclusiveMaximum)))
 	}
 }
 
@@ -564,17 +565,10 @@ func stringifyForEnum(value any) string {
 	case uint64:
 		return strconv.FormatUint(v, 10)
 	case float64:
-		return formatFloat(v)
+		return format.Float(v)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
-}
-
-func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return fmt.Sprintf("%d", int64(f))
-	}
-	return fmt.Sprintf("%g", f)
 }
 
 func sortedKeys[V any](m map[string]V) []string {

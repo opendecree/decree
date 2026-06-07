@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/opendecree/decree/sdk/tools/internal/format"
 )
 
 // Schema is the input to documentation generation.
@@ -301,16 +303,16 @@ func writeConstraints(b *strings.Builder, c *Constraints) {
 	var lines []string
 
 	if c.Min != nil {
-		lines = append(lines, fmt.Sprintf("Minimum: %s", formatFloat(*c.Min)))
+		lines = append(lines, fmt.Sprintf("Minimum: %s", format.Float(*c.Min)))
 	}
 	if c.Max != nil {
-		lines = append(lines, fmt.Sprintf("Maximum: %s", formatFloat(*c.Max)))
+		lines = append(lines, fmt.Sprintf("Maximum: %s", format.Float(*c.Max)))
 	}
 	if c.ExclusiveMin != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive minimum: %s", formatFloat(*c.ExclusiveMin)))
+		lines = append(lines, fmt.Sprintf("Exclusive minimum: %s", format.Float(*c.ExclusiveMin)))
 	}
 	if c.ExclusiveMax != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive maximum: %s", formatFloat(*c.ExclusiveMax)))
+		lines = append(lines, fmt.Sprintf("Exclusive maximum: %s", format.Float(*c.ExclusiveMax)))
 	}
 	if c.MinLength != nil {
 		lines = append(lines, fmt.Sprintf("Min length: %d", *c.MinLength))
@@ -342,15 +344,4 @@ func yesNo(v bool) string {
 		return "yes"
 	}
 	return "no"
-}
-
-// formatFloat formats a float64 for display, omitting the decimal point when
-// the value is a whole number.
-// TODO: this is byte-identical to validate.formatFloat; if a shared internal
-// package is added to sdk/tools, hoist both copies there. (#852)
-func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return fmt.Sprintf("%d", int64(f))
-	}
-	return fmt.Sprintf("%g", f)
 }

@@ -896,23 +896,6 @@ func TestViolation_Error_NoField(t *testing.T) {
 	}
 }
 
-func TestFormatFloat(t *testing.T) {
-	tests := []struct {
-		in   float64
-		want string
-	}{
-		{42, "42"},
-		{3.14, "3.14"},
-		{0, "0"},
-		{-1, "-1"},
-	}
-	for _, tt := range tests {
-		if got := formatFloat(tt.in); got != tt.want {
-			t.Errorf("formatFloat(%v) = %q, want %q", tt.in, got, tt.want)
-		}
-	}
-}
-
 // --- Helpers ---
 
 func assertViolation(t *testing.T, result *Result, field, msgSubstr string) {
