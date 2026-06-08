@@ -2,6 +2,7 @@ package authz_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -14,6 +15,14 @@ import (
 	"github.com/opendecree/decree/internal/authz"
 	"github.com/opendecree/decree/internal/storage/domain"
 )
+
+// lockedValues marshals an enum-value subset the way the store persists it.
+func lockedValues(t *testing.T, vals ...string) []byte {
+	t.Helper()
+	b, err := json.Marshal(vals)
+	require.NoError(t, err)
+	return b
+}
 
 // --- helpers ---
 
@@ -192,6 +201,87 @@ func TestFieldLockGuard_ContextCacheHit_LockedField(t *testing.T) {
 	require.Error(t, err)
 	// Field locks use FailedPrecondition (a precondition on the resource state),
 	// distinct from PermissionDenied (role/tenant access denial).
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+// --- FieldLockGuard: value-scoped (LockedValues) ---
+
+func TestFieldLockGuard_NilLockedValues_LocksWholeField(t *testing.T) {
+	// Raw nil LockedValues is the whole-field lock; any value is blocked.
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: nil}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "anything"})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestFieldLockGuard_EmptyLockedValues_LocksWholeField(t *testing.T) {
+	// A marshaled empty list ("[]") carries no values to scope on, so it behaves
+	// like a whole-field lock: any value is blocked.
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t)}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "anything"})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestFieldLockGuard_ValueScoped_LockedValueBlocked(t *testing.T) {
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t, "red", "blue")}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "blue"})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestFieldLockGuard_ValueScoped_UnlistedValueAllowed(t *testing.T) {
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t, "red", "blue")}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "green"})
+	require.NoError(t, err)
+}
+
+func TestFieldLockGuard_ValueScoped_NullWriteAllowed(t *testing.T) {
+	// A clear/null write carries an empty Value, which matches no listed value.
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t, "red", "blue")}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: ""})
+	require.NoError(t, err)
+}
+
+func TestFieldLockGuard_ValueScoped_SuperAdminBypasses(t *testing.T) {
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t, "red")}},
+	})
+	err := g.Check(superAdminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "red"})
+	require.NoError(t, err)
+}
+
+func TestFieldLockGuard_ValueScoped_UnmarshalErrorFailsClosed(t *testing.T) {
+	// Corrupt LockedValues (not a JSON []string) must block the write, not panic.
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{{TenantID: tenant1, FieldPath: "a.b", LockedValues: []byte("not json")}},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "green"})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
+func TestFieldLockGuard_ValueScoped_OtherLockStillScanned(t *testing.T) {
+	// First lock (value-scoped) does not match the attempted value, but a second
+	// whole-field lock on the same path must still block.
+	g := authz.NewFieldLockGuard(&stubLockStore{
+		locks: []domain.TenantFieldLock{
+			{TenantID: tenant1, FieldPath: "a.b", LockedValues: lockedValues(t, "red")},
+			{TenantID: tenant1, FieldPath: "a.b"},
+		},
+	})
+	err := g.Check(adminCtx(), authz.ActionWrite, authz.Resource{TenantID: tenant1, FieldPath: "a.b", Value: "green"})
+	require.Error(t, err)
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 

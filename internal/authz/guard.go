@@ -21,6 +21,7 @@ const (
 type Resource struct {
 	TenantID  string
 	FieldPath string // non-empty only for field-level checks
+	Value     string // attempted new value, for value-scoped field locks
 }
 
 // Guard is a single authorization check.
