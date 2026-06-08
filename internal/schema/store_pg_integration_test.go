@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -237,6 +238,81 @@ func TestSchemaPGStore(t *testing.T) {
 		require.NoError(t, store.DeleteTenant(ctx, tenant.ID))
 		_, err = store.GetTenantByID(ctx, tenant.ID)
 		require.Error(t, err)
+	})
+
+	t.Run("SeedTenantConfig", func(t *testing.T) {
+		sch, err := store.CreateSchema(ctx, CreateSchemaParams{
+			Name: fmt.Sprintf("schema-seed-%s", t.Name()),
+		})
+		require.NoError(t, err)
+
+		sv, err := store.CreateSchemaVersion(ctx, CreateSchemaVersionParams{
+			SchemaID: sch.ID,
+			Version:  1,
+			Checksum: "seed",
+		})
+		require.NoError(t, err)
+
+		tenant, err := store.CreateTenant(ctx, CreateTenantParams{
+			Name:          fmt.Sprintf("tenant-seed-%s", t.Name()),
+			SchemaID:      sch.ID,
+			SchemaVersion: sv.Version,
+		})
+		require.NoError(t, err)
+
+		err = store.SeedTenantConfig(ctx, SeedTenantConfigParams{
+			TenantID: tenant.ID,
+			Actor:    "seeder",
+			Values: map[string]SeedValue{
+				"app.retries": {Value: "3", Checksum: configValueChecksum("3")},
+				"app.enabled": {Value: "true", Checksum: configValueChecksum("true")},
+			},
+		})
+		require.NoError(t, err)
+
+		// The seeded version + values land in the real config tables. Read them
+		// back with raw SQL (the config store cannot be imported here — it
+		// imports this package — so a direct query proves the rows exist).
+		tenantUUID, err := pgconv.StringToUUID(tenant.ID)
+		require.NoError(t, err)
+
+		var version int32
+		var createdBy string
+		var cvID pgtype.UUID
+		require.NoError(t, pool.QueryRow(ctx,
+			"SELECT id, version, created_by FROM config_versions WHERE tenant_id = $1", tenantUUID,
+		).Scan(&cvID, &version, &createdBy))
+		assert.Equal(t, int32(1), version)
+		assert.Equal(t, "seeder", createdBy)
+
+		valRows, err := pool.Query(ctx,
+			"SELECT field_path, value, checksum FROM config_values WHERE config_version_id = $1", cvID)
+		require.NoError(t, err)
+		defer valRows.Close()
+		got := make(map[string]string)
+		for valRows.Next() {
+			var path, value, checksum string
+			require.NoError(t, valRows.Scan(&path, &value, &checksum))
+			got[path] = value
+			assert.Equal(t, configValueChecksum(value), checksum, "stored checksum must match value")
+		}
+		require.NoError(t, valRows.Err())
+		assert.Equal(t, map[string]string{"app.retries": "3", "app.enabled": "true"}, got)
+
+		// Empty seed is a no-op even against a real DB: no version row is written.
+		t2, err := store.CreateTenant(ctx, CreateTenantParams{
+			Name:          fmt.Sprintf("tenant-seed-empty-%s", t.Name()),
+			SchemaID:      sch.ID,
+			SchemaVersion: sv.Version,
+		})
+		require.NoError(t, err)
+		require.NoError(t, store.SeedTenantConfig(ctx, SeedTenantConfigParams{TenantID: t2.ID, Actor: "seeder"}))
+		t2UUID, err := pgconv.StringToUUID(t2.ID)
+		require.NoError(t, err)
+		var n int
+		require.NoError(t, pool.QueryRow(ctx,
+			"SELECT count(*) FROM config_versions WHERE tenant_id = $1", t2UUID).Scan(&n))
+		assert.Equal(t, 0, n)
 	})
 
 	t.Run("FieldLocks", func(t *testing.T) {

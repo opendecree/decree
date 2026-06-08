@@ -542,6 +542,21 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 		return nil, status.Error(codes.FailedPrecondition, "schema version must be published before assigning to a tenant")
 	}
 
+	// Materialize the schema's per-field defaults so the new tenant starts with
+	// them as config version 1. Defaults are validated here because schema
+	// publish does not validate default_value (it only checks that constraints
+	// match the field type) — see collectDefaultValues / validateDefaultValue.
+	// Fields without a default are left unset; a schema with no defaults seeds
+	// nothing, preserving the pre-defaults behavior (no version 1 is created).
+	fields, err := s.store.GetSchemaFields(ctx, version.ID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to load schema fields")
+	}
+	defaults, err := collectDefaultValues(fields)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "%v", err)
+	}
+
 	actor := s.getActor(ctx)
 	var tenant domain.Tenant
 
@@ -557,6 +572,18 @@ func (s *Service) CreateTenant(ctx context.Context, req *pb.CreateTenantRequest)
 				return status.Error(codes.AlreadyExists, "tenant with this name already exists")
 			}
 			return err
+		}
+		// Seed defaults in the same tx so the tenant and its initial config
+		// commit together. SeedTenantConfig is a no-op when there are no
+		// defaults, so no empty version is written in that case.
+		if len(defaults) > 0 {
+			if err := tx.SeedTenantConfig(ctx, SeedTenantConfigParams{
+				TenantID: tenant.ID,
+				Actor:    actor,
+				Values:   defaults,
+			}); err != nil {
+				return err
+			}
 		}
 		meta, _ := json.Marshal(map[string]any{"name": req.Name, "schema_id": req.SchemaId, "schema_version": req.SchemaVersion})
 		return tx.InsertAuditWriteLog(ctx, InsertAuditWriteLogParams{

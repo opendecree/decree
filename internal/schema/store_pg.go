@@ -713,6 +713,50 @@ func (s *PGStore) ListFieldLocks(ctx context.Context, tenantID string, arg ListF
 	return result, nil
 }
 
+// --- Tenant config seeding ---
+
+const seedConfigValueSQL = `INSERT INTO config_values (config_version_id, field_path, value, checksum, description) VALUES ($1, $2, $3, $4, NULL)`
+
+// SeedTenantConfig materializes the schema's field defaults as the tenant's
+// version-1 config. It reuses the same physical rows the config service writes
+// (config_versions + config_values) on the tx-bound query handle, so when this
+// runs inside the CreateTenant transaction the seed commits atomically with the
+// tenant row (or rolls back with it).
+func (s *PGStore) SeedTenantConfig(ctx context.Context, arg SeedTenantConfigParams) error {
+	if len(arg.Values) == 0 {
+		return nil
+	}
+	tenantUUID, err := pgconv.StringToUUID(arg.TenantID)
+	if err != nil {
+		return err
+	}
+
+	cv, err := s.write.CreateConfigVersion(ctx, dbstore.CreateConfigVersionParams{
+		TenantID:    tenantUUID,
+		Version:     1,
+		Description: ptrString("Initial config from schema defaults"),
+		CreatedBy:   arg.Actor,
+	})
+	if err != nil {
+		return fmt.Errorf("seed config version: %w", err)
+	}
+
+	batch := &pgx.Batch{}
+	for path, v := range arg.Values {
+		value := v.Value
+		checksum := v.Checksum
+		batch.Queue(seedConfigValueSQL, cv.ID, path, value, checksum)
+	}
+	br := s.batcher().SendBatch(ctx, batch)
+	defer func() { _ = br.Close() }()
+	for range arg.Values {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("seed config value: %w", err)
+		}
+	}
+	return br.Close()
+}
+
 // --- DB → domain conversion helpers ---
 
 func schemaFromDB(r dbstore.Schema) domain.Schema {
