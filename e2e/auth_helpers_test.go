@@ -165,7 +165,7 @@ func bootstrapMatrixFixture(t *testing.T, namePrefix string) *matrixFixture {
 
 	// Seed one config write so RollbackToVersion / GetVersion / ListVersions
 	// have content to act on.
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.name", "seed"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.name", "seed")))
 
 	t.Cleanup(func() {
 		_ = admin.DeleteTenant(ctx, tenant.ID)

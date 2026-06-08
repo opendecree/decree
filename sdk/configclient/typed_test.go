@@ -20,7 +20,7 @@ func TestSetTime_Success(t *testing.T) {
 		return r.Value != nil && r.Value.Kind() == KindTime && r.FieldPath == "x"
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetTime(ctx, "t1", "x", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := client.SetTime(ctx, "t1", "x", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -35,7 +35,7 @@ func TestSetDuration_Success(t *testing.T) {
 		return r.Value != nil && r.Value.Kind() == KindDuration && r.Value.MustDurationValue() == 30*time.Second
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetDuration(ctx, "t1", "x", 30*time.Second); err != nil {
+	if _, err := client.SetDuration(ctx, "t1", "x", 30*time.Second); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -47,7 +47,7 @@ func TestSetTyped_Success(t *testing.T) {
 
 	tr.on("SetField", nil, &SetFieldResponse{}, nil)
 
-	if err := client.SetTyped(ctx, "t1", "x", StringVal("hello")); err != nil {
+	if _, err := client.SetTyped(ctx, "t1", "x", StringVal("hello")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

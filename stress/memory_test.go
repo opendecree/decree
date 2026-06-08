@@ -48,7 +48,7 @@ func TestMemoryGrowth_BoundedUnderLoad(t *testing.T) {
 	tenantID, cleanTenant := makeTenant(t, admin, "stress-mg-tenant", schemaID)
 	defer cleanTenant()
 	for i := 0; i < 8; i++ {
-		require.NoError(t, cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i)))
+		require.NoError(t, noVer(cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i))))
 	}
 
 	runtime.GC()
@@ -95,7 +95,7 @@ func TestGoroutineLeak(t *testing.T) {
 	defer cleanSchema()
 	tenantID, cleanTenant := makeTenant(t, admin, "stress-gr-tenant", schemaID)
 	defer cleanTenant()
-	require.NoError(t, cfg.Set(ctx, tenantID, "f.field_0", "seed"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "f.field_0", "seed")))
 
 	// Allow the stack to settle before measuring baseline.
 	time.Sleep(100 * time.Millisecond)
@@ -156,7 +156,7 @@ func TestConcurrentTenants_Isolation(t *testing.T) {
 		sentinel := fmt.Sprintf("tenant-sentinel-%d", i)
 		id, cleanTenant := makeTenant(t, admin, fmt.Sprintf("stress-iso-%d", i), schemaID)
 		defer cleanTenant()
-		require.NoError(t, cfg.Set(ctx, id, "f.field_0", sentinel))
+		require.NoError(t, noVer(cfg.Set(ctx, id, "f.field_0", sentinel)))
 		tenants[i] = tenantInfo{id: id, sentinel: sentinel}
 	}
 
@@ -180,7 +180,7 @@ func TestConcurrentTenants_Isolation(t *testing.T) {
 			for gen := 0; time.Now().Before(deadline); gen++ {
 				idx := (w*1000 + gen) % tenantCount
 				newSentinel := fmt.Sprintf("tenant-sentinel-%d-gen%d", idx, gen)
-				if err := cfg.Set(ctx, tenants[idx].id, "f.field_0", newSentinel); err == nil {
+				if _, err := cfg.Set(ctx, tenants[idx].id, "f.field_0", newSentinel); err == nil {
 					tenants[idx].sentinel = newSentinel
 				}
 			}
@@ -236,7 +236,7 @@ func BenchmarkMemoryGrowth_Sustained(b *testing.B) {
 	tenantID, cleanTenant := makeTenant(b, admin, "stress-mb-tenant", schemaID)
 	b.Cleanup(cleanTenant)
 	for i := 0; i < 8; i++ {
-		require.NoError(b, cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i)))
+		require.NoError(b, noVer(cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i))))
 	}
 
 	b.ReportAllocs()

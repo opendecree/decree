@@ -35,7 +35,7 @@ func TestConnectionPool_ConcurrentLoad(t *testing.T) {
 	defer cleanSchema()
 	tenantID, cleanTenant := makeTenant(t, admin, "stress-pool-tenant", schemaID)
 	defer cleanTenant()
-	require.NoError(t, cfg.Set(ctx, tenantID, "f.field_0", "seed"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "f.field_0", "seed")))
 
 	var wg sync.WaitGroup
 	var errCount atomic.Int64
@@ -79,7 +79,7 @@ func TestConnectionPool_LeakDetection(t *testing.T) {
 	defer cleanSchema()
 	tenantID, cleanTenant := makeTenant(t, admin, "stress-leak-tenant", schemaID)
 	defer cleanTenant()
-	require.NoError(t, cfg.Set(ctx, tenantID, "f.field_0", "seed"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "f.field_0", "seed")))
 
 	latencies := make([]time.Duration, rounds)
 	for round := 0; round < rounds; round++ {
@@ -124,7 +124,7 @@ func BenchmarkConcurrentGetAll(b *testing.B) {
 	b.Cleanup(cleanSchema)
 	tenantID, cleanTenant := makeTenant(b, admin, "stress-concurrent-tenant", schemaID)
 	b.Cleanup(cleanTenant)
-	require.NoError(b, cfg.Set(ctx, tenantID, "f.field_0", "seed"))
+	require.NoError(b, noVer(cfg.Set(ctx, tenantID, "f.field_0", "seed")))
 
 	b.ResetTimer()
 	b.SetParallelism(goroutines)
@@ -157,7 +157,7 @@ func BenchmarkLargePayload_GetAll(b *testing.B) {
 
 	largeVal := strings.Repeat("x", valueSize)
 	for i := 0; i < fieldCount; i++ {
-		require.NoError(b, cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), largeVal))
+		require.NoError(b, noVer(cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), largeVal)))
 	}
 
 	b.ResetTimer()
@@ -212,7 +212,7 @@ func TestLargeSchema_CreateAndFetch(t *testing.T) {
 
 	// Write one value per field.
 	for i := 0; i < fieldCount; i++ {
-		require.NoError(t, cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i)))
+		require.NoError(t, noVer(cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i))))
 	}
 
 	vals, err := cfg.GetAll(ctx, tenantID)
@@ -238,7 +238,7 @@ func TestLargePayload_SetAndGet(t *testing.T) {
 	defer cleanTenant()
 
 	largeVal := strings.Repeat("abc", valueSize/3)
-	require.NoError(t, cfg.Set(ctx, tenantID, "f.field_0", largeVal))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "f.field_0", largeVal)))
 
 	got, err := cfg.Get(ctx, tenantID, "f.field_0")
 	require.NoError(t, err)

@@ -106,11 +106,13 @@ func (t *ConfigTransport) SetField(ctx context.Context, req *configclient.SetFie
 	if req.IdempotencyKey != "" {
 		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
-	_, err := t.rpc.SetField(ctx, protoReq, callOpts...)
+	resp, err := t.rpc.SetField(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
-	return &configclient.SetFieldResponse{}, nil
+	return &configclient.SetFieldResponse{
+		ConfigVersion: configVersionFromProto(resp.GetConfigVersion()),
+	}, nil
 }
 
 func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFieldsRequest) (*configclient.SetFieldsResponse, error) {
@@ -137,11 +139,13 @@ func (t *ConfigTransport) SetFields(ctx context.Context, req *configclient.SetFi
 	if req.IdempotencyKey != "" {
 		protoReq.IdempotencyKey = &req.IdempotencyKey
 	}
-	_, err := t.rpc.SetFields(ctx, protoReq, callOpts...)
+	resp, err := t.rpc.SetFields(ctx, protoReq, callOpts...)
 	if err != nil {
 		return nil, mapConfigError(err)
 	}
-	return &configclient.SetFieldsResponse{}, nil
+	return &configclient.SetFieldsResponse{
+		ConfigVersion: configVersionFromProto(resp.GetConfigVersion()),
+	}, nil
 }
 
 func (t *ConfigTransport) Subscribe(ctx context.Context, req *configclient.SubscribeRequest) (configclient.Subscription, error) {

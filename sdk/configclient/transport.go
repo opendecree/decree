@@ -1,6 +1,9 @@
 package configclient
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Transport abstracts the underlying RPC mechanism for config operations.
 // The default implementation uses gRPC (see the grpctransport package).
@@ -63,6 +66,9 @@ type ConfigValue struct {
 	FieldPath string
 	Value     *TypedValue // nil when the field is null
 	Checksum  string
+	// Description is a human-readable explanation of this specific value.
+	// Only populated when the read request asked for descriptions; empty otherwise.
+	Description string
 }
 
 // GetFieldsRequest is the input for [Transport.GetFields].
@@ -91,7 +97,11 @@ type SetFieldRequest struct {
 }
 
 // SetFieldResponse is the output of [Transport.SetField].
-type SetFieldResponse struct{}
+type SetFieldResponse struct {
+	// ConfigVersion is the version created by the write. nil if the transport
+	// did not report one.
+	ConfigVersion *ConfigVersion
+}
 
 // FieldUpdate describes a single field change within a batch write.
 type FieldUpdate struct {
@@ -110,7 +120,29 @@ type SetFieldsRequest struct {
 }
 
 // SetFieldsResponse is the output of [Transport.SetFields].
-type SetFieldsResponse struct{}
+type SetFieldsResponse struct {
+	// ConfigVersion is the version created by the batch write. nil if the
+	// transport did not report one.
+	ConfigVersion *ConfigVersion
+}
+
+// ConfigVersion describes a config version created by a write operation.
+// It is returned by the write methods (Set, SetMany, etc.) so callers can
+// use it for optimistic concurrency control or audit correlation.
+type ConfigVersion struct {
+	// ID is the server-assigned unique identifier (UUID).
+	ID string
+	// TenantID is the tenant this version belongs to (UUID).
+	TenantID string
+	// Version is the monotonically increasing version number (starts at 1).
+	Version int32
+	// Description explains what changed in this version.
+	Description string
+	// CreatedBy is the actor who created the version.
+	CreatedBy string
+	// CreatedAt is when the version was created.
+	CreatedAt time.Time
+}
 
 // SubscribeRequest is the input for [Transport.Subscribe].
 type SubscribeRequest struct {

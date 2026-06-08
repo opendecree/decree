@@ -81,22 +81,51 @@ func WithFieldChecksums(checksums map[string]string) WriteOption {
 // client, transient errors trigger retry. [WithFieldChecksums] on batch writes
 // (SetMany/SetManyTyped) also enables retry because per-field checksums make
 // the operation idempotent.
-func doWrite(ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) error) error {
+func doWrite[T any](ctx context.Context, c *Client, wo writeOptions, fn func(ctx context.Context) (T, error)) (T, error) {
 	if (wo.idempotencyKey != "" || wo.expectedChecksum != "" || len(wo.fieldChecksums) > 0) && c.opts.retryEnabled {
-		return retryDo(ctx, c, fn)
+		return retry(ctx, c, fn)
 	}
 	return fn(ctx)
 }
 
+// setFieldVersion sends a single-field write and returns the post-write version.
+// It enforces the transport contract that a nil error must yield a non-nil
+// response, returning [ErrInvalidTransportResponse] otherwise.
+func setFieldVersion(ctx context.Context, c *Client, req *SetFieldRequest) (*ConfigVersion, error) {
+	resp, err := c.transport.SetField(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil {
+		return nil, ErrInvalidTransportResponse
+	}
+	return resp.ConfigVersion, nil
+}
+
+// setFieldsVersion sends a batch write and returns the post-write version.
+// It enforces the transport contract that a nil error must yield a non-nil
+// response, returning [ErrInvalidTransportResponse] otherwise.
+func setFieldsVersion(ctx context.Context, c *Client, req *SetFieldsRequest) (*ConfigVersion, error) {
+	resp, err := c.transport.SetFields(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil {
+		return nil, ErrInvalidTransportResponse
+	}
+	return resp.ConfigVersion, nil
+}
+
 // Set writes a single configuration value as a string.
-// Creates a new config version atomically.
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 //
 // By default, Set does not retry on transient errors. Use [WithIdempotencyKey]
 // to opt in to safe retry with server-side deduplication.
-func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opts ...WriteOption) error {
+func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
-	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+	return doWrite(ctx, c, wo, func(ctx context.Context) (*ConfigVersion, error) {
 		req := &SetFieldRequest{
 			TenantID:         tenantID,
 			FieldPath:        fieldPath,
@@ -108,20 +137,20 @@ func (c *Client) Set(ctx context.Context, tenantID, fieldPath, value string, opt
 		if wo.expectedChecksum != "" {
 			req.ExpectedChecksum = &wo.expectedChecksum
 		}
-		_, err := c.transport.SetField(ctx, req)
-		return err
+		return setFieldVersion(ctx, c, req)
 	})
 }
 
 // SetTyped writes a single typed configuration value.
-// Creates a new config version atomically.
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 //
 // By default, SetTyped does not retry on transient errors. Use [WithIdempotencyKey]
 // to opt in to safe retry with server-side deduplication.
-func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) error {
+func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value *TypedValue, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
-	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+	return doWrite(ctx, c, wo, func(ctx context.Context) (*ConfigVersion, error) {
 		req := &SetFieldRequest{
 			TenantID:         tenantID,
 			FieldPath:        fieldPath,
@@ -133,20 +162,20 @@ func (c *Client) SetTyped(ctx context.Context, tenantID, fieldPath string, value
 		if wo.expectedChecksum != "" {
 			req.ExpectedChecksum = &wo.expectedChecksum
 		}
-		_, err := c.transport.SetField(ctx, req)
-		return err
+		return setFieldVersion(ctx, c, req)
 	})
 }
 
 // SetNull sets a configuration field to null.
-// Creates a new config version atomically.
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrLocked] if the field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 //
 // By default, SetNull does not retry on transient errors. Use [WithIdempotencyKey]
 // to opt in to safe retry with server-side deduplication.
-func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts ...WriteOption) error {
+func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
-	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+	return doWrite(ctx, c, wo, func(ctx context.Context) (*ConfigVersion, error) {
 		req := &SetFieldRequest{
 			TenantID:       tenantID,
 			FieldPath:      fieldPath,
@@ -156,24 +185,25 @@ func (c *Client) SetNull(ctx context.Context, tenantID, fieldPath string, opts .
 		if wo.expectedChecksum != "" {
 			req.ExpectedChecksum = &wo.expectedChecksum
 		}
-		_, err := c.transport.SetField(ctx, req)
-		return err
+		return setFieldVersion(ctx, c, req)
 	})
 }
 
 // SetMany writes multiple configuration values atomically in a single version.
 // The description is optional — pass an empty string to omit it.
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 //
 // By default, SetMany does not retry on transient errors. Use [WithIdempotencyKey]
 // to opt in to safe retry with server-side deduplication.
-func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) error {
+func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string]string, description string, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
 	effectiveDescription := description
 	if effectiveDescription == "" {
 		effectiveDescription = wo.description
 	}
-	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+	return doWrite(ctx, c, wo, func(ctx context.Context) (*ConfigVersion, error) {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
 		for path := range values {
@@ -192,29 +222,30 @@ func (c *Client) SetMany(ctx context.Context, tenantID string, values map[string
 			}
 			updates = append(updates, u)
 		}
-		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
+		return setFieldsVersion(ctx, c, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
 			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
-		return err
 	})
 }
 
 // SetManyTyped writes multiple typed configuration values atomically in a single
 // version. The description is optional — pass an empty string to omit it.
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrLocked] if any field is administratively locked; [ErrPermissionDenied] if the caller lacks access.
 //
 // By default, SetManyTyped does not retry on transient errors. Use [WithIdempotencyKey]
 // to opt in to safe retry with server-side deduplication.
-func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) error {
+func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[string]*TypedValue, description string, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
 	effectiveDescription := description
 	if effectiveDescription == "" {
 		effectiveDescription = wo.description
 	}
-	return doWrite(ctx, c, wo, func(ctx context.Context) error {
+	return doWrite(ctx, c, wo, func(ctx context.Context) (*ConfigVersion, error) {
 		// Sort by FieldPath for deterministic request ordering.
 		paths := make([]string, 0, len(values))
 		for path := range values {
@@ -233,13 +264,12 @@ func (c *Client) SetManyTyped(ctx context.Context, tenantID string, values map[s
 			}
 			updates = append(updates, u)
 		}
-		_, err := c.transport.SetFields(ctx, &SetFieldsRequest{
+		return setFieldsVersion(ctx, c, &SetFieldsRequest{
 			TenantID:       tenantID,
 			Updates:        updates,
 			Description:    effectiveDescription,
 			IdempotencyKey: wo.idempotencyKey,
 		})
-		return err
 	})
 }
 
@@ -286,6 +316,8 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 
 // Set writes a new value for this field, but only if the value has not been
 // modified since the [LockedValue] was obtained via [Client.GetForUpdate].
+// Creates a new config version atomically and returns it (nil if the transport
+// does not report one).
 // Returns [ErrChecksumMismatch] if the value was changed by another writer.
 //
 // Because ExpectedChecksum makes this write idempotent, this method respects
@@ -294,20 +326,20 @@ func (c *Client) GetForUpdate(ctx context.Context, tenantID, fieldPath string) (
 // [WithExpectedChecksum], [WithValueDescriptions], and [WithFieldChecksums] are
 // not applicable to LockedValue.Set and return [ErrInvalidArgument] if supplied.
 // Use [WithIdempotencyKey], [WithDescription], and [WithValueDescription] instead.
-func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOption) error {
+func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOption) (*ConfigVersion, error) {
 	wo := applyWriteOptions(opts)
 	if wo.expectedChecksum != "" {
-		return fmt.Errorf("%w: WithExpectedChecksum is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: WithExpectedChecksum is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
 	}
 	if len(wo.valueDescriptions) > 0 {
-		return fmt.Errorf("%w: WithValueDescriptions is not supported on LockedValue.Set; use WithValueDescription for a single field", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: WithValueDescriptions is not supported on LockedValue.Set; use WithValueDescription for a single field", ErrInvalidArgument)
 	}
 	if len(wo.fieldChecksums) > 0 {
-		return fmt.Errorf("%w: WithFieldChecksums is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: WithFieldChecksums is not supported on LockedValue.Set; the checksum is managed by the lock", ErrInvalidArgument)
 	}
 	// LockedValue.Set is always safe to retry: the checksum acts as an implicit
-	// idempotency guard. Use retryDo directly to preserve that guarantee.
-	return retryDo(ctx, lv.client, func(ctx context.Context) error {
+	// idempotency guard. Use retry directly to preserve that guarantee.
+	return retry(ctx, lv.client, func(ctx context.Context) (*ConfigVersion, error) {
 		req := &SetFieldRequest{
 			TenantID:         lv.tenantID,
 			FieldPath:        lv.FieldPath,
@@ -317,8 +349,7 @@ func (lv *LockedValue) Set(ctx context.Context, newValue string, opts ...WriteOp
 			ValueDescription: wo.valueDescription,
 			IdempotencyKey:   wo.idempotencyKey,
 		}
-		_, err := lv.client.transport.SetField(ctx, req)
-		return err
+		return setFieldVersion(ctx, lv.client, req)
 	})
 }
 
@@ -328,58 +359,65 @@ const updateMaxAttempts = 3
 // Update performs an atomic read-modify-write on a single field.
 // It reads the current value and checksum, calls updateFn with the current value,
 // and writes the result back with the checksum for optimistic concurrency.
-// On [ErrChecksumMismatch] (concurrent write by another caller) the entire
-// read-modify-write cycle is retried up to 3 times before returning the error.
+// On success it returns the post-write config version (nil if the transport does
+// not report one). On [ErrChecksumMismatch] (concurrent write by another caller)
+// the entire read-modify-write cycle is retried up to 3 times before returning
+// the error.
 //
 // Returns [ErrChecksumMismatch] if the value was still being concurrently modified
 // after all retry attempts.
 // If the field exists but has a null value, updateFn receives "" (not [ErrNotFound]).
 // [ErrNotFound] is only returned when the field does not exist at all (transport error).
-func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateFn func(current string) (string, error), opts ...WriteOption) error {
+func (c *Client) Update(ctx context.Context, tenantID, fieldPath string, updateFn func(current string) (string, error), opts ...WriteOption) (*ConfigVersion, error) {
 	for attempt := range updateMaxAttempts {
 		lv, err := c.GetForUpdate(ctx, tenantID, fieldPath)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		newValue, err := updateFn(lv.Value)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = lv.Set(ctx, newValue, opts...)
+		version, err := lv.Set(ctx, newValue, opts...)
 		if err == nil {
-			return nil
+			return version, nil
 		}
 		if !errors.Is(err, ErrChecksumMismatch) || attempt == updateMaxAttempts-1 {
-			return err
+			return nil, err
 		}
 	}
 	// Unreachable, but satisfies the compiler.
-	return ErrChecksumMismatch
+	return nil, ErrChecksumMismatch
 }
 
 // --- Type-specific setters ---
 
-// SetInt writes an integer configuration value.
-func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64, opts ...WriteOption) error {
+// SetInt writes an integer configuration value and returns the post-write
+// config version (nil if the transport does not report one).
+func (c *Client) SetInt(ctx context.Context, tenantID, fieldPath string, value int64, opts ...WriteOption) (*ConfigVersion, error) {
 	return c.SetTyped(ctx, tenantID, fieldPath, IntVal(value), opts...)
 }
 
-// SetFloat writes a floating-point configuration value.
-func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64, opts ...WriteOption) error {
+// SetFloat writes a floating-point configuration value and returns the post-write
+// config version (nil if the transport does not report one).
+func (c *Client) SetFloat(ctx context.Context, tenantID, fieldPath string, value float64, opts ...WriteOption) (*ConfigVersion, error) {
 	return c.SetTyped(ctx, tenantID, fieldPath, FloatVal(value), opts...)
 }
 
-// SetBool writes a boolean configuration value.
-func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool, opts ...WriteOption) error {
+// SetBool writes a boolean configuration value and returns the post-write
+// config version (nil if the transport does not report one).
+func (c *Client) SetBool(ctx context.Context, tenantID, fieldPath string, value bool, opts ...WriteOption) (*ConfigVersion, error) {
 	return c.SetTyped(ctx, tenantID, fieldPath, BoolVal(value), opts...)
 }
 
-// SetTime writes a timestamp configuration value.
-func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time, opts ...WriteOption) error {
+// SetTime writes a timestamp configuration value and returns the post-write
+// config version (nil if the transport does not report one).
+func (c *Client) SetTime(ctx context.Context, tenantID, fieldPath string, value time.Time, opts ...WriteOption) (*ConfigVersion, error) {
 	return c.SetTyped(ctx, tenantID, fieldPath, TimeVal(value), opts...)
 }
 
-// SetDuration writes a duration configuration value.
-func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration, opts ...WriteOption) error {
+// SetDuration writes a duration configuration value and returns the post-write
+// config version (nil if the transport does not report one).
+func (c *Client) SetDuration(ctx context.Context, tenantID, fieldPath string, value time.Duration, opts ...WriteOption) (*ConfigVersion, error) {
 	return c.SetTyped(ctx, tenantID, fieldPath, DurationVal(value), opts...)
 }

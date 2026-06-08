@@ -34,7 +34,7 @@ func TestDBOutage_MidFlight(t *testing.T) {
 	t.Cleanup(cleanupTenant)
 
 	// Seed a value (warms the Redis cache so reads may survive the outage).
-	require.NoError(t, cfg.Set(ctx, tenantID, "chaos.field0", "before-outage"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "chaos.field0", "before-outage")))
 
 	// Pause postgres — simulates a network partition (no TCP RST, just freeze).
 	containerPause(t, postgresContainer())
@@ -60,7 +60,7 @@ func TestDBOutage_MidFlight(t *testing.T) {
 	eventually(t, 30*time.Second, func() bool {
 		writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
 		defer writeCancel()
-		return cfg.Set(writeCtx, tenantID, "chaos.field0", "after-outage") == nil
+		return noVer(cfg.Set(writeCtx, tenantID, "chaos.field0", "after-outage")) == nil
 	})
 }
 
@@ -105,6 +105,6 @@ func TestDBRecovery_AfterRestart(t *testing.T) {
 	eventually(t, 60*time.Second, func() bool {
 		writeCtx, writeCancel := context.WithTimeout(ctx, 5*time.Second)
 		defer writeCancel()
-		return cfg.Set(writeCtx, tenantID, "chaos.field0", "after-db-restart") == nil
+		return noVer(cfg.Set(writeCtx, tenantID, "chaos.field0", "after-db-restart")) == nil
 	})
 }

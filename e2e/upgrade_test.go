@@ -38,8 +38,8 @@ func TestUpgrade_Populate(t *testing.T) {
 	tenant, err := admin.CreateTenant(ctx, upgradeTenantName, s.ID, 1)
 	require.NoError(t, err)
 
-	require.NoError(t, cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.region", "us-east-1"))
+	require.NoError(t, noVer(cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second)))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.region", "us-east-1")))
 }
 
 // TestUpgrade_Assert verifies fixture data is intact after goose migrations,
@@ -74,7 +74,7 @@ func TestUpgrade_Assert(t *testing.T) {
 	assert.Equal(t, "us-east-1", vals["app.region"])
 
 	// Verify new writes succeed on the migrated server.
-	require.NoError(t, cfg.Set(ctx, tenantID, "app.region", "eu-west-1"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "app.region", "eu-west-1")))
 	updated, err := cfg.Get(ctx, tenantID, "app.region")
 	require.NoError(t, err)
 	assert.Equal(t, "eu-west-1", updated)

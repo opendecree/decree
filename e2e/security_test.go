@@ -121,7 +121,7 @@ func TestSecurity_SensitiveFieldRedacted(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Write the secret.
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "auth.token", secretValue))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "auth.token", secretValue)))
 
 	// --- Subscribe event must not carry plaintext ---
 	event, err := stream.Recv()
@@ -242,7 +242,7 @@ func TestSecurity_SchemaLimitsEnforced(t *testing.T) {
 		valCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		cfg := newConfigClient(conn)
-		_ = cfg.Set(valCtx, tenant.ID, "data.payload", `{"ok":true}`)
+		_, _ = cfg.Set(valCtx, tenant.ID, "data.payload", `{"ok":true}`)
 		require.NoError(t, valCtx.Err(), "server must not hang on pathological JSON Schema compile")
 	})
 }
@@ -275,9 +275,9 @@ func TestSecurity_AuditChainIntegrity(t *testing.T) {
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-subject", "e2e-security-audit", "x-role", "superadmin")
 
 	// Lay down several config writes to build up a multi-entry chain.
-	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "alpha"))
-	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "beta"))
-	require.NoError(t, cfg.Set(ctx, fixture.tenantID, "app.name", "gamma"))
+	require.NoError(t, noVer(cfg.Set(ctx, fixture.tenantID, "app.name", "alpha")))
+	require.NoError(t, noVer(cfg.Set(ctx, fixture.tenantID, "app.name", "beta")))
+	require.NoError(t, noVer(cfg.Set(ctx, fixture.tenantID, "app.name", "gamma")))
 
 	resp, err := auditSvc.VerifyChain(ctx, &pb.VerifyChainRequest{TenantId: fixture.tenantID})
 	require.NoError(t, err)

@@ -229,7 +229,7 @@ func bootstrapJWTMatrixFixture(t *testing.T, issuer *jwtIssuer, conn *grpc.Clien
 		t.Fatalf("bootstrapJWTMatrixFixture CreateTenant: %v", err)
 	}
 
-	if err := cfg.Set(ctx, tenant.ID, "app.name", "seed"); err != nil {
+	if _, err := cfg.Set(ctx, tenant.ID, "app.name", "seed"); err != nil {
 		t.Fatalf("bootstrapJWTMatrixFixture seed config: %v", err)
 	}
 

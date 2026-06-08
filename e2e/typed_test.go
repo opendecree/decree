@@ -37,11 +37,11 @@ func TestTypedValuesAndNull(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Set values with typed setters.
-	require.NoError(t, cfg.SetInt(ctx, tenant.ID, "app.retries", 5))
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.025))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.name", "MyApp"))
-	require.NoError(t, cfg.SetBool(ctx, tenant.ID, "app.enabled", true))
-	require.NoError(t, cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second))
+	require.NoError(t, noVer(cfg.SetInt(ctx, tenant.ID, "app.retries", 5)))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.025)))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.name", "MyApp")))
+	require.NoError(t, noVer(cfg.SetBool(ctx, tenant.ID, "app.enabled", true)))
+	require.NoError(t, noVer(cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second)))
 
 	// 3. Read with typed getters.
 	retries, err := cfg.GetInt(ctx, tenant.ID, "app.retries")
@@ -70,7 +70,7 @@ func TestTypedValuesAndNull(t *testing.T) {
 	assert.Equal(t, "5", retriesStr)
 
 	// 5. Null handling — set to null and verify.
-	require.NoError(t, cfg.SetNull(ctx, tenant.ID, "app.retries"))
+	require.NoError(t, noVer(cfg.SetNull(ctx, tenant.ID, "app.retries")))
 
 	// GetInt on null returns zero value.
 	retriesAfterNull, err := cfg.GetInt(ctx, tenant.ID, "app.retries")
@@ -83,13 +83,13 @@ func TestTypedValuesAndNull(t *testing.T) {
 	assert.Nil(t, retriesNullable)
 
 	// 6. Null vs empty string distinction.
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.name", "")) // empty string, not null
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.name", ""))) // empty string, not null
 	nameNullable, err := cfg.GetStringNullable(ctx, tenant.ID, "app.name")
 	require.NoError(t, err)
 	require.NotNil(t, nameNullable, "empty string should not be null")
 	assert.Equal(t, "", *nameNullable)
 
-	require.NoError(t, cfg.SetNull(ctx, tenant.ID, "app.name")) // now actually null
+	require.NoError(t, noVer(cfg.SetNull(ctx, tenant.ID, "app.name"))) // now actually null
 	nameNullable, err = cfg.GetStringNullable(ctx, tenant.ID, "app.name")
 	require.NoError(t, err)
 	assert.Nil(t, nameNullable, "should be null after SetNull")

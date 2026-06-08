@@ -32,9 +32,9 @@ func TestUsageTracking(t *testing.T) {
 	tenant, err := admin.CreateTenant(ctx, "usage-tenant-e2e", s.ID, 1)
 	require.NoError(t, err)
 
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "billing.fee", "2.5%"))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "billing.currency", "USD"))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "billing.unused", "n/a"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "billing.fee", "2.5%")))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "billing.currency", "USD")))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "billing.unused", "n/a")))
 
 	// 2. Read fields — triggers usage recording.
 	_, err = cfg.Get(ctx, tenant.ID, "billing.fee")
