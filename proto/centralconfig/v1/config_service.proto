@@ -80,6 +80,14 @@ service ConfigService {
       post: "/v1/tenants/{tenant_id}/versions/{version}:rollback"
     };
   }
+  // DiffVersions compares the full resolved config at two versions and returns
+  // the fields that differ. Unchanged fields are omitted. Results are sorted by
+  // field path for deterministic output.
+  rpc DiffVersions(DiffVersionsRequest) returns (DiffVersionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/tenants/{tenant_id}/versions/{from_version}/diff/{to_version}"
+    };
+  }
 
   // Real-time subscriptions via server-streaming.
 
@@ -305,6 +313,50 @@ message RollbackToVersionRequest {
 message RollbackToVersionResponse {
   // The newly created config version containing the rolled-back values.
   ConfigVersion config_version = 1;
+}
+
+message DiffVersionsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // The base version to diff from.
+  int32 from_version = 2;
+
+  // The target version to diff to.
+  int32 to_version = 3;
+}
+
+message DiffVersionsResponse {
+  // The fields that differ between from_version and to_version, sorted by
+  // field path. Unchanged fields are omitted.
+  repeated FieldDiff diffs = 1;
+}
+
+// ChangeType categorizes how a field changed between two config versions.
+enum ChangeType {
+  // Unspecified change type. Never emitted by the server.
+  CHANGE_TYPE_UNSPECIFIED = 0;
+  // The field is present in to_version but absent in from_version.
+  CHANGE_TYPE_ADDED = 1;
+  // The field is present in from_version but absent in to_version.
+  CHANGE_TYPE_REMOVED = 2;
+  // The field is present in both versions with a different value.
+  CHANGE_TYPE_MODIFIED = 3;
+}
+
+// FieldDiff describes a single field that differs between two config versions.
+message FieldDiff {
+  // Dot-separated field path (e.g. "payments.fee").
+  string field_path = 1;
+
+  // How the field changed.
+  ChangeType change_type = 2;
+
+  // The value at from_version. Empty when change_type is CHANGE_TYPE_ADDED.
+  string old_value = 3;
+
+  // The value at to_version. Empty when change_type is CHANGE_TYPE_REMOVED.
+  string new_value = 4;
 }
 
 // --- Subscription ---

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -196,6 +197,18 @@ func (s *stubConfigService) RollbackToVersion(ctx context.Context, _ *pb.Rollbac
 		return nil, s.err
 	}
 	return &pb.RollbackToVersionResponse{ConfigVersion: &pb.ConfigVersion{TenantId: "t1", Version: 2}}, nil
+}
+
+func (s *stubConfigService) DiffVersions(ctx context.Context, _ *pb.DiffVersionsRequest) (*pb.DiffVersionsResponse, error) {
+	s.lastMD = incomingMD(ctx)
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &pb.DiffVersionsResponse{Diffs: []*pb.FieldDiff{
+		{FieldPath: "a", ChangeType: pb.ChangeType_CHANGE_TYPE_ADDED, NewValue: "1"},
+		{FieldPath: "b", ChangeType: pb.ChangeType_CHANGE_TYPE_REMOVED, OldValue: "2"},
+		{FieldPath: "c", ChangeType: pb.ChangeType_CHANGE_TYPE_MODIFIED, OldValue: "3", NewValue: "4"},
+	}}, nil
 }
 
 func (s *stubConfigService) ExportConfig(ctx context.Context, _ *pb.ExportConfigRequest) (*pb.ExportConfigResponse, error) {
@@ -774,6 +787,46 @@ func TestAdminConfigTransport_RollbackToVersion_ForwardsAuthMetadata(t *testing.
 	_, _ = tr.RollbackToVersion(context.Background(), "t1", 1, "rollback")
 
 	assertMetadataHeader(t, stub.lastMD, "x-role", "superadmin")
+}
+
+func TestAdminConfigTransport_DiffVersions_ForwardsAuthMetadata(t *testing.T) {
+	stub := &stubConfigService{}
+	conn := newBufconnServer(t, stub, nil, nil)
+	tr := newAdminConfigTransport(t, conn, grpctransport.WithRole("superadmin"))
+
+	_, _ = tr.DiffVersions(context.Background(), "t1", 1, 2)
+
+	assertMetadataHeader(t, stub.lastMD, "x-role", "superadmin")
+}
+
+func TestAdminConfigTransport_DiffVersions_NotFound(t *testing.T) {
+	stub := &stubConfigService{err: status.Error(codes.NotFound, "version not found")}
+	conn := newBufconnServer(t, stub, nil, nil)
+	tr := newAdminConfigTransport(t, conn, grpctransport.WithRole("superadmin"))
+
+	_, err := tr.DiffVersions(context.Background(), "t1", 1, 99)
+	if !errors.Is(err, adminclient.ErrNotFound) {
+		t.Errorf("got %v, want ErrNotFound", err)
+	}
+}
+
+func TestAdminConfigTransport_DiffVersions_Success(t *testing.T) {
+	stub := &stubConfigService{}
+	conn := newBufconnServer(t, stub, nil, nil)
+	tr := newAdminConfigTransport(t, conn, grpctransport.WithRole("superadmin"))
+
+	diffs, err := tr.DiffVersions(context.Background(), "t1", 1, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []adminclient.FieldDiff{
+		{FieldPath: "a", ChangeType: adminclient.ChangeTypeAdded, NewValue: "1"},
+		{FieldPath: "b", ChangeType: adminclient.ChangeTypeRemoved, OldValue: "2"},
+		{FieldPath: "c", ChangeType: adminclient.ChangeTypeModified, OldValue: "3", NewValue: "4"},
+	}
+	if !reflect.DeepEqual(diffs, want) {
+		t.Errorf("diffs = %+v, want %+v", diffs, want)
+	}
 }
 
 func TestAdminConfigTransport_ExportConfig_ForwardsAuthMetadata(t *testing.T) {

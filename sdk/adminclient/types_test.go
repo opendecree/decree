@@ -287,3 +287,48 @@ func TestImportMode_Constants(t *testing.T) {
 		t.Errorf("got ImportModeDefaults %v, want 3", ImportModeDefaults)
 	}
 }
+
+func TestChangeType_Constants(t *testing.T) {
+	if ChangeTypeUnspecified != 0 {
+		t.Errorf("got ChangeTypeUnspecified %v, want 0", ChangeTypeUnspecified)
+	}
+	if ChangeTypeAdded != 1 {
+		t.Errorf("got ChangeTypeAdded %v, want 1", ChangeTypeAdded)
+	}
+	if ChangeTypeRemoved != 2 {
+		t.Errorf("got ChangeTypeRemoved %v, want 2", ChangeTypeRemoved)
+	}
+	if ChangeTypeModified != 3 {
+		t.Errorf("got ChangeTypeModified %v, want 3", ChangeTypeModified)
+	}
+}
+
+func TestChangeType_String(t *testing.T) {
+	tests := []struct {
+		ct   ChangeType
+		want string
+	}{
+		{ChangeTypeAdded, "added"},
+		{ChangeTypeRemoved, "removed"},
+		{ChangeTypeModified, "modified"},
+		{ChangeTypeUnspecified, "unspecified"},
+		{ChangeType(99), "unspecified"},
+	}
+	for _, tc := range tests {
+		if got := tc.ct.String(); got != tc.want {
+			t.Errorf("ChangeType(%d).String() = %q, want %q", tc.ct, got, tc.want)
+		}
+	}
+}
+
+func TestFieldDiff_Fields(t *testing.T) {
+	d := FieldDiff{
+		FieldPath:  "payments.fee",
+		ChangeType: ChangeTypeModified,
+		OldValue:   "0.5",
+		NewValue:   "0.75",
+	}
+	if d.FieldPath != "payments.fee" || d.ChangeType != ChangeTypeModified || d.OldValue != "0.5" || d.NewValue != "0.75" {
+		t.Errorf("FieldDiff fields not assigned correctly: %+v", d)
+	}
+}

@@ -1334,6 +1334,54 @@
         ]
       }
     },
+    "/v1/tenants/{tenantId}/versions/{fromVersion}/diff/{toVersion}": {
+      "get": {
+        "summary": "DiffVersions compares the full resolved config at two versions and returns\nthe fields that differ. Unchanged fields are omitted. Results are sorted by\nfield path for deterministic output.",
+        "operationId": "ConfigService_DiffVersions",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DiffVersionsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "tenantId",
+            "description": "Tenant ID (UUID).",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "fromVersion",
+            "description": "The base version to diff from.",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "toVersion",
+            "description": "The target version to diff to.",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "ConfigService"
+        ]
+      }
+    },
     "/v1/tenants/{tenantId}/versions/{version}": {
       "get": {
         "summary": "GetVersion retrieves metadata for a specific config version.",
@@ -1690,6 +1738,17 @@
       },
       "description": "AuditEntry represents a write event recorded in the audit log.\nEvery config mutation (SetField, SetFields, RollbackToVersion) creates\none or more audit entries atomically with the config change."
     },
+    "v1ChangeType": {
+      "type": "string",
+      "enum": [
+        "CHANGE_TYPE_UNSPECIFIED",
+        "CHANGE_TYPE_ADDED",
+        "CHANGE_TYPE_REMOVED",
+        "CHANGE_TYPE_MODIFIED"
+      ],
+      "default": "CHANGE_TYPE_UNSPECIFIED",
+      "description": "ChangeType categorizes how a field changed between two config versions.\n\n - CHANGE_TYPE_UNSPECIFIED: Unspecified change type. Never emitted by the server.\n - CHANGE_TYPE_ADDED: The field is present in to_version but absent in from_version.\n - CHANGE_TYPE_REMOVED: The field is present in from_version but absent in to_version.\n - CHANGE_TYPE_MODIFIED: The field is present in both versions with a different value."
+    },
     "v1Config": {
       "type": "object",
       "properties": {
@@ -1882,6 +1941,19 @@
       },
       "description": "DependentRequiredEntry encodes one cross-field requirement: when the\ntrigger field has a non-null value, every dependent field path must also\nhave a non-null value. This is the proto wire form of JSON Schema 2020-12\ndependentRequired, which uses a `map<path, list<path>>` shape \u2014 proto\nmaps cannot hold repeated values directly, so we use a repeated list of\nentries."
     },
+    "v1DiffVersionsResponse": {
+      "type": "object",
+      "properties": {
+        "diffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1FieldDiff"
+          },
+          "description": "The fields that differ between from_version and to_version, sorted by\nfield path. Unchanged fields are omitted."
+        }
+      }
+    },
     "v1ExportConfigResponse": {
       "type": "object",
       "properties": {
@@ -1973,6 +2045,28 @@
         }
       },
       "description": "FieldConstraints defines validation rules for a schema field.\nWhich constraints apply depends on the field's type \u2014 see FieldType docs."
+    },
+    "v1FieldDiff": {
+      "type": "object",
+      "properties": {
+        "fieldPath": {
+          "type": "string",
+          "description": "Dot-separated field path (e.g. \"payments.fee\")."
+        },
+        "changeType": {
+          "$ref": "#/definitions/v1ChangeType",
+          "description": "How the field changed."
+        },
+        "oldValue": {
+          "type": "string",
+          "description": "The value at from_version. Empty when change_type is CHANGE_TYPE_ADDED."
+        },
+        "newValue": {
+          "type": "string",
+          "description": "The value at to_version. Empty when change_type is CHANGE_TYPE_REMOVED."
+        }
+      },
+      "description": "FieldDiff describes a single field that differs between two config versions."
     },
     "v1FieldExample": {
       "type": "object",

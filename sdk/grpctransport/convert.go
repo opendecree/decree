@@ -432,6 +432,28 @@ func versionFromProto(v *pb.ConfigVersion) *adminclient.Version {
 	return result
 }
 
+func fieldDiffFromProto(d *pb.FieldDiff) adminclient.FieldDiff {
+	return adminclient.FieldDiff{
+		FieldPath:  d.GetFieldPath(),
+		ChangeType: changeTypeFromProto(d.GetChangeType()),
+		OldValue:   d.GetOldValue(),
+		NewValue:   d.GetNewValue(),
+	}
+}
+
+func changeTypeFromProto(ct pb.ChangeType) adminclient.ChangeType {
+	switch ct {
+	case pb.ChangeType_CHANGE_TYPE_ADDED:
+		return adminclient.ChangeTypeAdded
+	case pb.ChangeType_CHANGE_TYPE_REMOVED:
+		return adminclient.ChangeTypeRemoved
+	case pb.ChangeType_CHANGE_TYPE_MODIFIED:
+		return adminclient.ChangeTypeModified
+	default:
+		return adminclient.ChangeTypeUnspecified
+	}
+}
+
 // --- Helpers ---
 
 func timeToProto(t *time.Time) *timestamppb.Timestamp {

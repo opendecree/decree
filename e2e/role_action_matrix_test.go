@@ -271,6 +271,16 @@ func allRPCs() []rpcSpec {
 			},
 		},
 		{
+			name:   "DiffVersions",
+			policy: allow,
+			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
+				// Fixture seeds version 1; diffing it against itself is a valid
+				// read (empty diff) so this exercises auth only.
+				_, err := c.admin.DiffConfigVersions(ctx, fx.tenantID, 1, 1)
+				return err
+			},
+		},
+		{
 			name:   "RollbackToVersion",
 			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {

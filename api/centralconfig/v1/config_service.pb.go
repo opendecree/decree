@@ -22,6 +22,63 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ChangeType categorizes how a field changed between two config versions.
+type ChangeType int32
+
+const (
+	// Unspecified change type. Never emitted by the server.
+	ChangeType_CHANGE_TYPE_UNSPECIFIED ChangeType = 0
+	// The field is present in to_version but absent in from_version.
+	ChangeType_CHANGE_TYPE_ADDED ChangeType = 1
+	// The field is present in from_version but absent in to_version.
+	ChangeType_CHANGE_TYPE_REMOVED ChangeType = 2
+	// The field is present in both versions with a different value.
+	ChangeType_CHANGE_TYPE_MODIFIED ChangeType = 3
+)
+
+// Enum value maps for ChangeType.
+var (
+	ChangeType_name = map[int32]string{
+		0: "CHANGE_TYPE_UNSPECIFIED",
+		1: "CHANGE_TYPE_ADDED",
+		2: "CHANGE_TYPE_REMOVED",
+		3: "CHANGE_TYPE_MODIFIED",
+	}
+	ChangeType_value = map[string]int32{
+		"CHANGE_TYPE_UNSPECIFIED": 0,
+		"CHANGE_TYPE_ADDED":       1,
+		"CHANGE_TYPE_REMOVED":     2,
+		"CHANGE_TYPE_MODIFIED":    3,
+	}
+)
+
+func (x ChangeType) Enum() *ChangeType {
+	p := new(ChangeType)
+	*p = x
+	return p
+}
+
+func (x ChangeType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChangeType) Descriptor() protoreflect.EnumDescriptor {
+	return file_centralconfig_v1_config_service_proto_enumTypes[0].Descriptor()
+}
+
+func (ChangeType) Type() protoreflect.EnumType {
+	return &file_centralconfig_v1_config_service_proto_enumTypes[0]
+}
+
+func (x ChangeType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChangeType.Descriptor instead.
+func (ChangeType) EnumDescriptor() ([]byte, []int) {
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{0}
+}
+
 // ImportMode controls how imported values interact with existing config.
 type ImportMode int32
 
@@ -66,11 +123,11 @@ func (x ImportMode) String() string {
 }
 
 func (ImportMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_centralconfig_v1_config_service_proto_enumTypes[0].Descriptor()
+	return file_centralconfig_v1_config_service_proto_enumTypes[1].Descriptor()
 }
 
 func (ImportMode) Type() protoreflect.EnumType {
-	return &file_centralconfig_v1_config_service_proto_enumTypes[0]
+	return &file_centralconfig_v1_config_service_proto_enumTypes[1]
 }
 
 func (x ImportMode) Number() protoreflect.EnumNumber {
@@ -79,7 +136,7 @@ func (x ImportMode) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ImportMode.Descriptor instead.
 func (ImportMode) EnumDescriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{0}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{1}
 }
 
 type GetConfigRequest struct {
@@ -1100,6 +1157,188 @@ func (x *RollbackToVersionResponse) GetConfigVersion() *ConfigVersion {
 	return nil
 }
 
+type DiffVersionsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Tenant ID (UUID).
+	TenantId string `protobuf:"bytes,1,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// The base version to diff from.
+	FromVersion int32 `protobuf:"varint,2,opt,name=from_version,json=fromVersion,proto3" json:"from_version,omitempty"`
+	// The target version to diff to.
+	ToVersion     int32 `protobuf:"varint,3,opt,name=to_version,json=toVersion,proto3" json:"to_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiffVersionsRequest) Reset() {
+	*x = DiffVersionsRequest{}
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiffVersionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiffVersionsRequest) ProtoMessage() {}
+
+func (x *DiffVersionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiffVersionsRequest.ProtoReflect.Descriptor instead.
+func (*DiffVersionsRequest) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DiffVersionsRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DiffVersionsRequest) GetFromVersion() int32 {
+	if x != nil {
+		return x.FromVersion
+	}
+	return 0
+}
+
+func (x *DiffVersionsRequest) GetToVersion() int32 {
+	if x != nil {
+		return x.ToVersion
+	}
+	return 0
+}
+
+type DiffVersionsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The fields that differ between from_version and to_version, sorted by
+	// field path. Unchanged fields are omitted.
+	Diffs         []*FieldDiff `protobuf:"bytes,1,rep,name=diffs,proto3" json:"diffs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiffVersionsResponse) Reset() {
+	*x = DiffVersionsResponse{}
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiffVersionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiffVersionsResponse) ProtoMessage() {}
+
+func (x *DiffVersionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiffVersionsResponse.ProtoReflect.Descriptor instead.
+func (*DiffVersionsResponse) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *DiffVersionsResponse) GetDiffs() []*FieldDiff {
+	if x != nil {
+		return x.Diffs
+	}
+	return nil
+}
+
+// FieldDiff describes a single field that differs between two config versions.
+type FieldDiff struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Dot-separated field path (e.g. "payments.fee").
+	FieldPath string `protobuf:"bytes,1,opt,name=field_path,json=fieldPath,proto3" json:"field_path,omitempty"`
+	// How the field changed.
+	ChangeType ChangeType `protobuf:"varint,2,opt,name=change_type,json=changeType,proto3,enum=centralconfig.v1.ChangeType" json:"change_type,omitempty"`
+	// The value at from_version. Empty when change_type is CHANGE_TYPE_ADDED.
+	OldValue string `protobuf:"bytes,3,opt,name=old_value,json=oldValue,proto3" json:"old_value,omitempty"`
+	// The value at to_version. Empty when change_type is CHANGE_TYPE_REMOVED.
+	NewValue      string `protobuf:"bytes,4,opt,name=new_value,json=newValue,proto3" json:"new_value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FieldDiff) Reset() {
+	*x = FieldDiff{}
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FieldDiff) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FieldDiff) ProtoMessage() {}
+
+func (x *FieldDiff) ProtoReflect() protoreflect.Message {
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FieldDiff.ProtoReflect.Descriptor instead.
+func (*FieldDiff) Descriptor() ([]byte, []int) {
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *FieldDiff) GetFieldPath() string {
+	if x != nil {
+		return x.FieldPath
+	}
+	return ""
+}
+
+func (x *FieldDiff) GetChangeType() ChangeType {
+	if x != nil {
+		return x.ChangeType
+	}
+	return ChangeType_CHANGE_TYPE_UNSPECIFIED
+}
+
+func (x *FieldDiff) GetOldValue() string {
+	if x != nil {
+		return x.OldValue
+	}
+	return ""
+}
+
+func (x *FieldDiff) GetNewValue() string {
+	if x != nil {
+		return x.NewValue
+	}
+	return ""
+}
+
 type SubscribeRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Tenant ID (UUID) to subscribe to.
@@ -1120,7 +1359,7 @@ type SubscribeRequest struct {
 
 func (x *SubscribeRequest) Reset() {
 	*x = SubscribeRequest{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[17]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1132,7 +1371,7 @@ func (x *SubscribeRequest) String() string {
 func (*SubscribeRequest) ProtoMessage() {}
 
 func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[17]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1145,7 +1384,7 @@ func (x *SubscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeRequest.ProtoReflect.Descriptor instead.
 func (*SubscribeRequest) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{17}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SubscribeRequest) GetTenantId() string {
@@ -1179,7 +1418,7 @@ type SubscribeResponse struct {
 
 func (x *SubscribeResponse) Reset() {
 	*x = SubscribeResponse{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[18]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1191,7 +1430,7 @@ func (x *SubscribeResponse) String() string {
 func (*SubscribeResponse) ProtoMessage() {}
 
 func (x *SubscribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[18]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1204,7 +1443,7 @@ func (x *SubscribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeResponse.ProtoReflect.Descriptor instead.
 func (*SubscribeResponse) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{18}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *SubscribeResponse) GetChange() *ConfigChange {
@@ -1230,7 +1469,7 @@ type ExportConfigRequest struct {
 
 func (x *ExportConfigRequest) Reset() {
 	*x = ExportConfigRequest{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[19]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1242,7 +1481,7 @@ func (x *ExportConfigRequest) String() string {
 func (*ExportConfigRequest) ProtoMessage() {}
 
 func (x *ExportConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[19]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1255,7 +1494,7 @@ func (x *ExportConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportConfigRequest.ProtoReflect.Descriptor instead.
 func (*ExportConfigRequest) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{19}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ExportConfigRequest) GetTenantId() string {
@@ -1289,7 +1528,7 @@ type ExportConfigResponse struct {
 
 func (x *ExportConfigResponse) Reset() {
 	*x = ExportConfigResponse{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[20]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1301,7 +1540,7 @@ func (x *ExportConfigResponse) String() string {
 func (*ExportConfigResponse) ProtoMessage() {}
 
 func (x *ExportConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[20]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1314,7 +1553,7 @@ func (x *ExportConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportConfigResponse.ProtoReflect.Descriptor instead.
 func (*ExportConfigResponse) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{20}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ExportConfigResponse) GetYamlContent() []byte {
@@ -1340,7 +1579,7 @@ type ImportConfigRequest struct {
 
 func (x *ImportConfigRequest) Reset() {
 	*x = ImportConfigRequest{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[21]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1352,7 +1591,7 @@ func (x *ImportConfigRequest) String() string {
 func (*ImportConfigRequest) ProtoMessage() {}
 
 func (x *ImportConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[21]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1365,7 +1604,7 @@ func (x *ImportConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportConfigRequest.ProtoReflect.Descriptor instead.
 func (*ImportConfigRequest) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{21}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ImportConfigRequest) GetTenantId() string {
@@ -1406,7 +1645,7 @@ type ImportConfigResponse struct {
 
 func (x *ImportConfigResponse) Reset() {
 	*x = ImportConfigResponse{}
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[22]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1418,7 +1657,7 @@ func (x *ImportConfigResponse) String() string {
 func (*ImportConfigResponse) ProtoMessage() {}
 
 func (x *ImportConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_centralconfig_v1_config_service_proto_msgTypes[22]
+	mi := &file_centralconfig_v1_config_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1431,7 +1670,7 @@ func (x *ImportConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportConfigResponse.ProtoReflect.Descriptor instead.
 func (*ImportConfigResponse) Descriptor() ([]byte, []int) {
-	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{22}
+	return file_centralconfig_v1_config_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ImportConfigResponse) GetConfigVersion() *ConfigVersion {
@@ -1525,7 +1764,21 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\vdescription\x18\x03 \x01(\tH\x00R\vdescription\x88\x01\x01B\x0e\n" +
 	"\f_description\"c\n" +
 	"\x19RollbackToVersionResponse\x12F\n" +
-	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"\x8c\x01\n" +
+	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion\"t\n" +
+	"\x13DiffVersionsRequest\x12\x1b\n" +
+	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12!\n" +
+	"\ffrom_version\x18\x02 \x01(\x05R\vfromVersion\x12\x1d\n" +
+	"\n" +
+	"to_version\x18\x03 \x01(\x05R\ttoVersion\"I\n" +
+	"\x14DiffVersionsResponse\x121\n" +
+	"\x05diffs\x18\x01 \x03(\v2\x1b.centralconfig.v1.FieldDiffR\x05diffs\"\xa3\x01\n" +
+	"\tFieldDiff\x12\x1d\n" +
+	"\n" +
+	"field_path\x18\x01 \x01(\tR\tfieldPath\x12=\n" +
+	"\vchange_type\x18\x02 \x01(\x0e2\x1c.centralconfig.v1.ChangeTypeR\n" +
+	"changeType\x12\x1b\n" +
+	"\told_value\x18\x03 \x01(\tR\boldValue\x12\x1b\n" +
+	"\tnew_value\x18\x04 \x01(\tR\bnewValue\"\x8c\x01\n" +
 	"\x10SubscribeRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1f\n" +
 	"\vfield_paths\x18\x02 \x03(\tR\n" +
@@ -1552,11 +1805,17 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\x14ImportConfigResponse\x12F\n" +
 	"\x0econfig_version\x18\x01 \x01(\v2\x1f.centralconfig.v1.ConfigVersionR\rconfigVersion*s\n" +
 	"\n" +
+	"ChangeType\x12\x1b\n" +
+	"\x17CHANGE_TYPE_UNSPECIFIED\x10\x00\x12\x15\n" +
+	"\x11CHANGE_TYPE_ADDED\x10\x01\x12\x17\n" +
+	"\x13CHANGE_TYPE_REMOVED\x10\x02\x12\x18\n" +
+	"\x14CHANGE_TYPE_MODIFIED\x10\x03*s\n" +
+	"\n" +
 	"ImportMode\x12\x1b\n" +
 	"\x17IMPORT_MODE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11IMPORT_MODE_MERGE\x10\x01\x12\x17\n" +
 	"\x13IMPORT_MODE_REPLACE\x10\x02\x12\x18\n" +
-	"\x14IMPORT_MODE_DEFAULTS\x10\x032\xb6\f\n" +
+	"\x14IMPORT_MODE_DEFAULTS\x10\x032\xe1\r\n" +
 	"\rConfigService\x12|\n" +
 	"\tGetConfig\x12\".centralconfig.v1.GetConfigRequest\x1a#.centralconfig.v1.GetConfigResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/tenants/{tenant_id}/config\x12\x8d\x01\n" +
 	"\bGetField\x12!.centralconfig.v1.GetFieldRequest\x1a\".centralconfig.v1.GetFieldResponse\":\x82\xd3\xe4\x93\x024\x122/v1/tenants/{tenant_id}/config/fields/{field_path}\x12\x88\x01\n" +
@@ -1566,7 +1825,8 @@ const file_centralconfig_v1_config_service_proto_rawDesc = "" +
 	"\fListVersions\x12%.centralconfig.v1.ListVersionsRequest\x1a&.centralconfig.v1.ListVersionsResponse\"(\x82\xd3\xe4\x93\x02\"\x12 /v1/tenants/{tenant_id}/versions\x12\x8b\x01\n" +
 	"\n" +
 	"GetVersion\x12#.centralconfig.v1.GetVersionRequest\x1a$.centralconfig.v1.GetVersionResponse\"2\x82\xd3\xe4\x93\x02,\x12*/v1/tenants/{tenant_id}/versions/{version}\x12\xa9\x01\n" +
-	"\x11RollbackToVersion\x12*.centralconfig.v1.RollbackToVersionRequest\x1a+.centralconfig.v1.RollbackToVersionResponse\";\x82\xd3\xe4\x93\x025\"3/v1/tenants/{tenant_id}/versions/{version}:rollback\x12\x88\x01\n" +
+	"\x11RollbackToVersion\x12*.centralconfig.v1.RollbackToVersionRequest\x1a+.centralconfig.v1.RollbackToVersionResponse\";\x82\xd3\xe4\x93\x025\"3/v1/tenants/{tenant_id}/versions/{version}:rollback\x12\xa8\x01\n" +
+	"\fDiffVersions\x12%.centralconfig.v1.DiffVersionsRequest\x1a&.centralconfig.v1.DiffVersionsResponse\"I\x82\xd3\xe4\x93\x02C\x12A/v1/tenants/{tenant_id}/versions/{from_version}/diff/{to_version}\x12\x88\x01\n" +
 	"\tSubscribe\x12\".centralconfig.v1.SubscribeRequest\x1a#.centralconfig.v1.SubscribeResponse\"0\x82\xd3\xe4\x93\x02*\x12(/v1/tenants/{tenant_id}/config:subscribe0\x01\x12\x8c\x01\n" +
 	"\fExportConfig\x12%.centralconfig.v1.ExportConfigRequest\x1a&.centralconfig.v1.ExportConfigResponse\"-\x82\xd3\xe4\x93\x02'\x12%/v1/tenants/{tenant_id}/config/export\x12\x8f\x01\n" +
 	"\fImportConfig\x12%.centralconfig.v1.ImportConfigRequest\x1a&.centralconfig.v1.ImportConfigResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/v1/tenants/{tenant_id}/config/importB\xce\x01\n" +
@@ -1584,81 +1844,89 @@ func file_centralconfig_v1_config_service_proto_rawDescGZIP() []byte {
 	return file_centralconfig_v1_config_service_proto_rawDescData
 }
 
-var file_centralconfig_v1_config_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_centralconfig_v1_config_service_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_centralconfig_v1_config_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_centralconfig_v1_config_service_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_centralconfig_v1_config_service_proto_goTypes = []any{
-	(ImportMode)(0),                   // 0: centralconfig.v1.ImportMode
-	(*GetConfigRequest)(nil),          // 1: centralconfig.v1.GetConfigRequest
-	(*GetConfigResponse)(nil),         // 2: centralconfig.v1.GetConfigResponse
-	(*GetFieldRequest)(nil),           // 3: centralconfig.v1.GetFieldRequest
-	(*GetFieldResponse)(nil),          // 4: centralconfig.v1.GetFieldResponse
-	(*GetFieldsRequest)(nil),          // 5: centralconfig.v1.GetFieldsRequest
-	(*GetFieldsResponse)(nil),         // 6: centralconfig.v1.GetFieldsResponse
-	(*SetFieldRequest)(nil),           // 7: centralconfig.v1.SetFieldRequest
-	(*SetFieldResponse)(nil),          // 8: centralconfig.v1.SetFieldResponse
-	(*SetFieldsRequest)(nil),          // 9: centralconfig.v1.SetFieldsRequest
-	(*SetFieldsResponse)(nil),         // 10: centralconfig.v1.SetFieldsResponse
-	(*FieldUpdate)(nil),               // 11: centralconfig.v1.FieldUpdate
-	(*ListVersionsRequest)(nil),       // 12: centralconfig.v1.ListVersionsRequest
-	(*ListVersionsResponse)(nil),      // 13: centralconfig.v1.ListVersionsResponse
-	(*GetVersionRequest)(nil),         // 14: centralconfig.v1.GetVersionRequest
-	(*GetVersionResponse)(nil),        // 15: centralconfig.v1.GetVersionResponse
-	(*RollbackToVersionRequest)(nil),  // 16: centralconfig.v1.RollbackToVersionRequest
-	(*RollbackToVersionResponse)(nil), // 17: centralconfig.v1.RollbackToVersionResponse
-	(*SubscribeRequest)(nil),          // 18: centralconfig.v1.SubscribeRequest
-	(*SubscribeResponse)(nil),         // 19: centralconfig.v1.SubscribeResponse
-	(*ExportConfigRequest)(nil),       // 20: centralconfig.v1.ExportConfigRequest
-	(*ExportConfigResponse)(nil),      // 21: centralconfig.v1.ExportConfigResponse
-	(*ImportConfigRequest)(nil),       // 22: centralconfig.v1.ImportConfigRequest
-	(*ImportConfigResponse)(nil),      // 23: centralconfig.v1.ImportConfigResponse
-	(*Config)(nil),                    // 24: centralconfig.v1.Config
-	(*ConfigValue)(nil),               // 25: centralconfig.v1.ConfigValue
-	(*TypedValue)(nil),                // 26: centralconfig.v1.TypedValue
-	(*ConfigVersion)(nil),             // 27: centralconfig.v1.ConfigVersion
-	(*ConfigChange)(nil),              // 28: centralconfig.v1.ConfigChange
+	(ChangeType)(0),                   // 0: centralconfig.v1.ChangeType
+	(ImportMode)(0),                   // 1: centralconfig.v1.ImportMode
+	(*GetConfigRequest)(nil),          // 2: centralconfig.v1.GetConfigRequest
+	(*GetConfigResponse)(nil),         // 3: centralconfig.v1.GetConfigResponse
+	(*GetFieldRequest)(nil),           // 4: centralconfig.v1.GetFieldRequest
+	(*GetFieldResponse)(nil),          // 5: centralconfig.v1.GetFieldResponse
+	(*GetFieldsRequest)(nil),          // 6: centralconfig.v1.GetFieldsRequest
+	(*GetFieldsResponse)(nil),         // 7: centralconfig.v1.GetFieldsResponse
+	(*SetFieldRequest)(nil),           // 8: centralconfig.v1.SetFieldRequest
+	(*SetFieldResponse)(nil),          // 9: centralconfig.v1.SetFieldResponse
+	(*SetFieldsRequest)(nil),          // 10: centralconfig.v1.SetFieldsRequest
+	(*SetFieldsResponse)(nil),         // 11: centralconfig.v1.SetFieldsResponse
+	(*FieldUpdate)(nil),               // 12: centralconfig.v1.FieldUpdate
+	(*ListVersionsRequest)(nil),       // 13: centralconfig.v1.ListVersionsRequest
+	(*ListVersionsResponse)(nil),      // 14: centralconfig.v1.ListVersionsResponse
+	(*GetVersionRequest)(nil),         // 15: centralconfig.v1.GetVersionRequest
+	(*GetVersionResponse)(nil),        // 16: centralconfig.v1.GetVersionResponse
+	(*RollbackToVersionRequest)(nil),  // 17: centralconfig.v1.RollbackToVersionRequest
+	(*RollbackToVersionResponse)(nil), // 18: centralconfig.v1.RollbackToVersionResponse
+	(*DiffVersionsRequest)(nil),       // 19: centralconfig.v1.DiffVersionsRequest
+	(*DiffVersionsResponse)(nil),      // 20: centralconfig.v1.DiffVersionsResponse
+	(*FieldDiff)(nil),                 // 21: centralconfig.v1.FieldDiff
+	(*SubscribeRequest)(nil),          // 22: centralconfig.v1.SubscribeRequest
+	(*SubscribeResponse)(nil),         // 23: centralconfig.v1.SubscribeResponse
+	(*ExportConfigRequest)(nil),       // 24: centralconfig.v1.ExportConfigRequest
+	(*ExportConfigResponse)(nil),      // 25: centralconfig.v1.ExportConfigResponse
+	(*ImportConfigRequest)(nil),       // 26: centralconfig.v1.ImportConfigRequest
+	(*ImportConfigResponse)(nil),      // 27: centralconfig.v1.ImportConfigResponse
+	(*Config)(nil),                    // 28: centralconfig.v1.Config
+	(*ConfigValue)(nil),               // 29: centralconfig.v1.ConfigValue
+	(*TypedValue)(nil),                // 30: centralconfig.v1.TypedValue
+	(*ConfigVersion)(nil),             // 31: centralconfig.v1.ConfigVersion
+	(*ConfigChange)(nil),              // 32: centralconfig.v1.ConfigChange
 }
 var file_centralconfig_v1_config_service_proto_depIdxs = []int32{
-	24, // 0: centralconfig.v1.GetConfigResponse.config:type_name -> centralconfig.v1.Config
-	25, // 1: centralconfig.v1.GetFieldResponse.value:type_name -> centralconfig.v1.ConfigValue
-	25, // 2: centralconfig.v1.GetFieldsResponse.values:type_name -> centralconfig.v1.ConfigValue
-	26, // 3: centralconfig.v1.SetFieldRequest.value:type_name -> centralconfig.v1.TypedValue
-	27, // 4: centralconfig.v1.SetFieldResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
-	11, // 5: centralconfig.v1.SetFieldsRequest.updates:type_name -> centralconfig.v1.FieldUpdate
-	27, // 6: centralconfig.v1.SetFieldsResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
-	26, // 7: centralconfig.v1.FieldUpdate.value:type_name -> centralconfig.v1.TypedValue
-	27, // 8: centralconfig.v1.ListVersionsResponse.versions:type_name -> centralconfig.v1.ConfigVersion
-	27, // 9: centralconfig.v1.GetVersionResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
-	27, // 10: centralconfig.v1.RollbackToVersionResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
-	28, // 11: centralconfig.v1.SubscribeResponse.change:type_name -> centralconfig.v1.ConfigChange
-	0,  // 12: centralconfig.v1.ImportConfigRequest.mode:type_name -> centralconfig.v1.ImportMode
-	27, // 13: centralconfig.v1.ImportConfigResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
-	1,  // 14: centralconfig.v1.ConfigService.GetConfig:input_type -> centralconfig.v1.GetConfigRequest
-	3,  // 15: centralconfig.v1.ConfigService.GetField:input_type -> centralconfig.v1.GetFieldRequest
-	5,  // 16: centralconfig.v1.ConfigService.GetFields:input_type -> centralconfig.v1.GetFieldsRequest
-	7,  // 17: centralconfig.v1.ConfigService.SetField:input_type -> centralconfig.v1.SetFieldRequest
-	9,  // 18: centralconfig.v1.ConfigService.SetFields:input_type -> centralconfig.v1.SetFieldsRequest
-	12, // 19: centralconfig.v1.ConfigService.ListVersions:input_type -> centralconfig.v1.ListVersionsRequest
-	14, // 20: centralconfig.v1.ConfigService.GetVersion:input_type -> centralconfig.v1.GetVersionRequest
-	16, // 21: centralconfig.v1.ConfigService.RollbackToVersion:input_type -> centralconfig.v1.RollbackToVersionRequest
-	18, // 22: centralconfig.v1.ConfigService.Subscribe:input_type -> centralconfig.v1.SubscribeRequest
-	20, // 23: centralconfig.v1.ConfigService.ExportConfig:input_type -> centralconfig.v1.ExportConfigRequest
-	22, // 24: centralconfig.v1.ConfigService.ImportConfig:input_type -> centralconfig.v1.ImportConfigRequest
-	2,  // 25: centralconfig.v1.ConfigService.GetConfig:output_type -> centralconfig.v1.GetConfigResponse
-	4,  // 26: centralconfig.v1.ConfigService.GetField:output_type -> centralconfig.v1.GetFieldResponse
-	6,  // 27: centralconfig.v1.ConfigService.GetFields:output_type -> centralconfig.v1.GetFieldsResponse
-	8,  // 28: centralconfig.v1.ConfigService.SetField:output_type -> centralconfig.v1.SetFieldResponse
-	10, // 29: centralconfig.v1.ConfigService.SetFields:output_type -> centralconfig.v1.SetFieldsResponse
-	13, // 30: centralconfig.v1.ConfigService.ListVersions:output_type -> centralconfig.v1.ListVersionsResponse
-	15, // 31: centralconfig.v1.ConfigService.GetVersion:output_type -> centralconfig.v1.GetVersionResponse
-	17, // 32: centralconfig.v1.ConfigService.RollbackToVersion:output_type -> centralconfig.v1.RollbackToVersionResponse
-	19, // 33: centralconfig.v1.ConfigService.Subscribe:output_type -> centralconfig.v1.SubscribeResponse
-	21, // 34: centralconfig.v1.ConfigService.ExportConfig:output_type -> centralconfig.v1.ExportConfigResponse
-	23, // 35: centralconfig.v1.ConfigService.ImportConfig:output_type -> centralconfig.v1.ImportConfigResponse
-	25, // [25:36] is the sub-list for method output_type
-	14, // [14:25] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	28, // 0: centralconfig.v1.GetConfigResponse.config:type_name -> centralconfig.v1.Config
+	29, // 1: centralconfig.v1.GetFieldResponse.value:type_name -> centralconfig.v1.ConfigValue
+	29, // 2: centralconfig.v1.GetFieldsResponse.values:type_name -> centralconfig.v1.ConfigValue
+	30, // 3: centralconfig.v1.SetFieldRequest.value:type_name -> centralconfig.v1.TypedValue
+	31, // 4: centralconfig.v1.SetFieldResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
+	12, // 5: centralconfig.v1.SetFieldsRequest.updates:type_name -> centralconfig.v1.FieldUpdate
+	31, // 6: centralconfig.v1.SetFieldsResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
+	30, // 7: centralconfig.v1.FieldUpdate.value:type_name -> centralconfig.v1.TypedValue
+	31, // 8: centralconfig.v1.ListVersionsResponse.versions:type_name -> centralconfig.v1.ConfigVersion
+	31, // 9: centralconfig.v1.GetVersionResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
+	31, // 10: centralconfig.v1.RollbackToVersionResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
+	21, // 11: centralconfig.v1.DiffVersionsResponse.diffs:type_name -> centralconfig.v1.FieldDiff
+	0,  // 12: centralconfig.v1.FieldDiff.change_type:type_name -> centralconfig.v1.ChangeType
+	32, // 13: centralconfig.v1.SubscribeResponse.change:type_name -> centralconfig.v1.ConfigChange
+	1,  // 14: centralconfig.v1.ImportConfigRequest.mode:type_name -> centralconfig.v1.ImportMode
+	31, // 15: centralconfig.v1.ImportConfigResponse.config_version:type_name -> centralconfig.v1.ConfigVersion
+	2,  // 16: centralconfig.v1.ConfigService.GetConfig:input_type -> centralconfig.v1.GetConfigRequest
+	4,  // 17: centralconfig.v1.ConfigService.GetField:input_type -> centralconfig.v1.GetFieldRequest
+	6,  // 18: centralconfig.v1.ConfigService.GetFields:input_type -> centralconfig.v1.GetFieldsRequest
+	8,  // 19: centralconfig.v1.ConfigService.SetField:input_type -> centralconfig.v1.SetFieldRequest
+	10, // 20: centralconfig.v1.ConfigService.SetFields:input_type -> centralconfig.v1.SetFieldsRequest
+	13, // 21: centralconfig.v1.ConfigService.ListVersions:input_type -> centralconfig.v1.ListVersionsRequest
+	15, // 22: centralconfig.v1.ConfigService.GetVersion:input_type -> centralconfig.v1.GetVersionRequest
+	17, // 23: centralconfig.v1.ConfigService.RollbackToVersion:input_type -> centralconfig.v1.RollbackToVersionRequest
+	19, // 24: centralconfig.v1.ConfigService.DiffVersions:input_type -> centralconfig.v1.DiffVersionsRequest
+	22, // 25: centralconfig.v1.ConfigService.Subscribe:input_type -> centralconfig.v1.SubscribeRequest
+	24, // 26: centralconfig.v1.ConfigService.ExportConfig:input_type -> centralconfig.v1.ExportConfigRequest
+	26, // 27: centralconfig.v1.ConfigService.ImportConfig:input_type -> centralconfig.v1.ImportConfigRequest
+	3,  // 28: centralconfig.v1.ConfigService.GetConfig:output_type -> centralconfig.v1.GetConfigResponse
+	5,  // 29: centralconfig.v1.ConfigService.GetField:output_type -> centralconfig.v1.GetFieldResponse
+	7,  // 30: centralconfig.v1.ConfigService.GetFields:output_type -> centralconfig.v1.GetFieldsResponse
+	9,  // 31: centralconfig.v1.ConfigService.SetField:output_type -> centralconfig.v1.SetFieldResponse
+	11, // 32: centralconfig.v1.ConfigService.SetFields:output_type -> centralconfig.v1.SetFieldsResponse
+	14, // 33: centralconfig.v1.ConfigService.ListVersions:output_type -> centralconfig.v1.ListVersionsResponse
+	16, // 34: centralconfig.v1.ConfigService.GetVersion:output_type -> centralconfig.v1.GetVersionResponse
+	18, // 35: centralconfig.v1.ConfigService.RollbackToVersion:output_type -> centralconfig.v1.RollbackToVersionResponse
+	20, // 36: centralconfig.v1.ConfigService.DiffVersions:output_type -> centralconfig.v1.DiffVersionsResponse
+	23, // 37: centralconfig.v1.ConfigService.Subscribe:output_type -> centralconfig.v1.SubscribeResponse
+	25, // 38: centralconfig.v1.ConfigService.ExportConfig:output_type -> centralconfig.v1.ExportConfigResponse
+	27, // 39: centralconfig.v1.ConfigService.ImportConfig:output_type -> centralconfig.v1.ImportConfigResponse
+	28, // [28:40] is the sub-list for method output_type
+	16, // [16:28] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_centralconfig_v1_config_service_proto_init() }
@@ -1674,16 +1942,16 @@ func file_centralconfig_v1_config_service_proto_init() {
 	file_centralconfig_v1_config_service_proto_msgTypes[8].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[10].OneofWrappers = []any{}
 	file_centralconfig_v1_config_service_proto_msgTypes[15].OneofWrappers = []any{}
-	file_centralconfig_v1_config_service_proto_msgTypes[17].OneofWrappers = []any{}
-	file_centralconfig_v1_config_service_proto_msgTypes[19].OneofWrappers = []any{}
-	file_centralconfig_v1_config_service_proto_msgTypes[21].OneofWrappers = []any{}
+	file_centralconfig_v1_config_service_proto_msgTypes[20].OneofWrappers = []any{}
+	file_centralconfig_v1_config_service_proto_msgTypes[22].OneofWrappers = []any{}
+	file_centralconfig_v1_config_service_proto_msgTypes[24].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_centralconfig_v1_config_service_proto_rawDesc), len(file_centralconfig_v1_config_service_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   23,
+			NumEnums:      2,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
