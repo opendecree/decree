@@ -55,6 +55,19 @@ func (c *Client) GetConfigVersion(ctx context.Context, tenantID string, version 
 	})
 }
 
+// DiffConfigVersions compares the full resolved config at two versions and
+// returns the fields that differ. Unchanged fields are omitted; the result is
+// sorted by field path. A field with a null value at a version is treated as
+// present with an empty-string value.
+func (c *Client) DiffConfigVersions(ctx context.Context, tenantID string, fromVersion, toVersion int32) ([]FieldDiff, error) {
+	if c.config == nil {
+		return nil, ErrServiceNotConfigured
+	}
+	return retry(ctx, c, func(ctx context.Context) ([]FieldDiff, error) {
+		return c.config.DiffVersions(ctx, tenantID, fromVersion, toVersion)
+	})
+}
+
 // RollbackConfig requests the server to create a new config version populated
 // with the values from the specified previous version.
 // The description is optional — pass an empty string to use the server default.

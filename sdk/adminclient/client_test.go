@@ -99,6 +99,7 @@ type mockConfigTransport struct {
 	listVersionsFn func(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*ListVersionsResponse, error)
 	getVersionFn   func(ctx context.Context, tenantID string, version int32) (*Version, error)
 	rollbackFn     func(ctx context.Context, tenantID string, version int32, description string) (*Version, error)
+	diffVersionsFn func(ctx context.Context, tenantID string, fromVersion, toVersion int32) ([]FieldDiff, error)
 	exportConfigFn func(ctx context.Context, tenantID string, version *int32) ([]byte, error)
 	importConfigFn func(ctx context.Context, req *ImportConfigRequest) (*Version, error)
 }
@@ -113,6 +114,10 @@ func (m *mockConfigTransport) GetVersion(ctx context.Context, tenantID string, v
 
 func (m *mockConfigTransport) RollbackToVersion(ctx context.Context, tenantID string, version int32, description string) (*Version, error) {
 	return m.rollbackFn(ctx, tenantID, version, description)
+}
+
+func (m *mockConfigTransport) DiffVersions(ctx context.Context, tenantID string, fromVersion, toVersion int32) ([]FieldDiff, error) {
+	return m.diffVersionsFn(ctx, tenantID, fromVersion, toVersion)
 }
 
 func (m *mockConfigTransport) ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error) {
@@ -306,6 +311,46 @@ func TestRollbackConfig_Success(t *testing.T) {
 	}
 	if got := v.Version; got != int32(5) {
 		t.Errorf("got Version %v, want %v", got, int32(5))
+	}
+}
+
+func TestDiffConfigVersions_Success(t *testing.T) {
+	mc := &mockConfigTransport{}
+	client := New(WithConfigTransport(mc))
+	ctx := context.Background()
+
+	var gotFrom, gotTo int32
+	mc.diffVersionsFn = func(_ context.Context, _ string, fromVersion, toVersion int32) ([]FieldDiff, error) {
+		gotFrom, gotTo = fromVersion, toVersion
+		return []FieldDiff{
+			{FieldPath: "a", ChangeType: ChangeTypeAdded, NewValue: "1"},
+			{FieldPath: "b", ChangeType: ChangeTypeModified, OldValue: "2", NewValue: "3"},
+		}, nil
+	}
+
+	diffs, err := client.DiffConfigVersions(ctx, "t1", 1, 4)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotFrom != 1 || gotTo != 4 {
+		t.Errorf("transport got from=%d to=%d, want from=1 to=4", gotFrom, gotTo)
+	}
+	if len(diffs) != 2 {
+		t.Fatalf("got %d diffs, want 2", len(diffs))
+	}
+	if diffs[0].ChangeType != ChangeTypeAdded || diffs[0].NewValue != "1" {
+		t.Errorf("diff[0] = %+v, want added/1", diffs[0])
+	}
+	if diffs[1].ChangeType != ChangeTypeModified || diffs[1].OldValue != "2" || diffs[1].NewValue != "3" {
+		t.Errorf("diff[1] = %+v, want modified/2/3", diffs[1])
+	}
+}
+
+func TestDiffConfigVersions_NotConfigured(t *testing.T) {
+	client := New()
+	_, err := client.DiffConfigVersions(context.Background(), "t1", 1, 2)
+	if !errors.Is(err, ErrServiceNotConfigured) {
+		t.Errorf("got %v, want ErrServiceNotConfigured", err)
 	}
 }
 

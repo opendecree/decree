@@ -32,6 +32,7 @@ type ConfigTransport interface {
 	ListVersions(ctx context.Context, tenantID string, pageSize int32, pageToken string) (*ListVersionsResponse, error)
 	GetVersion(ctx context.Context, tenantID string, version int32) (*Version, error)
 	RollbackToVersion(ctx context.Context, tenantID string, version int32, description string) (*Version, error)
+	DiffVersions(ctx context.Context, tenantID string, fromVersion, toVersion int32) ([]FieldDiff, error)
 	ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error)
 	ImportConfig(ctx context.Context, req *ImportConfigRequest) (*Version, error)
 }

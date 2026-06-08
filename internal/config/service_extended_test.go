@@ -571,6 +571,128 @@ func TestGetVersion_NotFound(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+// --- DiffVersions ---
+
+// setupDiffVersionExist stubs GetConfigVersion so both from/to versions resolve.
+func setupDiffVersionExist(store *mockStore, ctx context.Context) {
+	store.On("GetConfigVersion", ctx, mock.AnythingOfType("config.GetConfigVersionParams")).
+		Return(domain.ConfigVersion{ID: versionID2, Version: 1}, nil)
+}
+
+func TestDiffVersions_AddedRemovedModifiedUnchanged(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	setupDiffVersionExist(store, ctx)
+	// from(v1): keep, drop, change present.
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 1}).
+		Return([]GetFullConfigAtVersionRow{
+			{FieldPath: "keep", Value: strPtr("same")},
+			{FieldPath: "drop", Value: strPtr("gone")},
+			{FieldPath: "change", Value: strPtr("old")},
+		}, nil)
+	// to(v2): keep unchanged, change modified, add new.
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 2}).
+		Return([]GetFullConfigAtVersionRow{
+			{FieldPath: "keep", Value: strPtr("same")},
+			{FieldPath: "change", Value: strPtr("new")},
+			{FieldPath: "add", Value: strPtr("fresh")},
+		}, nil)
+
+	resp, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 1, ToVersion: 2})
+	require.NoError(t, err)
+	require.Len(t, resp.Diffs, 3)
+
+	// Sorted by field path: add, change, drop.
+	assert.Equal(t, "add", resp.Diffs[0].FieldPath)
+	assert.Equal(t, pb.ChangeType_CHANGE_TYPE_ADDED, resp.Diffs[0].ChangeType)
+	assert.Empty(t, resp.Diffs[0].OldValue)
+	assert.Equal(t, "fresh", resp.Diffs[0].NewValue)
+
+	assert.Equal(t, "change", resp.Diffs[1].FieldPath)
+	assert.Equal(t, pb.ChangeType_CHANGE_TYPE_MODIFIED, resp.Diffs[1].ChangeType)
+	assert.Equal(t, "old", resp.Diffs[1].OldValue)
+	assert.Equal(t, "new", resp.Diffs[1].NewValue)
+
+	assert.Equal(t, "drop", resp.Diffs[2].FieldPath)
+	assert.Equal(t, pb.ChangeType_CHANGE_TYPE_REMOVED, resp.Diffs[2].ChangeType)
+	assert.Equal(t, "gone", resp.Diffs[2].OldValue)
+	assert.Empty(t, resp.Diffs[2].NewValue)
+}
+
+func TestDiffVersions_Identical_EmptyDiff(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	setupDiffVersionExist(store, ctx)
+	rows := []GetFullConfigAtVersionRow{{FieldPath: "a", Value: strPtr("1")}}
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 3}).
+		Return(rows, nil)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 4}).
+		Return(rows, nil)
+
+	resp, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 3, ToVersion: 4})
+	require.NoError(t, err)
+	assert.Empty(t, resp.Diffs)
+}
+
+func TestDiffVersions_FromVersionNotFound(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("GetConfigVersion", ctx, GetConfigVersionParams{TenantID: tenantID1, Version: 99}).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+
+	_, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 99, ToVersion: 1})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+	store.AssertNotCalled(t, "GetFullConfigAtVersion")
+}
+
+func TestDiffVersions_ToVersionNotFound(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	store.On("GetConfigVersion", ctx, GetConfigVersionParams{TenantID: tenantID1, Version: 1}).
+		Return(domain.ConfigVersion{ID: versionID2, Version: 1}, nil)
+	store.On("GetConfigVersion", ctx, GetConfigVersionParams{TenantID: tenantID1, Version: 99}).
+		Return(domain.ConfigVersion{}, domain.ErrNotFound)
+
+	_, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 1, ToVersion: 99})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+	store.AssertNotCalled(t, "GetFullConfigAtVersion")
+}
+
+func TestDiffVersions_NullValueTreatedAsPresent(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	setupDiffVersionExist(store, ctx)
+	// from has a null-valued field; to drops it entirely → REMOVED.
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 5}).
+		Return([]GetFullConfigAtVersionRow{{FieldPath: "n", Value: nil}}, nil)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 6}).
+		Return([]GetFullConfigAtVersionRow{}, nil)
+
+	resp, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 5, ToVersion: 6})
+	require.NoError(t, err)
+	require.Len(t, resp.Diffs, 1)
+	assert.Equal(t, "n", resp.Diffs[0].FieldPath)
+	assert.Equal(t, pb.ChangeType_CHANGE_TYPE_REMOVED, resp.Diffs[0].ChangeType)
+	assert.Empty(t, resp.Diffs[0].OldValue)
+}
+
+func TestDiffVersions_StoreError_ReturnsInternal(t *testing.T) {
+	svc, store, _, _ := newTestService()
+	ctx := auth.WithoutAuth(context.Background())
+
+	setupDiffVersionExist(store, ctx)
+	store.On("GetFullConfigAtVersion", ctx, GetFullConfigAtVersionParams{TenantID: tenantID1, Version: 7}).
+		Return([]GetFullConfigAtVersionRow(nil), errors.New("db down"))
+
+	_, err := svc.DiffVersions(ctx, &pb.DiffVersionsRequest{TenantId: tenantID1, FromVersion: 7, ToVersion: 8})
+	assert.Equal(t, codes.Internal, status.Code(err))
+}
+
 // --- convert.go: typedValueToString coverage ---
 
 func TestTypedValueToString_AllTypes(t *testing.T) {

@@ -172,3 +172,48 @@ type Version struct {
 	CreatedBy   string
 	CreatedAt   time.Time
 }
+
+// ChangeType categorizes how a field changed between two config versions.
+type ChangeType int32
+
+const (
+	// ChangeTypeUnspecified is the zero value; never returned by the server.
+	ChangeTypeUnspecified ChangeType = 0
+	// ChangeTypeAdded means the field is present in the target version but
+	// absent in the base version.
+	ChangeTypeAdded ChangeType = 1
+	// ChangeTypeRemoved means the field is present in the base version but
+	// absent in the target version.
+	ChangeTypeRemoved ChangeType = 2
+	// ChangeTypeModified means the field is present in both versions with a
+	// different value.
+	ChangeTypeModified ChangeType = 3
+)
+
+// String returns a human-readable name for the change type.
+func (c ChangeType) String() string {
+	switch c {
+	case ChangeTypeAdded:
+		return "added"
+	case ChangeTypeRemoved:
+		return "removed"
+	case ChangeTypeModified:
+		return "modified"
+	default:
+		return "unspecified"
+	}
+}
+
+// FieldDiff describes a single field that differs between two config versions.
+type FieldDiff struct {
+	// FieldPath is the dot-separated field path (e.g. "payments.fee").
+	FieldPath string
+	// ChangeType is how the field changed.
+	ChangeType ChangeType
+	// OldValue is the value at the base version. Empty when ChangeType is
+	// ChangeTypeAdded.
+	OldValue string
+	// NewValue is the value at the target version. Empty when ChangeType is
+	// ChangeTypeRemoved.
+	NewValue string
+}

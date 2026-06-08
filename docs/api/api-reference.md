@@ -44,8 +44,11 @@
     - [AuditService](#centralconfig-v1-AuditService)
   
 - [centralconfig/v1/config_service.proto](#centralconfig_v1_config_service-proto)
+    - [DiffVersionsRequest](#centralconfig-v1-DiffVersionsRequest)
+    - [DiffVersionsResponse](#centralconfig-v1-DiffVersionsResponse)
     - [ExportConfigRequest](#centralconfig-v1-ExportConfigRequest)
     - [ExportConfigResponse](#centralconfig-v1-ExportConfigResponse)
+    - [FieldDiff](#centralconfig-v1-FieldDiff)
     - [FieldUpdate](#centralconfig-v1-FieldUpdate)
     - [GetConfigRequest](#centralconfig-v1-GetConfigRequest)
     - [GetConfigResponse](#centralconfig-v1-GetConfigResponse)
@@ -68,6 +71,7 @@
     - [SubscribeRequest](#centralconfig-v1-SubscribeRequest)
     - [SubscribeResponse](#centralconfig-v1-SubscribeResponse)
   
+    - [ChangeType](#centralconfig-v1-ChangeType)
     - [ImportMode](#centralconfig-v1-ImportMode)
   
     - [ConfigService](#centralconfig-v1-ConfigService)
@@ -826,6 +830,38 @@ Usage statistics are tracked asynchronously via batched read counters.
 
 
 
+<a name="centralconfig-v1-DiffVersionsRequest"></a>
+
+### DiffVersionsRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| tenant_id | [string](#string) |  | Tenant ID (UUID). |
+| from_version | [int32](#int32) |  | The base version to diff from. |
+| to_version | [int32](#int32) |  | The target version to diff to. |
+
+
+
+
+
+
+<a name="centralconfig-v1-DiffVersionsResponse"></a>
+
+### DiffVersionsResponse
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| diffs | [FieldDiff](#centralconfig-v1-FieldDiff) | repeated | The fields that differ between from_version and to_version, sorted by field path. Unchanged fields are omitted. |
+
+
+
+
+
+
 <a name="centralconfig-v1-ExportConfigRequest"></a>
 
 ### ExportConfigRequest
@@ -852,6 +888,24 @@ Usage statistics are tracked asynchronously via batched read counters.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | yaml_content | [bytes](#bytes) |  | YAML-encoded configuration values. |
+
+
+
+
+
+
+<a name="centralconfig-v1-FieldDiff"></a>
+
+### FieldDiff
+FieldDiff describes a single field that differs between two config versions.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| field_path | [string](#string) |  | Dot-separated field path (e.g. &#34;payments.fee&#34;). |
+| change_type | [ChangeType](#centralconfig-v1-ChangeType) |  | How the field changed. |
+| old_value | [string](#string) |  | The value at from_version. Empty when change_type is CHANGE_TYPE_ADDED. |
+| new_value | [string](#string) |  | The value at to_version. Empty when change_type is CHANGE_TYPE_REMOVED. |
 
 
 
@@ -1206,6 +1260,20 @@ FieldUpdate represents a single field change within a SetFields batch.
  
 
 
+<a name="centralconfig-v1-ChangeType"></a>
+
+### ChangeType
+ChangeType categorizes how a field changed between two config versions.
+
+| Name | Number | Description |
+| ---- | ------ | ----------- |
+| CHANGE_TYPE_UNSPECIFIED | 0 | Unspecified change type. Never emitted by the server. |
+| CHANGE_TYPE_ADDED | 1 | The field is present in to_version but absent in from_version. |
+| CHANGE_TYPE_REMOVED | 2 | The field is present in from_version but absent in to_version. |
+| CHANGE_TYPE_MODIFIED | 3 | The field is present in both versions with a different value. |
+
+
+
 <a name="centralconfig-v1-ImportMode"></a>
 
 ### ImportMode
@@ -1250,6 +1318,7 @@ bypasses the cache and reads directly from the database.
 | ListVersions | [ListVersionsRequest](#centralconfig-v1-ListVersionsRequest) | [ListVersionsResponse](#centralconfig-v1-ListVersionsResponse) | ListVersions returns config version history for a tenant (newest first). |
 | GetVersion | [GetVersionRequest](#centralconfig-v1-GetVersionRequest) | [GetVersionResponse](#centralconfig-v1-GetVersionResponse) | GetVersion retrieves metadata for a specific config version. |
 | RollbackToVersion | [RollbackToVersionRequest](#centralconfig-v1-RollbackToVersionRequest) | [RollbackToVersionResponse](#centralconfig-v1-RollbackToVersionResponse) | RollbackToVersion creates a new version with the same values as the target version. This does not delete intermediate versions — it creates a new version that copies the target&#39;s values. |
+| DiffVersions | [DiffVersionsRequest](#centralconfig-v1-DiffVersionsRequest) | [DiffVersionsResponse](#centralconfig-v1-DiffVersionsResponse) | DiffVersions compares the full resolved config at two versions and returns the fields that differ. Unchanged fields are omitted. Results are sorted by field path for deterministic output. |
 | Subscribe | [SubscribeRequest](#centralconfig-v1-SubscribeRequest) | [SubscribeResponse](#centralconfig-v1-SubscribeResponse) stream | Subscribe opens a server-streaming connection that pushes ConfigChange events whenever the tenant&#39;s configuration is modified.
 
 Stream lifetime: - Client disconnect: stream ends immediately. - Server closes with OK status: the server-side pub/sub backend restarted (e.g. Redis reconnect). Clients MUST reconnect with exponential backoff; an OK close does NOT indicate the subscription is permanently gone. - Server closes with error status: treat as a transient failure and reconnect with backoff.

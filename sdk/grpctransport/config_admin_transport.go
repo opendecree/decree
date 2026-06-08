@@ -79,6 +79,23 @@ func (t *AdminConfigTransport) RollbackToVersion(ctx context.Context, tenantID s
 	return versionFromProto(resp.GetConfigVersion()), nil
 }
 
+func (t *AdminConfigTransport) DiffVersions(ctx context.Context, tenantID string, fromVersion, toVersion int32) ([]adminclient.FieldDiff, error) {
+	ctx, callOpts := t.auth.apply(ctx)
+	resp, err := t.rpc.DiffVersions(ctx, &pb.DiffVersionsRequest{
+		TenantId:    tenantID,
+		FromVersion: fromVersion,
+		ToVersion:   toVersion,
+	}, callOpts...)
+	if err != nil {
+		return nil, mapAdminError(err)
+	}
+	diffs := make([]adminclient.FieldDiff, len(resp.GetDiffs()))
+	for i, d := range resp.GetDiffs() {
+		diffs[i] = fieldDiffFromProto(d)
+	}
+	return diffs, nil
+}
+
 func (t *AdminConfigTransport) ExportConfig(ctx context.Context, tenantID string, version *int32) ([]byte, error) {
 	ctx, callOpts := t.auth.apply(ctx)
 	resp, err := t.rpc.ExportConfig(ctx, &pb.ExportConfigRequest{

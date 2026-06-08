@@ -154,6 +154,12 @@ func (f *fakeConfigTransport) RollbackToVersion(_ context.Context, _ string, tar
 	return &adminclient.Version{Version: targetVersion + 1}, nil
 }
 
+func (f *fakeConfigTransport) DiffVersions(_ context.Context, _ string, _, _ int32) ([]adminclient.FieldDiff, error) {
+	return []adminclient.FieldDiff{
+		{FieldPath: "payments.fee", ChangeType: adminclient.ChangeTypeModified, OldValue: "0.5", NewValue: "0.75"},
+	}, nil
+}
+
 func (f *fakeConfigTransport) ExportConfig(_ context.Context, _ string, _ *int32) ([]byte, error) {
 	return []byte("fields: []"), nil
 }
@@ -261,6 +267,22 @@ func ExampleClient_RollbackConfig() {
 	}
 	fmt.Println(v.Version > 0)
 	// Output: true
+}
+
+func ExampleClient_DiffConfigVersions() {
+	client := newFullClient()
+	ctx := context.Background()
+
+	// Compare the config at version 1 against version 2.
+	diffs, err := client.DiffConfigVersions(ctx, "tenant-1", 1, 2)
+	if err != nil {
+		fmt.Println("error:", err)
+		return
+	}
+	for _, d := range diffs {
+		fmt.Printf("%s %s: %s -> %s\n", d.ChangeType, d.FieldPath, d.OldValue, d.NewValue)
+	}
+	// Output: modified payments.fee: 0.5 -> 0.75
 }
 
 func ExampleClient_ImportConfig() {

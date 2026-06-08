@@ -1646,6 +1646,9 @@ func TestConfigService_RequiresAuth(t *testing.T) {
 	_, err = svc.GetVersion(ctx, &pb.GetVersionRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 
+	_, err = svc.DiffVersions(ctx, &pb.DiffVersionsRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+
 	_, err = svc.ExportConfig(ctx, &pb.ExportConfigRequest{})
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
 

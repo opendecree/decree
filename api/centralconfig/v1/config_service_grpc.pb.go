@@ -27,6 +27,7 @@ const (
 	ConfigService_ListVersions_FullMethodName      = "/centralconfig.v1.ConfigService/ListVersions"
 	ConfigService_GetVersion_FullMethodName        = "/centralconfig.v1.ConfigService/GetVersion"
 	ConfigService_RollbackToVersion_FullMethodName = "/centralconfig.v1.ConfigService/RollbackToVersion"
+	ConfigService_DiffVersions_FullMethodName      = "/centralconfig.v1.ConfigService/DiffVersions"
 	ConfigService_Subscribe_FullMethodName         = "/centralconfig.v1.ConfigService/Subscribe"
 	ConfigService_ExportConfig_FullMethodName      = "/centralconfig.v1.ConfigService/ExportConfig"
 	ConfigService_ImportConfig_FullMethodName      = "/centralconfig.v1.ConfigService/ImportConfig"
@@ -64,6 +65,10 @@ type ConfigServiceClient interface {
 	// This does not delete intermediate versions — it creates a new version that
 	// copies the target's values.
 	RollbackToVersion(ctx context.Context, in *RollbackToVersionRequest, opts ...grpc.CallOption) (*RollbackToVersionResponse, error)
+	// DiffVersions compares the full resolved config at two versions and returns
+	// the fields that differ. Unchanged fields are omitted. Results are sorted by
+	// field path for deterministic output.
+	DiffVersions(ctx context.Context, in *DiffVersionsRequest, opts ...grpc.CallOption) (*DiffVersionsResponse, error)
 	// Subscribe opens a server-streaming connection that pushes ConfigChange events
 	// whenever the tenant's configuration is modified.
 	//
@@ -172,6 +177,16 @@ func (c *configServiceClient) RollbackToVersion(ctx context.Context, in *Rollbac
 	return out, nil
 }
 
+func (c *configServiceClient) DiffVersions(ctx context.Context, in *DiffVersionsRequest, opts ...grpc.CallOption) (*DiffVersionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiffVersionsResponse)
+	err := c.cc.Invoke(ctx, ConfigService_DiffVersions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *configServiceClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &ConfigService_ServiceDesc.Streams[0], ConfigService_Subscribe_FullMethodName, cOpts...)
@@ -243,6 +258,10 @@ type ConfigServiceServer interface {
 	// This does not delete intermediate versions — it creates a new version that
 	// copies the target's values.
 	RollbackToVersion(context.Context, *RollbackToVersionRequest) (*RollbackToVersionResponse, error)
+	// DiffVersions compares the full resolved config at two versions and returns
+	// the fields that differ. Unchanged fields are omitted. Results are sorted by
+	// field path for deterministic output.
+	DiffVersions(context.Context, *DiffVersionsRequest) (*DiffVersionsResponse, error)
 	// Subscribe opens a server-streaming connection that pushes ConfigChange events
 	// whenever the tenant's configuration is modified.
 	//
@@ -294,6 +313,9 @@ func (UnimplementedConfigServiceServer) GetVersion(context.Context, *GetVersionR
 }
 func (UnimplementedConfigServiceServer) RollbackToVersion(context.Context, *RollbackToVersionRequest) (*RollbackToVersionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackToVersion not implemented")
+}
+func (UnimplementedConfigServiceServer) DiffVersions(context.Context, *DiffVersionsRequest) (*DiffVersionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiffVersions not implemented")
 }
 func (UnimplementedConfigServiceServer) Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[SubscribeResponse]) error {
 	return status.Error(codes.Unimplemented, "method Subscribe not implemented")
@@ -469,6 +491,24 @@ func _ConfigService_RollbackToVersion_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConfigService_DiffVersions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiffVersionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConfigServiceServer).DiffVersions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConfigService_DiffVersions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConfigServiceServer).DiffVersions(ctx, req.(*DiffVersionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ConfigService_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(SubscribeRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -554,6 +594,10 @@ var ConfigService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RollbackToVersion",
 			Handler:    _ConfigService_RollbackToVersion_Handler,
+		},
+		{
+			MethodName: "DiffVersions",
+			Handler:    _ConfigService_DiffVersions_Handler,
 		},
 		{
 			MethodName: "ExportConfig",

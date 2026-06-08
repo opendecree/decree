@@ -942,6 +942,56 @@ func (s *Service) GetVersion(ctx context.Context, req *pb.GetVersionRequest) (*p
 	return &pb.GetVersionResponse{ConfigVersion: configVersionToProto(version)}, nil
 }
 
+// DiffVersions compares the full resolved config at from_version and to_version
+// and returns the fields that differ. Unchanged fields are omitted; results are
+// sorted by field path. Requires ActionRead.
+func (s *Service) DiffVersions(ctx context.Context, req *pb.DiffVersionsRequest) (*pb.DiffVersionsResponse, error) {
+	if err := auth.MustHaveClaims(ctx); err != nil {
+		return nil, err
+	}
+	tenantID, err := s.resolveTenantWithAccess(ctx, req.TenantId, authz.ActionRead)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate that both versions exist before loading snapshots, so a missing
+	// version yields NotFound rather than an empty diff.
+	if _, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{TenantID: tenantID, Version: req.FromVersion}); err != nil {
+		return nil, errToStatus(err, "from version not found", "failed to get from version")
+	}
+	if _, err := s.store.GetConfigVersion(ctx, GetConfigVersionParams{TenantID: tenantID, Version: req.ToVersion}); err != nil {
+		return nil, errToStatus(err, "to version not found", "failed to get to version")
+	}
+
+	fromMap, err := s.configMapAtVersion(ctx, tenantID, req.FromVersion)
+	if err != nil {
+		return nil, err
+	}
+	toMap, err := s.configMapAtVersion(ctx, tenantID, req.ToVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.DiffVersionsResponse{Diffs: diffConfigMaps(fromMap, toMap)}, nil
+}
+
+// configMapAtVersion loads the full resolved config at the given version and
+// returns it as a field-path -> value map. A null value is represented as "".
+func (s *Service) configMapAtVersion(ctx context.Context, tenantID string, version int32) (map[string]string, error) {
+	rows, err := s.store.GetFullConfigAtVersion(ctx, GetFullConfigAtVersionParams{
+		TenantID: tenantID,
+		Version:  version,
+	})
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get config at version")
+	}
+	out := make(map[string]string, len(rows))
+	for _, row := range rows {
+		out[row.FieldPath] = derefString(row.Value)
+	}
+	return out, nil
+}
+
 func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersionRequest) (*pb.RollbackToVersionResponse, error) {
 	if err := auth.MustHaveClaims(ctx); err != nil {
 		return nil, err
