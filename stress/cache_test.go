@@ -36,7 +36,7 @@ func BenchmarkManyTenants_GetAll(b *testing.B) {
 		id, cleanTenant := makeTenant(b, admin, fmt.Sprintf("stress-mt-%d", i), schemaID)
 		tenantIDs[i] = id
 		b.Cleanup(cleanTenant)
-		require.NoError(b, cfg.Set(ctx, id, "f.field_0", fmt.Sprintf("val-%d", i)))
+		require.NoError(b, noVer(cfg.Set(ctx, id, "f.field_0", fmt.Sprintf("val-%d", i))))
 	}
 
 	b.ResetTimer()
@@ -63,7 +63,7 @@ func BenchmarkManyFields_GetAll(b *testing.B) {
 	b.Cleanup(cleanTenant)
 
 	for i := 0; i < fieldCount; i++ {
-		require.NoError(b, cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i)))
+		require.NoError(b, noVer(cfg.Set(ctx, tenantID, fmt.Sprintf("f.field_%d", i), fmt.Sprintf("val-%d", i))))
 	}
 
 	b.ResetTimer()
@@ -84,11 +84,11 @@ func BenchmarkRapidInvalidation(b *testing.B) {
 	b.Cleanup(cleanSchema)
 	tenantID, cleanTenant := makeTenant(b, admin, "stress-inv-tenant", schemaID)
 	b.Cleanup(cleanTenant)
-	require.NoError(b, cfg.Set(ctx, tenantID, "f.field_0", "seed"))
+	require.NoError(b, noVer(cfg.Set(ctx, tenantID, "f.field_0", "seed")))
 
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		_ = cfg.Set(ctx, tenantID, "f.field_0", fmt.Sprintf("rapid-%d", i))
+		_, _ = cfg.Set(ctx, tenantID, "f.field_0", fmt.Sprintf("rapid-%d", i))
 	}
 }
 
@@ -116,7 +116,7 @@ func TestCacheEviction(t *testing.T) {
 		id, cleanTenant := makeTenant(t, admin, fmt.Sprintf("stress-ev-%d", i), schemaID)
 		tenantIDs[i] = id
 		defer cleanTenant()
-		require.NoError(t, cfg.Set(ctx, id, "f.field_0", fmt.Sprintf("seed-%d", i)))
+		require.NoError(t, noVer(cfg.Set(ctx, id, "f.field_0", fmt.Sprintf("seed-%d", i))))
 	}
 
 	deadline := time.Now().Add(duration)
@@ -137,7 +137,7 @@ func TestCacheEviction(t *testing.T) {
 			defer wg.Done()
 			for i := 0; time.Now().Before(deadline); i++ {
 				tid := tenantIDs[(w*100+i)%tenantCount]
-				_ = cfg.Set(ctx, tid, "f.field_0", fmt.Sprintf("write-%d-%d", w, i))
+				_, _ = cfg.Set(ctx, tid, "f.field_0", fmt.Sprintf("write-%d-%d", w, i))
 			}
 		}()
 	}

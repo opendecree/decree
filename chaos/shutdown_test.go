@@ -42,7 +42,7 @@ func TestGracefulShutdown_UnderLoad(t *testing.T) {
 	t.Cleanup(cleanupSchema)
 	tenantID, cleanupTenant := makeTenant(t, admin, "shutdown-tenant", schemaID)
 	t.Cleanup(cleanupTenant)
-	require.NoError(t, cfg0.Set(ctx, tenantID, "chaos.field0", "initial"))
+	require.NoError(t, noVer(cfg0.Set(ctx, tenantID, "chaos.field0", "initial")))
 
 	// Warm up all connections so goroutines are immediately in-flight on start.
 	for _, c := range conns {

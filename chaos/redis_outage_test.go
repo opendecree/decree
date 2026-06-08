@@ -31,7 +31,7 @@ func TestRedisOutage_CacheFallback(t *testing.T) {
 	t.Cleanup(cleanupTenant)
 
 	// Seed a value — written to DB and cached in Redis.
-	require.NoError(t, cfg.Set(ctx, tenantID, "chaos.field0", "seeded"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenantID, "chaos.field0", "seeded")))
 
 	// Pause Redis.
 	containerPause(t, redisContainer())
@@ -47,7 +47,7 @@ func TestRedisOutage_CacheFallback(t *testing.T) {
 	// SetField must succeed (DB write; Redis cache.Set and Invalidate are warn-only).
 	writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer writeCancel()
-	require.NoError(t, cfg.Set(writeCtx, tenantID, "chaos.field0", "written-during-outage"),
+	require.NoError(t, noVer(cfg.Set(writeCtx, tenantID, "chaos.field0", "written-during-outage")),
 		"SetField must succeed while Redis is paused")
 
 	// Verify the new value is readable via DB fallback.
@@ -108,7 +108,7 @@ func TestRedisOutage_PubSubDegraded(t *testing.T) {
 	// Server must still serve non-pubsub requests (no crash).
 	writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer writeCancel()
-	require.NoError(t, cfg.Set(writeCtx, tenantID, "chaos.field0", "set-during-redis-outage"),
+	require.NoError(t, noVer(cfg.Set(writeCtx, tenantID, "chaos.field0", "set-during-redis-outage")),
 		"SetField must work while Redis is paused (publish failure is warn-only)")
 
 	// Unpause Redis.
