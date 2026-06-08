@@ -550,7 +550,11 @@ func (s *Service) SetField(ctx context.Context, req *pb.SetFieldRequest) (*pb.Se
 	if err != nil {
 		return nil, err
 	}
-	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: req.FieldPath}); err != nil {
+	// Value feeds value-scoped field locks (FieldLockGuard). For a null/clear
+	// write typedValueToString returns nil → Value is "", which never matches a
+	// lock that lists specific strings (acceptable: clearing is not setting a
+	// locked value).
+	if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: req.FieldPath, Value: derefString(typedValueToString(req.Value))}); err != nil {
 		return nil, err
 	}
 
@@ -727,7 +731,8 @@ func (s *Service) SetFields(ctx context.Context, req *pb.SetFieldsRequest) (*pb.
 		if update.FieldPath == "" {
 			return nil, status.Error(codes.InvalidArgument, "field_path must not be empty")
 		}
-		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: update.FieldPath}); err != nil {
+		// Value feeds value-scoped field locks; "" for null/clear writes (see SetField).
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: update.FieldPath, Value: derefString(typedValueToString(update.Value))}); err != nil {
 			return nil, err
 		}
 		if err := s.validateField(ctx, tenantID, update.FieldPath, update.Value); err != nil {
@@ -979,7 +984,8 @@ func (s *Service) RollbackToVersion(ctx context.Context, req *pb.RollbackToVersi
 	// Guard and validate each field being restored. This prevents locked or
 	// now-invalid values from being silently reinstated via rollback.
 	for _, row := range targetRows {
-		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: row.FieldPath}); err != nil {
+		// Value feeds value-scoped field locks; "" for a null restored value (see SetField).
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: row.FieldPath, Value: derefString(row.Value)}); err != nil {
 			return nil, err
 		}
 		tv := stringToTypedValue(row.Value, lookupFieldType(rollbackTypes, row.FieldPath))
@@ -1315,7 +1321,8 @@ func (s *Service) ImportConfig(ctx context.Context, req *pb.ImportConfigRequest)
 		if s.limits.MaxFieldValueBytes > 0 && len(v.Value) > s.limits.MaxFieldValueBytes {
 			return nil, status.Errorf(codes.InvalidArgument, "field %q value is %d bytes, exceeds limit of %d", v.FieldPath, len(v.Value), s.limits.MaxFieldValueBytes)
 		}
-		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: v.FieldPath}); err != nil {
+		// Value feeds value-scoped field locks (the import value is already canonical string form).
+		if err := s.guard.Check(ctx, authz.ActionWrite, authz.Resource{TenantID: tenantID, FieldPath: v.FieldPath, Value: v.Value}); err != nil {
 			return nil, err
 		}
 		// Convert string value to TypedValue for validation.
