@@ -197,4 +197,13 @@ type Store interface {
 	DeleteFieldLock(ctx context.Context, arg DeleteFieldLockParams) error
 	GetFieldLocks(ctx context.Context, tenantID string) ([]domain.TenantFieldLock, error)
 	ListFieldLocks(ctx context.Context, tenantID string, arg ListFieldLocksParams) ([]domain.TenantFieldLock, error)
+
+	// SeedTenantConfig writes a tenant's initial config (version 1) from the
+	// schema's field defaults. It creates one config_versions row plus one
+	// config_values row per default, mirroring the config store's write
+	// semantics (version + value + checksum). Intended to be called inside
+	// RunInTx alongside CreateTenant so seeding is atomic with tenant creation.
+	// arg.Values must be non-empty — callers skip the call entirely when the
+	// schema defines no defaults, so no empty version 1 is ever created.
+	SeedTenantConfig(ctx context.Context, arg SeedTenantConfigParams) error
 }

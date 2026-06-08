@@ -23,6 +23,8 @@ type MemoryStore struct {
 	schemaFields   map[string][]domain.SchemaField     // schemaVersionID → []SchemaField
 	tenants        map[string]domain.Tenant            // id → Tenant
 	fieldLocks     map[string][]domain.TenantFieldLock // tenantID → []TenantFieldLock
+	configVersions map[string]domain.ConfigVersion     // configVersionID → ConfigVersion
+	configValues   map[string][]domain.ConfigValue     // configVersionID → []ConfigValue
 	auditLog       []domain.AuditWriteLog
 }
 
@@ -34,6 +36,8 @@ func NewMemoryStore() *MemoryStore {
 		schemaFields:   make(map[string][]domain.SchemaField),
 		tenants:        make(map[string]domain.Tenant),
 		fieldLocks:     make(map[string][]domain.TenantFieldLock),
+		configVersions: make(map[string]domain.ConfigVersion),
+		configValues:   make(map[string][]domain.ConfigValue),
 	}
 }
 
@@ -63,6 +67,8 @@ func (m *MemoryStore) clone() *MemoryStore {
 		schemaFields:   make(map[string][]domain.SchemaField, len(m.schemaFields)),
 		tenants:        make(map[string]domain.Tenant, len(m.tenants)),
 		fieldLocks:     make(map[string][]domain.TenantFieldLock, len(m.fieldLocks)),
+		configVersions: make(map[string]domain.ConfigVersion, len(m.configVersions)),
+		configValues:   make(map[string][]domain.ConfigValue, len(m.configValues)),
 		auditLog:       make([]domain.AuditWriteLog, len(m.auditLog)),
 	}
 	for k, v := range m.schemas {
@@ -84,6 +90,14 @@ func (m *MemoryStore) clone() *MemoryStore {
 		copy(cp, ls)
 		tmp.fieldLocks[k] = cp
 	}
+	for k, v := range m.configVersions {
+		tmp.configVersions[k] = v
+	}
+	for k, vs := range m.configValues {
+		cp := make([]domain.ConfigValue, len(vs))
+		copy(cp, vs)
+		tmp.configValues[k] = cp
+	}
 	copy(tmp.auditLog, m.auditLog)
 	return tmp
 }
@@ -98,6 +112,8 @@ func (m *MemoryStore) mergeFrom(src *MemoryStore) {
 	m.schemaFields = src.schemaFields
 	m.tenants = src.tenants
 	m.fieldLocks = src.fieldLocks
+	m.configVersions = src.configVersions
+	m.configValues = src.configValues
 	m.auditLog = src.auditLog
 }
 
@@ -596,6 +612,79 @@ func (m *MemoryStore) ListFieldLocks(_ context.Context, tenantID string, arg Lis
 	all := make([]domain.TenantFieldLock, len(locks))
 	copy(all, locks)
 	return paginate(all, int(arg.Offset), int(arg.Limit)), nil
+}
+
+// --- Tenant config seeding ---
+
+// SeedTenantConfig writes the tenant's version-1 config from schema defaults,
+// mirroring the PG store: one config version plus one value per default. A nil
+// or empty Values map is a no-op so no empty version 1 is created.
+func (m *MemoryStore) SeedTenantConfig(_ context.Context, arg SeedTenantConfigParams) error {
+	if len(arg.Values) == 0 {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cvID := m.nextID()
+	desc := "Initial config from schema defaults"
+	m.configVersions[cvID] = domain.ConfigVersion{
+		ID:          cvID,
+		TenantID:    arg.TenantID,
+		Version:     1,
+		Description: &desc,
+		CreatedBy:   arg.Actor,
+		CreatedAt:   time.Now(),
+	}
+	values := make([]domain.ConfigValue, 0, len(arg.Values))
+	for path, v := range arg.Values {
+		value := v.Value
+		checksum := v.Checksum
+		values = append(values, domain.ConfigValue{
+			ConfigVersionID: cvID,
+			FieldPath:       path,
+			Value:           &value,
+			Checksum:        &checksum,
+		})
+	}
+	m.configValues[cvID] = values
+	return nil
+}
+
+// ConfigVersionsForTenant returns the config versions seeded for a tenant.
+// Test helper: the schema store does not otherwise expose config reads.
+func (m *MemoryStore) ConfigVersionsForTenant(tenantID string) []domain.ConfigVersion {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var out []domain.ConfigVersion
+	for _, cv := range m.configVersions {
+		if cv.TenantID == tenantID {
+			out = append(out, cv)
+		}
+	}
+	return out
+}
+
+// ConfigValuesForTenant returns field path -> value for the tenant's seeded
+// config, collapsing across versions (only version 1 is ever seeded here).
+// Test helper.
+func (m *MemoryStore) ConfigValuesForTenant(tenantID string) map[string]string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make(map[string]string)
+	for _, cv := range m.configVersions {
+		if cv.TenantID != tenantID {
+			continue
+		}
+		for _, v := range m.configValues[cv.ID] {
+			if v.Value != nil {
+				out[v.FieldPath] = *v.Value
+			}
+		}
+	}
+	return out
 }
 
 // paginate applies offset and limit to a sorted slice.

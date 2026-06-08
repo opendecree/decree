@@ -223,6 +223,8 @@ func TestCreateTenant_Success(t *testing.T) {
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
 		Return(domain.SchemaVersion{Published: true}, nil)
+	store.On("GetSchemaFields", ctx, mock.AnythingOfType("string")).
+		Return([]domain.SchemaField{}, nil)
 	store.On("CreateTenant", ctx, mock.AnythingOfType("schema.CreateTenantParams")).
 		Return(domain.Tenant{ID: testTenantID, Name: "test-tenant", SchemaID: testSchemaID, SchemaVersion: 1}, nil)
 
@@ -244,6 +246,8 @@ func TestCreateTenant_AlreadyExists(t *testing.T) {
 
 	store.On("GetSchemaVersion", ctx, GetSchemaVersionParams{SchemaID: testSchemaID, Version: 1}).
 		Return(domain.SchemaVersion{Published: true}, nil)
+	store.On("GetSchemaFields", ctx, mock.AnythingOfType("string")).
+		Return([]domain.SchemaField{}, nil)
 	store.On("CreateTenant", ctx, mock.AnythingOfType("schema.CreateTenantParams")).
 		Return(domain.Tenant{}, domain.ErrAlreadyExists)
 
