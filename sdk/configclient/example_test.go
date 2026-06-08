@@ -38,11 +38,11 @@ func (f *fakeTransport) GetFields(_ context.Context, req *configclient.GetFields
 }
 
 func (f *fakeTransport) SetField(_ context.Context, _ *configclient.SetFieldRequest) (*configclient.SetFieldResponse, error) {
-	return &configclient.SetFieldResponse{}, nil
+	return &configclient.SetFieldResponse{ConfigVersion: &configclient.ConfigVersion{Version: 2}}, nil
 }
 
 func (f *fakeTransport) SetFields(_ context.Context, _ *configclient.SetFieldsRequest) (*configclient.SetFieldsResponse, error) {
-	return &configclient.SetFieldsResponse{}, nil
+	return &configclient.SetFieldsResponse{ConfigVersion: &configclient.ConfigVersion{Version: 2}}, nil
 }
 
 func (f *fakeTransport) Subscribe(_ context.Context, _ *configclient.SubscribeRequest) (configclient.Subscription, error) {
@@ -66,13 +66,13 @@ func ExampleClient_Set() {
 	client := configclient.New(&fakeTransport{})
 	ctx := context.Background()
 
-	err := client.Set(ctx, "tenant-1", "app.environment", "staging")
+	version, err := client.Set(ctx, "tenant-1", "app.environment", "staging")
 	if err != nil {
 		fmt.Println("error:", err)
 		return
 	}
-	fmt.Println("ok")
-	// Output: ok
+	fmt.Println("version:", version.Version)
+	// Output: version: 2
 }
 
 func ExampleClient_GetAll() {
@@ -92,7 +92,7 @@ func ExampleClient_SetMany() {
 	client := configclient.New(&fakeTransport{})
 	ctx := context.Background()
 
-	err := client.SetMany(ctx, "tenant-1", map[string]string{
+	_, err := client.SetMany(ctx, "tenant-1", map[string]string{
 		"app.name":  "MyApp",
 		"app.debug": "false",
 	}, "bulk update")
@@ -132,7 +132,7 @@ func ExampleClient_Update() {
 	ctx := context.Background()
 
 	// Atomic read-modify-write: append a suffix to the current value.
-	err := client.Update(ctx, "tenant-1", "app.environment", func(current string) (string, error) {
+	_, err := client.Update(ctx, "tenant-1", "app.environment", func(current string) (string, error) {
 		return current + "-updated", nil
 	})
 	if err != nil {

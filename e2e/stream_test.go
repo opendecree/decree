@@ -52,7 +52,7 @@ func TestConfigSubscription(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Write via configclient SDK.
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "notify.enabled", "true"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "notify.enabled", "true")))
 
 	// Read from raw stream.
 	change, err := stream.Recv()

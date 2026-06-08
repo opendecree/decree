@@ -49,9 +49,9 @@ func TestFullFlow(t *testing.T) {
 	assert.GreaterOrEqual(t, len(tenants), 1)
 
 	// 3. Set config fields via configclient (typed setters for non-string fields).
-	require.NoError(t, cfg.SetDuration(ctx, tenant.ID, "settlement.window", 24*time.Hour))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "settlement.currency", "USD"))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "settlement.fee", "0.5%"))
+	require.NoError(t, noVer(cfg.SetDuration(ctx, tenant.ID, "settlement.window", 24*time.Hour)))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "settlement.currency", "USD")))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "settlement.fee", "0.5%")))
 
 	// 4. Read config via configclient.
 	allVals, err := cfg.GetAll(ctx, tenant.ID)
@@ -94,16 +94,16 @@ func TestFullFlow(t *testing.T) {
 	assert.Equal(t, "0.5%", lv.Value)
 
 	// Set with correct checksum → succeeds.
-	require.NoError(t, lv.Set(ctx, "0.3%"))
+	require.NoError(t, noVer(lv.Set(ctx, "0.3%")))
 
 	// Set with stale checksum → fails.
-	err = lv.Set(ctx, "0.1%")
+	_, err = lv.Set(ctx, "0.1%")
 	assert.ErrorIs(t, err, configclient.ErrChecksumMismatch)
 
 	// 8. Update convenience CAS.
-	require.NoError(t, cfg.Update(ctx, tenant.ID, "settlement.fee", func(current string) (string, error) {
+	require.NoError(t, noVer(cfg.Update(ctx, tenant.ID, "settlement.fee", func(current string) (string, error) {
 		return "0.2%", nil
-	}))
+	})))
 	updated, err := cfg.Get(ctx, tenant.ID, "settlement.fee")
 	require.NoError(t, err)
 	assert.Equal(t, "0.2%", updated)
@@ -166,11 +166,11 @@ func TestConfigExportImport(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Set config values via typed setters.
-	require.NoError(t, cfg.SetBool(ctx, tenant.ID, "app.enabled", true))
-	require.NoError(t, cfg.SetInt(ctx, tenant.ID, "app.max_retries", 3))
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "app.fee_rate", 0.025))
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.name", "MyApp"))
-	require.NoError(t, cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second))
+	require.NoError(t, noVer(cfg.SetBool(ctx, tenant.ID, "app.enabled", true)))
+	require.NoError(t, noVer(cfg.SetInt(ctx, tenant.ID, "app.max_retries", 3)))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "app.fee_rate", 0.025)))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.name", "MyApp")))
+	require.NoError(t, noVer(cfg.SetDuration(ctx, tenant.ID, "app.timeout", 30*time.Second)))
 
 	// 4. Export config via adminclient.
 	yamlContent, err := admin.ExportConfig(ctx, tenant.ID, nil)

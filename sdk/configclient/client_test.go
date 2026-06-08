@@ -213,11 +213,14 @@ func TestSet_Success(t *testing.T) {
 	tr.on("SetField", func(args ...any) bool {
 		r := args[0].(*SetFieldRequest)
 		return r.TenantID == "t1" && r.FieldPath == "a" && r.Value != nil && r.Value.String() == "new"
-	}, &SetFieldResponse{}, nil)
+	}, &SetFieldResponse{ConfigVersion: &ConfigVersion{Version: 7, TenantID: "t1"}}, nil)
 
-	err := client.Set(ctx, "t1", "a", "new")
+	version, err := client.Set(ctx, "t1", "a", "new")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if version == nil || version.Version != 7 {
+		t.Errorf("Set version: got %+v, want version 7", version)
 	}
 }
 
@@ -228,7 +231,7 @@ func TestSet_Locked(t *testing.T) {
 
 	tr.on("SetField", nil, (*SetFieldResponse)(nil), ErrLocked)
 
-	err := client.Set(ctx, "t1", "a", "new")
+	_, err := client.Set(ctx, "t1", "a", "new")
 	if !errors.Is(err, ErrLocked) {
 		t.Errorf("got error %v, want %v", err, ErrLocked)
 	}
@@ -244,7 +247,7 @@ func TestSet_PermissionDenied(t *testing.T) {
 
 	tr.on("SetField", nil, (*SetFieldResponse)(nil), ErrPermissionDenied)
 
-	err := client.Set(ctx, "t1", "a", "new")
+	_, err := client.Set(ctx, "t1", "a", "new")
 	if !errors.Is(err, ErrPermissionDenied) {
 		t.Errorf("got error %v, want ErrPermissionDenied", err)
 	}
@@ -260,11 +263,14 @@ func TestSetMany_Success(t *testing.T) {
 	client := New(tr)
 	ctx := context.Background()
 
-	tr.on("SetFields", nil, &SetFieldsResponse{}, nil)
+	tr.on("SetFields", nil, &SetFieldsResponse{ConfigVersion: &ConfigVersion{Version: 9, TenantID: "t1"}}, nil)
 
-	err := client.SetMany(ctx, "t1", map[string]string{"a": "1", "b": "2"}, "bulk update")
+	version, err := client.SetMany(ctx, "t1", map[string]string{"a": "1", "b": "2"}, "bulk update")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if version == nil || version.Version != 9 {
+		t.Errorf("SetMany version: got %+v, want version 9", version)
 	}
 	if n := tr.called("SetFields"); n != 1 {
 		t.Errorf("expected SetFields to be called once, got %d", n)
@@ -289,7 +295,7 @@ func TestSetManyTyped_Success(t *testing.T) {
 			byPath["enabled"] != nil && byPath["enabled"].Kind() == KindBool && byPath["enabled"].MustBoolValue()
 	}, &SetFieldsResponse{}, nil)
 
-	err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{
+	_, err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{
 		"count":   IntVal(42),
 		"enabled": BoolVal(true),
 	}, "typed bulk")
@@ -637,7 +643,7 @@ func TestGetForUpdate_ThenSet(t *testing.T) {
 		return r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk123" && r.Value != nil && r.Value.String() == "new"
 	}, &SetFieldResponse{}, nil)
 
-	err = lv.Set(ctx, "new")
+	_, err = lv.Set(ctx, "new")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -659,7 +665,7 @@ func TestGetForUpdate_ChecksumMismatch(t *testing.T) {
 
 	tr.on("SetField", nil, (*SetFieldResponse)(nil), ErrChecksumMismatch)
 
-	err = lv.Set(ctx, "new")
+	_, err = lv.Set(ctx, "new")
 	if !errors.Is(err, ErrChecksumMismatch) {
 		t.Errorf("got error %v, want %v", err, ErrChecksumMismatch)
 	}
@@ -694,7 +700,7 @@ func TestLockedValue_CapturesClient(t *testing.T) {
 	}, &SetFieldResponse{}, nil)
 
 	// Set takes only ctx + new value — no client argument required.
-	if err := lv.Set(ctx, "on"); err != nil {
+	if _, err := lv.Set(ctx, "on"); err != nil {
 		t.Fatalf("Set: unexpected error: %v", err)
 	}
 
@@ -719,7 +725,7 @@ func TestUpdate_Success(t *testing.T) {
 		return r.Value != nil && r.Value.String() == "6" && r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk"
 	}, &SetFieldResponse{}, nil)
 
-	err := client.Update(ctx, "t1", "counter", func(current string) (string, error) {
+	_, err := client.Update(ctx, "t1", "counter", func(current string) (string, error) {
 		return "6", nil
 	})
 	if err != nil {
@@ -742,7 +748,7 @@ func TestUpdate_WriteOptionsForwarded(t *testing.T) {
 		return true
 	}, &SetFieldResponse{}, nil)
 
-	err := client.Update(ctx, "t1", "k", func(current string) (string, error) {
+	_, err := client.Update(ctx, "t1", "k", func(current string) (string, error) {
 		return "new", nil
 	}, WithDescription("my-desc"), WithValueDescription("val-desc"))
 	if err != nil {
@@ -784,7 +790,7 @@ func TestUpdate_RetryOnChecksumMismatch(t *testing.T) {
 	}
 
 	client := New(st)
-	err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
+	_, err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
 		return current + "-updated", nil
 	})
 	if err != nil {
@@ -814,7 +820,7 @@ func TestUpdate_ChecksumMismatchExhaustsRetries(t *testing.T) {
 	}
 
 	client := New(st)
-	err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
+	_, err := client.Update(ctx, "t1", "field", func(current string) (string, error) {
 		return current + "!", nil
 	})
 	if !errors.Is(err, ErrChecksumMismatch) {
@@ -838,7 +844,7 @@ func TestUpdate_ChecksumMismatch(t *testing.T) {
 		},
 	}
 	client := New(st)
-	err := client.Update(context.Background(), "t1", "field", func(current string) (string, error) {
+	_, err := client.Update(context.Background(), "t1", "field", func(current string) (string, error) {
 		return current + "!", nil
 	})
 	if !errors.Is(err, ErrChecksumMismatch) {
@@ -860,7 +866,7 @@ func TestUpdate_FnError(t *testing.T) {
 		},
 	}
 	client := New(tr)
-	err := client.Update(context.Background(), "t1", "f", func(string) (string, error) {
+	_, err := client.Update(context.Background(), "t1", "f", func(string) (string, error) {
 		return "", fnErr
 	})
 	if !errors.Is(err, fnErr) {
@@ -883,7 +889,7 @@ func TestUpdate_GetForUpdateError(t *testing.T) {
 		},
 	}
 	client := New(tr)
-	err := client.Update(context.Background(), "t1", "f", func(s string) (string, error) {
+	_, err := client.Update(context.Background(), "t1", "f", func(s string) (string, error) {
 		return s + "_new", nil
 	})
 	if !errors.Is(err, getErr) {
@@ -1191,7 +1197,7 @@ func TestSetInt_Success(t *testing.T) {
 		return r.Value != nil && r.Value.Kind() == KindInteger && r.Value.MustIntValue() == 42
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetInt(ctx, "t1", "retries", 42); err != nil {
+	if _, err := client.SetInt(ctx, "t1", "retries", 42); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1206,7 +1212,7 @@ func TestSetBool_Success(t *testing.T) {
 		return r.Value != nil && r.Value.Kind() == KindBool && r.Value.MustBoolValue()
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetBool(ctx, "t1", "enabled", true); err != nil {
+	if _, err := client.SetBool(ctx, "t1", "enabled", true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1221,7 +1227,7 @@ func TestSetFloat_Success(t *testing.T) {
 		return r.Value != nil && r.Value.Kind() == KindNumber && r.Value.MustFloatValue() == 3.14
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetFloat(ctx, "t1", "rate", 3.14); err != nil {
+	if _, err := client.SetFloat(ctx, "t1", "rate", 3.14); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1236,7 +1242,7 @@ func TestSetNull_Success(t *testing.T) {
 		return r.Value == nil
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.SetNull(ctx, "t1", "retries"); err != nil {
+	if _, err := client.SetNull(ctx, "t1", "retries"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -1258,7 +1264,7 @@ func TestSet_NoRetryEvenWithRetryEnabled(t *testing.T) {
 		return true
 	}, (*SetFieldResponse)(nil), &RetryableError{Err: fmt.Errorf("unavailable")})
 
-	err := client.Set(ctx, "t1", "a", "v")
+	_, err := client.Set(ctx, "t1", "a", "v")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1282,7 +1288,7 @@ func TestSetMany_NoRetryEvenWithRetryEnabled(t *testing.T) {
 		return true
 	}, (*SetFieldsResponse)(nil), &RetryableError{Err: fmt.Errorf("unavailable")})
 
-	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "")
+	_, err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1301,7 +1307,7 @@ func TestSet_RetriesWithIdempotencyKey(t *testing.T) {
 		RetryableCheck: IsRetryable,
 	}))
 
-	err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("key-123"))
+	_, err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("key-123"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1322,7 +1328,7 @@ func TestSet_IdempotencyKeyPassedToTransport(t *testing.T) {
 		return true
 	}, &SetFieldResponse{}, nil)
 
-	if err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("my-key")); err != nil {
+	if _, err := client.Set(ctx, "t1", "a", "v", WithIdempotencyKey("my-key")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotKey != "my-key" {
@@ -1342,7 +1348,7 @@ func TestSetMany_IdempotencyKeyPassedToTransport(t *testing.T) {
 		return true
 	}, &SetFieldsResponse{}, nil)
 
-	if err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithIdempotencyKey("batch-key")); err != nil {
+	if _, err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithIdempotencyKey("batch-key")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotKey != "batch-key" {
@@ -1392,7 +1398,7 @@ func TestDoWrite_FieldChecksums_Retries(t *testing.T) {
 		RetryableCheck: IsRetryable,
 	}))
 
-	err := client.SetMany(ctx, "t1", map[string]string{"field": "value"}, "",
+	_, err := client.SetMany(ctx, "t1", map[string]string{"field": "value"}, "",
 		WithFieldChecksums(map[string]string{"field": "chk-abc"}),
 	)
 	if err != nil {
@@ -1415,7 +1421,7 @@ func TestSet_WithDescription(t *testing.T) {
 		return r.Description == "why" && r.ValueDescription == "what"
 	}, &SetFieldResponse{}, nil)
 
-	err := client.Set(ctx, "t1", "a", "v", WithDescription("why"), WithValueDescription("what"))
+	_, err := client.Set(ctx, "t1", "a", "v", WithDescription("why"), WithValueDescription("what"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1431,7 +1437,7 @@ func TestSet_WithExpectedChecksum(t *testing.T) {
 		return r.ExpectedChecksum != nil && *r.ExpectedChecksum == "abc"
 	}, &SetFieldResponse{}, nil)
 
-	err := client.Set(ctx, "t1", "a", "v", WithExpectedChecksum("abc"))
+	_, err := client.Set(ctx, "t1", "a", "v", WithExpectedChecksum("abc"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1457,7 +1463,7 @@ func TestSetMany_WithValueDescriptionsAndChecksums(t *testing.T) {
 		return aOK && bOK
 	}, &SetFieldsResponse{}, nil)
 
-	err := client.SetMany(ctx, "t1",
+	_, err := client.SetMany(ctx, "t1",
 		map[string]string{"a": "1", "b": "2"},
 		"batch",
 		WithValueDescriptions(map[string]string{"a": "desc-a"}),
@@ -1480,7 +1486,7 @@ func TestSetMany_WithDescription_honored(t *testing.T) {
 		return true
 	}, &SetFieldsResponse{}, nil)
 
-	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithDescription("via-option"))
+	_, err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "", WithDescription("via-option"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1501,7 +1507,7 @@ func TestSetManyTyped_WithDescription_honored(t *testing.T) {
 		return true
 	}, &SetFieldsResponse{}, nil)
 
-	err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{"a": IntVal(1)}, "", WithDescription("via-option"))
+	_, err := client.SetManyTyped(ctx, "t1", map[string]*TypedValue{"a": IntVal(1)}, "", WithDescription("via-option"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1522,7 +1528,7 @@ func TestSetMany_positional_beats_option(t *testing.T) {
 		return true
 	}, &SetFieldsResponse{}, nil)
 
-	err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "positional", WithDescription("via-option"))
+	_, err := client.SetMany(ctx, "t1", map[string]string{"a": "1"}, "positional", WithDescription("via-option"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1551,7 +1557,7 @@ func TestLockedValue_Set_WithDescription(t *testing.T) {
 			r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk"
 	}, &SetFieldResponse{}, nil)
 
-	err = lv.Set(ctx, "new", WithDescription("my reason"), WithValueDescription("my val desc"))
+	_, err = lv.Set(ctx, "new", WithDescription("my reason"), WithValueDescription("my val desc"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1577,7 +1583,7 @@ func TestLockedValue_Set_ForwardsIdempotencyKey(t *testing.T) {
 			r.ExpectedChecksum != nil && *r.ExpectedChecksum == "chk"
 	}, &SetFieldResponse{}, nil)
 
-	err = lv.Set(ctx, "new", WithIdempotencyKey("idem-key-123"))
+	_, err = lv.Set(ctx, "new", WithIdempotencyKey("idem-key-123"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1659,7 +1665,7 @@ func TestLockedValue_Set_RejectsUnsupportedOptions(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			lv := makeLockedValue(t)
-			err := lv.Set(ctx, "new", tc.opt)
+			_, err := lv.Set(ctx, "new", tc.opt)
 			if err == nil {
 				t.Fatalf("expected ErrInvalidArgument for %s, got nil", tc.name)
 			}

@@ -14,6 +14,37 @@ import (
 
 func ptrF64(f float64) *float64 { return &f }
 
+// --- ConfigVersion conversion ---
+
+func TestConfigVersionFromProto(t *testing.T) {
+	if got := configVersionFromProto(nil); got != nil {
+		t.Fatalf("nil proto: got %v, want nil", got)
+	}
+
+	created := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
+	full := configVersionFromProto(&pb.ConfigVersion{
+		Id:          "ver-1",
+		TenantId:    "t1",
+		Version:     7,
+		Description: "bump fee",
+		CreatedBy:   "alice",
+		CreatedAt:   timestamppb.New(created),
+	})
+	if full == nil {
+		t.Fatal("full proto: got nil")
+	}
+	if full.ID != "ver-1" || full.TenantID != "t1" || full.Version != 7 ||
+		full.Description != "bump fee" || full.CreatedBy != "alice" || !full.CreatedAt.Equal(created) {
+		t.Errorf("full proto mapped incorrectly: %+v", full)
+	}
+
+	// A nil CreatedAt must leave the zero time, not panic.
+	noTime := configVersionFromProto(&pb.ConfigVersion{Id: "ver-2", Version: 1})
+	if noTime == nil || !noTime.CreatedAt.IsZero() {
+		t.Errorf("nil CreatedAt: got %+v, want zero CreatedAt", noTime)
+	}
+}
+
 // --- TypedValue round-trips ---
 
 func TestTypedValueRoundTrip_Integer(t *testing.T) {

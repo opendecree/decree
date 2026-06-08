@@ -242,16 +242,16 @@ func allRPCs() []rpcSpec {
 			name:   "SetField",
 			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				return c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("m1-%s", randSuffix()))
+				return noVer(c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("m1-%s", randSuffix())))
 			},
 		},
 		{
 			name:   "SetFields",
 			policy: adminOrAbove,
 			invoke: func(ctx context.Context, t *testing.T, c *clients, fx *matrixFixture) error {
-				return c.cfg.SetMany(ctx, fx.tenantID, map[string]string{
+				return noVer(c.cfg.SetMany(ctx, fx.tenantID, map[string]string{
 					"app.name": fmt.Sprintf("m1-many-%s", randSuffix()),
-				}, "matrix")
+				}, "matrix"))
 			},
 		},
 		{
@@ -278,7 +278,7 @@ func allRPCs() []rpcSpec {
 				// the fixture seeds version 1. For user, the Set call is also
 				// denied but the error is discarded — RollbackConfig is the
 				// RPC under test.
-				_ = c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("rb-%s", randSuffix()))
+				_, _ = c.cfg.Set(ctx, fx.tenantID, "app.name", fmt.Sprintf("rb-%s", randSuffix()))
 				_, err := c.admin.RollbackConfig(ctx, fx.tenantID, 1, "matrix rollback")
 				return err
 			},

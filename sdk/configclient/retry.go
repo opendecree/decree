@@ -25,11 +25,6 @@ func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (
 	return sdkretry.Run(ctx, c.opts.retryEnabled, c.opts.retry, fn)
 }
 
-// retryDo executes fn with retries if retry is enabled, for void operations.
-func retryDo(ctx context.Context, c *Client, fn func(ctx context.Context) error) error {
-	return sdkretry.RunDo(ctx, c.opts.retryEnabled, c.opts.retry, fn)
-}
-
 // backoffDuration computes exponential backoff with optional jitter.
 // Exposed for tests.
 func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {

@@ -56,47 +56,47 @@ func TestConstraintValidation(t *testing.T) {
 	// --- Valid values should pass ---
 
 	t.Run("valid values accepted", func(t *testing.T) {
-		require.NoError(t, cfg.SetInt(ctx, tenant.ID, "app.retries", 5))
-		require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.5))
-		require.NoError(t, cfg.Set(ctx, tenant.ID, "app.name", "MyApp"))
-		require.NoError(t, cfg.Set(ctx, tenant.ID, "app.env", "prod"))
-		require.NoError(t, cfg.SetBool(ctx, tenant.ID, "app.enabled", true))
+		require.NoError(t, noVer(cfg.SetInt(ctx, tenant.ID, "app.retries", 5)))
+		require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.5)))
+		require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.name", "MyApp")))
+		require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.env", "prod")))
+		require.NoError(t, noVer(cfg.SetBool(ctx, tenant.ID, "app.enabled", true)))
 	})
 
 	// --- Constraint violations should fail with informative errors ---
 
 	t.Run("integer above max", func(t *testing.T) {
-		err := cfg.SetInt(ctx, tenant.ID, "app.retries", 11)
+		_, err := cfg.SetInt(ctx, tenant.ID, "app.retries", 11)
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "maximum")
 	})
 
 	t.Run("integer below min", func(t *testing.T) {
-		err := cfg.SetInt(ctx, tenant.ID, "app.retries", -1)
+		_, err := cfg.SetInt(ctx, tenant.ID, "app.retries", -1)
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "minimum")
 	})
 
 	t.Run("number out of range", func(t *testing.T) {
-		err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 1.5)
+		_, err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 1.5)
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "maximum")
 	})
 
 	t.Run("string too short", func(t *testing.T) {
-		err := cfg.Set(ctx, tenant.ID, "app.name", "x")
+		_, err := cfg.Set(ctx, tenant.ID, "app.name", "x")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "minimum")
 	})
 
 	t.Run("enum violation", func(t *testing.T) {
-		err := cfg.Set(ctx, tenant.ID, "app.env", "local")
+		_, err := cfg.Set(ctx, tenant.ID, "app.env", "local")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "not in allowed")
 	})
 
 	t.Run("invalid url", func(t *testing.T) {
-		err := cfg.Set(ctx, tenant.ID, "app.webhook", "not-a-url")
+		_, err := cfg.Set(ctx, tenant.ID, "app.webhook", "not-a-url")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "url")
 	})
@@ -104,7 +104,7 @@ func TestConstraintValidation(t *testing.T) {
 	// --- Strict mode: unknown fields rejected ---
 
 	t.Run("unknown field rejected", func(t *testing.T) {
-		err := cfg.Set(ctx, tenant.ID, "app.nonexistent", "value")
+		_, err := cfg.Set(ctx, tenant.ID, "app.nonexistent", "value")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "not defined")
 	})
@@ -112,7 +112,7 @@ func TestConstraintValidation(t *testing.T) {
 	// --- Type mismatch ---
 
 	t.Run("wrong type rejected", func(t *testing.T) {
-		err := cfg.Set(ctx, tenant.ID, "app.retries", "not-a-number")
+		_, err := cfg.Set(ctx, tenant.ID, "app.retries", "not-a-number")
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "expected integer")
 	})
@@ -183,17 +183,17 @@ func TestExclusiveConstraints(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("value within exclusive range accepted", func(t *testing.T) {
-		require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.5))
+		require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "app.rate", 0.5)))
 	})
 
 	t.Run("value at exclusive minimum rejected", func(t *testing.T) {
-		err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 0)
+		_, err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 0)
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "greater than")
 	})
 
 	t.Run("value at exclusive maximum rejected", func(t *testing.T) {
-		err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 1)
+		_, err := cfg.SetFloat(ctx, tenant.ID, "app.rate", 1)
 		assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 		assert.Contains(t, err.Error(), "less than")
 	})

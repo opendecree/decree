@@ -32,7 +32,7 @@ func benchAuditEnv(b *testing.B, name string, writes int) (*adminclient.Client, 
 	require.NoError(b, err)
 
 	for i := range writes {
-		require.NoError(b, cfg.Set(ctx, tenant.ID, "bench.string", fmt.Sprintf("val-%d", i)))
+		require.NoError(b, noVer(cfg.Set(ctx, tenant.ID, "bench.string", fmt.Sprintf("val-%d", i))))
 	}
 
 	return admin, tenant.ID, func() {

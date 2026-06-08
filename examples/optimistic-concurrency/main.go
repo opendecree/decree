@@ -56,13 +56,17 @@ func run() error {
 	fmt.Printf("Current app.name: %q (checksum: %s)\n", locked.Value, locked.Checksum)
 
 	// Update with the checksum — succeeds only if no one else changed it.
-	if err := locked.Set(ctx, "Acme Corp App v2"); err != nil {
+	// The returned version identifies the config snapshot the write produced.
+	version, err := locked.Set(ctx, "Acme Corp App v2")
+	if err != nil {
 		return fmt.Errorf("cas set: %w", err)
 	}
-	fmt.Println("Updated to \"Acme Corp App v2\" via CAS")
+	if version != nil {
+		fmt.Printf("Updated to \"Acme Corp App v2\" via CAS (version %d)\n", version.Version)
+	}
 
 	// Try again with the stale checksum — fails with ErrChecksumMismatch.
-	err = locked.Set(ctx, "Acme Corp App v3")
+	_, err = locked.Set(ctx, "Acme Corp App v3")
 	if err != nil {
 		fmt.Printf("Stale CAS correctly rejected: %v\n", err)
 	}
@@ -76,7 +80,7 @@ func run() error {
 	// applies the function, and writes back with a checksum guard.
 	// Returns ErrChecksumMismatch if another writer modified the value
 	// between the read and write — the caller should retry if needed.
-	err = client.Update(ctx, tenantID, "app.name", func(current string) (string, error) {
+	_, err = client.Update(ctx, tenantID, "app.name", func(current string) (string, error) {
 		return current + " (updated)", nil
 	})
 	if err != nil {

@@ -46,15 +46,15 @@ func writeRPCs() []writeRPCSpec {
 		{
 			name: "SetField",
 			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
-				return c.cfg.Set(ctx, tenantID, "app.name", fmt.Sprintf("m2-%s", randSuffix()))
+				return noVer(c.cfg.Set(ctx, tenantID, "app.name", fmt.Sprintf("m2-%s", randSuffix())))
 			},
 		},
 		{
 			name: "SetFields",
 			invoke: func(ctx context.Context, _ *testing.T, c *clients, tenantID, _ string) error {
-				return c.cfg.SetMany(ctx, tenantID, map[string]string{
+				return noVer(c.cfg.SetMany(ctx, tenantID, map[string]string{
 					"app.name": fmt.Sprintf("m2-many-%s", randSuffix()),
-				}, "matrix2")
+				}, "matrix2"))
 			},
 		},
 		{

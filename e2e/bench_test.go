@@ -37,10 +37,10 @@ func benchEnv(b *testing.B, name string) (*configclient.Client, string, func()) 
 	require.NoError(b, err)
 
 	// Seed initial values.
-	require.NoError(b, cfg.Set(ctx, tenant.ID, "bench.string", "hello"))
-	require.NoError(b, cfg.SetInt(ctx, tenant.ID, "bench.int", 42))
-	require.NoError(b, cfg.SetBool(ctx, tenant.ID, "bench.bool", true))
-	require.NoError(b, cfg.SetFloat(ctx, tenant.ID, "bench.number", 3.14))
+	require.NoError(b, noVer(cfg.Set(ctx, tenant.ID, "bench.string", "hello")))
+	require.NoError(b, noVer(cfg.SetInt(ctx, tenant.ID, "bench.int", 42)))
+	require.NoError(b, noVer(cfg.SetBool(ctx, tenant.ID, "bench.bool", true)))
+	require.NoError(b, noVer(cfg.SetFloat(ctx, tenant.ID, "bench.number", 3.14)))
 
 	cleanup := func() {
 		_ = admin.DeleteTenant(ctx, tenant.ID)
@@ -91,7 +91,7 @@ func BenchmarkSetField(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		_ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
+		_, _ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
 	}
 }
 
@@ -102,7 +102,7 @@ func BenchmarkSetInt(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
-		_ = cfg.SetInt(ctx, tenantID, "bench.int", int64(i))
+		_, _ = cfg.SetInt(ctx, tenantID, "bench.int", int64(i))
 	}
 }
 
@@ -143,7 +143,7 @@ func BenchmarkSetField_Parallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			_ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
+			_, _ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
 			i++
 		}
 	})
@@ -159,7 +159,7 @@ func BenchmarkMixed_90Read_10Write(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
 		if i%10 == 0 {
-			_ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
+			_, _ = cfg.Set(ctx, tenantID, "bench.string", fmt.Sprintf("val-%d", i))
 		} else {
 			_, _ = cfg.Get(ctx, tenantID, "bench.string")
 		}
@@ -197,7 +197,7 @@ func benchGetFields(b *testing.B, name string, fieldCount int) {
 	tenant, err := admin.CreateTenant(ctx, name+"-tenant", s.ID, 1)
 	require.NoError(b, err)
 	for i, p := range paths {
-		require.NoError(b, cfg.Set(ctx, tenant.ID, p, fmt.Sprintf("val-%d", i)))
+		require.NoError(b, noVer(cfg.Set(ctx, tenant.ID, p, fmt.Sprintf("val-%d", i))))
 	}
 
 	b.Cleanup(func() {
@@ -271,7 +271,7 @@ func BenchmarkGetForUpdate_ThenSet(b *testing.B) {
 		if err != nil {
 			continue
 		}
-		_ = lv.Set(ctx, "updated")
+		_, _ = lv.Set(ctx, "updated")
 	}
 }
 

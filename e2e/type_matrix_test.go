@@ -187,7 +187,7 @@ func bootstrapTypeMatrix(t *testing.T) (*matrixFixture, map[string]*configclient
 		for _, nullable := range []bool{false, true} {
 			path := fieldPath(tc, nullable)
 			sample := tc.sample()
-			require.NoError(t, cfg.SetTyped(ctx, tenant.ID, path, sample),
+			require.NoError(t, noVer(cfg.SetTyped(ctx, tenant.ID, path, sample)),
 				"seeding %s", path)
 			seeds[path] = sample
 		}
@@ -219,14 +219,14 @@ func TestTypeMatrix(t *testing.T) {
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
 						sample := tc.sample()
-						require.NoError(t, cfg.SetTyped(ctx, fx.tenantID, path, sample))
+						require.NoError(t, noVer(cfg.SetTyped(ctx, fx.tenantID, path, sample)))
 						seeds[path] = sample // refresh seed for downstream ops
 					})
 
 					t.Run("set_null", func(t *testing.T) {
 						ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 						defer cancel()
-						err := cfg.SetNull(ctx, fx.tenantID, path)
+						_, err := cfg.SetNull(ctx, fx.tenantID, path)
 						if nullable {
 							assert.NoError(t, err, "nullable field must accept null")
 						} else {
@@ -234,7 +234,7 @@ func TestTypeMatrix(t *testing.T) {
 						}
 						// Restore a non-null seed so subsequent ops have content.
 						sample := tc.sample()
-						require.NoError(t, cfg.SetTyped(ctx, fx.tenantID, path, sample))
+						require.NoError(t, noVer(cfg.SetTyped(ctx, fx.tenantID, path, sample)))
 						seeds[path] = sample
 					})
 

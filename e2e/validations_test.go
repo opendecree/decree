@@ -65,16 +65,16 @@ func TestValidations_CrossFieldRule_RejectsAndAccepts(t *testing.T) {
 	// Stage min and max in two separate writes — order matters only because
 	// SetField evaluates each write in isolation; setting min above max
 	// produces a violation on the SECOND write whichever order we use.
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "payments.max_amount", 100))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "payments.max_amount", 100)))
 
 	// Violating write: min equals max.
-	err = cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 100)
+	_, err = cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 100)
 	require.Error(t, err, "rule must fire when min == max")
 	assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 	assert.Contains(t, err.Error(), "payments.min_amount must be less than payments.max_amount")
 
 	// Passing write: min strictly less than max.
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 10))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 10)))
 
 	// Confirm both values landed.
 	all, err := cfg.GetAll(ctx, tenant.ID)
@@ -106,12 +106,12 @@ func TestValidations_DependentRequiredAlongsideCEL(t *testing.T) {
 
 	// Pre-seed valid min/max so the CEL rule cannot fire and obscure the
 	// dependentRequired failure.
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 1))
-	require.NoError(t, cfg.SetFloat(ctx, tenant.ID, "payments.max_amount", 100))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "payments.min_amount", 1)))
+	require.NoError(t, noVer(cfg.SetFloat(ctx, tenant.ID, "payments.max_amount", 100)))
 
 	// Enabling refunds without setting the refund_window violates
 	// dependentRequired.
-	err = cfg.SetBool(ctx, tenant.ID, "payments.refunds_enabled", true)
+	_, err = cfg.SetBool(ctx, tenant.ID, "payments.refunds_enabled", true)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, configclient.ErrInvalidArgument)
 	assert.Contains(t, err.Error(), "payments.refund_window")
@@ -141,7 +141,7 @@ func TestValidations_SetFields_PostMergeStateChecked(t *testing.T) {
 	// final state satisfies min < max even though min would temporarily
 	// equal max if the writes were ordered as two separate SetField calls
 	// after a prior write at min=5.
-	err = cfg.SetManyTyped(ctx, tenant.ID, map[string]*configclient.TypedValue{
+	_, err = cfg.SetManyTyped(ctx, tenant.ID, map[string]*configclient.TypedValue{
 		"payments.min_amount": configclient.FloatVal(10),
 		"payments.max_amount": configclient.FloatVal(100),
 	}, "")

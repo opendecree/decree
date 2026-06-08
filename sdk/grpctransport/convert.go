@@ -74,17 +74,32 @@ func typedValueToProto(tv *configclient.TypedValue) *pb.TypedValue {
 // --- ConfigValue conversion ---
 
 // configValueFromProto converts a proto ConfigValue to the SDK type.
-//
-// TODO: pb.ConfigValue.Description is dropped here and the post-write
-// ConfigVersion returned by SetField/SetFields is discarded into empty DTOs.
-// Notify configclient owners if Description or post-write version info is
-// ever needed by callers. (tracked: #851)
 func configValueFromProto(cv *pb.ConfigValue) configclient.ConfigValue {
 	return configclient.ConfigValue{
-		FieldPath: cv.GetFieldPath(),
-		Value:     typedValueFromProto(cv.GetValue()),
-		Checksum:  cv.GetChecksum(),
+		FieldPath:   cv.GetFieldPath(),
+		Value:       typedValueFromProto(cv.GetValue()),
+		Checksum:    cv.GetChecksum(),
+		Description: cv.GetDescription(),
 	}
+}
+
+// configVersionFromProto converts a proto ConfigVersion to the SDK configclient
+// type. Returns nil when the input is nil so that absent versions stay absent.
+func configVersionFromProto(v *pb.ConfigVersion) *configclient.ConfigVersion {
+	if v == nil {
+		return nil
+	}
+	result := &configclient.ConfigVersion{
+		ID:          v.GetId(),
+		TenantID:    v.GetTenantId(),
+		Version:     v.GetVersion(),
+		Description: v.GetDescription(),
+		CreatedBy:   v.GetCreatedBy(),
+	}
+	if v.GetCreatedAt() != nil {
+		result.CreatedAt = v.GetCreatedAt().AsTime()
+	}
+	return result
 }
 
 // --- Schema/Field conversion ---

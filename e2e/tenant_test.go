@@ -94,7 +94,7 @@ func TestUpdateTenantSchemaVersion(t *testing.T) {
 		_ = admin.DeleteTenant(ctx, tenant.ID)
 		_ = admin.DeleteSchema(ctx, s.ID)
 	})
-	require.NoError(t, cfg.Set(ctx, tenant.ID, "app.value", "v1"))
+	require.NoError(t, noVer(cfg.Set(ctx, tenant.ID, "app.value", "v1")))
 
 	// Upgrade to v2.
 	updated, err := admin.UpdateTenantSchema(ctx, tenant.ID, 2)
@@ -103,10 +103,10 @@ func TestUpdateTenantSchemaVersion(t *testing.T) {
 
 	// Validator cache must reflect v2: setting v1's `app.value` now fails;
 	// setting v2's `app.count` succeeds.
-	err = cfg.Set(ctx, tenant.ID, "app.value", "still-v1")
+	_, err = cfg.Set(ctx, tenant.ID, "app.value", "still-v1")
 	require.Error(t, err, "setting dropped field on upgraded tenant must fail")
 
-	require.NoError(t, cfg.SetInt(ctx, tenant.ID, "app.count", 7))
+	require.NoError(t, noVer(cfg.SetInt(ctx, tenant.ID, "app.count", 7)))
 	count, err := cfg.GetInt(ctx, tenant.ID, "app.count")
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), count)

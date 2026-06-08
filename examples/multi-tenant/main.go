@@ -65,16 +65,16 @@ func run() error {
 	defer admin.DeleteTenant(ctx, tenantB)
 
 	// Set different values for tenant B.
-	if err := cfg.Set(ctx, tenantB, "app.name", "Globex Corp App"); err != nil {
+	if _, err := cfg.Set(ctx, tenantB, "app.name", "Globex Corp App"); err != nil {
 		return fmt.Errorf("set app.name: %w", err)
 	}
-	if err := cfg.SetInt(ctx, tenantB, "server.rate_limit", 500); err != nil {
+	if _, err := cfg.SetInt(ctx, tenantB, "server.rate_limit", 500); err != nil {
 		return fmt.Errorf("set server.rate_limit: %w", err)
 	}
-	if err := cfg.Set(ctx, tenantB, "payments.currency", "EUR"); err != nil {
+	if _, err := cfg.Set(ctx, tenantB, "payments.currency", "EUR"); err != nil {
 		return fmt.Errorf("set payments.currency: %w", err)
 	}
-	if err := cfg.SetFloat(ctx, tenantB, "payments.fee_rate", 0.015); err != nil {
+	if _, err := cfg.SetFloat(ctx, tenantB, "payments.fee_rate", 0.015); err != nil {
 		return fmt.Errorf("set payments.fee_rate: %w", err)
 	}
 

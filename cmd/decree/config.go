@@ -123,7 +123,8 @@ func runConfigSet(ctx context.Context, admin *adminclient.Client, cfg *configcli
 	if err != nil {
 		return fmt.Errorf("field %s: %w", fieldPath, err)
 	}
-	return cfg.SetTyped(ctx, tenantID, fieldPath, tv)
+	_, err = cfg.SetTyped(ctx, tenantID, fieldPath, tv)
+	return err
 }
 
 var configSetManyCmd = &cobra.Command{
@@ -186,7 +187,7 @@ func runConfigSetMany(ctx context.Context, admin *adminclient.Client, cfg *confi
 		}
 		typed[path] = tv
 	}
-	if err := cfg.SetManyTyped(ctx, tenantID, typed, description); err != nil {
+	if _, err := cfg.SetManyTyped(ctx, tenantID, typed, description); err != nil {
 		return 0, err
 	}
 	return len(typed), nil
