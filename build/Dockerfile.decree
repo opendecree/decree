@@ -9,6 +9,7 @@ WORKDIR /app
 # copies go.sum only when it exists without failing.
 COPY cmd/decree/go.mod cmd/decree/go.su[m] ./cmd/decree/
 COPY api/go.mod api/go.su[m] ./api/
+COPY sdk/retry/go.mod sdk/retry/go.su[m] ./sdk/retry/
 COPY sdk/adminclient/go.mod sdk/adminclient/go.su[m] ./sdk/adminclient/
 COPY sdk/configclient/go.mod sdk/configclient/go.su[m] ./sdk/configclient/
 COPY sdk/configwatcher/go.mod sdk/configwatcher/go.su[m] ./sdk/configwatcher/
