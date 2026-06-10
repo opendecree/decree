@@ -22,6 +22,8 @@
 <p align="center"><em>Typed business configuration: the layer between feature flags and infrastructure config.</em></p>
 
 > **Alpha Software** — OpenDecree is under active development. APIs, proto definitions, configuration formats, and behavior may change without notice between versions. Not recommended for production use yet.
+>
+> See the **[Roadmap](ROADMAP.md)** for what is stable today and the path to a 1.0 stable release.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/opendecree/decree/main/assets/demo.gif" alt="OpenDecree quickstart demo: schema → config → watch" width="800">
