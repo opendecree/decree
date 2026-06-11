@@ -849,6 +849,132 @@ fields:
 	}
 }
 
+func TestParseSchema_Metadata(t *testing.T) {
+	data := `spec_version: "v1"
+name: payments
+version: 3
+version_description: Added refund_window field
+info:
+  title: Payments
+  author: platform-team
+  contact:
+    name: Pat
+    email: pat@example.com
+    url: https://wiki.example.com/team
+  labels:
+    team: platform
+fields:
+  payments.fee:
+    type: number
+    examples:
+      low:
+        value: "0.01"
+        summary: Low rate
+      high:
+        value: "0.99"
+    externalDocs:
+      description: Fee guide
+      url: https://docs.example.com/fees
+  payments.webhook:
+    type: url
+    constraints:
+      allowed_schemes: [https, sftp]
+`
+	doc, err := ParseSchema([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if doc.VersionDescription != "Added refund_window field" {
+		t.Errorf("unexpected version_description: %q", doc.VersionDescription)
+	}
+	info := doc.Info
+	if info == nil {
+		t.Fatal("expected non-nil Info")
+	}
+	if info.Title != "Payments" || info.Author != "platform-team" {
+		t.Errorf("unexpected info: %+v", info)
+	}
+	if info.Contact == nil || info.Contact.Name != "Pat" || info.Contact.Email != "pat@example.com" || info.Contact.URL != "https://wiki.example.com/team" {
+		t.Errorf("unexpected contact: %+v", info.Contact)
+	}
+	if info.Labels["team"] != "platform" {
+		t.Errorf("unexpected labels: %v", info.Labels)
+	}
+
+	fee := doc.Fields["payments.fee"]
+	if len(fee.Examples) != 2 {
+		t.Fatalf("expected 2 examples, got %d", len(fee.Examples))
+	}
+	if ex := fee.Examples["low"]; ex.Value != "0.01" || ex.Summary != "Low rate" {
+		t.Errorf("unexpected example: %+v", ex)
+	}
+	if ex := fee.Examples["high"]; ex.Value != "0.99" || ex.Summary != "" {
+		t.Errorf("unexpected example: %+v", ex)
+	}
+	if fee.ExternalDocs == nil || fee.ExternalDocs.URL != "https://docs.example.com/fees" || fee.ExternalDocs.Description != "Fee guide" {
+		t.Errorf("unexpected externalDocs: %+v", fee.ExternalDocs)
+	}
+
+	webhook := doc.Fields["payments.webhook"]
+	if webhook.Constraints == nil || len(webhook.Constraints.AllowedSchemes) != 2 {
+		t.Fatalf("unexpected constraints: %+v", webhook.Constraints)
+	}
+}
+
+func TestParseSchema_MetadataErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      string
+		msgSubstr string
+	}{
+		{"info is not a mapping", `spec_version: "v1"
+name: test
+info: just-a-string
+fields:
+  a:
+    type: string`, "invalid YAML"},
+		{"examples is not a mapping", `spec_version: "v1"
+name: test
+fields:
+  a:
+    type: string
+    examples: [one, two]`, "invalid YAML"},
+		{"example without value", `spec_version: "v1"
+name: test
+fields:
+  a:
+    type: string
+    examples:
+      low:
+        summary: missing value`, `example "low": value is required`},
+		{"externalDocs is not a mapping", `spec_version: "v1"
+name: test
+fields:
+  a:
+    type: string
+    externalDocs: https://docs.example.com`, "invalid YAML"},
+		{"externalDocs without url", `spec_version: "v1"
+name: test
+fields:
+  a:
+    type: string
+    externalDocs:
+      description: missing url`, "externalDocs: url is required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseSchema([]byte(tt.data))
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !containsStr(err.Error(), tt.msgSubstr) {
+				t.Errorf("expected error containing %q, got: %v", tt.msgSubstr, err)
+			}
+		})
+	}
+}
+
 func TestParseConfig_Errors(t *testing.T) {
 	tests := []struct {
 		name string

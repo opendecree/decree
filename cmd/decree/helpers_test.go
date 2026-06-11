@@ -356,6 +356,129 @@ fields:
 	}
 }
 
+const metadataSchemaYAML = `spec_version: v1
+name: payments
+version: 3
+version_description: Added refund_window field
+info:
+  title: Payments Configuration
+  author: platform-team
+  contact:
+    name: Pat
+    email: pat@example.com
+  labels:
+    team: platform
+fields:
+  payments.fee:
+    type: number
+    examples:
+      low:
+        value: "0.01"
+        summary: Low rate
+      high:
+        value: "0.99"
+    externalDocs:
+      description: Fee guide
+      url: https://docs.example.com/fees
+  payments.webhook:
+    type: url
+    constraints:
+      allowed_schemes: [https, sftp]
+`
+
+func TestSchemaFromYAML_Metadata(t *testing.T) {
+	s, err := schemaFromYAML([]byte(metadataSchemaYAML))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := s.VersionDescription; got != "Added refund_window field" {
+		t.Errorf("got %v, want %v", got, "Added refund_window field")
+	}
+	if s.Info == nil {
+		t.Fatal("expected non-nil Info")
+	}
+	want := &docgen.SchemaInfo{
+		Title:   "Payments Configuration",
+		Author:  "platform-team",
+		Contact: &docgen.SchemaContact{Name: "Pat", Email: "pat@example.com"},
+		Labels:  map[string]string{"team": "platform"},
+	}
+	if !reflect.DeepEqual(s.Info, want) {
+		t.Errorf("got %+v, want %+v", s.Info, want)
+	}
+
+	var fee, webhook *docgen.Field
+	for i := range s.Fields {
+		switch s.Fields[i].Path {
+		case "payments.fee":
+			fee = &s.Fields[i]
+		case "payments.webhook":
+			webhook = &s.Fields[i]
+		}
+	}
+	if fee == nil || webhook == nil {
+		t.Fatal("expected both fields to be mapped")
+	}
+	wantExamples := map[string]docgen.FieldExample{
+		"low":  {Value: "0.01", Summary: "Low rate"},
+		"high": {Value: "0.99"},
+	}
+	if !reflect.DeepEqual(fee.Examples, wantExamples) {
+		t.Errorf("got %+v, want %+v", fee.Examples, wantExamples)
+	}
+	wantDocs := &docgen.ExternalDocs{Description: "Fee guide", URL: "https://docs.example.com/fees"}
+	if !reflect.DeepEqual(fee.ExternalDocs, wantDocs) {
+		t.Errorf("got %+v, want %+v", fee.ExternalDocs, wantDocs)
+	}
+	if webhook.Constraints == nil || !reflect.DeepEqual(webhook.Constraints.AllowedSchemes, []string{"https", "sftp"}) {
+		t.Errorf("unexpected constraints: %+v", webhook.Constraints)
+	}
+}
+
+func TestSchemaFromYAML_InfoWithoutContact(t *testing.T) {
+	yaml := `spec_version: v1
+name: test
+info:
+  title: Test
+fields:
+  x:
+    type: string
+`
+	s, err := schemaFromYAML([]byte(yaml))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Info == nil || s.Info.Title != "Test" {
+		t.Fatalf("unexpected Info: %+v", s.Info)
+	}
+	if s.Info.Contact != nil {
+		t.Errorf("expected nil Contact, got %+v", s.Info.Contact)
+	}
+}
+
+func TestSchemaFromYAML_MetadataRenders(t *testing.T) {
+	s, err := schemaFromYAML([]byte(metadataSchemaYAML))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	md := docgen.Generate(*s)
+	for _, substr := range []string{
+		"# Payments Configuration",
+		"**Version:** 3 — Added refund_window field",
+		"**Author:** platform-team",
+		"**Contact:** Pat <pat@example.com>",
+		"`team: platform`",
+		"- **low:** `0.01` — Low rate",
+		"- **high:** `0.99`",
+		"**See also:** [Fee guide](https://docs.example.com/fees)",
+		"- Allowed schemes: https, sftp",
+	} {
+		if !strings.Contains(md, substr) {
+			t.Errorf("expected output to contain %q, got:\n%s", substr, md)
+		}
+	}
+}
+
 func TestSchemaFromYAML_Invalid(t *testing.T) {
 	_, err := schemaFromYAML([]byte("not: [valid"))
 	if err == nil {

@@ -25,41 +25,64 @@ import (
 
 // SchemaFile is the parsed representation of a schema YAML file.
 type SchemaFile struct {
-	SpecVersion        string `yaml:"spec_version"`
-	Schema             string `yaml:"$schema,omitempty"`
-	ID                 string `yaml:"$id,omitempty"`
-	Name               string `yaml:"name"`
-	Description        string `yaml:"description,omitempty"`
-	Version            int32  `yaml:"version,omitempty"`
-	VersionDescription string `yaml:"version_description,omitempty"`
-	// Info is accepted for forward-compatibility with richer schema formats but
-	// is not used by the offline validator.
-	Info   any                 `yaml:"info,omitempty"`
-	Fields map[string]FieldDef `yaml:"fields"`
+	SpecVersion        string              `yaml:"spec_version"`
+	Schema             string              `yaml:"$schema,omitempty"`
+	ID                 string              `yaml:"$id,omitempty"`
+	Name               string              `yaml:"name"`
+	Description        string              `yaml:"description,omitempty"`
+	Version            int32               `yaml:"version,omitempty"`
+	VersionDescription string              `yaml:"version_description,omitempty"`
+	Info               *SchemaInfoDef      `yaml:"info,omitempty"`
+	Fields             map[string]FieldDef `yaml:"fields"`
+}
+
+// SchemaInfoDef contains optional schema-level metadata.
+type SchemaInfoDef struct {
+	Title   string            `yaml:"title,omitempty"`
+	Author  string            `yaml:"author,omitempty"`
+	Contact *SchemaContactDef `yaml:"contact,omitempty"`
+	Labels  map[string]string `yaml:"labels,omitempty"`
+}
+
+// SchemaContactDef contains contact information for a schema owner.
+type SchemaContactDef struct {
+	Name  string `yaml:"name,omitempty"`
+	Email string `yaml:"email,omitempty"`
+	URL   string `yaml:"url,omitempty"`
 }
 
 // FieldDef describes a single field in the schema YAML.
 type FieldDef struct {
-	Type        string          `yaml:"type"`
-	Description string          `yaml:"description,omitempty"`
-	Default     string          `yaml:"default,omitempty"`
-	Nullable    bool            `yaml:"nullable,omitempty"`
-	Deprecated  bool            `yaml:"deprecated,omitempty"`
-	RedirectTo  string          `yaml:"redirect_to,omitempty"`
-	Constraints *ConstraintsDef `yaml:"constraints,omitempty"`
-	Title       string          `yaml:"title,omitempty"`
-	Example     string          `yaml:"example,omitempty"`
-	// Examples and ExternalDocs are accepted for forward-compatibility but are
-	// not used by the offline validator.
-	Examples     any      `yaml:"examples,omitempty"`
-	ExternalDocs any      `yaml:"externalDocs,omitempty"`
-	Tags         []string `yaml:"tags,omitempty"`
+	Type         string                `yaml:"type"`
+	Description  string                `yaml:"description,omitempty"`
+	Default      string                `yaml:"default,omitempty"`
+	Nullable     bool                  `yaml:"nullable,omitempty"`
+	Deprecated   bool                  `yaml:"deprecated,omitempty"`
+	RedirectTo   string                `yaml:"redirect_to,omitempty"`
+	Constraints  *ConstraintsDef       `yaml:"constraints,omitempty"`
+	Title        string                `yaml:"title,omitempty"`
+	Example      string                `yaml:"example,omitempty"`
+	Examples     map[string]ExampleDef `yaml:"examples,omitempty"`
+	ExternalDocs *ExternalDocsDef      `yaml:"externalDocs,omitempty"`
+	Tags         []string              `yaml:"tags,omitempty"`
 	// Format is accepted for forward-compatibility but is not used by the
 	// offline validator.
 	Format    string `yaml:"format,omitempty"`
 	ReadOnly  bool   `yaml:"readOnly,omitempty"`
 	WriteOnce bool   `yaml:"writeOnce,omitempty"`
 	Sensitive bool   `yaml:"sensitive,omitempty"`
+}
+
+// ExampleDef represents a named example value.
+type ExampleDef struct {
+	Value   string `yaml:"value"`
+	Summary string `yaml:"summary,omitempty"`
+}
+
+// ExternalDocsDef links to external documentation.
+type ExternalDocsDef struct {
+	Description string `yaml:"description,omitempty"`
+	URL         string `yaml:"url"`
 }
 
 // ConstraintsDef uses OAS-style naming for field constraints.
@@ -166,6 +189,14 @@ func ParseSchema(data []byte) (*SchemaFile, error) {
 	for path, f := range doc.Fields {
 		if !isValidType(f.Type) {
 			return nil, fmt.Errorf("field %s: unknown type %q", path, f.Type)
+		}
+		for name, ex := range f.Examples {
+			if ex.Value == "" {
+				return nil, fmt.Errorf("field %s: example %q: value is required", path, name)
+			}
+		}
+		if f.ExternalDocs != nil && f.ExternalDocs.URL == "" {
+			return nil, fmt.Errorf("field %s: externalDocs: url is required", path)
 		}
 		if f.Default != "" {
 			dv, err := parseDefaultAsTyped(f.Type, f.Default)

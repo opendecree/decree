@@ -27,6 +27,31 @@ func TestGenerate_Basic(t *testing.T) {
 	assertContains(t, md, "Fee percentage")
 }
 
+func TestGenerate_VersionDescription(t *testing.T) {
+	schema := Schema{
+		Name:               "test",
+		Version:            3,
+		VersionDescription: "Added refund_window field",
+		Fields:             []Field{{Path: "x", Type: "string"}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**Version:** 3 — Added refund_window field")
+}
+
+func TestGenerate_VersionDescriptionWithoutVersion(t *testing.T) {
+	schema := Schema{
+		Name:               "test",
+		VersionDescription: "Added refund_window field",
+		Fields:             []Field{{Path: "x", Type: "string"}},
+	}
+
+	md := Generate(schema)
+	if strings.Contains(md, "Version") || strings.Contains(md, "Added refund_window field") {
+		t.Errorf("expected no version line when Version is unset, got:\n%s", md)
+	}
+}
+
 func TestGenerate_GroupsByPrefix(t *testing.T) {
 	schema := Schema{
 		Name: "test",
@@ -61,21 +86,43 @@ func TestGenerate_WithoutGrouping(t *testing.T) {
 func TestGenerate_Constraints(t *testing.T) {
 	min := float64(0)
 	max := float64(100)
+	exclMin := float64(0)
+	exclMax := float64(1)
 	minLen := int32(1)
+	maxLen := int32(50)
 	schema := Schema{
 		Name: "test",
 		Fields: []Field{
 			{Path: "rate", Type: "number", Constraints: &Constraints{Min: &min, Max: &max}},
-			{Path: "name", Type: "string", Constraints: &Constraints{MinLength: &minLen, Pattern: "^[a-z]+$", Enum: []string{"a", "b"}}},
+			{Path: "share", Type: "number", Constraints: &Constraints{ExclusiveMin: &exclMin, ExclusiveMax: &exclMax}},
+			{Path: "name", Type: "string", Constraints: &Constraints{MinLength: &minLen, MaxLength: &maxLen, Pattern: "^[a-z]+$", Enum: []string{"a", "b"}}},
+			{Path: "payload", Type: "json", Constraints: &Constraints{JSONSchema: `{"type": "object"}`}},
 		},
 	}
 
 	md := Generate(schema)
 	assertContains(t, md, "Minimum: 0")
 	assertContains(t, md, "Maximum: 100")
+	assertContains(t, md, "Exclusive minimum: 0")
+	assertContains(t, md, "Exclusive maximum: 1")
 	assertContains(t, md, "Min length: 1")
+	assertContains(t, md, "Max length: 50")
 	assertContains(t, md, "Pattern: `^[a-z]+$`")
 	assertContains(t, md, "Enum: a, b")
+	assertContains(t, md, "JSON Schema: (see schema definition)")
+}
+
+func TestGenerate_AllowedSchemes(t *testing.T) {
+	schema := Schema{
+		Name: "test",
+		Fields: []Field{
+			{Path: "hook", Type: "url", Constraints: &Constraints{AllowedSchemes: []string{"https", "sftp"}}},
+		},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "**Constraints:**")
+	assertContains(t, md, "- Allowed schemes: https, sftp")
 }
 
 func TestGenerate_WithoutConstraints(t *testing.T) {
@@ -250,9 +297,8 @@ func TestGenerate_Examples(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "**Examples:**")
-	assertContains(t, md, "**low:** `0.01` — Low rate")
-	assertContains(t, md, "**high:** `0.99`")
+	// Examples render sorted by name for deterministic output.
+	assertContains(t, md, "**Examples:**\n- **high:** `0.99`\n- **low:** `0.01` — Low rate\n")
 }
 
 func TestGenerate_ExternalDocs(t *testing.T) {
