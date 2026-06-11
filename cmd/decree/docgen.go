@@ -93,16 +93,22 @@ func init() {
 	docgenCmd.Flags().Bool("no-grouping", false, "flat list instead of grouped by prefix")
 }
 
-// adminSchemaToDocgen converts adminclient types to docgen types.
+// adminSchemaToDocgen converts adminclient types to docgen types. It must map
+// every documentation-relevant property the admin client carries so that
+// online mode documents a schema identically to --file mode (#912);
+// TestAdminSchemaToDocgen_PropertyDrift guards the mapping against new
+// adminclient properties.
 func adminSchemaToDocgen(s *adminclient.Schema) docgen.Schema {
 	ds := docgen.Schema{
-		Name:        s.Name,
-		Description: s.Description,
-		Version:     s.Version,
-		Fields:      make([]docgen.Field, len(s.Fields)),
+		Name:               s.Name,
+		Description:        s.Description,
+		Version:            s.Version,
+		VersionDescription: s.VersionDescription,
+		Info:               schemaInfoFromAdmin(s.Info),
+		Fields:             make([]docgen.Field, len(s.Fields)),
 	}
 	for i, f := range s.Fields {
-		ds.Fields[i] = docgen.Field{
+		df := docgen.Field{
 			Path:        f.Path,
 			Type:        string(f.Type),
 			Description: f.Description,
@@ -110,22 +116,63 @@ func adminSchemaToDocgen(s *adminclient.Schema) docgen.Schema {
 			Nullable:    f.Nullable,
 			Deprecated:  f.Deprecated,
 			RedirectTo:  f.RedirectTo,
+			Title:       f.Title,
+			Example:     f.Example,
+			Tags:        f.Tags,
+			Format:      f.Format,
+			ReadOnly:    f.ReadOnly,
+			WriteOnce:   f.WriteOnce,
+			Sensitive:   f.Sensitive,
 		}
-		if f.Constraints != nil {
-			ds.Fields[i].Constraints = &docgen.Constraints{
-				Min:          f.Constraints.Min,
-				Max:          f.Constraints.Max,
-				ExclusiveMin: f.Constraints.ExclusiveMin,
-				ExclusiveMax: f.Constraints.ExclusiveMax,
-				MinLength:    f.Constraints.MinLength,
-				MaxLength:    f.Constraints.MaxLength,
-				Pattern:      f.Constraints.Pattern,
-				Enum:         f.Constraints.Enum,
-				JSONSchema:   f.Constraints.JSONSchema,
+		if len(f.Examples) > 0 {
+			df.Examples = make(map[string]docgen.FieldExample, len(f.Examples))
+			for name, ex := range f.Examples {
+				df.Examples[name] = docgen.FieldExample{Value: ex.Value, Summary: ex.Summary}
 			}
 		}
+		if f.ExternalDocs != nil {
+			df.ExternalDocs = &docgen.ExternalDocs{
+				Description: f.ExternalDocs.Description,
+				URL:         f.ExternalDocs.URL,
+			}
+		}
+		if f.Constraints != nil {
+			df.Constraints = &docgen.Constraints{
+				Min:            f.Constraints.Min,
+				Max:            f.Constraints.Max,
+				ExclusiveMin:   f.Constraints.ExclusiveMin,
+				ExclusiveMax:   f.Constraints.ExclusiveMax,
+				MinLength:      f.Constraints.MinLength,
+				MaxLength:      f.Constraints.MaxLength,
+				Pattern:        f.Constraints.Pattern,
+				Enum:           f.Constraints.Enum,
+				JSONSchema:     f.Constraints.JSONSchema,
+				AllowedSchemes: f.Constraints.AllowedSchemes,
+			}
+		}
+		ds.Fields[i] = df
 	}
 	return ds
+}
+
+// schemaInfoFromAdmin converts the adminclient info metadata to the docgen shape.
+func schemaInfoFromAdmin(info *adminclient.SchemaInfo) *docgen.SchemaInfo {
+	if info == nil {
+		return nil
+	}
+	di := &docgen.SchemaInfo{
+		Title:  info.Title,
+		Author: info.Author,
+		Labels: info.Labels,
+	}
+	if info.Contact != nil {
+		di.Contact = &docgen.SchemaContact{
+			Name:  info.Contact.Name,
+			Email: info.Contact.Email,
+			URL:   info.Contact.URL,
+		}
+	}
+	return di
 }
 
 // schemaFromYAML parses a schema YAML file into a docgen.Schema using the

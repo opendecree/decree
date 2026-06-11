@@ -210,7 +210,8 @@ func constraintsFromProto(c *pb.FieldConstraints) *adminclient.FieldConstraints 
 		return nil
 	}
 	fc := &adminclient.FieldConstraints{
-		Enum: c.GetEnumValues(),
+		Enum:           c.GetEnumValues(),
+		AllowedSchemes: c.GetAllowedSchemes(),
 	}
 	if c.Min != nil {
 		v := c.GetMin()
@@ -304,7 +305,8 @@ func constraintsToProto(c *adminclient.FieldConstraints) *pb.FieldConstraints {
 		return nil
 	}
 	fc := &pb.FieldConstraints{
-		EnumValues: c.Enum,
+		EnumValues:     c.Enum,
+		AllowedSchemes: c.AllowedSchemes,
 	}
 	if c.Min != nil {
 		fc.Min = c.Min

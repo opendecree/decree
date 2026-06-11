@@ -302,13 +302,14 @@ func TestFieldsRoundTrip_WithConstraints(t *testing.T) {
 			Path: "rate",
 			Type: "number",
 			Constraints: &adminclient.FieldConstraints{
-				Min:        &min,
-				Max:        &max,
-				MinLength:  &minLen,
-				MaxLength:  &maxLen,
-				Enum:       []string{"low", "high"},
-				Pattern:    `^\d+$`,
-				JSONSchema: `{"type":"number"}`,
+				Min:            &min,
+				Max:            &max,
+				MinLength:      &minLen,
+				MaxLength:      &maxLen,
+				Enum:           []string{"low", "high"},
+				Pattern:        `^\d+$`,
+				JSONSchema:     `{"type":"number"}`,
+				AllowedSchemes: []string{"https", "sftp"},
 			},
 		},
 	}
@@ -337,6 +338,9 @@ func TestFieldsRoundTrip_WithConstraints(t *testing.T) {
 	}
 	if c.JSONSchema != `{"type":"number"}` {
 		t.Errorf("JSONSchema: got %q", c.JSONSchema)
+	}
+	if len(c.AllowedSchemes) != 2 || c.AllowedSchemes[0] != "https" || c.AllowedSchemes[1] != "sftp" {
+		t.Errorf("AllowedSchemes: got %v", c.AllowedSchemes)
 	}
 }
 

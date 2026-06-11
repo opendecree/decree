@@ -90,6 +90,9 @@ type FieldConstraints struct {
 	Pattern      string
 	Enum         []string
 	JSONSchema   string
+	// AllowedSchemes lists the URI schemes accepted for url-typed fields.
+	// When empty the server defaults to http and https.
+	AllowedSchemes []string
 }
 
 // Tenant represents a tenant assigned to a schema.
