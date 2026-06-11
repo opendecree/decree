@@ -97,14 +97,16 @@ sdk/
 ├── configclient/        # Config read/write SDK (own module)
 ├── adminclient/         # Admin operations SDK (own module)
 ├── configwatcher/       # Live typed values SDK (own module)
-└── tools/               # Power tools: diff, docgen, validate, seed, dump (own module)
+├── tools/               # Power tools: diff, docgen, validate, seed, dump (own module)
+└── contrib/             # SDK framework adapters: viper, koanf, envconfig (own modules)
 
 e2e/                     # End-to-end tests (own module: e2e/go.mod)
 build/                   # Dockerfiles (service + tools)
 deploy/
 ├── helm/                # Helm chart
 └── otel-collector.yaml  # OTel Collector config for local dev
-contrib/                 # Third-party integrations (future: viper, koanf)
+contrib/
+└── decree-docs/         # Standalone schema docs generator (own module)
 ```
 
 ### Module Layout

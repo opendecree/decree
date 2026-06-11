@@ -11,7 +11,7 @@ Six Go SDK packages, each an independent module. Full API reference is hosted on
 - **`grpctransport`** — gRPC connection management and the `Transport` the clients run on.
 - **`retry`** — the shared retry policy (exponential backoff) used by the clients.
 
-The `contrib/` directory additionally holds optional configuration-loader integrations (`envconfig`, `koanf`, `viper`).
+The `sdk/contrib/` directory additionally holds optional configuration-loader integrations (`envconfig`, `koanf`, `viper`).
 
 ## Connecting
 
