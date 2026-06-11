@@ -294,6 +294,250 @@ func TestAdminSchemaToDocgen_NoConstraints(t *testing.T) {
 	}
 }
 
+// ptrTo returns a pointer to v.
+func ptrTo[T any](v T) *T { return &v }
+
+// fullAdminSchema returns an adminclient.Schema with every property set to a
+// distinct non-zero value. TestAdminSchemaToDocgen_Metadata and
+// TestAdminSchemaToDocgen_PropertyDrift use it to verify that
+// adminSchemaToDocgen maps the complete admin client surface.
+func fullAdminSchema() *adminclient.Schema {
+	return &adminclient.Schema{
+		ID:                 "schema-uuid",
+		Name:               "payments",
+		Description:        "Payment configuration schema",
+		Version:            3,
+		ParentVersion:      ptrTo(int32(2)),
+		VersionDescription: "Added refund_window field",
+		Checksum:           "abc123",
+		Published:          true,
+		CreatedAt:          time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
+		Info: &adminclient.SchemaInfo{
+			Title:  "Payments Configuration",
+			Author: "platform-team",
+			Contact: &adminclient.SchemaContact{
+				Name:  "Pat",
+				Email: "pat@example.com",
+				URL:   "https://example.com/payments-team",
+			},
+			Labels: map[string]string{"team": "platform"},
+		},
+		Fields: []adminclient.Field{
+			{
+				Path:        "payments.webhook",
+				Type:        adminclient.FieldTypeURL,
+				Nullable:    true,
+				Deprecated:  true,
+				RedirectTo:  "payments.callback_url",
+				Default:     "https://example.com/hook",
+				Description: "Webhook endpoint",
+				Title:       "Webhook URL",
+				Example:     "https://example.com/hook-example",
+				Examples: map[string]adminclient.FieldExample{
+					"primary": {Value: "https://hooks.example.com/a", Summary: "Primary endpoint"},
+				},
+				ExternalDocs: &adminclient.ExternalDocs{
+					Description: "Webhook guide",
+					URL:         "https://docs.example.com/webhooks",
+				},
+				Tags:      []string{"billing", "integration"},
+				Format:    "uri",
+				ReadOnly:  true,
+				WriteOnce: true,
+				Sensitive: true,
+				Constraints: &adminclient.FieldConstraints{
+					Min:            ptrTo(1.0),
+					Max:            ptrTo(9.0),
+					ExclusiveMin:   ptrTo(0.5),
+					ExclusiveMax:   ptrTo(9.5),
+					MinLength:      ptrTo(int32(2)),
+					MaxLength:      ptrTo(int32(64)),
+					Pattern:        "^https://",
+					Enum:           []string{"https://a.example.com", "https://b.example.com"},
+					JSONSchema:     `{"type":"string"}`,
+					AllowedSchemes: []string{"https", "sftp"},
+				},
+			},
+		},
+	}
+}
+
+func TestAdminSchemaToDocgen_Metadata(t *testing.T) {
+	got := adminSchemaToDocgen(fullAdminSchema())
+	want := docgen.Schema{
+		Name:               "payments",
+		Description:        "Payment configuration schema",
+		Version:            3,
+		VersionDescription: "Added refund_window field",
+		Info: &docgen.SchemaInfo{
+			Title:  "Payments Configuration",
+			Author: "platform-team",
+			Contact: &docgen.SchemaContact{
+				Name:  "Pat",
+				Email: "pat@example.com",
+				URL:   "https://example.com/payments-team",
+			},
+			Labels: map[string]string{"team": "platform"},
+		},
+		Fields: []docgen.Field{
+			{
+				Path:        "payments.webhook",
+				Type:        "url",
+				Description: "Webhook endpoint",
+				Default:     "https://example.com/hook",
+				Nullable:    true,
+				Deprecated:  true,
+				RedirectTo:  "payments.callback_url",
+				Title:       "Webhook URL",
+				Example:     "https://example.com/hook-example",
+				Examples: map[string]docgen.FieldExample{
+					"primary": {Value: "https://hooks.example.com/a", Summary: "Primary endpoint"},
+				},
+				ExternalDocs: &docgen.ExternalDocs{
+					Description: "Webhook guide",
+					URL:         "https://docs.example.com/webhooks",
+				},
+				Tags:      []string{"billing", "integration"},
+				Format:    "uri",
+				ReadOnly:  true,
+				WriteOnce: true,
+				Sensitive: true,
+				Constraints: &docgen.Constraints{
+					Min:            ptrTo(1.0),
+					Max:            ptrTo(9.0),
+					ExclusiveMin:   ptrTo(0.5),
+					ExclusiveMax:   ptrTo(9.5),
+					MinLength:      ptrTo(int32(2)),
+					MaxLength:      ptrTo(int32(64)),
+					Pattern:        "^https://",
+					Enum:           []string{"https://a.example.com", "https://b.example.com"},
+					JSONSchema:     `{"type":"string"}`,
+					AllowedSchemes: []string{"https", "sftp"},
+				},
+			},
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("adminSchemaToDocgen mismatch:\ngot:  %+v\nwant: %+v", got, want)
+	}
+}
+
+// TestAdminSchemaToDocgen_PropertyDrift reflects over every exported property
+// of the adminclient schema types and asserts each one is either copied into
+// the docgen model by adminSchemaToDocgen or explicitly recorded below as
+// non-documentation metadata. A property added to adminclient fails this test
+// until it is populated in fullAdminSchema and either mapped or recorded.
+func TestAdminSchemaToDocgen_PropertyDrift(t *testing.T) {
+	in := fullAdminSchema()
+	out := adminSchemaToDocgen(in)
+
+	tests := []struct {
+		name  string
+		admin any
+		doc   any
+		// notDocumented lists adminclient properties that deliberately have no
+		// docgen counterpart: server bookkeeping that schema YAML cannot
+		// express, so documenting it would break online/--file parity.
+		notDocumented []string
+	}{
+		{
+			name:          "Schema",
+			admin:         *in,
+			doc:           out,
+			notDocumented: []string{"ID", "ParentVersion", "Checksum", "Published", "CreatedAt"},
+		},
+		{name: "Field", admin: in.Fields[0], doc: out.Fields[0]},
+		{name: "FieldConstraints", admin: *in.Fields[0].Constraints, doc: *out.Fields[0].Constraints},
+		{name: "SchemaInfo", admin: *in.Info, doc: *out.Info},
+		{name: "SchemaContact", admin: *in.Info.Contact, doc: *out.Info.Contact},
+		{name: "FieldExample", admin: in.Fields[0].Examples["primary"], doc: out.Fields[0].Examples["primary"]},
+		{name: "ExternalDocs", admin: *in.Fields[0].ExternalDocs, doc: *out.Fields[0].ExternalDocs},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			av := reflect.ValueOf(tt.admin)
+			dv := reflect.ValueOf(tt.doc)
+			skip := make(map[string]bool, len(tt.notDocumented))
+			for _, name := range tt.notDocumented {
+				if _, ok := av.Type().FieldByName(name); !ok {
+					t.Errorf("stale notDocumented entry %q: adminclient.%s has no such property", name, av.Type().Name())
+				}
+				skip[name] = true
+			}
+			for i := 0; i < av.NumField(); i++ {
+				name := av.Type().Field(i).Name
+				if skip[name] {
+					continue
+				}
+				if av.Field(i).IsZero() {
+					t.Errorf("adminclient.%s.%s is zero in fullAdminSchema — populate it so this test can verify the mapping", av.Type().Name(), name)
+					continue
+				}
+				df, ok := dv.Type().FieldByName(name)
+				if !ok {
+					t.Errorf("adminclient.%s.%s has no docgen counterpart — map it in adminSchemaToDocgen or record it in notDocumented", av.Type().Name(), name)
+					continue
+				}
+				if dv.FieldByIndex(df.Index).IsZero() {
+					t.Errorf("adminclient.%s.%s is dropped by adminSchemaToDocgen", av.Type().Name(), name)
+				}
+			}
+		})
+	}
+}
+
+// TestDocgenOnlineFileParity asserts the acceptance criterion of #912: the
+// same schema content produces byte-identical documentation whether it is
+// read from a YAML file or fetched from the server via the admin client.
+func TestDocgenOnlineFileParity(t *testing.T) {
+	fileSchema, err := schemaFromYAML([]byte(metadataSchemaYAML))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The adminclient equivalent of metadataSchemaYAML, as GetSchema would
+	// return it. Field order is reversed to prove output order-independence.
+	online := &adminclient.Schema{
+		Name:               "payments",
+		Version:            3,
+		VersionDescription: "Added refund_window field",
+		Info: &adminclient.SchemaInfo{
+			Title:   "Payments Configuration",
+			Author:  "platform-team",
+			Contact: &adminclient.SchemaContact{Name: "Pat", Email: "pat@example.com"},
+			Labels:  map[string]string{"team": "platform"},
+		},
+		Fields: []adminclient.Field{
+			{
+				Path: "payments.webhook",
+				Type: adminclient.FieldTypeURL,
+				Constraints: &adminclient.FieldConstraints{
+					AllowedSchemes: []string{"https", "sftp"},
+				},
+			},
+			{
+				Path: "payments.fee",
+				Type: adminclient.FieldTypeNumber,
+				Examples: map[string]adminclient.FieldExample{
+					"low":  {Value: "0.01", Summary: "Low rate"},
+					"high": {Value: "0.99"},
+				},
+				ExternalDocs: &adminclient.ExternalDocs{
+					Description: "Fee guide",
+					URL:         "https://docs.example.com/fees",
+				},
+			},
+		},
+	}
+
+	fromFile := docgen.Generate(*fileSchema)
+	fromOnline := docgen.Generate(adminSchemaToDocgen(online))
+	if fromFile != fromOnline {
+		t.Errorf("online and --file modes documented the same schema differently:\n--file:\n%s\nonline:\n%s", fromFile, fromOnline)
+	}
+}
+
 // --- schemaFromYAML ---
 
 func TestSchemaFromYAML(t *testing.T) {

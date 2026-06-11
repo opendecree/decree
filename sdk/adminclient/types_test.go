@@ -170,15 +170,16 @@ func TestFieldConstraints_AllFields(t *testing.T) {
 	maxLen := int32(255)
 
 	c := FieldConstraints{
-		Min:          &min,
-		Max:          &max,
-		ExclusiveMin: &exMin,
-		ExclusiveMax: &exMax,
-		MinLength:    &minLen,
-		MaxLength:    &maxLen,
-		Pattern:      "^[a-z]+$",
-		Enum:         []string{"a", "b"},
-		JSONSchema:   `{"type":"object"}`,
+		Min:            &min,
+		Max:            &max,
+		ExclusiveMin:   &exMin,
+		ExclusiveMax:   &exMax,
+		MinLength:      &minLen,
+		MaxLength:      &maxLen,
+		Pattern:        "^[a-z]+$",
+		Enum:           []string{"a", "b"},
+		JSONSchema:     `{"type":"object"}`,
+		AllowedSchemes: []string{"https", "sftp"},
 	}
 
 	if c.Min == nil || *c.Min != 0.0 {
@@ -195,6 +196,9 @@ func TestFieldConstraints_AllFields(t *testing.T) {
 	}
 	if got := c.JSONSchema; got != `{"type":"object"}` {
 		t.Errorf("got JSONSchema %v, want %v", got, `{"type":"object"}`)
+	}
+	if len(c.AllowedSchemes) != 2 || c.AllowedSchemes[0] != "https" {
+		t.Errorf("got AllowedSchemes %v, want [https sftp]", c.AllowedSchemes)
 	}
 }
 
