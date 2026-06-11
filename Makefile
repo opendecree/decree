@@ -21,8 +21,9 @@ GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 SERVER_LDFLAGS := -X github.com/opendecree/decree/internal/version.Version=$(GIT_VERSION) -X github.com/opendecree/decree/internal/version.Commit=$(GIT_COMMIT)
 CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 
-# Module list for multi-module operations.
+# Module lists for multi-module operations.
 SDK_MODULES := sdk/retry sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools sdk/contrib/viper sdk/contrib/envconfig sdk/contrib/koanf
+CONTRIB_MODULES := contrib/decree-docs
 
 .PHONY: all generate generate-proto generate-sqlc deps test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
@@ -92,12 +93,12 @@ lint-proto: $(TOOLS_SENTINEL)
 ## deps: Download Go module dependencies across all modules
 deps:
 	go mod download ./...
-	@for mod in api $(SDK_MODULES) cmd/decree; do (cd $$mod && go mod download ./...) || exit 1; done
+	@for mod in api $(SDK_MODULES) $(CONTRIB_MODULES) cmd/decree; do (cd $$mod && go mod download ./...) || exit 1; done
 
 ## test: Run unit tests across all modules
 test:
 	go test ./... -race -count=1
-	@for mod in $(SDK_MODULES) cmd/decree; do (cd $$mod && go test ./... -race -count=1) || exit 1; done
+	@for mod in $(SDK_MODULES) $(CONTRIB_MODULES) cmd/decree; do (cd $$mod && go test ./... -race -count=1) || exit 1; done
 
 ## validate-meta-schemas: Validate canonical schema/config YAMLs against the v0.1.0 meta-schemas
 validate-meta-schemas:
@@ -107,10 +108,10 @@ validate-meta-schemas:
 pre-commit:
 	@echo "=== Build ==="
 	go build ./...
-	@for mod in $(SDK_MODULES) cmd/decree; do (cd $$mod && go build ./...) || exit 1; done
+	@for mod in $(SDK_MODULES) $(CONTRIB_MODULES) cmd/decree; do (cd $$mod && go build ./...) || exit 1; done
 	@echo "=== Vet ==="
 	go vet ./...
-	@for mod in $(SDK_MODULES) cmd/decree; do (cd $$mod && go vet ./...) || exit 1; done
+	@for mod in $(SDK_MODULES) $(CONTRIB_MODULES) cmd/decree; do (cd $$mod && go vet ./...) || exit 1; done
 	@echo "=== Format ==="
 	@unformatted=$$(gofumpt -l .); \
 	if [ -n "$$unformatted" ]; then \
@@ -121,7 +122,7 @@ pre-commit:
 	golangci-lint run ./...
 	@echo "=== Test ==="
 	go test ./... -race -count=1
-	@for mod in $(SDK_MODULES) cmd/decree; do (cd $$mod && go test ./... -race -count=1) || exit 1; done
+	@for mod in $(SDK_MODULES) $(CONTRIB_MODULES) cmd/decree; do (cd $$mod && go test ./... -race -count=1) || exit 1; done
 	@echo "=== Coverage ==="
 	./scripts/check-coverage.sh
 	@echo ""

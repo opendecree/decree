@@ -52,6 +52,7 @@ site/
 /decree
 /server
 cmd/decree/decree
+contrib/decree-docs/decree-docs
 
 # Example binaries (compiled in-place by go build / go test -tags=example)
 examples/config-validation/config-validation

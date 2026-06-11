@@ -37,6 +37,7 @@ declare -A MODULES=(
   ["sdk/adminclient"]="./..."
   ["sdk/configwatcher"]="./..."
   ["sdk/tools"]="./..."
+  ["contrib/decree-docs"]="./..."
   ["cmd/decree"]="./..."
 )
 
@@ -47,6 +48,7 @@ declare -A MODULE_DIRS=(
   ["sdk/adminclient"]="sdk/adminclient"
   ["sdk/configwatcher"]="sdk/configwatcher"
   ["sdk/tools"]="sdk/tools"
+  ["contrib/decree-docs"]="contrib/decree-docs"
   ["cmd/decree"]="cmd/decree"
 )
 

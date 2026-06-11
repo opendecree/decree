@@ -27,13 +27,14 @@ updates:
           - minor
           - patch
 
-  # ── Tier: 1.24-floor (api, CLI, grpctransport, tools) ───────────────────
+  # ── Tier: 1.24-floor (api, CLI, grpctransport, tools, decree-docs) ──────
   # Must not cross go 1.25. Ignore any dep that forces the go directive above
   # 1.24, including otel ≥ 1.42 (requires go 1.25) and grpc-gateway ≥ 2.29.
   - package-ecosystem: gomod
     directories:
       - /api
       - /cmd/decree
+      - /contrib/decree-docs
       - /sdk/grpctransport
       - /sdk/tools
     schedule:
