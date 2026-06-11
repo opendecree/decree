@@ -101,8 +101,17 @@ func TestGenerate_Deprecated(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "Deprecated | yes")
-	assertContains(t, md, "Redirect | `new_field`")
+	assertContains(t, md, "> **Deprecated** — use `new_field` instead.")
+}
+
+func TestGenerate_DeprecatedNoRedirect(t *testing.T) {
+	schema := Schema{
+		Name:   "test",
+		Fields: []Field{{Path: "old_field", Type: "string", Deprecated: true}},
+	}
+
+	md := Generate(schema)
+	assertContains(t, md, "> **Deprecated.**")
 }
 
 func TestGenerate_WithoutDeprecated(t *testing.T) {
@@ -131,8 +140,8 @@ func TestGenerate_Nullable(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "Nullable | yes")
-	assertContains(t, md, "Nullable | no")
+	assertContains(t, md, "### `a`\n\n*type: `string` · nullable*")
+	assertContains(t, md, "### `b`\n\n*type: `string`*")
 }
 
 func TestGenerate_Default(t *testing.T) {
@@ -142,7 +151,7 @@ func TestGenerate_Default(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "Default | `hello`")
+	assertContains(t, md, "default: `hello`")
 }
 
 func TestGenerate_NoPrefix(t *testing.T) {
@@ -280,7 +289,7 @@ func TestGenerate_Tags(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "| Tags | billing, critical |")
+	assertContains(t, md, "tags: billing, critical")
 }
 
 func TestGenerate_Format(t *testing.T) {
@@ -290,7 +299,7 @@ func TestGenerate_Format(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "| Format | email |")
+	assertContains(t, md, "format: email")
 }
 
 func TestGenerate_ReadOnlyWriteOnceSensitive(t *testing.T) {
@@ -304,9 +313,9 @@ func TestGenerate_ReadOnlyWriteOnceSensitive(t *testing.T) {
 	}
 
 	md := Generate(schema)
-	assertContains(t, md, "| Read-only | yes |")
-	assertContains(t, md, "| Write-once | yes |")
-	assertContains(t, md, "| Sensitive | yes |")
+	assertContains(t, md, "*type: `string` · read-only*")
+	assertContains(t, md, "*type: `string` · write-once*")
+	assertContains(t, md, "*type: `string` · sensitive*")
 }
 
 func assertContains(t *testing.T, s, substr string) {

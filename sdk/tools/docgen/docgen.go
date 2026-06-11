@@ -234,36 +234,16 @@ func writeField(b *strings.Builder, f Field, cfg *config) {
 		fmt.Fprintf(b, "### `%s`\n\n", f.Path)
 	}
 
-	// Property table.
-	fmt.Fprintln(b, "| Property | Value |")
-	fmt.Fprintln(b, "|----------|-------|")
-	fmt.Fprintf(b, "| Type | %s |\n", f.Type)
-	if f.Format != "" {
-		fmt.Fprintf(b, "| Format | %s |\n", f.Format)
-	}
-	fmt.Fprintf(b, "| Nullable | %s |\n", yesNo(f.Nullable))
-	if f.Default != "" {
-		fmt.Fprintf(b, "| Default | `%s` |\n", f.Default)
-	}
-	if f.ReadOnly {
-		fmt.Fprint(b, "| Read-only | yes |\n")
-	}
-	if f.WriteOnce {
-		fmt.Fprint(b, "| Write-once | yes |\n")
-	}
-	if f.Sensitive {
-		fmt.Fprint(b, "| Sensitive | yes |\n")
-	}
+	fmt.Fprintf(b, "%s\n\n", fieldMeta(f))
+
 	if f.Deprecated {
-		fmt.Fprint(b, "| Deprecated | yes |\n")
 		if f.RedirectTo != "" {
-			fmt.Fprintf(b, "| Redirect | `%s` |\n", f.RedirectTo)
+			fmt.Fprintf(b, "> **Deprecated** — use `%s` instead.\n\n", f.RedirectTo)
+		} else {
+			fmt.Fprintln(b, "> **Deprecated.**")
+			fmt.Fprintln(b)
 		}
 	}
-	if len(f.Tags) > 0 {
-		fmt.Fprintf(b, "| Tags | %s |\n", strings.Join(f.Tags, ", "))
-	}
-	fmt.Fprintln(b)
 
 	if f.Description != "" {
 		fmt.Fprintf(b, "%s\n\n", f.Description)
@@ -339,9 +319,30 @@ func writeConstraints(b *strings.Builder, c *Constraints) {
 	}
 }
 
-func yesNo(v bool) string {
-	if v {
-		return "yes"
+// fieldMeta renders a field's type and flags as a single italic line, e.g.
+// "*type: `string` · format: email · default: `prod` · sensitive*".
+func fieldMeta(f Field) string {
+	parts := []string{fmt.Sprintf("type: `%s`", f.Type)}
+	if f.Format != "" {
+		parts = append(parts, fmt.Sprintf("format: %s", f.Format))
 	}
-	return "no"
+	if f.Nullable {
+		parts = append(parts, "nullable")
+	}
+	if f.Default != "" {
+		parts = append(parts, fmt.Sprintf("default: `%s`", f.Default))
+	}
+	if f.ReadOnly {
+		parts = append(parts, "read-only")
+	}
+	if f.WriteOnce {
+		parts = append(parts, "write-once")
+	}
+	if f.Sensitive {
+		parts = append(parts, "sensitive")
+	}
+	if len(f.Tags) > 0 {
+		parts = append(parts, fmt.Sprintf("tags: %s", strings.Join(f.Tags, ", ")))
+	}
+	return "*" + strings.Join(parts, " · ") + "*"
 }
