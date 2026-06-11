@@ -136,9 +136,11 @@ func schemaFromYAML(data []byte) (*docgen.Schema, error) {
 		return nil, fmt.Errorf("invalid schema YAML: %w", err)
 	}
 	s := &docgen.Schema{
-		Name:        sf.Name,
-		Description: sf.Description,
-		Version:     sf.Version,
+		Name:               sf.Name,
+		Description:        sf.Description,
+		Version:            sf.Version,
+		VersionDescription: sf.VersionDescription,
+		Info:               schemaInfoFromYAML(sf.Info),
 	}
 	for path, f := range sf.Fields {
 		df := docgen.Field{
@@ -157,20 +159,53 @@ func schemaFromYAML(data []byte) (*docgen.Schema, error) {
 			WriteOnce:   f.WriteOnce,
 			Sensitive:   f.Sensitive,
 		}
+		if len(f.Examples) > 0 {
+			df.Examples = make(map[string]docgen.FieldExample, len(f.Examples))
+			for name, ex := range f.Examples {
+				df.Examples[name] = docgen.FieldExample{Value: ex.Value, Summary: ex.Summary}
+			}
+		}
+		if f.ExternalDocs != nil {
+			df.ExternalDocs = &docgen.ExternalDocs{
+				Description: f.ExternalDocs.Description,
+				URL:         f.ExternalDocs.URL,
+			}
+		}
 		if f.Constraints != nil {
 			df.Constraints = &docgen.Constraints{
-				Min:          f.Constraints.Minimum,
-				Max:          f.Constraints.Maximum,
-				ExclusiveMin: f.Constraints.ExclusiveMinimum,
-				ExclusiveMax: f.Constraints.ExclusiveMaximum,
-				MinLength:    f.Constraints.MinLength,
-				MaxLength:    f.Constraints.MaxLength,
-				Pattern:      f.Constraints.Pattern,
-				Enum:         f.Constraints.Enum,
-				JSONSchema:   f.Constraints.JSONSchema,
+				Min:            f.Constraints.Minimum,
+				Max:            f.Constraints.Maximum,
+				ExclusiveMin:   f.Constraints.ExclusiveMinimum,
+				ExclusiveMax:   f.Constraints.ExclusiveMaximum,
+				MinLength:      f.Constraints.MinLength,
+				MaxLength:      f.Constraints.MaxLength,
+				Pattern:        f.Constraints.Pattern,
+				Enum:           f.Constraints.Enum,
+				JSONSchema:     f.Constraints.JSONSchema,
+				AllowedSchemes: f.Constraints.AllowedSchemes,
 			}
 		}
 		s.Fields = append(s.Fields, df)
 	}
 	return s, nil
+}
+
+// schemaInfoFromYAML converts the validate info metadata to the docgen shape.
+func schemaInfoFromYAML(info *validate.SchemaInfoDef) *docgen.SchemaInfo {
+	if info == nil {
+		return nil
+	}
+	di := &docgen.SchemaInfo{
+		Title:  info.Title,
+		Author: info.Author,
+		Labels: info.Labels,
+	}
+	if info.Contact != nil {
+		di.Contact = &docgen.SchemaContact{
+			Name:  info.Contact.Name,
+			Email: info.Contact.Email,
+			URL:   info.Contact.URL,
+		}
+	}
+	return di
 }

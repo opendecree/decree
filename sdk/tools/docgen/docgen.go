@@ -18,8 +18,11 @@ type Schema struct {
 	// Version is the schema version number. A value of 0 means the version is
 	// not set and will be omitted from the generated documentation.
 	Version int32
-	Info    *SchemaInfo
-	Fields  []Field
+	// VersionDescription describes what changed in this version. It annotates
+	// the version line, so it is only rendered when Version is set.
+	VersionDescription string
+	Info               *SchemaInfo
+	Fields             []Field
 }
 
 // SchemaInfo contains optional schema-level metadata.
@@ -72,15 +75,16 @@ type ExternalDocs struct {
 
 // Constraints defines validation rules for a field.
 type Constraints struct {
-	Min          *float64
-	Max          *float64
-	ExclusiveMin *float64
-	ExclusiveMax *float64
-	MinLength    *int32
-	MaxLength    *int32
-	Pattern      string
-	Enum         []string
-	JSONSchema   string
+	Min            *float64
+	Max            *float64
+	ExclusiveMin   *float64
+	ExclusiveMax   *float64
+	MinLength      *int32
+	MaxLength      *int32
+	Pattern        string
+	Enum           []string
+	JSONSchema     string
+	AllowedSchemes []string
 }
 
 // Option configures documentation generation.
@@ -148,7 +152,11 @@ func Generate(schema Schema, opts ...Option) string {
 		fmt.Fprintf(&b, "%s\n\n", schema.Description)
 	}
 	if schema.Version > 0 {
-		fmt.Fprintf(&b, "**Version:** %d\n\n", schema.Version)
+		if schema.VersionDescription != "" {
+			fmt.Fprintf(&b, "**Version:** %d — %s\n\n", schema.Version, schema.VersionDescription)
+		} else {
+			fmt.Fprintf(&b, "**Version:** %d\n\n", schema.Version)
+		}
 	}
 	if schema.Info != nil {
 		writeSchemaInfo(&b, schema.Info)
@@ -255,7 +263,14 @@ func writeField(b *strings.Builder, f Field, cfg *config) {
 	}
 	if len(f.Examples) > 0 {
 		fmt.Fprintln(b, "**Examples:**")
-		for name, ex := range f.Examples {
+		// Sort names so the output is deterministic across runs.
+		names := make([]string, 0, len(f.Examples))
+		for name := range f.Examples {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			ex := f.Examples[name]
 			if ex.Summary != "" {
 				fmt.Fprintf(b, "- **%s:** `%s` — %s\n", name, ex.Value, ex.Summary)
 			} else {
@@ -308,6 +323,9 @@ func writeConstraints(b *strings.Builder, c *Constraints) {
 	}
 	if c.JSONSchema != "" {
 		lines = append(lines, "JSON Schema: (see schema definition)")
+	}
+	if len(c.AllowedSchemes) > 0 {
+		lines = append(lines, fmt.Sprintf("Allowed schemes: %s", strings.Join(c.AllowedSchemes, ", ")))
 	}
 
 	if len(lines) > 0 {
