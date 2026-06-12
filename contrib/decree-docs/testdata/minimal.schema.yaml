@@ -1,0 +1,7 @@
+# Minimal valid schema: pins that optional model keys stay absent in the
+# JSON output (minimal.golden.json).
+spec_version: v1
+name: minimal
+fields:
+  app.name:
+    type: string
