@@ -1,0 +1,12 @@
+{
+  "docModelVersion": 1,
+  "schema": {
+    "name": "minimal",
+    "fields": [
+      {
+        "path": "app.name",
+        "type": "string"
+      }
+    ]
+  }
+}
