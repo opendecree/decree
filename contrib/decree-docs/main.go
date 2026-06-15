@@ -41,8 +41,9 @@ decree schemas. It loads schemas from local files or from a running decree
 server and renders them as json, md, mdx, or html, with built-in themes,
 CSS style injection, and a template override system.
 
-This build ships the command skeleton and version information only; the
-loaders and format backends land in upcoming releases.`,
+This build loads schemas from local YAML files and emits the JSON
+documentation model; the md/mdx/html backends and server mode land in
+upcoming releases.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
