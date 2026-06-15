@@ -1,0 +1,135 @@
+{
+  "docModelVersion": 1,
+  "schema": {
+    "name": "payments",
+    "description": "Payment processing configuration.",
+    "version": 3,
+    "versionDescription": "Added refund window and webhook controls.",
+    "info": {
+      "title": "Payments Configuration",
+      "author": "platform-team",
+      "contact": {
+        "name": "Pat",
+        "email": "pat@example.com",
+        "url": "https://example.com/payments-team"
+      },
+      "labels": {
+        "team": "platform",
+        "tier": "critical"
+      }
+    },
+    "fields": [
+      {
+        "path": "payments.api_key",
+        "type": "string",
+        "description": "Gateway API key.",
+        "format": "password",
+        "writeOnce": true,
+        "sensitive": true
+      },
+      {
+        "path": "payments.cutoff",
+        "type": "time",
+        "description": "Daily settlement cutoff.",
+        "nullable": true
+      },
+      {
+        "path": "payments.enabled",
+        "type": "bool",
+        "title": "Payments Enabled",
+        "description": "Master switch for payment processing.",
+        "default": "true"
+      },
+      {
+        "path": "payments.environment",
+        "type": "string",
+        "description": "Deployment environment label.",
+        "readOnly": true,
+        "constraints": {
+          "minLength": 2,
+          "maxLength": 32,
+          "pattern": "^[a-z][a-z0-9-]*$"
+        }
+      },
+      {
+        "path": "payments.fee",
+        "type": "number",
+        "description": "Per-transaction fee rate.",
+        "default": "0.01",
+        "nullable": true,
+        "example": "0.02",
+        "examples": {
+          "high": {
+            "value": "0.99"
+          },
+          "low": {
+            "value": "0.01",
+            "summary": "Promotional rate"
+          }
+        },
+        "externalDocs": {
+          "description": "Fee guide",
+          "url": "https://docs.example.com/fees"
+        },
+        "tags": [
+          "billing",
+          "rates"
+        ],
+        "constraints": {
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      {
+        "path": "payments.metadata",
+        "type": "json",
+        "description": "Free-form gateway metadata.",
+        "constraints": {
+          "jsonSchema": "{\"type\":\"object\"}"
+        }
+      },
+      {
+        "path": "payments.mode",
+        "type": "string",
+        "description": "Processing mode.",
+        "default": "test",
+        "deprecated": true,
+        "redirectTo": "payments.environment",
+        "constraints": {
+          "enum": [
+            "live",
+            "test"
+          ]
+        }
+      },
+      {
+        "path": "payments.refund_window",
+        "type": "duration",
+        "description": "Window during which refunds are accepted.",
+        "default": "72h"
+      },
+      {
+        "path": "payments.retries",
+        "type": "integer",
+        "description": "Delivery attempts per webhook event.",
+        "default": "3",
+        "constraints": {
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 10
+        }
+      },
+      {
+        "path": "payments.webhook",
+        "type": "url",
+        "title": "Webhook URL",
+        "description": "Endpoint receiving payment events.",
+        "constraints": {
+          "allowedSchemes": [
+            "https",
+            "sftp"
+          ]
+        }
+      }
+    ]
+  }
+}

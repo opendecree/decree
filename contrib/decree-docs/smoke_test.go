@@ -32,4 +32,15 @@ func TestSmoke_BinaryBuildsAndRuns(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("generate --file --format json", func(t *testing.T) {
+		out, err := exec.Command(bin,
+			"generate", "--file", "testdata/full.schema.yaml", "--format", "json").CombinedOutput()
+		if err != nil {
+			t.Fatalf("generate failed: %v\n%s", err, out)
+		}
+		if !strings.Contains(string(out), `"docModelVersion": 1`) {
+			t.Errorf("expected JSON doc model output, got %q", out)
+		}
+	})
 }
