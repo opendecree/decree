@@ -3,17 +3,17 @@ module github.com/opendecree/decree/sdk/grpctransport
 go 1.24.0
 
 require (
-	github.com/opendecree/decree/api v0.1.2
-	github.com/opendecree/decree/sdk/adminclient v0.1.2
-	github.com/opendecree/decree/sdk/configclient v0.1.2
-	github.com/opendecree/decree/sdk/configwatcher v0.1.2
+	github.com/opendecree/decree/api v0.12.0-alpha.1
+	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.1
+	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.1
+	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.1
 	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 )
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
-	github.com/opendecree/decree/sdk/retry v0.0.0 // indirect
+	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.1 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
