@@ -96,51 +96,11 @@ brews:
     test: |
       system "#{bin}/decree", "version"
 
-# Multi-arch Docker images for decree-server published to ghcr.io.
-dockers:
-  - id: decree-server-amd64
-    ids:
-      - decree-server
-    image_templates:
-      - "ghcr.io/opendecree/decree:{{ .Tag }}-amd64"
-      - "ghcr.io/opendecree/decree:latest-amd64"
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/amd64"
-      - "--label=org.opencontainers.image.created={{ .Date }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/opendecree/decree"
-    dockerfile: build/Dockerfile
-    goarch: amd64
-    goos: linux
-
-  - id: decree-server-arm64
-    ids:
-      - decree-server
-    image_templates:
-      - "ghcr.io/opendecree/decree:{{ .Tag }}-arm64"
-      - "ghcr.io/opendecree/decree:latest-arm64"
-    use: buildx
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.created={{ .Date }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.source=https://github.com/opendecree/decree"
-    dockerfile: build/Dockerfile
-    goarch: arm64
-    goos: linux
-
-docker_manifests:
-  - name_template: "ghcr.io/opendecree/decree:{{ .Tag }}"
-    image_templates:
-      - "ghcr.io/opendecree/decree:{{ .Tag }}-amd64"
-      - "ghcr.io/opendecree/decree:{{ .Tag }}-arm64"
-  - name_template: "ghcr.io/opendecree/decree:latest"
-    image_templates:
-      - "ghcr.io/opendecree/decree:latest-amd64"
-      - "ghcr.io/opendecree/decree:latest-arm64"
+# Docker images (decree + decree-cli, multi-arch + manifests) are built and
+# pushed by the dedicated build/images jobs in .github/workflows/release.yml
+# using the repo-root build context. GoReleaser does not build images: its
+# build context is dist/ (binaries only), which cannot satisfy the from-source
+# build/Dockerfile (COPY go.mod/go.sum/...).
 
 # SBOM for all binaries.
 sboms:
