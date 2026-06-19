@@ -3,18 +3,18 @@ module github.com/opendecree/decree/examples/environment-bootstrap
 go 1.25.0
 
 require (
-	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.2
-	github.com/opendecree/decree/sdk/tools v0.12.0-alpha.2
+	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.3
+	github.com/opendecree/decree/sdk/tools v0.12.0-alpha.3
 )
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/opendecree/decree/api v0.12.0-alpha.2 // indirect
-	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.2 // indirect
-	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.2 // indirect
-	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.2 // indirect
-	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.2 // indirect
+	github.com/opendecree/decree/api v0.12.0-alpha.3 // indirect
+	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.3 // indirect
+	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.3 // indirect
+	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.3 // indirect
+	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.3 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
