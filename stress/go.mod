@@ -13,9 +13,9 @@ replace github.com/opendecree/decree/sdk/grpctransport => ../sdk/grpctransport
 replace github.com/opendecree/decree/sdk/configwatcher => ../sdk/configwatcher
 
 require (
-	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.3
-	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.3
-	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.3
+	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.4
+	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.4
+	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.4
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.81.1
 )
@@ -24,9 +24,9 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/opendecree/decree/api v0.12.0-alpha.3 // indirect
-	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.3 // indirect
-	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.3 // indirect
+	github.com/opendecree/decree/api v0.12.0-alpha.4 // indirect
+	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.4 // indirect
+	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	golang.org/x/net v0.51.0 // indirect

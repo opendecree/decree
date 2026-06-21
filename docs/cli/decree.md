@@ -35,6 +35,7 @@ Command-line tool for managing schemas, tenants, and configuration values in Ope
 * [decree docgen](decree_docgen.md)	 - Generate markdown documentation from a schema
 * [decree dump](decree_dump.md)	 - Export a full tenant backup (schema + config + locks)
 * [decree lock](decree_lock.md)	 - Manage field locks
+* [decree migrate](decree_migrate.md)	 - Apply database migrations
 * [decree schema](decree_schema.md)	 - Manage configuration schemas
 * [decree seed](decree_seed.md)	 - Seed a schema, tenant, and/or config from a YAML file
 * [decree server](decree_server.md)	 - Server information and management

@@ -147,7 +147,21 @@ helm install decree-admin deploy/helm/decree \
 
 OpenDecree uses [goose](https://github.com/pressly/goose) for database migrations. Migrations live in `db/migrations/`.
 
-### Running Migrations Manually
+The server does **not** migrate on startup: it assumes the unprivileged `decree_app` role (created by the baseline migration) on every connection, so a fresh database must be migrated **before** the server starts — otherwise it fails with `role "decree_app" does not exist`.
+
+### Using the `decree migrate` command (recommended)
+
+The `decree` CLI bundles the migrations, so the `decree-cli` image is a turnkey migration runner — no source checkout or SQL mount required:
+
+```bash
+docker run --rm \
+  -e DB_WRITE_URL="postgres://owner:pass@host:5432/centralconfig?sslmode=disable" \
+  ghcr.io/opendecree/decree-cli:latest migrate up
+```
+
+Connect as the database **owner/superuser** — the migrations create the `decree_app` role and its grants, so they cannot run as `decree_app` itself. `migrate up` is idempotent; use `migrate status` to inspect applied versions. In Kubernetes, run it as a `pre-install,pre-upgrade` Helm hook Job (or an init container) so it completes before the server starts.
+
+### Running Migrations Manually (goose)
 
 ```bash
 # Using the tools Docker image

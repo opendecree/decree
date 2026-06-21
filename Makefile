@@ -25,7 +25,7 @@ CLI_LDFLAGS := -X main.cliVersion=$(GIT_VERSION) -X main.cliCommit=$(GIT_COMMIT)
 SDK_MODULES := sdk/retry sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools sdk/contrib/viper sdk/contrib/envconfig sdk/contrib/koanf
 CONTRIB_MODULES := contrib/decree-docs
 
-.PHONY: all generate generate-proto generate-sqlc deps test lint lint-go lint-proto lint-migrations build image ui migrate e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
+.PHONY: all generate generate-proto generate-sqlc deps test lint lint-go lint-proto lint-migrations build image ui migrate sync-migrations e2e e2e-jwt examples bench bench-e2e stress chaos docs docs-api docs-cli docs-man docs-serve docs-deploy pre-commit clean tools help demo-gif validate-meta-schemas
 
 all: generate lint test build
 
@@ -137,6 +137,11 @@ migrate: $(TOOLS_SENTINEL)
 ## migrate-down: Roll back the last migration (Docker)
 migrate-down: $(TOOLS_SENTINEL)
 	$(DOCKER_RUN_TOOLS) goose -dir db/migrations postgres "$${DB_WRITE_URL:-postgres://centralconfig:localdev@localhost:5432/centralconfig?sslmode=disable}" down
+
+## sync-migrations: Copy db/migrations SQL into the CLI embed package (run after adding a migration)
+sync-migrations:
+	cp db/migrations/*.sql cmd/decree/migrations/
+	@echo "Synced db/migrations → cmd/decree/migrations (the embed drift guard runs in 'make test')"
 
 # --- Integration tests ---
 

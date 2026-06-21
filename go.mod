@@ -11,7 +11,7 @@ require (
 	github.com/google/cel-go v0.28.1
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/opendecree/decree/api v0.12.0-alpha.3
+	github.com/opendecree/decree/api v0.12.0-alpha.4
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/redis/go-redis/extra/redisotel/v9 v9.20.1
 	github.com/redis/go-redis/v9 v9.20.1
