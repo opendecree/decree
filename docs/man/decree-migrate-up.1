@@ -2,20 +2,25 @@
 .TH "DECREE" "1" "Jan 2026" "OpenDecree" "OpenDecree CLI"
 
 .SH NAME
-decree - OpenDecree CLI
+decree-migrate-up - Apply all pending migrations
 
 
 .SH SYNOPSIS
-\fBdecree [flags]\fP
+\fBdecree migrate up [flags]\fP
 
 
 .SH DESCRIPTION
-Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.
+Apply all pending migrations
 
 
 .SH OPTIONS
 \fB-h\fP, \fB--help\fP[=false]
-	help for decree
+	help for up
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+\fB--db-url\fP=""
+	PostgreSQL connection URL for the owner/superuser role (defaults to $DB_WRITE_URL)
 
 .PP
 \fB--insecure\fP[=false]
@@ -59,4 +64,4 @@ Command-line tool for managing schemas, tenants, and configuration values in Ope
 
 
 .SH SEE ALSO
-\fBdecree-audit(1)\fP, \fBdecree-completion(1)\fP, \fBdecree-config(1)\fP, \fBdecree-diff(1)\fP, \fBdecree-docgen(1)\fP, \fBdecree-dump(1)\fP, \fBdecree-lock(1)\fP, \fBdecree-migrate(1)\fP, \fBdecree-schema(1)\fP, \fBdecree-seed(1)\fP, \fBdecree-server(1)\fP, \fBdecree-tenant(1)\fP, \fBdecree-validate(1)\fP, \fBdecree-version(1)\fP, \fBdecree-watch(1)\fP
+\fBdecree-migrate(1)\fP

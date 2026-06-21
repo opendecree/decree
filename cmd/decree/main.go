@@ -68,6 +68,13 @@ var rootCmd = &cobra.Command{
 // isOfflineInvocation returns true when the given command does not need a
 // server connection and therefore should not block on --wait.
 func isOfflineInvocation(cmd *cobra.Command) bool {
+	// migrate and its subcommands connect directly to the database, not the
+	// gRPC server, so they must never block on --wait.
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "migrate" {
+			return true
+		}
+	}
 	switch cmd.Name() {
 	case "validate", "version", "gen-docs", "gen-man":
 		return true

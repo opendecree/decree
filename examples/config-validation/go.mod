@@ -2,7 +2,7 @@ module github.com/opendecree/decree/examples/config-validation
 
 go 1.25
 
-require github.com/opendecree/decree/sdk/tools v0.12.0-alpha.3
+require github.com/opendecree/decree/sdk/tools v0.12.0-alpha.4
 
 require (
 	github.com/kr/text v0.2.0 // indirect
