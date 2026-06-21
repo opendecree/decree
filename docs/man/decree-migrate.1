@@ -2,22 +2,38 @@
 .TH "DECREE" "1" "Jan 2026" "OpenDecree" "OpenDecree CLI"
 
 .SH NAME
-decree - OpenDecree CLI
+decree-migrate - Apply database migrations
 
 
 .SH SYNOPSIS
-\fBdecree [flags]\fP
+\fBdecree migrate [flags]\fP
 
 
 .SH DESCRIPTION
-Command-line tool for managing schemas, tenants, and configuration values in OpenDecree.
+Apply the OpenDecree database schema migrations.
+
+.PP
+Migrations create the tables, row-level-security policies, and the unprivileged
+"decree_app" role that the server assumes (SET ROLE) on every connection. A fresh
+database must be migrated before the server can start, otherwise the server fails
+with: role "decree_app" does not exist.
+
+.PP
+Connect as a role that may CREATE ROLE and GRANT — the database owner or a
+superuser — not as decree_app. Running "up" repeatedly is safe; already-applied
+migrations are skipped.
 
 
 .SH OPTIONS
-\fB-h\fP, \fB--help\fP[=false]
-	help for decree
+\fB--db-url\fP=""
+	PostgreSQL connection URL for the owner/superuser role (defaults to $DB_WRITE_URL)
 
 .PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for migrate
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
 \fB--insecure\fP[=false]
 	disable TLS (plaintext); for local development only
 
@@ -59,4 +75,4 @@ Command-line tool for managing schemas, tenants, and configuration values in Ope
 
 
 .SH SEE ALSO
-\fBdecree-audit(1)\fP, \fBdecree-completion(1)\fP, \fBdecree-config(1)\fP, \fBdecree-diff(1)\fP, \fBdecree-docgen(1)\fP, \fBdecree-dump(1)\fP, \fBdecree-lock(1)\fP, \fBdecree-migrate(1)\fP, \fBdecree-schema(1)\fP, \fBdecree-seed(1)\fP, \fBdecree-server(1)\fP, \fBdecree-tenant(1)\fP, \fBdecree-validate(1)\fP, \fBdecree-version(1)\fP, \fBdecree-watch(1)\fP
+\fBdecree(1)\fP, \fBdecree-migrate-down(1)\fP, \fBdecree-migrate-status(1)\fP, \fBdecree-migrate-up(1)\fP
