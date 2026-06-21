@@ -41,7 +41,7 @@ jobs:
       IMAGE_REF: ${{ format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image.name) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -139,7 +139,7 @@ jobs:
     if: contains(join(github.event.commits.*.modified, ','), 'docs/')
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
