@@ -2,7 +2,8 @@
 # check-supply-chain-pins.sh — Enforce supply-chain pinning policy.
 #
 # 1. Every `uses:` line in .github/workflows/*.yml that references a
-#    non-trusted action must pin to a 40-char commit SHA.
+#    non-trusted action must pin to a 40-char commit SHA (GitHub Actions) or
+#    a `sha256:<64-hex>` digest (raw `docker://` image refs).
 #    Trusted orgs (allowed to pin by tag): actions, github, docker.
 # 2. Every `FROM` line in build/* must pin to an `@sha256:<digest>`.
 #
@@ -34,13 +35,16 @@ while IFS= read -r line; do
   ref="${ref#"${ref%%[![:space:]]*}"}"
   # Skip local workflow refs
   [[ "$ref" == ./* ]] && continue
+  # Strip the docker:// scheme (raw image ref) before org matching/SHA check
+  bare_ref="${ref#docker://}"
   # Trusted orgs may continue to pin by tag
-  case "$ref" in
+  case "$bare_ref" in
     actions/*|github/*|docker/*|opendecree/*) continue ;;
   esac
-  # Ref must look like owner/repo[/path]@<sha>
-  sha="${ref##*@}"
-  if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+  # Ref must look like owner/repo[/path]@<sha> (GitHub Actions, 40-hex commit
+  # SHA) or owner/repo@sha256:<64-hex> (docker:// image ref, content digest)
+  sha="${bare_ref##*@}"
+  if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]] && [[ ! "$sha" =~ ^sha256:[0-9a-f]{64}$ ]]; then
     echo "non-trusted action not SHA-pinned: $file_loc:$lineno: $ref" >&2
     fail=1
   fi
