@@ -236,3 +236,16 @@ All 9 issues in the decree-ui "Beta Readiness" milestone shipped. Key work:
 - **TENANT_ID_FILE / SCHEMA_ID_FILE** (#74) — file-based ID injection for Docker Compose demos where IDs are written dynamically by a seed container.
 - **Playwright e2e tests** — full stack test against Docker Compose (config edit, rollback, dark mode, history).
 - **`__APP_VERSION__`** — Vite `define` injects `package.json` version at build time; exposed in sidebar footer.
+
+## decree: Beta Readiness Milestone (207 issues, 367 closed incl. PRs, closed 2026-06-22)
+
+Findings from a beta-readiness audit across server, SDK, CLI, and docs. Landed in waves over several weeks; last issue closed was #910 (CLI: `RunE` errors silently swallowed — `main()` now prints to stderr before `os.Exit`). Breakdown by label: server 100, sdk 71, cli 20, docs 17 (overlapping with the above).
+
+Key themes:
+
+- **Server hardening** — enforcement gaps closed: `read_only`/`write_once` schema attributes, checksum coverage of sensitive/readOnly/writeOnce flags, ReDoS regex-length cap, tenant-admin permission boundary (can delete/rename own tenant but not create), `Subscribe` swallowed version errors and duplicate-delivered events, validation failing open on malformed `json_schema`/regex constraints, import `DEFAULTS` mode N+1 round-trips, `stringToTypedValue` silent parse-error swallowing.
+- **SDK polish** — per-module low-severity cleanup pass (tools, grpctransport, configwatcher, adminclient, configclient); coverage gaps closed in `tools/seed` and `tools/validate` (uint64/precision/malformed-type/error-path cases); `grpctransport` dedup of `applyAuth` boilerplate (was duplicated across 31 methods) and fixed `ResourceExhausted` retry-after hint loss; `tools/validate` integer-precision loss via float64 fixed.
+- **CLI cleanup** — silenced-error fix (#910, this session), `os.Exit` calls moved out of `RunE`, required-flag validation moved to cobra, redundant `schema create`/`schema import` overlap, duplicate schema-YAML struct definitions, stdout/stderr routing for machine-readable output, `--wait` hook firing on offline commands.
+- **Docs accuracy sweep** — wrong documented defaults (auth.md role default, CEL validation status), missing ~12 server env vars in configuration.md, broken CLI reference nav, non-compiling Go SDK examples, Docker Compose quickstart fixed (migrate step needed the tools image).
+
+Milestone closed 2026-06-22 with 0 open issues remaining.
