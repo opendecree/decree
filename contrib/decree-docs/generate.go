@@ -2,17 +2,28 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/opendecree/decree/contrib/decree-docs/docmodel"
 	"github.com/opendecree/decree/contrib/decree-docs/loader"
+	"github.com/opendecree/decree/contrib/decree-docs/markdown"
 )
 
-// docFormats lists the formats generate can emit. The md, mdx, and html
-// backends land in upcoming releases (#915-#917).
-var docFormats = []string{"json"}
+// docFormats lists the formats generate can emit. The mdx and html backends
+// land in upcoming releases (#916-#917).
+var docFormats = []string{"json", "md"}
+
+// mdFlavors lists the --flavor values valid with --format md.
+var mdFlavors = []string{string(markdown.Plain), string(markdown.Material)}
+
+// mdPageModes lists the --pages values valid with --format md.
+var mdPageModes = []string{string(markdown.SinglePage), string(markdown.MultiPage)}
 
 var generateCmd = &cobra.Command{
 	Use:   "generate [schema-id]",
@@ -25,7 +36,13 @@ upcoming release (#918); --file and schema-id are mutually exclusive.
 
 The json format emits the complete documentation model: a stable JSON
 document, versioned by its docModelVersion root marker, that third-party
-renderers can build on.`,
+renderers can build on.
+
+The md format renders Markdown. --flavor plain emits portable CommonMark;
+--flavor material additionally uses the MkDocs Material admonition and
+content-tab extensions. --pages single (default) renders one page to
+stdout (or to <out-dir>/index.md with --out-dir); --pages multi renders an
+index page plus one page per top-level field group and requires --out-dir.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runGenerate,
 }
@@ -33,8 +50,17 @@ renderers can build on.`,
 func init() {
 	generateCmd.Flags().String("file", "", "schema YAML file (offline mode)")
 	generateCmd.Flags().String("format", "json", "output format: "+strings.Join(docFormats, ", "))
+	generateCmd.Flags().String("flavor", string(markdown.Plain), "md flavor: "+strings.Join(mdFlavors, ", "))
+	generateCmd.Flags().String("pages", string(markdown.SinglePage), "md page mode: "+strings.Join(mdPageModes, ", "))
+	generateCmd.Flags().String("out-dir", "", "output directory (required when md rendering produces multiple pages)")
 	_ = generateCmd.RegisterFlagCompletionFunc("format", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return docFormats, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = generateCmd.RegisterFlagCompletionFunc("flavor", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return mdFlavors, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = generateCmd.RegisterFlagCompletionFunc("pages", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return mdPageModes, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(generateCmd)
 }
@@ -59,6 +85,47 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Only json today; this switch grows with the md/mdx/html backends.
+
+	if format == "md" {
+		return runGenerateMD(cmd, doc)
+	}
 	return doc.EncodeJSON(cmd.OutOrStdout())
+}
+
+func runGenerateMD(cmd *cobra.Command, doc *docmodel.Document) error {
+	flavorFlag, _ := cmd.Flags().GetString("flavor")
+	if !slices.Contains(mdFlavors, flavorFlag) {
+		return fmt.Errorf("unknown flavor %q (valid flavors: %s)", flavorFlag, strings.Join(mdFlavors, ", "))
+	}
+	pagesFlag, _ := cmd.Flags().GetString("pages")
+	if !slices.Contains(mdPageModes, pagesFlag) {
+		return fmt.Errorf("unknown pages mode %q (valid modes: %s)", pagesFlag, strings.Join(mdPageModes, ", "))
+	}
+	outDir, _ := cmd.Flags().GetString("out-dir")
+
+	pages, err := markdown.Render(doc, markdown.Options{
+		Flavor: markdown.Flavor(flavorFlag),
+		Pages:  markdown.PageMode(pagesFlag),
+	})
+	if err != nil {
+		return err
+	}
+
+	if len(pages) == 1 && outDir == "" {
+		_, err := io.WriteString(cmd.OutOrStdout(), pages[0].Content)
+		return err
+	}
+	if outDir == "" {
+		return fmt.Errorf("--out-dir is required for multi-page md output")
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("create out-dir: %w", err)
+	}
+	for _, p := range pages {
+		path := filepath.Join(outDir, p.Name+".md")
+		if err := os.WriteFile(path, []byte(p.Content), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+	return nil
 }

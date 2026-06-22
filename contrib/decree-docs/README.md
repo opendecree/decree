@@ -4,7 +4,7 @@ A standalone, multi-format documentation generator for decree schemas. It loads 
 
 > **Alpha**: This module is part of the OpenDecree alpha release. The CLI and output formats may change.
 
-> **Status**: in development — this build loads schemas from local YAML files and emits the JSON documentation model. The md/mdx/html backends, server mode, and the config/template system land in upcoming releases.
+> **Status**: in development — this build loads schemas from local YAML files and emits the json and md documentation formats. The mdx/html backends, server mode, and the config/template system land in upcoming releases.
 
 `decree-docs` lives under `contrib/` (standalone tools built on decree), as opposed to `sdk/contrib/` (SDK framework adapters such as viper, koanf, and envconfig). It composes on top of the minimal, zero-dependency `sdk/tools/docgen` library rather than replacing it.
 
@@ -22,6 +22,8 @@ go build -o decree-docs .
 
 ```sh
 decree-docs generate --file decree.schema.yaml --format json
+decree-docs generate --file decree.schema.yaml --format md --flavor material
+decree-docs generate --file decree.schema.yaml --format md --pages multi --out-dir docs/
 decree-docs --help
 decree-docs version
 ```
@@ -64,9 +66,16 @@ Serialization rules (see the `docmodel` package documentation for the authoritat
 - Fields are sorted by path, so output is deterministic.
 - Server-side bookkeeping (schema ID, checksum, published state, timestamps) is excluded: a schema loaded from a file and the same schema fetched from a server produce identical documents.
 
+## The md format
+
+`--format md` renders Markdown from the doc model. `--flavor plain` emits portable CommonMark; `--flavor material` additionally uses the `admonition` and `pymdownx.tabbed` extensions this repo's `mkdocs.yml` already enables — deprecation notices render as a `!!! warning` admonition, and fields with two or more named examples render as content tabs. In both flavors, deprecated/sensitive/read-only/write-once fields get a bold badge line distinct from the type/format meta line; material adds an icon per badge.
+
+`--pages single` (default) renders one page: to stdout, or to `<out-dir>/index.md` with `--out-dir`. `--pages multi` renders an index page plus one page per top-level field-path-prefix group (e.g. `payments.fee` and `payments.retries` both land on `payments.md`) and requires `--out-dir`.
+
 ## Testing
 
 ```sh
 go test ./...
-go test . -run TestGenerate_JSONGolden -update   # rewrite golden files
+go test . -run TestGenerate_JSONGolden -update          # rewrite CLI JSON golden files
+go test ./markdown -run TestRender_Golden -update       # rewrite markdown golden files
 ```
