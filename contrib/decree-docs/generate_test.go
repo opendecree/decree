@@ -23,6 +23,9 @@ func resetGenerateCmd(t *testing.T) {
 	t.Cleanup(func() {
 		_ = generateCmd.Flags().Set("file", "")
 		_ = generateCmd.Flags().Set("format", "json")
+		_ = generateCmd.Flags().Set("flavor", "plain")
+		_ = generateCmd.Flags().Set("pages", "single")
+		_ = generateCmd.Flags().Set("out-dir", "")
 	})
 }
 
@@ -154,6 +157,141 @@ func TestGenerate_FileNotFound(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "read schema file") {
 		t.Errorf("expected read error, got %q", stderr)
+	}
+}
+
+func TestGenerate_FlavorFlagCompletion(t *testing.T) {
+	complete, ok := generateCmd.GetFlagCompletionFunc("flavor")
+	if !ok {
+		t.Fatal("expected a completion function for --flavor")
+	}
+	values, _ := complete(generateCmd, nil, "")
+	if !slices.Equal(values, mdFlavors) {
+		t.Errorf("got completions %v, want %v", values, mdFlavors)
+	}
+}
+
+func TestGenerate_PagesFlagCompletion(t *testing.T) {
+	complete, ok := generateCmd.GetFlagCompletionFunc("pages")
+	if !ok {
+		t.Fatal("expected a completion function for --pages")
+	}
+	values, _ := complete(generateCmd, nil, "")
+	if !slices.Equal(values, mdPageModes) {
+		t.Errorf("got completions %v, want %v", values, mdPageModes)
+	}
+}
+
+func TestGenerate_MD_SinglePageGoesToStdout(t *testing.T) {
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "md")
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.HasPrefix(stdout, "# minimal\n\n") {
+		t.Errorf("expected stdout to start with the schema heading, got %q", stdout)
+	}
+}
+
+func TestGenerate_MD_UnknownFlavor(t *testing.T) {
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "md", "--flavor", "fancy")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, `unknown flavor "fancy"`) || !strings.Contains(stderr, "valid flavors: plain, material") {
+		t.Errorf("expected unknown-flavor error, got %q", stderr)
+	}
+}
+
+func TestGenerate_MD_UnknownPageMode(t *testing.T) {
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "md", "--pages", "weekly")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, `unknown pages mode "weekly"`) || !strings.Contains(stderr, "valid modes: single, multi") {
+		t.Errorf("expected unknown-pages error, got %q", stderr)
+	}
+}
+
+func TestGenerate_MD_MultiPageRequiresOutDir(t *testing.T) {
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/full.schema.yaml", "--format", "md", "--pages", "multi")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "--out-dir is required") {
+		t.Errorf("expected out-dir-required error, got %q", stderr)
+	}
+	if stdout != "" {
+		t.Errorf("expected empty stdout, got %q", stdout)
+	}
+}
+
+func TestGenerate_MD_MultiPageWritesFiles(t *testing.T) {
+	outDir := t.TempDir()
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/full.schema.yaml", "--format", "md", "--pages", "multi", "--out-dir", outDir)
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	for _, name := range []string{"index.md", "payments.md"} {
+		path := filepath.Join(outDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("expected %s to be written: %v", path, err)
+			continue
+		}
+		if len(data) == 0 {
+			t.Errorf("expected %s to be non-empty", path)
+		}
+	}
+}
+
+func TestGenerate_MD_OutDirNotADirectory(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(outDir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write blocker file: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/full.schema.yaml", "--format", "md", "--pages", "multi", "--out-dir", outDir)
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "create out-dir") {
+		t.Errorf("expected create-out-dir error, got %q", stderr)
+	}
+}
+
+func TestGenerate_MD_WriteFileError(t *testing.T) {
+	outDir := t.TempDir()
+	// index.md as a directory makes the write to that path fail.
+	if err := os.Mkdir(filepath.Join(outDir, "index.md"), 0o755); err != nil {
+		t.Fatalf("mkdir blocker: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/full.schema.yaml", "--format", "md", "--pages", "multi", "--out-dir", outDir)
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "write") {
+		t.Errorf("expected write error, got %q", stderr)
+	}
+}
+
+func TestGenerate_MD_SinglePageWithOutDirWritesIndexFile(t *testing.T) {
+	outDir := t.TempDir()
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "md", "--out-dir", outDir)
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("expected empty stdout when writing to --out-dir, got %q", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "index.md")); err != nil {
+		t.Errorf("expected index.md to be written: %v", err)
 	}
 }
 
