@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payments Configuration</title>
+<style>
+@layer decree.reset, decree.theme, decree.components, decree.user;
+
+@layer decree.reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: inherit; }
+}
+
+@layer decree.theme {
+  :root {
+    --decree-bg: #fbfcfd;
+  --decree-surface: #ffffff;
+  --decree-ink: #1c1e21;
+  --decree-muted: #6b7178;
+  --decree-line: #e4e7eb;
+  --decree-chip: #eef1f4;
+  --decree-accent: #2f64d8;
+  --decree-warn: #9a6212;
+  --decree-info: #0c6f80;
+  --decree-danger: #a3322e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --decree-bg: #0f1419;
+  --decree-surface: #161b22;
+  --decree-ink: #e6e9ed;
+  --decree-muted: #8b939c;
+  --decree-line: #272d36;
+  --decree-chip: #1f2630;
+  --decree-accent: #6f9bff;
+  --decree-warn: #d8a24a;
+  --decree-info: #5cc4d6;
+  --decree-danger: #e0716c;
+    }
+  }
+}
+
+@layer decree.components {
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--decree-ink);
+    background: var(--decree-bg);
+  }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .decree-doc { min-height: 100vh; }
+  header.decree-header {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 24px; border-bottom: 1px solid var(--decree-line);
+    background: var(--decree-surface);
+  }
+  header.decree-header h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
+  header.decree-header .sub { font-size: 13px; color: var(--decree-muted); margin-top: 2px; }
+
+  .decree-body { display: flex; align-items: stretch; }
+  nav.decree-nav {
+    width: 256px; flex: none; align-self: stretch;
+    border-right: 1px solid var(--decree-line); background: var(--decree-surface);
+    padding: 18px 14px;
+  }
+  nav.decree-nav .group-title {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--decree-muted); margin: 14px 0 8px;
+  }
+  nav.decree-nav .group-title:first-child { margin-top: 0; }
+  nav.decree-nav a {
+    display: block; padding: 6px 11px; border-radius: 7px; text-decoration: none;
+    font-size: 13.5px; color: var(--decree-ink);
+  }
+  nav.decree-nav a.deprecated { color: var(--decree-muted); text-decoration: line-through; }
+  nav.decree-nav .footer {
+    margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--decree-line);
+    font-size: 12px; color: var(--decree-muted); line-height: 1.5;
+  }
+
+  main.decree-main { flex: 1; min-width: 0; padding: 30px 40px 80px; max-width: 880px; }
+  main.decree-main h2.group { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 32px 0 18px; }
+  main.decree-main h2.group:first-child { margin-top: 8px; }
+
+  section.field-card {
+    border: 1px solid var(--decree-line); border-radius: 12px; background: var(--decree-surface);
+    padding: 18px 20px; margin-bottom: 18px; scroll-margin-top: 20px;
+  }
+  section.field-card .field-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  section.field-card .field-head code.path { font-size: 16px; font-weight: 650; }
+  section.field-card .field-head code.path.deprecated { text-decoration: line-through; color: var(--decree-muted); }
+  section.field-card .type-chip {
+    font-size: 11.5px; background: var(--decree-chip); color: var(--decree-ink);
+    padding: 2px 8px; border-radius: 6px; font-weight: 600;
+  }
+  section.field-card .desc { font-size: 14.5px; margin: 11px 0 12px; line-height: 1.55; }
+  section.field-card .meta-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--decree-muted); margin-bottom: 12px; }
+  section.field-card .default-chip {
+    font-size: 12.5px; font-weight: 600; color: var(--decree-accent); padding: 2px 8px; border-radius: 5px;
+    background: color-mix(in srgb, var(--decree-accent) 12%, var(--decree-surface));
+  }
+  section.field-card .tag-chip { font-size: 12px; background: var(--decree-chip); padding: 1px 7px; border-radius: 5px; margin-right: 4px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase;
+  }
+  .badge.neutral { background: var(--decree-chip); color: var(--decree-muted); }
+  .badge.warn { color: var(--decree-warn); background: color-mix(in srgb, var(--decree-warn) 16%, var(--decree-surface)); }
+  .badge.info { color: var(--decree-info); background: color-mix(in srgb, var(--decree-info) 16%, var(--decree-surface)); }
+  .badge.danger { color: var(--decree-danger); background: color-mix(in srgb, var(--decree-danger) 16%, var(--decree-surface)); }
+  .badge-row { display: flex; gap: 7px; flex-wrap: wrap; margin: 9px 0; }
+
+  .deprecation-notice {
+    display: flex; align-items: flex-start; gap: 9px; border-radius: 9px; padding: 10px 13px; margin: 13px 0;
+    font-size: 13.5px; color: var(--decree-warn);
+    background: color-mix(in srgb, var(--decree-warn) 10%, var(--decree-surface));
+    border: 1px solid color-mix(in srgb, var(--decree-warn) 30%, var(--decree-surface));
+  }
+  .deprecation-notice code {
+    background: var(--decree-surface); color: var(--decree-accent); padding: 1px 7px; border-radius: 5px;
+  }
+
+  .examples { margin: 14px 0; }
+  .examples .label, .constraints .label {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--decree-muted); margin-bottom: 7px;
+  }
+  .example-item {
+    border: 1px solid var(--decree-line); border-radius: 9px; padding: 10px 14px; margin-bottom: 8px;
+  }
+  .example-item .name { font-size: 12px; font-weight: 650; color: var(--decree-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .example-item code.value { background: var(--decree-chip); padding: 2px 8px; border-radius: 5px; }
+  .example-item .summary { font-size: 13px; color: var(--decree-muted); margin-top: 6px; }
+
+  .constraints ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+  .constraints li { font-size: 13.5px; }
+  .constraints code { background: var(--decree-chip); padding: 1px 7px; border-radius: 5px; }
+
+  .external-docs { margin-top: 12px; font-size: 13px; }
+  .external-docs a { color: var(--decree-accent); text-decoration: none; font-weight: 600; }
+
+  .sensitive-mask {
+    display: flex; align-items: center; gap: 9px; border: 1px solid var(--decree-line); border-radius: 8px;
+    padding: 9px 13px; background: var(--decree-chip); font-family: ui-monospace, Menlo, monospace;
+    font-size: 14px; color: var(--decree-muted); margin-top: 12px;
+  }
+  .sensitive-mask .note { margin-left: auto; font-size: 11px; font-family: ui-sans-serif, system-ui, sans-serif; }
+}
+
+</style>
+</head>
+<body>
+<div class="decree-doc">
+  <header class="decree-header">
+    <div>
+      <h1>Payments Configuration</h1>
+      <div class="sub">v3 · platform-team</div>
+    </div>
+  </header>
+  <div class="decree-body">
+    <nav class="decree-nav">
+      <div class="group-title">payments</div>
+      <a href="#payments.api_key">api_key</a>
+      <a href="#payments.cutoff">cutoff</a>
+      <a href="#payments.enabled">enabled</a>
+      <a href="#payments.environment">environment</a>
+      <a href="#payments.fee">fee</a>
+      <a href="#payments.metadata">metadata</a>
+      <a href="#payments.mode" class="deprecated">mode</a>
+      <a href="#payments.refund_window">refund_window</a>
+      <a href="#payments.retries">retries</a>
+      <a href="#payments.webhook">webhook</a>
+      <div class="footer">10 fields · 8 types<br>Generated by decree-docs</div>
+    </nav>
+    <main class="decree-main">
+      <h2 class="group">payments</h2>
+      
+<section class="field-card" id="payments.api_key">
+  <div class="field-head">
+    <code class="mono path">payments.api_key</code>
+    <span class="type-chip mono">string · password</span>
+  </div>
+  <div class="badge-row">
+    <span class="badge info">⟳ Write-once</span>
+    <span class="badge danger">⊘ Sensitive</span>
+  </div>
+  <p class="desc">Gateway API key.</p>
+  <div class="sensitive-mask">
+    <span>🔒</span> ● ● ● ● ● ● ● ●
+    <span class="note">value masked</span>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.cutoff">
+  <div class="field-head">
+    <code class="mono path">payments.cutoff</code>
+    <span class="type-chip mono">time</span>
+  </div>
+  <div class="badge-row">
+    <span class="badge neutral">Nullable</span>
+  </div>
+  <p class="desc">Daily settlement cutoff.</p>
+</section>
+
+      
+<section class="field-card" id="payments.enabled">
+  <div class="field-head">
+    <h3>Payments Enabled</h3>
+    <code class="mono">payments.enabled</code>
+    <span class="type-chip mono">bool</span>
+  </div>
+  <p class="desc">Master switch for payment processing.</p>
+  <div class="meta-row">
+    <span>Default <code class="default-chip mono">true</code></span>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.environment">
+  <div class="field-head">
+    <code class="mono path">payments.environment</code>
+    <span class="type-chip mono">string</span>
+  </div>
+  <div class="badge-row">
+    <span class="badge neutral">⊙ Read-only</span>
+  </div>
+  <p class="desc">Deployment environment label.</p>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>Min length: 2</li>
+      <li>Max length: 32</li>
+      <li>Pattern: ^[a-z][a-z0-9-]*$</li>
+    </ul>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.fee">
+  <div class="field-head">
+    <code class="mono path">payments.fee</code>
+    <span class="type-chip mono">number</span>
+  </div>
+  <div class="badge-row">
+    <span class="badge neutral">Nullable</span>
+  </div>
+  <p class="desc">Per-transaction fee rate.</p>
+  <div class="meta-row">
+    <span>Default <code class="default-chip mono">0.01</code></span>
+    <span>Tags <span class="tag-chip mono">billing</span><span class="tag-chip mono">rates</span></span>
+  </div>
+  <div class="examples">
+    <div class="label">Examples</div>
+    <div class="example-item">
+      <code class="value mono">0.02</code>
+    </div>
+    <div class="example-item">
+      <div class="name">high</div>
+      <code class="value mono">0.99</code>
+    </div>
+    <div class="example-item">
+      <div class="name">low</div>
+      <code class="value mono">0.01</code>
+      <div class="summary">Promotional rate</div>
+    </div>
+  </div>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>Minimum: 0</li>
+      <li>Maximum: 1</li>
+    </ul>
+  </div>
+  <div class="external-docs">
+    <a href="https://docs.example.com/fees">Fee guide ↗</a>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.metadata">
+  <div class="field-head">
+    <code class="mono path">payments.metadata</code>
+    <span class="type-chip mono">json</span>
+  </div>
+  <p class="desc">Free-form gateway metadata.</p>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>JSON Schema: (see schema definition)</li>
+    </ul>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.mode">
+  <div class="field-head">
+    <code class="mono path deprecated">payments.mode</code>
+    <span class="type-chip mono">string</span>
+  </div>
+  <div class="badge-row">
+    <span class="badge warn">⚠ Deprecated</span>
+  </div>
+  <div class="deprecation-notice">
+    <span>↪</span>
+    <span>Deprecated — use <code>payments.environment</code> instead.</span>
+  </div>
+  <p class="desc">Processing mode.</p>
+  <div class="meta-row">
+    <span>Default <code class="default-chip mono">test</code></span>
+  </div>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>Enum: live, test</li>
+    </ul>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.refund_window">
+  <div class="field-head">
+    <code class="mono path">payments.refund_window</code>
+    <span class="type-chip mono">duration</span>
+  </div>
+  <p class="desc">Window during which refunds are accepted.</p>
+  <div class="meta-row">
+    <span>Default <code class="default-chip mono">72h</code></span>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.retries">
+  <div class="field-head">
+    <code class="mono path">payments.retries</code>
+    <span class="type-chip mono">integer</span>
+  </div>
+  <p class="desc">Delivery attempts per webhook event.</p>
+  <div class="meta-row">
+    <span>Default <code class="default-chip mono">3</code></span>
+  </div>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>Exclusive minimum: 0</li>
+      <li>Exclusive maximum: 10</li>
+    </ul>
+  </div>
+</section>
+
+      
+<section class="field-card" id="payments.webhook">
+  <div class="field-head">
+    <h3>Webhook URL</h3>
+    <code class="mono">payments.webhook</code>
+    <span class="type-chip mono">url</span>
+  </div>
+  <p class="desc">Endpoint receiving payment events.</p>
+  <div class="constraints">
+    <div class="label">Constraints</div>
+    <ul>
+      <li>Allowed schemes: https, sftp</li>
+    </ul>
+  </div>
+</section>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>

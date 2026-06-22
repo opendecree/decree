@@ -4,7 +4,7 @@ A standalone, multi-format documentation generator for decree schemas. It loads 
 
 > **Alpha**: This module is part of the OpenDecree alpha release. The CLI and output formats may change.
 
-> **Status**: in development — this build loads schemas from local YAML files and emits the json and md documentation formats. The mdx/html backends, server mode, and the config/template system land in upcoming releases.
+> **Status**: in development — this build loads schemas from local YAML files and emits the json, md, and html documentation formats. The mdx backend, server mode, and the config/template system land in upcoming releases.
 
 `decree-docs` lives under `contrib/` (standalone tools built on decree), as opposed to `sdk/contrib/` (SDK framework adapters such as viper, koanf, and envconfig). It composes on top of the minimal, zero-dependency `sdk/tools/docgen` library rather than replacing it.
 
@@ -24,6 +24,8 @@ go build -o decree-docs .
 decree-docs generate --file decree.schema.yaml --format json
 decree-docs generate --file decree.schema.yaml --format md --flavor material
 decree-docs generate --file decree.schema.yaml --format md --pages multi --out-dir docs/
+decree-docs generate --file decree.schema.yaml --format html --theme dark
+decree-docs generate --file decree.schema.yaml --format html --css brand.css --out-dir docs/
 decree-docs --help
 decree-docs version
 ```
@@ -72,10 +74,21 @@ Serialization rules (see the `docmodel` package documentation for the authoritat
 
 `--pages single` (default) renders one page: to stdout, or to `<out-dir>/index.md` with `--out-dir`. `--pages multi` renders an index page plus one page per top-level field-path-prefix group (e.g. `payments.fee` and `payments.retries` both land on `payments.md`) and requires `--out-dir`.
 
+## The html format
+
+`--format html` renders a single self-contained HTML document: inline CSS, no external assets, no network requests, viewable straight from disk. `--theme` selects a built-in color scheme — `light` (default), `dark`, or `auto` (light at `:root`, dark via `@media (prefers-color-scheme: dark)`, so it follows the reader's OS preference). All theme colors are exposed as 10 `--decree-*` CSS custom properties (`--decree-bg`, `--decree-surface`, `--decree-ink`, `--decree-muted`, `--decree-line`, `--decree-chip`, `--decree-accent`, `--decree-warn`, `--decree-info`, `--decree-danger`); badge/chip background tints derive from these via `color-mix()` rather than separate tokens.
+
+`--css <file>` appends the file's contents inside a trailing `decree.user` CSS cascade layer (`@layer decree.reset, decree.theme, decree.components, decree.user;`). Cascade layer order — not selector specificity — decides precedence, so a one-line override like `:root { --decree-accent: #7c3aed; }` retints the whole document without `!important` or selector escalation.
+
+The page anatomy (left nav grouped by field-path prefix, content pane of per-field cards with badges/examples/constraints) follows a design pass against OAS-reference-doc conventions (Redoc, Swagger UI, Scalar, Stoplight Elements); see `.agents/context/docs-toolkit-design/` for the locked wireframes/hi-fi mockups and token table.
+
+`--format html` always renders to a single file: stdout, or `<out-dir>/index.html` with `--out-dir`.
+
 ## Testing
 
 ```sh
 go test ./...
 go test . -run TestGenerate_JSONGolden -update          # rewrite CLI JSON golden files
 go test ./markdown -run TestRender_Golden -update       # rewrite markdown golden files
+go test ./html -run TestRender_Golden -update           # rewrite html golden files
 ```

@@ -26,6 +26,8 @@ func resetGenerateCmd(t *testing.T) {
 		_ = generateCmd.Flags().Set("flavor", "plain")
 		_ = generateCmd.Flags().Set("pages", "single")
 		_ = generateCmd.Flags().Set("out-dir", "")
+		_ = generateCmd.Flags().Set("theme", "light")
+		_ = generateCmd.Flags().Set("css", "")
 	})
 }
 
@@ -292,6 +294,111 @@ func TestGenerate_MD_SinglePageWithOutDirWritesIndexFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outDir, "index.md")); err != nil {
 		t.Errorf("expected index.md to be written: %v", err)
+	}
+}
+
+func TestGenerate_ThemeFlagCompletion(t *testing.T) {
+	complete, ok := generateCmd.GetFlagCompletionFunc("theme")
+	if !ok {
+		t.Fatal("expected a completion function for --theme")
+	}
+	values, _ := complete(generateCmd, nil, "")
+	if !slices.Equal(values, htmlThemes) {
+		t.Errorf("got completions %v, want %v", values, htmlThemes)
+	}
+}
+
+func TestGenerate_HTML_SinglePageGoesToStdout(t *testing.T) {
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html")
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.HasPrefix(stdout, "<!DOCTYPE html>") {
+		t.Errorf("expected stdout to start with the HTML doctype, got %q", stdout)
+	}
+}
+
+func TestGenerate_HTML_UnknownTheme(t *testing.T) {
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--theme", "neon")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, `unknown theme "neon"`) || !strings.Contains(stderr, "valid themes: light, dark, auto") {
+		t.Errorf("expected unknown-theme error, got %q", stderr)
+	}
+}
+
+func TestGenerate_HTML_CSSFileNotFound(t *testing.T) {
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--css", "testdata/does-not-exist.css")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "read --css file") {
+		t.Errorf("expected read error, got %q", stderr)
+	}
+}
+
+func TestGenerate_HTML_CSSOverrideApplied(t *testing.T) {
+	cssPath := filepath.Join(t.TempDir(), "brand.css")
+	if err := os.WriteFile(cssPath, []byte(":root { --decree-accent: #7c3aed; }"), 0o644); err != nil {
+		t.Fatalf("write css fixture: %v", err)
+	}
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--css", cssPath)
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stdout, "@layer decree.user {\n:root { --decree-accent: #7c3aed; }\n}") {
+		t.Errorf("expected user CSS to be appended in the decree.user layer, got %q", stdout)
+	}
+}
+
+func TestGenerate_HTML_OutDirWritesIndexFile(t *testing.T) {
+	outDir := t.TempDir()
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--out-dir", outDir)
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("expected empty stdout when writing to --out-dir, got %q", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "index.html")); err != nil {
+		t.Errorf("expected index.html to be written: %v", err)
+	}
+}
+
+func TestGenerate_HTML_OutDirNotADirectory(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(outDir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write blocker file: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--out-dir", outDir)
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "create out-dir") {
+		t.Errorf("expected create-out-dir error, got %q", stderr)
+	}
+}
+
+func TestGenerate_HTML_WriteFileError(t *testing.T) {
+	outDir := t.TempDir()
+	// index.html as a directory makes the write to that path fail.
+	if err := os.Mkdir(filepath.Join(outDir, "index.html"), 0o755); err != nil {
+		t.Fatalf("mkdir blocker: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "html", "--out-dir", outDir)
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "write") {
+		t.Errorf("expected write error, got %q", stderr)
 	}
 }
 

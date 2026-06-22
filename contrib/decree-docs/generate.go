@@ -11,19 +11,23 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/opendecree/decree/contrib/decree-docs/docmodel"
+	"github.com/opendecree/decree/contrib/decree-docs/html"
 	"github.com/opendecree/decree/contrib/decree-docs/loader"
 	"github.com/opendecree/decree/contrib/decree-docs/markdown"
 )
 
-// docFormats lists the formats generate can emit. The mdx and html backends
-// land in upcoming releases (#916-#917).
-var docFormats = []string{"json", "md"}
+// docFormats lists the formats generate can emit. The mdx backend lands in
+// an upcoming release (#917).
+var docFormats = []string{"json", "md", "html"}
 
 // mdFlavors lists the --flavor values valid with --format md.
 var mdFlavors = []string{string(markdown.Plain), string(markdown.Material)}
 
 // mdPageModes lists the --pages values valid with --format md.
 var mdPageModes = []string{string(markdown.SinglePage), string(markdown.MultiPage)}
+
+// htmlThemes lists the --theme values valid with --format html.
+var htmlThemes = []string{string(html.Light), string(html.Dark), string(html.Auto)}
 
 var generateCmd = &cobra.Command{
 	Use:   "generate [schema-id]",
@@ -42,7 +46,14 @@ The md format renders Markdown. --flavor plain emits portable CommonMark;
 --flavor material additionally uses the MkDocs Material admonition and
 content-tab extensions. --pages single (default) renders one page to
 stdout (or to <out-dir>/index.md with --out-dir); --pages multi renders an
-index page plus one page per top-level field group and requires --out-dir.`,
+index page plus one page per top-level field group and requires --out-dir.
+
+The html format renders a single self-contained HTML file (inline CSS, no
+external assets, no network requests) to stdout or to <out-dir>/index.html
+with --out-dir. --theme selects a built-in color scheme (light, dark, or
+auto, which follows the reader's OS preference). --css <file> appends the
+file's contents in a trailing CSS cascade layer, so user overrides take
+precedence over the built-in theme without needing !important.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runGenerate,
 }
@@ -53,6 +64,8 @@ func init() {
 	generateCmd.Flags().String("flavor", string(markdown.Plain), "md flavor: "+strings.Join(mdFlavors, ", "))
 	generateCmd.Flags().String("pages", string(markdown.SinglePage), "md page mode: "+strings.Join(mdPageModes, ", "))
 	generateCmd.Flags().String("out-dir", "", "output directory (required when md rendering produces multiple pages)")
+	generateCmd.Flags().String("theme", string(html.Light), "html theme: "+strings.Join(htmlThemes, ", "))
+	generateCmd.Flags().String("css", "", "html: file whose contents are appended as a user CSS override")
 	_ = generateCmd.RegisterFlagCompletionFunc("format", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return docFormats, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -61,6 +74,9 @@ func init() {
 	})
 	_ = generateCmd.RegisterFlagCompletionFunc("pages", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return mdPageModes, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = generateCmd.RegisterFlagCompletionFunc("theme", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return htmlThemes, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootCmd.AddCommand(generateCmd)
 }
@@ -86,10 +102,14 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if format == "md" {
+	switch format {
+	case "md":
 		return runGenerateMD(cmd, doc)
+	case "html":
+		return runGenerateHTML(cmd, doc)
+	default:
+		return doc.EncodeJSON(cmd.OutOrStdout())
 	}
-	return doc.EncodeJSON(cmd.OutOrStdout())
 }
 
 func runGenerateMD(cmd *cobra.Command, doc *docmodel.Document) error {
@@ -126,6 +146,41 @@ func runGenerateMD(cmd *cobra.Command, doc *docmodel.Document) error {
 		if err := os.WriteFile(path, []byte(p.Content), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
+	}
+	return nil
+}
+
+func runGenerateHTML(cmd *cobra.Command, doc *docmodel.Document) error {
+	themeFlag, _ := cmd.Flags().GetString("theme")
+	if !slices.Contains(htmlThemes, themeFlag) {
+		return fmt.Errorf("unknown theme %q (valid themes: %s)", themeFlag, strings.Join(htmlThemes, ", "))
+	}
+
+	var userCSS string
+	if cssFile, _ := cmd.Flags().GetString("css"); cssFile != "" {
+		data, err := os.ReadFile(cssFile)
+		if err != nil {
+			return fmt.Errorf("read --css file: %w", err)
+		}
+		userCSS = string(data)
+	}
+
+	out, err := html.Render(doc, html.Options{Theme: html.Theme(themeFlag), CSS: userCSS})
+	if err != nil {
+		return err
+	}
+
+	outDir, _ := cmd.Flags().GetString("out-dir")
+	if outDir == "" {
+		_, err := io.WriteString(cmd.OutOrStdout(), out)
+		return err
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("create out-dir: %w", err)
+	}
+	path := filepath.Join(outDir, "index.html")
+	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil
 }
