@@ -32,9 +32,6 @@ jobs:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Go autobuild takes ~5 min; skip it on PRs — govulncheck covers per-PR vuln
-    # scanning. Actions and Python are fast (< 1 min) and still run on PRs.
-    if: matrix.language != 'go' || github.event_name != 'pull_request'
     permissions:
       security-events: write
       packages: read
@@ -44,6 +41,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Go autobuild takes ~5 min; skip it on PRs — govulncheck covers per-PR
+        # vuln scanning. Actions and Python are fast (< 1 min) and still run on
+        # PRs. `matrix` is not available in `jobs.<job_id>.if`, so the language
+        # list is selected here instead, per event.
+        language: ${{ github.event_name == 'pull_request' && fromJSON('["actions","python"]') || fromJSON('["actions","go","python"]') }}
         include:
           - language: actions
             build-mode: none

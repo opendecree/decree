@@ -203,6 +203,18 @@ jobs:
       - name: Check supply-chain pins
         run: ./scripts/check-supply-chain-pins.sh
 
+      - name: Lint workflow files
+        # rhysd/actionlint:1.7.12 — catches invalid workflow syntax (e.g. a
+        # context used somewhere it isn't available) before it reaches GitHub,
+        # where such errors silently produce zero jobs instead of a clear
+        # failure. See #931. shellcheck/pyflakes are disabled here: they lint
+        # the shell/Python embedded in `run:` steps, a different and much
+        # noisier concern than workflow-file validity — out of scope for this
+        # gate.
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+        with:
+          args: -color -shellcheck= -pyflakes=
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
