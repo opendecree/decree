@@ -33,6 +33,7 @@ func main() {
 	defer stop()
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
 }

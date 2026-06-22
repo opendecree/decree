@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -336,6 +338,53 @@ func TestRootCmd_SilenceUsage(t *testing.T) {
 func TestRootCmd_SilenceErrors(t *testing.T) {
 	if !rootCmd.SilenceErrors {
 		t.Error("expected rootCmd.SilenceErrors = true, got false")
+	}
+}
+
+// --- main() prints RunE errors before exiting (#910) ---
+
+// TestMain_PrintsErrorBeforeExit verifies that when a command's RunE returns
+// an error, main() prints it (rather than relying on cobra, which is
+// silenced via SilenceErrors/SilenceUsage on rootCmd) and exits non-zero.
+// main() calls os.Exit directly, so it is exercised via a re-exec of the test
+// binary itself: the child process runs the real main() against an invalid
+// --file schema (an offline path, so no server is required), and the parent
+// asserts on the child's stderr and exit code.
+func TestMain_PrintsErrorBeforeExit(t *testing.T) {
+	if os.Getenv("DECREE_TEST_RUN_MAIN") == "1" {
+		os.Args = []string{"decree", "docgen", "--file", os.Getenv("DECREE_TEST_BAD_SCHEMA")}
+		main()
+		return
+	}
+
+	dir := t.TempDir()
+	badSchema := dir + "/bad-schema.yaml"
+	if err := os.WriteFile(badSchema, []byte("invalid: yaml: [\n"), 0o600); err != nil {
+		t.Fatalf("failed to write fixture schema: %v", err)
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestMain_PrintsErrorBeforeExit$")
+	cmd.Env = append(os.Environ(),
+		"DECREE_TEST_RUN_MAIN=1",
+		"DECREE_TEST_BAD_SCHEMA="+badSchema,
+	)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected child process to exit non-zero, got nil error")
+	}
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		t.Fatalf("expected *exec.ExitError, got %T: %v", err, err)
+	}
+	if got := exitErr.ExitCode(); got != 1 {
+		t.Errorf("got exit code %d, want %d", got, 1)
+	}
+	if !strings.Contains(stderr.String(), "Error:") {
+		t.Errorf("expected stderr to contain the printed error, got stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 
