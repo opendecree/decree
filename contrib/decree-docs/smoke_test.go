@@ -39,7 +39,7 @@ func TestSmoke_BinaryBuildsAndRuns(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generate failed: %v\n%s", err, out)
 		}
-		if !strings.Contains(string(out), `"docModelVersion": 1`) {
+		if !strings.Contains(string(out), `"docModelVersion": 2`) {
 			t.Errorf("expected JSON doc model output, got %q", out)
 		}
 	})

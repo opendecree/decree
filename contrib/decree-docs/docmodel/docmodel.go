@@ -33,7 +33,7 @@ import (
 // Version is the current doc model version, emitted as docModelVersion in
 // the JSON root. It is incremented whenever the JSON shape changes
 // incompatibly, so third-party renderers can detect breaking changes.
-const Version = 1
+const Version = 2
 
 // Document is the root of the doc model.
 type Document struct {
@@ -71,6 +71,18 @@ type Schema struct {
 	Info *Info `json:"info,omitempty"`
 	// Fields lists the schema's fields, sorted by path.
 	Fields []Field `json:"fields"`
+	// Validations lists the schema's cross-field CEL validation rules.
+	Validations []Validation `json:"validations,omitempty"`
+}
+
+// Validation describes a single cross-field CEL validation rule.
+type Validation struct {
+	// Rule is the CEL expression evaluated against the configuration.
+	Rule string `json:"rule"`
+	// Message explains the rule to a human when it fails.
+	Message string `json:"message"`
+	// Severity is "error" or "warning".
+	Severity string `json:"severity,omitempty"`
 }
 
 // Info contains optional schema-level metadata.

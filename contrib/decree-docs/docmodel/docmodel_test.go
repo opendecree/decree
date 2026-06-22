@@ -73,10 +73,17 @@ func TestEncodeJSON_CanonicalForm(t *testing.T) {
 				},
 			},
 		},
+		Validations: []docmodel.Validation{
+			{
+				Rule:     "self.payments.min_amount < self.payments.max_amount",
+				Message:  "min_amount must be less than max_amount",
+				Severity: "error",
+			},
+		},
 	})
 
 	want := `{
-  "docModelVersion": 1,
+  "docModelVersion": 2,
   "schema": {
     "name": "payments",
     "description": "Payment configuration",
@@ -140,6 +147,13 @@ func TestEncodeJSON_CanonicalForm(t *testing.T) {
           ]
         }
       }
+    ],
+    "validations": [
+      {
+        "rule": "self.payments.min_amount < self.payments.max_amount",
+        "message": "min_amount must be less than max_amount",
+        "severity": "error"
+      }
     ]
   }
 }
@@ -162,7 +176,7 @@ func TestEncodeJSON_OmitsEmptyOptionals(t *testing.T) {
 	})
 
 	want := `{
-  "docModelVersion": 1,
+  "docModelVersion": 2,
   "schema": {
     "name": "minimal",
     "fields": [
@@ -195,6 +209,76 @@ func TestEncodeJSON_DoesNotEscapeHTML(t *testing.T) {
 	}
 	if !strings.Contains(b.String(), "a < b && c > d") {
 		t.Errorf("expected HTML characters to stay literal, got:\n%s", b.String())
+	}
+}
+
+// TestEncodeJSON_Validations pins that schema-level CEL validation rules
+// round-trip into JSON as a "validations" array, and that the array is
+// omitted entirely when the schema has none.
+func TestEncodeJSON_Validations(t *testing.T) {
+	doc := docmodel.New(docmodel.Schema{
+		Name:   "payments",
+		Fields: []docmodel.Field{{Path: "payments.fee", Type: "number"}},
+		Validations: []docmodel.Validation{
+			{
+				Rule:     "self.payments.min_amount < self.payments.max_amount",
+				Message:  "min_amount must be less than max_amount",
+				Severity: "error",
+			},
+			{
+				Rule:    "self.payments.fee >= 0",
+				Message: "fee must not be negative",
+			},
+		},
+	})
+
+	want := `{
+  "docModelVersion": 2,
+  "schema": {
+    "name": "payments",
+    "fields": [
+      {
+        "path": "payments.fee",
+        "type": "number"
+      }
+    ],
+    "validations": [
+      {
+        "rule": "self.payments.min_amount < self.payments.max_amount",
+        "message": "min_amount must be less than max_amount",
+        "severity": "error"
+      },
+      {
+        "rule": "self.payments.fee >= 0",
+        "message": "fee must not be negative"
+      }
+    ]
+  }
+}
+`
+	var b strings.Builder
+	if err := doc.EncodeJSON(&b); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := b.String(); got != want {
+		t.Errorf("validations JSON mismatch:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestEncodeJSON_OmitsEmptyValidations asserts that a schema with no
+// validations omits the "validations" key entirely (no behavior change for
+// existing schemas).
+func TestEncodeJSON_OmitsEmptyValidations(t *testing.T) {
+	doc := docmodel.New(docmodel.Schema{
+		Name:   "payments",
+		Fields: []docmodel.Field{{Path: "payments.fee", Type: "number"}},
+	})
+	var b strings.Builder
+	if err := doc.EncodeJSON(&b); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(b.String(), "validations") {
+		t.Errorf("expected no validations key, got:\n%s", b.String())
 	}
 }
 
