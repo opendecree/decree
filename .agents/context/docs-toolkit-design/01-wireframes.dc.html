@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Caveat:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0}
+</style>
+</helmet>
+
+<div style="--accent: {{ accent }}; font-family:'Patrick Hand',system-ui,sans-serif; color:#2f2b26; background:#efebe1; width:max-content; min-width:100%; min-height:100vh; padding:48px 56px 80px; box-sizing:border-box;">
+
+  <!-- ===== title ===== -->
+  <div style="max-width:1180px; margin-bottom:8px;">
+    <div style="font-family:'Caveat',cursive; font-size:15px; letter-spacing:1px; color:var(--accent,#2f64d8); text-transform:uppercase;">decree-docs · design pass</div>
+    <h1 style="font-family:'Caveat',cursive; font-weight:700; font-size:46px; margin:2px 0 6px; line-height:1;">Wireframes — HTML output anatomy &amp; field cards</h1>
+    <div style="font-size:18px; max-width:760px; color:#5b554b;">Low-fi structure only. Type, color and the <span style="font-family:ui-monospace,monospace; font-size:14px; background:#e3ddd0; padding:1px 6px; border-radius:5px;">--decree-*</span> token set come in the hi-fi pass. Content is drawn straight from the sample doc model — nothing invented.</div>
+  </div>
+
+  <!-- ===== section 1 : page anatomy ===== -->
+  <div style="display:flex; align-items:baseline; gap:16px; margin:40px 0 14px; max-width:1180px; flex-wrap:wrap;">
+    <div style="font-family:'Caveat',cursive; font-weight:700; font-size:30px;"><span style="color:var(--accent,#2f64d8);">1</span> · Page anatomy</div>
+    <div style="display:flex; gap:8px;">
+      <button onClick="{{ setView0 }}" style="{{ tab0Style }}">2-pane · examples inline</button>
+      <button onClick="{{ setView1 }}" style="{{ tab1Style }}">3-pane · examples rail</button>
+      <button onClick="{{ setView2 }}" style="{{ tab2Style }}">compact list / table</button>
+    </div>
+    <button onClick="{{ toggleNotes }}" style="{{ notesBtnStyle }}">{{ notesLabel }}</button>
+  </div>
+
+  <!-- ---- view 0 : 2-pane ---- -->
+  <sc-if value="{{ view0 }}" hint-placeholder-val="{{ true }}">
+  <div style="position:relative; width:1180px; border:2px solid #2f2b26; border-radius:12px 9px 13px 8px; background:#fff; box-shadow:4px 4px 0 rgba(47,43,38,.10); overflow:hidden;">
+
+    <!-- header bar -->
+    <div style="display:flex; align-items:center; gap:18px; padding:14px 20px; border-bottom:2px solid #2f2b26; background:#f7f4ec;">
+      <div style="display:flex; align-items:center; justify-content:center; width:38px; height:38px; border:1.5px dashed #2f2b26; border-radius:8px; font-size:11px; color:#8a8276; flex:none;">LOGO</div>
+      <div style="flex:1;">
+        <div style="font-size:21px; line-height:1;">Payments Configuration</div>
+        <div style="font-size:14px; color:#7a7264; margin-top:3px;">v3 · platform-team · <span style="font-family:ui-monospace,monospace; font-size:12px;">team:platform</span> <span style="font-family:ui-monospace,monospace; font-size:12px;">tier:critical</span></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <div style="width:200px; height:30px; border:1.5px solid #2f2b26; border-radius:7px; display:flex; align-items:center; padding:0 10px; font-size:13px; color:#9a9182;">⌕  search fields…</div>
+        <div style="display:flex; border:1.5px solid #2f2b26; border-radius:7px; overflow:hidden; font-size:12px;">
+          <div style="padding:6px 9px; background:var(--accent,#2f64d8); color:#fff;">light</div>
+          <div style="padding:6px 9px; border-left:1.5px solid #2f2b26;">dark</div>
+          <div style="padding:6px 9px; border-left:1.5px solid #2f2b26;">auto</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex; min-height:540px;">
+      <!-- left nav -->
+      <div style="width:248px; flex:none; border-right:2px solid #2f2b26; padding:16px 14px; background:#faf8f2;">
+        <div style="font-size:13px; color:#9a9182; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">schema</div>
+        <div style="font-size:17px; margin-bottom:14px;">payments ▾</div>
+        <div style="display:flex; flex-direction:column; gap:3px; font-size:16px;">
+          <div style="padding:5px 10px; border-left:3px solid var(--accent,#2f64d8); background:#eef3ff; color:var(--accent,#2f64d8); border-radius:0 6px 6px 0;">enabled</div>
+          <div style="padding:5px 10px; color:#5b554b;">api_key</div>
+          <div style="padding:5px 10px; color:#5b554b;">cutoff</div>
+          <div style="padding:5px 10px; color:#5b554b;">environment</div>
+          <div style="padding:5px 10px; color:#5b554b;">fee</div>
+          <div style="padding:5px 10px; color:#5b554b;">metadata</div>
+          <div style="padding:5px 10px; color:#9a9182; text-decoration:line-through;">mode</div>
+          <div style="padding:5px 10px; color:#5b554b;">refund_window</div>
+          <div style="padding:5px 10px; color:#5b554b;">retries</div>
+          <div style="padding:5px 10px; color:#5b554b;">webhook</div>
+        </div>
+      </div>
+
+      <!-- content pane -->
+      <div style="flex:1; padding:22px 26px; display:flex; flex-direction:column; gap:18px;">
+        <div>
+          <div style="font-size:22px;">payments</div>
+          <div style="font-size:15px; color:#7a7264;">Payment processing configuration. · 10 fields</div>
+        </div>
+
+        <!-- card: enabled -->
+        <div style="border:1.5px solid #2f2b26; border-radius:9px 7px 10px 6px; padding:14px 16px; scroll-margin-top:20px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:13px; color:#b7ae9d;">#</span>
+            <span style="font-size:19px;">Payments Enabled</span>
+            <span style="font-family:ui-monospace,monospace; font-size:13px; color:#8a8276;">payments.enabled</span>
+            <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 8px; border-radius:6px;">bool</span>
+          </div>
+          <div style="font-size:16px; color:#4b463d; margin:8px 0 10px;">Master switch for payment processing.</div>
+          <div style="font-size:14px; color:#7a7264;">default <span style="font-family:ui-monospace,monospace; background:#eef3ff; color:var(--accent,#2f64d8); padding:1px 7px; border-radius:5px;">true</span></div>
+        </div>
+
+        <!-- card: fee (rich, examples inline) -->
+        <div style="border:1.5px solid #2f2b26; border-radius:8px 10px 7px 9px; padding:14px 16px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:13px; color:#b7ae9d;">#</span>
+            <span style="font-family:ui-monospace,monospace; font-size:17px;">payments.fee</span>
+            <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 8px; border-radius:6px;">number</span>
+            <span style="display:inline-flex; align-items:center; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:12px; text-transform:uppercase; letter-spacing:.5px;">nullable</span>
+          </div>
+          <div style="font-size:16px; color:#4b463d; margin:8px 0 10px;">Per-transaction fee rate.</div>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; font-size:14px; color:#7a7264; margin-bottom:12px;">
+            <span>default <span style="font-family:ui-monospace,monospace; background:#eef3ff; color:var(--accent,#2f64d8); padding:1px 7px; border-radius:5px;">0.01</span></span>
+            <span>tags <span style="font-family:ui-monospace,monospace;">billing</span> <span style="font-family:ui-monospace,monospace;">rates</span></span>
+          </div>
+          <!-- example tabs -->
+          <div style="border:1.4px solid #d2cabb; border-radius:8px; overflow:hidden;">
+            <div style="display:flex; font-size:14px; border-bottom:1.4px solid #d2cabb;">
+              <div style="padding:6px 14px; background:var(--accent,#2f64d8); color:#fff;">high</div>
+              <div style="padding:6px 14px; color:#7a7264;">low</div>
+            </div>
+            <div style="padding:10px 14px; font-size:14px;">value <span style="font-family:ui-monospace,monospace; background:#f1ede4; padding:1px 7px; border-radius:5px;">0.99</span></div>
+          </div>
+          <div style="display:flex; gap:18px; margin-top:12px; font-size:14px; flex-wrap:wrap;">
+            <span style="color:#7a7264;">constraints &nbsp;<span style="font-family:ui-monospace,monospace;">0 ≤ x ≤ 1</span></span>
+            <span style="color:var(--accent,#2f64d8);">↗ Fee guide</span>
+          </div>
+        </div>
+
+        <!-- card: api_key (sensitive) collapsed-ish -->
+        <div style="border:1.5px solid #2f2b26; border-radius:9px 7px 9px 8px; padding:14px 16px; background:#fbfaf6;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:13px; color:#b7ae9d;">#</span>
+            <span style="font-family:ui-monospace,monospace; font-size:17px;">payments.api_key</span>
+            <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 8px; border-radius:6px;">string · password</span>
+            <span style="display:inline-flex; align-items:center; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:12px; text-transform:uppercase; letter-spacing:.5px;">⊘ sensitive</span>
+            <span style="display:inline-flex; align-items:center; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:12px; text-transform:uppercase; letter-spacing:.5px;">⟳ write-once</span>
+          </div>
+          <div style="font-size:16px; color:#4b463d; margin:8px 0 0;">Gateway API key.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- optional region callouts -->
+    <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; top:8px; left:60px; font-family:'Caveat',cursive; font-size:16px; color:var(--accent,#2f64d8); transform:rotate(-3deg);">↑ header: logo slot · title · version · labels · theme switch</div>
+      <div style="position:absolute; top:300px; left:8px; width:150px; font-family:'Caveat',cursive; font-size:16px; color:var(--accent,#2f64d8); transform:rotate(-2deg);">← nav tree grouped by prefix, deep-link anchors</div>
+      <div style="position:absolute; top:200px; right:10px; width:150px; font-family:'Caveat',cursive; font-size:16px; color:var(--accent,#2f64d8); transform:rotate(2deg); text-align:right;">field cards = superset of md backend →</div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <!-- ---- view 1 : 3-pane ---- -->
+  <sc-if value="{{ view1 }}" hint-placeholder-val="{{ false }}">
+  <div style="width:1180px; border:2px solid #2f2b26; border-radius:12px 9px 13px 8px; background:#fff; box-shadow:4px 4px 0 rgba(47,43,38,.10); overflow:hidden;">
+    <div style="display:flex; align-items:center; gap:18px; padding:14px 20px; border-bottom:2px solid #2f2b26; background:#f7f4ec;">
+      <div style="display:flex; align-items:center; justify-content:center; width:38px; height:38px; border:1.5px dashed #2f2b26; border-radius:8px; font-size:11px; color:#8a8276; flex:none;">LOGO</div>
+      <div style="flex:1; font-size:21px;">Payments Configuration <span style="font-size:14px; color:#7a7264;">v3</span></div>
+      <div style="display:flex; border:1.5px solid #2f2b26; border-radius:7px; overflow:hidden; font-size:12px;">
+        <div style="padding:6px 9px; background:var(--accent,#2f64d8); color:#fff;">light</div>
+        <div style="padding:6px 9px; border-left:1.5px solid #2f2b26;">dark</div>
+        <div style="padding:6px 9px; border-left:1.5px solid #2f2b26;">auto</div>
+      </div>
+    </div>
+    <div style="display:flex; min-height:540px;">
+      <!-- nav -->
+      <div style="width:200px; flex:none; border-right:2px solid #2f2b26; padding:16px 12px; background:#faf8f2; font-size:15px;">
+        <div style="font-size:12px; color:#9a9182; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">payments</div>
+        <div style="display:flex; flex-direction:column; gap:3px;">
+          <div style="padding:4px 9px; color:#5b554b;">enabled</div>
+          <div style="padding:4px 9px; border-left:3px solid var(--accent,#2f64d8); background:#eef3ff; color:var(--accent,#2f64d8); border-radius:0 6px 6px 0;">fee</div>
+          <div style="padding:4px 9px; color:#5b554b;">retries</div>
+          <div style="padding:4px 9px; color:#9a9182; text-decoration:line-through;">mode</div>
+          <div style="padding:4px 9px; color:#5b554b;">environment</div>
+          <div style="padding:4px 9px; color:#5b554b;">api_key</div>
+          <div style="padding:4px 9px; color:#5b554b;">metadata</div>
+          <div style="padding:4px 9px; color:#5b554b;">refund_window</div>
+          <div style="padding:4px 9px; color:#5b554b;">cutoff</div>
+          <div style="padding:4px 9px; color:#5b554b;">webhook</div>
+        </div>
+      </div>
+      <!-- content -->
+      <div style="flex:1; padding:22px 24px;">
+        <div style="border:1.5px solid #2f2b26; border-radius:8px 10px 7px 9px; padding:16px 18px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="font-family:ui-monospace,monospace; font-size:18px;">payments.fee</span>
+            <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 8px; border-radius:6px;">number</span>
+            <span style="display:inline-flex; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:12px; text-transform:uppercase;">nullable</span>
+          </div>
+          <div style="font-size:16px; color:#4b463d; margin:10px 0;">Per-transaction fee rate.</div>
+          <div style="font-size:14px; color:#7a7264; margin-bottom:8px;">default <span style="font-family:ui-monospace,monospace; background:#eef3ff; color:var(--accent,#2f64d8); padding:1px 7px; border-radius:5px;">0.01</span> · tags billing, rates</div>
+          <div style="font-size:14px; color:#7a7264;">constraints <span style="font-family:ui-monospace,monospace;">0 ≤ x ≤ 1</span></div>
+          <div style="margin-top:10px; font-size:14px; color:var(--accent,#2f64d8);">↗ Fee guide</div>
+          <div style="margin-top:14px; padding-top:12px; border-top:1.4px dashed #d2cabb; font-size:13px; color:#9a9182;">examples → shown in right rail</div>
+        </div>
+      </div>
+      <!-- examples rail -->
+      <div style="width:280px; flex:none; border-left:2px solid #2f2b26; padding:18px 16px; background:#f7f4ec;">
+        <div style="font-size:13px; color:#9a9182; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px;">examples</div>
+        <div style="border:1.4px solid #2f2b26; border-radius:8px; background:#fff; margin-bottom:12px;">
+          <div style="padding:6px 12px; border-bottom:1.4px solid #d2cabb; font-size:15px;">high</div>
+          <div style="padding:10px 12px; font-family:ui-monospace,monospace; font-size:14px;">0.99</div>
+        </div>
+        <div style="border:1.4px solid #2f2b26; border-radius:8px; background:#fff;">
+          <div style="padding:6px 12px; border-bottom:1.4px solid #d2cabb; font-size:15px;">low</div>
+          <div style="padding:10px 12px;">
+            <div style="font-family:ui-monospace,monospace; font-size:14px;">0.01</div>
+            <div style="font-size:14px; color:#7a7264; margin-top:4px;">Promotional rate</div>
+          </div>
+        </div>
+        <div style="margin-top:16px; font-size:13px; color:#9a9182; line-height:1.4;">Rail only appears for fields that declare named examples; otherwise content pane widens.</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ---- view 2 : compact list / table ---- -->
+  <sc-if value="{{ view2 }}" hint-placeholder-val="{{ false }}">
+  <div style="width:1180px; border:2px solid #2f2b26; border-radius:12px 9px 13px 8px; background:#fff; box-shadow:4px 4px 0 rgba(47,43,38,.10); overflow:hidden;">
+    <div style="display:flex; align-items:center; gap:18px; padding:14px 20px; border-bottom:2px solid #2f2b26; background:#f7f4ec;">
+      <div style="display:flex; align-items:center; justify-content:center; width:38px; height:38px; border:1.5px dashed #2f2b26; border-radius:8px; font-size:11px; color:#8a8276; flex:none;">LOGO</div>
+      <div style="flex:1; font-size:21px;">Payments Configuration</div>
+      <div style="width:240px; height:30px; border:1.5px solid #2f2b26; border-radius:7px; display:flex; align-items:center; padding:0 10px; font-size:13px; color:#9a9182;">⌕  filter fields…</div>
+    </div>
+    <div style="display:flex;">
+      <div style="width:200px; flex:none; border-right:2px solid #2f2b26; padding:16px 12px; background:#faf8f2; font-size:15px;">
+        <div style="font-size:12px; color:#9a9182; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">groups</div>
+        <div style="padding:4px 9px; border-left:3px solid var(--accent,#2f64d8); background:#eef3ff; color:var(--accent,#2f64d8); border-radius:0 6px 6px 0;">payments (10)</div>
+      </div>
+      <div style="flex:1; padding:8px 0;">
+        <!-- table header -->
+        <div style="display:flex; padding:8px 20px; font-size:13px; color:#9a9182; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #2f2b26;">
+          <div style="flex:2.4;">field</div><div style="flex:1;">type</div><div style="flex:1;">default</div><div style="flex:1.6;">flags</div><div style="flex:2;">constraints</div>
+        </div>
+        <!-- rows -->
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">enabled</div><div style="flex:1; color:#7a7264;">bool</div><div style="flex:1; font-family:ui-monospace,monospace; color:var(--accent,#2f64d8);">true</div><div style="flex:1.6;"></div><div style="flex:2; color:#9a9182;">—</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">fee <span style="font-size:12px; color:#9a9182;">+2 examples</span></div><div style="flex:1; color:#7a7264;">number</div><div style="flex:1; font-family:ui-monospace,monospace; color:var(--accent,#2f64d8);">0.01</div><div style="flex:1.6;"><span style="display:inline-flex; padding:0 7px; border:1.3px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase;">nullable</span></div><div style="flex:2; font-family:ui-monospace,monospace; color:#7a7264;">0 ≤ x ≤ 1</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">retries</div><div style="flex:1; color:#7a7264;">integer</div><div style="flex:1; font-family:ui-monospace,monospace; color:var(--accent,#2f64d8);">3</div><div style="flex:1.6;"></div><div style="flex:2; font-family:ui-monospace,monospace; color:#7a7264;">0 &lt; x &lt; 10</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center; background:#fbf9f4;"><div style="flex:2.4; font-family:ui-monospace,monospace; text-decoration:line-through; color:#9a9182;">mode</div><div style="flex:1; color:#7a7264;">string</div><div style="flex:1; font-family:ui-monospace,monospace;">test</div><div style="flex:1.6;"><span style="display:inline-flex; padding:0 7px; border:1.3px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase;">⚠ deprecated</span></div><div style="flex:2; font-family:ui-monospace,monospace; color:#7a7264;">enum: live|test</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">environment</div><div style="flex:1; color:#7a7264;">string</div><div style="flex:1; color:#9a9182;">—</div><div style="flex:1.6;"><span style="display:inline-flex; padding:0 7px; border:1.3px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase;">read-only</span></div><div style="flex:2; font-family:ui-monospace,monospace; color:#7a7264;">len 2–32 · ^[a-z…]</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; border-bottom:1px solid #ece6da; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">api_key</div><div style="flex:1; color:#7a7264;">string</div><div style="flex:1; color:#9a9182;">—</div><div style="flex:1.6; display:flex; gap:4px; flex-wrap:wrap;"><span style="display:inline-flex; padding:0 7px; border:1.3px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase;">⊘ sensitive</span></div><div style="flex:2; color:#9a9182;">password</div></div>
+        <div style="display:flex; padding:11px 20px; font-size:15px; align-items:center;"><div style="flex:2.4; font-family:ui-monospace,monospace;">webhook</div><div style="flex:1; color:#7a7264;">url</div><div style="flex:1; color:#9a9182;">—</div><div style="flex:1.6;"></div><div style="flex:2; font-family:ui-monospace,monospace; color:#7a7264;">schemes: https|sftp</div></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <div style="max-width:1180px; font-size:15px; color:#7a7264; margin-top:12px; font-style:italic;">Same content model in all three. 2-pane is the single-page default; 3-pane adds the examples rail (only when a field has named examples); compact list suits large schemas and scans fast before drilling into a card.</div>
+
+  <!-- ===== section 2 : field card states ===== -->
+  <div style="font-family:'Caveat',cursive; font-weight:700; font-size:30px; margin:48px 0 4px;"><span style="color:var(--accent,#2f64d8);">2</span> · Field-card states</div>
+  <div style="font-size:16px; color:#7a7264; margin-bottom:18px; max-width:760px;">A representative subset — every badge and every content block appears at least once.</div>
+
+  <div style="display:flex; flex-wrap:wrap; gap:26px; width:1180px;">
+
+    <!-- 1 plain + nullable -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">plain · nullable</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:9px 7px 10px 6px; padding:14px 16px; background:#fff; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:16px;">payments.cutoff</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">time</span>
+          <span style="display:inline-flex; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">nullable</span>
+        </div>
+        <div style="font-size:15px; color:#4b463d; margin-top:9px;">Daily settlement cutoff.</div>
+      </div>
+    </div>
+
+    <!-- 2 title + default -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">title · default</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:7px 10px 6px 9px; padding:14px 16px; background:#fff; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="font-size:18px;">Payments Enabled</div>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:13px; color:#8a8276;">payments.enabled</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">bool</span>
+        </div>
+        <div style="font-size:15px; color:#4b463d; margin:9px 0;">Master switch for payment processing.</div>
+        <div style="font-size:14px; color:#7a7264;">default <span style="font-family:ui-monospace,monospace; background:#eef3ff; color:var(--accent,#2f64d8); padding:1px 7px; border-radius:5px;">true</span></div>
+      </div>
+    </div>
+
+    <!-- 3 read-only + constraints -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">read-only · constraints</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:9px 8px 7px 10px; padding:14px 16px; background:#fff; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:16px;">payments.environment</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">string</span>
+          <span style="display:inline-flex; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">⊙ read-only</span>
+        </div>
+        <div style="font-size:15px; color:#4b463d; margin:9px 0 10px;">Deployment environment label.</div>
+        <div style="font-size:13px; color:#9a9182; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px;">constraints</div>
+        <div style="display:flex; flex-direction:column; gap:4px; font-size:14px; color:#5b554b;">
+          <div>min length <span style="font-family:ui-monospace,monospace;">2</span> · max length <span style="font-family:ui-monospace,monospace;">32</span></div>
+          <div>pattern <span style="font-family:ui-monospace,monospace; background:#f1ede4; padding:1px 6px; border-radius:5px;">^[a-z][a-z0-9-]*$</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 rich: examples + tags + ext docs -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">named examples · tags · ext-docs</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:8px 10px 9px 7px; padding:14px 16px; background:#fff; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:16px;">payments.fee</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">number</span>
+          <span style="display:inline-flex; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">nullable</span>
+        </div>
+        <div style="font-size:15px; color:#4b463d; margin:9px 0;">Per-transaction fee rate.</div>
+        <div style="font-size:14px; color:#7a7264; margin-bottom:10px;">default <span style="font-family:ui-monospace,monospace; background:#eef3ff; color:var(--accent,#2f64d8); padding:1px 7px; border-radius:5px;">0.01</span> · tags <span style="font-family:ui-monospace,monospace;">billing</span> <span style="font-family:ui-monospace,monospace;">rates</span></div>
+        <div style="border:1.4px solid #d2cabb; border-radius:8px; overflow:hidden;">
+          <div style="display:flex; font-size:13px; border-bottom:1.4px solid #d2cabb;">
+            <div style="padding:5px 12px; background:var(--accent,#2f64d8); color:#fff;">high</div>
+            <div style="padding:5px 12px; color:#7a7264;">low · Promotional rate</div>
+          </div>
+          <div style="padding:9px 12px; font-size:14px;">value <span style="font-family:ui-monospace,monospace; background:#f1ede4; padding:1px 7px; border-radius:5px;">0.99</span></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:10px; font-size:14px;">
+          <span style="color:#7a7264; font-family:ui-monospace,monospace;">0 ≤ x ≤ 1</span>
+          <span style="color:var(--accent,#2f64d8);">↗ Fee guide</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5 deprecated + redirect -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">deprecated · redirect · enum</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:7px 9px 10px 8px; padding:14px 16px; background:#fff; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:16px; text-decoration:line-through; color:#7a7264;">payments.mode</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">string</span>
+          <span style="display:inline-flex; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">⚠ deprecated</span>
+        </div>
+        <div style="border:1.4px dashed #2f2b26; border-radius:7px; padding:8px 11px; margin:10px 0; font-size:14px; background:#faf6ec;">↪ Deprecated — use <span style="font-family:ui-monospace,monospace; color:var(--accent,#2f64d8);">payments.environment</span> instead.</div>
+        <div style="font-size:15px; color:#4b463d; margin-bottom:9px;">Processing mode.</div>
+        <div style="font-size:14px; color:#7a7264;">default <span style="font-family:ui-monospace,monospace;">test</span> · enum <span style="font-family:ui-monospace,monospace; background:#f1ede4; padding:1px 6px; border-radius:5px;">live</span> <span style="font-family:ui-monospace,monospace; background:#f1ede4; padding:1px 6px; border-radius:5px;">test</span></div>
+      </div>
+    </div>
+
+    <!-- 6 sensitive + write-once masked -->
+    <div style="width:360px;">
+      <div style="font-family:'Caveat',cursive; font-size:18px; color:var(--accent,#2f64d8); margin-bottom:6px;">sensitive · write-once (masked)</div>
+      <div style="border:1.5px solid #2f2b26; border-radius:9px 7px 8px 10px; padding:14px 16px; background:#fbfaf6; box-shadow:3px 3px 0 rgba(47,43,38,.08);">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-family:ui-monospace,monospace; font-size:16px;">payments.api_key</span>
+          <span style="font-family:ui-monospace,monospace; font-size:12px; background:#e9e3d6; padding:2px 7px; border-radius:6px;">string · password</span>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+          <span style="display:inline-flex; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">⊘ sensitive</span>
+          <span style="display:inline-flex; gap:4px; padding:1px 9px; border:1.4px solid #2f2b26; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;">⟳ write-once</span>
+        </div>
+        <div style="font-size:15px; color:#4b463d; margin:10px 0;">Gateway API key.</div>
+        <div style="display:flex; align-items:center; gap:8px; border:1.4px solid #d2cabb; border-radius:7px; padding:8px 11px; background:#f4f1e9; font-family:ui-monospace,monospace; font-size:15px; color:#8a8276;">🔒 ● ● ● ● ● ● ● ●<span style="margin-left:auto; font-size:12px; color:#b7ae9d;">value masked</span></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:900},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;oklch(0.54 0.16 252)&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = { view: 0, notes: false };
+
+  renderVals() {
+    const accent = this.props.accent ?? 'oklch(0.54 0.16 252)';
+    const notes = this.props.showNotes ?? this.state.notes;
+    const base = {
+      fontFamily: "'Patrick Hand', sans-serif",
+      fontSize: '14px',
+      padding: '6px 13px',
+      borderRadius: '7px 6px 8px 6px',
+      border: '1.6px solid #2f2b26',
+      cursor: 'pointer',
+      lineHeight: 1,
+    };
+    const tab = (i) => ({
+      ...base,
+      background: this.state.view === i ? accent : '#fff',
+      color: this.state.view === i ? '#fff' : '#2f2b26',
+      boxShadow: this.state.view === i ? 'none' : '2px 2px 0 rgba(47,43,38,.10)',
+    });
+    return {
+      accent,
+      view0: this.state.view === 0,
+      view1: this.state.view === 1,
+      view2: this.state.view === 2,
+      showNotes: notes,
+      setView0: () => this.setState({ view: 0 }),
+      setView1: () => this.setState({ view: 1 }),
+      setView2: () => this.setState({ view: 2 }),
+      toggleNotes: () => this.setState((s) => ({ notes: !s.notes })),
+      notesLabel: notes ? '✕ hide notes' : '✎ region notes',
+      tab0Style: tab(0),
+      tab1Style: tab(1),
+      tab2Style: tab(2),
+      notesBtnStyle: {
+        ...base,
+        marginLeft: 'auto',
+        background: notes ? '#2f2b26' : '#fff',
+        color: notes ? '#fff' : '#7a7264',
+        boxShadow: '2px 2px 0 rgba(47,43,38,.10)',
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>
