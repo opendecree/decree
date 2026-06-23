@@ -95,6 +95,17 @@ MDX v3 parses `{` and `<` as the start of a JSX expression or tag, so every piec
 decree-docs generate --file decree.schema.yaml --format mdx --out-dir docs/
 ```
 
+## Man pages
+
+`decree-docs` is not yet wired into the repo's `make build`/release process (see Build above), so man-page generation is a manual step rather than a `make docs-man`-style target. Generate them from a checkout with the hidden `gen-man` command, which uses `cobra/doc.GenManTree` to cover the root command plus `generate` and `version`:
+
+```sh
+go run . gen-man              # writes to ./docs/man by default
+go run . gen-man path/to/dir  # or a custom output directory
+```
+
+Run this before cutting a release of this module and commit the regenerated pages alongside any command/flag changes.
+
 ## Testing
 
 ```sh
