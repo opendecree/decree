@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
 
 // TestRetry_ContextAlreadyCancelledBeforeBackoff covers the ctx.Err() != nil fast-path
@@ -80,7 +82,7 @@ func TestRetry_ContextCancelledDuringBackoff(t *testing.T) {
 // TestBackoffDuration_WithJitter covers the jitter branch in backoffDuration.
 func TestBackoffDuration_WithJitter(t *testing.T) {
 	// With jitter enabled the result must be in [0, backoff) where backoff = 100ms at attempt 0.
-	d := backoffDuration(0, 100*time.Millisecond, 5*time.Second, true)
+	d := sdkretry.BackoffDuration(0, 100*time.Millisecond, 5*time.Second, true)
 	if d < 0 || d >= 100*time.Millisecond {
 		t.Errorf("jittered backoff %v out of expected range [0, 100ms)", d)
 	}
@@ -88,7 +90,7 @@ func TestBackoffDuration_WithJitter(t *testing.T) {
 	// Run several times to confirm it's not always zero (probabilistic, but 0 has P=1/1e9).
 	nonZero := false
 	for range 20 {
-		if backoffDuration(0, 100*time.Millisecond, 5*time.Second, true) > 0 {
+		if sdkretry.BackoffDuration(0, 100*time.Millisecond, 5*time.Second, true) > 0 {
 			nonZero = true
 			break
 		}

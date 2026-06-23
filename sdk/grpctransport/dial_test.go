@@ -15,7 +15,7 @@ func TestDial_DefaultTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TODO: There is no test that verifies WithInsecure yields a plaintext
@@ -28,7 +28,7 @@ func TestDial_WithInsecure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 func TestDial_WithCustomCA(t *testing.T) {
@@ -37,7 +37,7 @@ func TestDial_WithCustomCA(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TestDial_DefaultKeepalive verifies that Dial succeeds with the default
@@ -49,7 +49,7 @@ func TestDial_DefaultKeepalive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial with default keepalive failed: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TestDial_WithKeepalive verifies that WithKeepalive overrides the defaults
@@ -67,7 +67,7 @@ func TestDial_WithKeepalive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial with custom keepalive failed: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TestDefaultKeepaliveParams verifies the exported default values match the

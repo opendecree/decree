@@ -3,6 +3,7 @@ package configwatcher
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -318,27 +319,27 @@ func TestWatcher_RegisterAfterStart(t *testing.T) {
 	if errAfter == nil {
 		t.Fatal("expected ErrStarted, got nil")
 	}
-	if errAfter != ErrStarted {
+	if !errors.Is(errAfter, ErrStarted) {
 		t.Errorf("got %v, want ErrStarted", errAfter)
 	}
 
 	// Verify all typed methods return ErrStarted after Start.
-	if _, e := w.Int("x", 0); e != ErrStarted {
+	if _, e := w.Int("x", 0); !errors.Is(e, ErrStarted) {
 		t.Errorf("Int: got %v, want ErrStarted", e)
 	}
-	if _, e := w.Float("x", 0); e != ErrStarted {
+	if _, e := w.Float("x", 0); !errors.Is(e, ErrStarted) {
 		t.Errorf("Float: got %v, want ErrStarted", e)
 	}
-	if _, e := w.Bool("x", false); e != ErrStarted {
+	if _, e := w.Bool("x", false); !errors.Is(e, ErrStarted) {
 		t.Errorf("Bool: got %v, want ErrStarted", e)
 	}
-	if _, e := w.Duration("x", 0); e != ErrStarted {
+	if _, e := w.Duration("x", 0); !errors.Is(e, ErrStarted) {
 		t.Errorf("Duration: got %v, want ErrStarted", e)
 	}
-	if _, e := w.Time("x", time.Time{}); e != ErrStarted {
+	if _, e := w.Time("x", time.Time{}); !errors.Is(e, ErrStarted) {
 		t.Errorf("Time: got %v, want ErrStarted", e)
 	}
-	if _, e := w.Raw("x", ""); e != ErrStarted {
+	if _, e := w.Raw("x", ""); !errors.Is(e, ErrStarted) {
 		t.Errorf("Raw: got %v, want ErrStarted", e)
 	}
 
@@ -1417,7 +1418,7 @@ func TestWatcher_StartAfterClose(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ErrClosed from Start after Close, got nil")
 	}
-	if err != ErrClosed {
+	if !errors.Is(err, ErrClosed) {
 		t.Errorf("got %v, want ErrClosed", err)
 	}
 

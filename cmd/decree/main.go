@@ -25,6 +25,14 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run executes the root command and returns the process exit code. Splitting
+// this out from main keeps the signal-context defer (stop()) and any future
+// deferred cleanup running before the process exits — os.Exit in main itself
+// would skip them (gocritic: exitAfterDefer).
+func run() int {
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		syscall.SIGINT,
@@ -34,8 +42,9 @@ func main() {
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 var rootCmd = &cobra.Command{
@@ -56,12 +65,12 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer conn.Close()
-		fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for server %s (timeout %s)...\n", flagServer, timeout)
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for server %s (timeout %s)...\n", flagServer, timeout)
 		if err := waitForServer(cmd.Context(), conn, timeout); err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Server ready.\n")
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Server ready.\n")
 		return nil
 	},
 }

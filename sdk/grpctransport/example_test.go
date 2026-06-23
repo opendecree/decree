@@ -13,7 +13,7 @@ func ExampleDial() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	fmt.Println("ok")
 	// Output: ok
 }
@@ -25,7 +25,7 @@ func ExampleDial_insecure() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	fmt.Println("ok")
 	// Output: ok
 }
@@ -36,7 +36,7 @@ func ExampleNewConfigClient() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, err = grpctransport.NewConfigClient(conn,
 		grpctransport.WithSubject("myapp"),
@@ -56,7 +56,7 @@ func ExampleNewAdminClient() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, err = grpctransport.NewAdminClient(conn,
 		grpctransport.WithSubject("admin"),
@@ -76,7 +76,7 @@ func ExampleNewWatcher() {
 		fmt.Println("error:", err)
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	_, err = grpctransport.NewWatcher(conn, "tenant-uuid",
 		grpctransport.WithSubject("myapp"),

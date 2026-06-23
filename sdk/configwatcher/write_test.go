@@ -44,7 +44,7 @@ func TestSetString_WritesAndUpdatesLocal(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if err := w.SetString(context.Background(), "app.env", "production"); err != nil {
 		t.Fatalf("SetString: %v", err)
@@ -84,7 +84,7 @@ func TestSetString_TransportError(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	err := w.SetString(context.Background(), "app.env", "production")
 	if err == nil {
@@ -112,7 +112,7 @@ func TestSetBool_WriteThroughOptions(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if err := w.SetBool(context.Background(), "app.debug", true,
 		WithDescription("enable debug"),

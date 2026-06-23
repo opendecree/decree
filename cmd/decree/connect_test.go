@@ -27,7 +27,7 @@ func TestDialServer_TLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dialServer (TLS path) unexpected error: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TestDialServer_TLS_NoWarning verifies that no warning is printed to stderr
@@ -53,7 +53,7 @@ func TestDialServer_TLS_NoWarning(t *testing.T) {
 	t.Cleanup(func() { os.Stderr = origStderr })
 
 	conn, dialErr := dialServer()
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
@@ -61,7 +61,7 @@ func TestDialServer_TLS_NoWarning(t *testing.T) {
 	if dialErr != nil {
 		t.Fatalf("dialServer (TLS path) unexpected error: %v", dialErr)
 	}
-	conn.Close()
+	_ = conn.Close()
 
 	if buf.Len() != 0 {
 		t.Errorf("expected no stderr output on TLS path, got: %q", buf.String())
@@ -85,7 +85,7 @@ func TestDialServer_Insecure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dialServer (insecure path) unexpected error: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 // TestDialServer_Insecure_PrintsWarning verifies that a warning is printed to
@@ -111,7 +111,7 @@ func TestDialServer_Insecure_PrintsWarning(t *testing.T) {
 	t.Cleanup(func() { os.Stderr = origStderr })
 
 	conn, dialErr := dialServer()
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
@@ -119,7 +119,7 @@ func TestDialServer_Insecure_PrintsWarning(t *testing.T) {
 	if dialErr != nil {
 		t.Fatalf("dialServer (insecure path) unexpected error: %v", dialErr)
 	}
-	conn.Close()
+	_ = conn.Close()
 
 	got := buf.String()
 	if !strings.Contains(got, "Warning") {
@@ -162,7 +162,7 @@ func TestResolveToken_TokenFile(t *testing.T) {
 		t.Fatalf("create temp: %v", err)
 	}
 	f.WriteString("  file-token\n") //nolint:errcheck
-	f.Close()
+	_ = f.Close()
 
 	flagToken = "ignored"
 	flagTokenFile = f.Name()

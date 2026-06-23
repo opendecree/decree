@@ -1000,12 +1000,12 @@ values: {}`},
 }
 
 func TestResult_Error(t *testing.T) {
-	r := &Result{}
+	r := &ResultError{}
 	if r.Error() != "" {
 		t.Error("expected empty error for valid result")
 	}
 
-	r.Violations = []Violation{
+	r.Violations = []ViolationError{
 		{FieldPath: "a", Message: "bad"},
 		{FieldPath: "b", Message: "worse"},
 	}
@@ -1016,7 +1016,7 @@ func TestResult_Error(t *testing.T) {
 }
 
 func TestViolation_Error_NoField(t *testing.T) {
-	v := Violation{Message: "global error"}
+	v := ViolationError{Message: "global error"}
 	if v.Error() != "global error" {
 		t.Errorf("unexpected: %q", v.Error())
 	}
@@ -1024,7 +1024,7 @@ func TestViolation_Error_NoField(t *testing.T) {
 
 // --- Helpers ---
 
-func assertViolation(t *testing.T, result *Result, field, msgSubstr string) {
+func assertViolation(t *testing.T, result *ResultError, field, msgSubstr string) {
 	t.Helper()
 	if result.IsValid() {
 		t.Fatalf("expected violation for %s containing %q, got valid", field, msgSubstr)

@@ -22,7 +22,7 @@ func TestWaitForServer_Healthy(t *testing.T) {
 	hs := health.NewServer()
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(srv, hs)
-	go srv.Serve(lis)
+	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
 	conn, err := grpc.NewClient(lis.Addr().String(),
@@ -31,7 +31,7 @@ func TestWaitForServer_Healthy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if err := waitForServer(context.Background(), conn, 5*time.Second); err != nil {
 		t.Fatalf("expected healthy server, got: %v", err)
@@ -46,7 +46,7 @@ func TestWaitForServer_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	err = waitForServer(context.Background(), conn, 2*time.Second)
 	if err == nil {
@@ -62,7 +62,7 @@ func TestWaitForServer_ParentCancel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
