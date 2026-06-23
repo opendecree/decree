@@ -6,6 +6,15 @@
 // _category_.json (sidebar label + position) and an index.mdx with that
 // group's fields. The tree drops directly into a Docusaurus docs/ folder.
 //
+// Schema-level cross-field validation rules ([docmodel.Schema.Validations])
+// render as a "## Validations" section on the index page (a rule can
+// reference fields across groups, so there is no single group page to put it
+// on). Each rule's CEL expression renders as an untagged fenced code block —
+// CEL isn't a Prism language, so tagging the fence would invite a wrong
+// language guess and mismatched-keyword highlighting — and its severity
+// (error/warning) renders via the same bracket-label admonition syntax as
+// the deprecation notice below.
+//
 // MDX v3 parses '{' and '<' as the start of a JSX expression or tag, so
 // every piece of schema-sourced text (descriptions, examples, enum values,
 // defaults, patterns, tags) must be neutralized before it reaches the
@@ -71,6 +80,8 @@ func indexPage(s docmodel.Schema, groups []fieldGroup) Page {
 	if s.Info != nil {
 		writeInfo(&b, s.Info)
 	}
+
+	writeValidations(&b, s.Validations)
 
 	fmt.Fprintln(&b, "## Groups")
 	fmt.Fprintln(&b)
@@ -307,6 +318,44 @@ func jsxStyle(css string) string {
 // MDX/JSX-adjacent span rather than a code span.
 func monoHeading(path string) string {
 	return fmt.Sprintf(`<span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>%s</span>`, escapeText(path))
+}
+
+// writeValidations renders the schema's cross-field CEL validation rules on
+// the index page (not per-group), since a rule may reference fields across
+// groups. Each rule renders as a list entry: the CEL expression as an
+// untagged fenced code block (CEL isn't a Prism language, so an untagged
+// fence avoids a wrong language guess and mismatched-keyword highlighting),
+// followed by the severity-distinguished message. Mirrors the md backend's
+// writeValidations/writeValidationMessage.
+func writeValidations(b *strings.Builder, validations []docmodel.Validation) {
+	if len(validations) == 0 {
+		return
+	}
+	fmt.Fprintln(b, "## Validations")
+	fmt.Fprintln(b)
+	for _, v := range validations {
+		fmt.Fprintln(b, "```")
+		fmt.Fprintln(b, v.Rule)
+		fmt.Fprintln(b, "```")
+		fmt.Fprintln(b)
+		writeValidationMessage(b, v)
+	}
+}
+
+// writeValidationMessage renders a validation's message with its severity
+// distinguished via the same bracket-label admonition mechanism
+// writeDeprecationNotice uses: ":::danger[Error]" for error severity,
+// ":::caution[Warning]" for warning (and the default, in case Severity is
+// unset or holds an unrecognized value).
+func writeValidationMessage(b *strings.Builder, v docmodel.Validation) {
+	admonition, label := "caution", "Warning"
+	if v.Severity == "error" {
+		admonition, label = "danger", "Error"
+	}
+	fmt.Fprintf(b, ":::%s[%s]\n", admonition, label)
+	fmt.Fprintf(b, "%s\n", escapeText(v.Message))
+	fmt.Fprintln(b, ":::")
+	fmt.Fprintln(b)
 }
 
 func writeDeprecationNotice(b *strings.Builder, f docmodel.Field) {
