@@ -29,10 +29,10 @@ package mdx
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/opendecree/decree/contrib/decree-docs/docmodel"
+	"github.com/opendecree/decree/contrib/decree-docs/internal/render"
 )
 
 // Page is one file in the rendered MDX tree.
@@ -46,26 +46,21 @@ type Page struct {
 
 // Render renders doc as a Docusaurus MDX doc tree.
 func Render(doc *docmodel.Document) ([]Page, error) {
-	groups := groupByPrefix(doc.Schema.Fields)
+	groups := render.GroupByPrefix(doc.Schema.Fields)
 
 	pages := make([]Page, 0, 1+2*len(groups))
 	pages = append(pages, indexPage(doc.Schema, groups))
 	for i, g := range groups {
 		position := i + 1
-		pages = append(pages, categoryFile(g.prefix, position))
+		pages = append(pages, categoryFile(g.Prefix, position))
 		pages = append(pages, groupPage(g))
 	}
 	return pages, nil
 }
 
-func indexPage(s docmodel.Schema, groups []fieldGroup) Page {
-	title := s.Name
-	if s.Info != nil && s.Info.Title != "" {
-		title = s.Info.Title
-	}
-
+func indexPage(s docmodel.Schema, groups []render.Group) Page {
 	var b strings.Builder
-	writeFrontmatter(&b, "index", title, "Overview", 0)
+	writeFrontmatter(&b, "index", render.Title(s), "Overview", 0)
 
 	if s.Description != "" {
 		fmt.Fprintf(&b, "%s\n\n", escapeText(s.Description))
@@ -87,10 +82,10 @@ func indexPage(s docmodel.Schema, groups []fieldGroup) Page {
 	fmt.Fprintln(&b)
 	for _, g := range groups {
 		noun := "fields"
-		if len(g.fields) == 1 {
+		if len(g.Fields) == 1 {
 			noun = "field"
 		}
-		fmt.Fprintf(&b, "- [%s](./%s/index) — %d %s\n", escapeText(g.prefix), g.prefix, len(g.fields), noun)
+		fmt.Fprintf(&b, "- [%s](./%s/index) — %d %s\n", escapeText(g.Prefix), g.Prefix, len(g.Fields), noun)
 	}
 	fmt.Fprintln(&b)
 
@@ -127,17 +122,17 @@ func categoryFile(prefix string, position int) Page {
 	return Page{Path: prefix + "/_category_.json", Content: content}
 }
 
-func groupPage(g fieldGroup) Page {
+func groupPage(g render.Group) Page {
 	var b strings.Builder
-	writeFrontmatter(&b, "index", g.prefix, g.prefix, 1)
-	for i, f := range g.fields {
+	writeFrontmatter(&b, "index", g.Prefix, g.Prefix, 1)
+	for i, f := range g.Fields {
 		if i > 0 {
 			fmt.Fprintln(&b, "---")
 			fmt.Fprintln(&b)
 		}
 		writeField(&b, f)
 	}
-	return Page{Path: g.prefix + "/index.mdx", Content: b.String()}
+	return Page{Path: g.Prefix + "/index.mdx", Content: b.String()}
 }
 
 func writeFrontmatter(b *strings.Builder, id, title, sidebarLabel string, position int) {
@@ -148,34 +143,6 @@ func writeFrontmatter(b *strings.Builder, id, title, sidebarLabel string, positi
 	fmt.Fprintf(b, "sidebar_position: %d\n", position)
 	fmt.Fprintln(b, "---")
 	fmt.Fprintln(b)
-}
-
-// --- Grouping ---
-
-type fieldGroup struct {
-	prefix string
-	fields []docmodel.Field
-}
-
-// groupByPrefix groups fields by their top-level path prefix. fields is
-// assumed sorted by path (docmodel guarantees this), so the first occurrence
-// of each prefix establishes deterministic group order.
-func groupByPrefix(fields []docmodel.Field) []fieldGroup {
-	var groups []fieldGroup
-	index := make(map[string]int)
-	for _, f := range fields {
-		prefix := f.Path
-		if i := strings.IndexByte(f.Path, '.'); i > 0 {
-			prefix = f.Path[:i]
-		}
-		if i, ok := index[prefix]; ok {
-			groups[i].fields = append(groups[i].fields, f)
-		} else {
-			index[prefix] = len(groups)
-			groups = append(groups, fieldGroup{prefix: prefix, fields: []docmodel.Field{f}})
-		}
-	}
-	return groups
 }
 
 // --- Fields ---
@@ -346,11 +313,14 @@ func writeValidations(b *strings.Builder, validations []docmodel.Validation) {
 // distinguished via the same bracket-label admonition mechanism
 // writeDeprecationNotice uses: ":::danger[Error]" for error severity,
 // ":::caution[Warning]" for warning (and the default, in case Severity is
-// unset or holds an unrecognized value).
+// unset or holds an unrecognized value). The canonical key from
+// [render.Severity] selects the admonition; mdx maps error onto Docusaurus's
+// "danger" and warning onto "caution".
 func writeValidationMessage(b *strings.Builder, v docmodel.Validation) {
-	admonition, label := "caution", "Warning"
-	if v.Severity == "error" {
-		admonition, label = "danger", "Error"
+	key, label := render.Severity(v.Severity)
+	admonition := "caution"
+	if key == "error" {
+		admonition = "danger"
 	}
 	fmt.Fprintf(b, ":::%s[%s]\n", admonition, label)
 	fmt.Fprintf(b, "%s\n", escapeText(v.Message))
@@ -378,11 +348,7 @@ func writeExamples(b *strings.Builder, f docmodel.Field) {
 		return
 	}
 
-	names := make([]string, 0, len(f.Examples))
-	for name := range f.Examples {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := render.SortedExampleNames(f)
 
 	fmt.Fprintln(b, "**Examples:**")
 	if f.Example != "" {
@@ -400,62 +366,34 @@ func writeExamples(b *strings.Builder, f docmodel.Field) {
 }
 
 func writeConstraints(b *strings.Builder, c *docmodel.Constraints) {
-	var lines []string
-	if c.Minimum != nil {
-		lines = append(lines, fmt.Sprintf("Minimum: %s", formatFloat(*c.Minimum)))
-	}
-	if c.Maximum != nil {
-		lines = append(lines, fmt.Sprintf("Maximum: %s", formatFloat(*c.Maximum)))
-	}
-	if c.ExclusiveMinimum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive minimum: %s", formatFloat(*c.ExclusiveMinimum)))
-	}
-	if c.ExclusiveMaximum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive maximum: %s", formatFloat(*c.ExclusiveMaximum)))
-	}
-	if c.MinLength != nil {
-		lines = append(lines, fmt.Sprintf("Min length: %d", *c.MinLength))
-	}
-	if c.MaxLength != nil {
-		lines = append(lines, fmt.Sprintf("Max length: %d", *c.MaxLength))
-	}
-	if c.Pattern != "" {
-		lines = append(lines, fmt.Sprintf("Pattern: %s", codeSpan(c.Pattern)))
-	}
-	if len(c.Enum) > 0 {
-		enum := make([]string, len(c.Enum))
-		for i, v := range c.Enum {
-			enum[i] = codeSpan(v)
-		}
-		lines = append(lines, fmt.Sprintf("Enum: %s", strings.Join(enum, ", ")))
-	}
-	if c.JSONSchema != "" {
-		lines = append(lines, "JSON Schema: (see schema definition)")
-	}
-	if len(c.AllowedSchemes) > 0 {
-		schemes := make([]string, len(c.AllowedSchemes))
-		for i, s := range c.AllowedSchemes {
-			schemes[i] = codeSpan(s)
-		}
-		lines = append(lines, fmt.Sprintf("Allowed schemes: %s", strings.Join(schemes, ", ")))
-	}
+	lines := render.Constraints(c)
 	if len(lines) == 0 {
 		return
 	}
 	fmt.Fprintln(b, "**Constraints:**")
-	for _, l := range lines {
-		fmt.Fprintf(b, "- %s\n", l)
+	for _, k := range lines {
+		fmt.Fprintf(b, "- %s: %s\n", k.Label, constraintValue(k))
 	}
 	fmt.Fprintln(b)
 }
 
-// formatFloat formats f for display, omitting the decimal point when the
-// value is a whole number (e.g. 1.0 -> "1", 1.5 -> "1.5").
-func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return strconv.FormatInt(int64(f), 10)
+// constraintValue formats a constraint value for MDX: regex patterns and
+// every list member run through codeSpan, since enum members and patterns
+// are schema-sourced and may contain MDX-special characters. Scalars are
+// numeric or fixed notes and render verbatim.
+func constraintValue(k render.Constraint) string {
+	switch k.Kind {
+	case render.CodeConstraint:
+		return codeSpan(k.Value)
+	case render.ListConstraint:
+		parts := make([]string, len(k.Values))
+		for i, v := range k.Values {
+			parts[i] = codeSpan(v)
+		}
+		return strings.Join(parts, ", ")
+	default:
+		return k.Value
 	}
-	return strconv.FormatFloat(f, 'g', -1, 64)
 }
 
 // --- Escaping ---

@@ -27,10 +27,10 @@ package markdown
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/opendecree/decree/contrib/decree-docs/docmodel"
+	"github.com/opendecree/decree/contrib/decree-docs/internal/render"
 )
 
 // Flavor selects the Markdown dialect Render emits.
@@ -75,7 +75,7 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 		return nil, fmt.Errorf("unknown flavor %q (valid flavors: %s, %s)", opts.Flavor, Plain, Material)
 	}
 
-	groups := groupByPrefix(doc.Schema.Fields)
+	groups := render.GroupByPrefix(doc.Schema.Fields)
 
 	switch opts.Pages {
 	case SinglePage, "":
@@ -83,8 +83,8 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 		writeHeader(&b, doc.Schema)
 		writeValidations(&b, doc.Schema.Validations, opts.Flavor)
 		for _, g := range groups {
-			fmt.Fprintf(&b, "## %s\n\n", g.prefix)
-			for _, f := range g.fields {
+			fmt.Fprintf(&b, "## %s\n\n", g.Prefix)
+			for _, f := range g.Fields {
 				writeField(&b, f, opts.Flavor)
 			}
 		}
@@ -93,11 +93,11 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 		pages := []Page{indexPage(doc.Schema, groups, opts.Flavor)}
 		for _, g := range groups {
 			var b strings.Builder
-			fmt.Fprintf(&b, "# %s\n\n", g.prefix)
-			for _, f := range g.fields {
+			fmt.Fprintf(&b, "# %s\n\n", g.Prefix)
+			for _, f := range g.Fields {
 				writeField(&b, f, opts.Flavor)
 			}
-			pages = append(pages, Page{Name: g.prefix, Content: b.String()})
+			pages = append(pages, Page{Name: g.Prefix, Content: b.String()})
 		}
 		return pages, nil
 	default:
@@ -105,7 +105,7 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 	}
 }
 
-func indexPage(s docmodel.Schema, groups []fieldGroup, flavor Flavor) Page {
+func indexPage(s docmodel.Schema, groups []render.Group, flavor Flavor) Page {
 	var b strings.Builder
 	writeHeader(&b, s)
 	writeValidations(&b, s.Validations, flavor)
@@ -113,21 +113,17 @@ func indexPage(s docmodel.Schema, groups []fieldGroup, flavor Flavor) Page {
 	fmt.Fprintln(&b)
 	for _, g := range groups {
 		noun := "fields"
-		if len(g.fields) == 1 {
+		if len(g.Fields) == 1 {
 			noun = "field"
 		}
-		fmt.Fprintf(&b, "- [%s](%s.md) — %d %s\n", g.prefix, g.prefix, len(g.fields), noun)
+		fmt.Fprintf(&b, "- [%s](%s.md) — %d %s\n", g.Prefix, g.Prefix, len(g.Fields), noun)
 	}
 	fmt.Fprintln(&b)
 	return Page{Name: "index", Content: b.String()}
 }
 
 func writeHeader(b *strings.Builder, s docmodel.Schema) {
-	title := s.Name
-	if s.Info != nil && s.Info.Title != "" {
-		title = s.Info.Title
-	}
-	fmt.Fprintf(b, "# %s\n\n", title)
+	fmt.Fprintf(b, "# %s\n\n", render.Title(s))
 	if s.Description != "" {
 		fmt.Fprintf(b, "%s\n\n", s.Description)
 	}
@@ -165,34 +161,6 @@ func writeInfo(b *strings.Builder, info *docmodel.Info) {
 		sort.Strings(labels)
 		fmt.Fprintf(b, "**Labels:** %s\n\n", strings.Join(labels, ", "))
 	}
-}
-
-// --- Grouping ---
-
-type fieldGroup struct {
-	prefix string
-	fields []docmodel.Field
-}
-
-// groupByPrefix groups fields by their top-level path prefix. fields is
-// assumed sorted by path (docmodel guarantees this), so the first occurrence
-// of each prefix establishes deterministic group order.
-func groupByPrefix(fields []docmodel.Field) []fieldGroup {
-	var groups []fieldGroup
-	index := make(map[string]int)
-	for _, f := range fields {
-		prefix := f.Path
-		if i := strings.IndexByte(f.Path, '.'); i > 0 {
-			prefix = f.Path[:i]
-		}
-		if i, ok := index[prefix]; ok {
-			groups[i].fields = append(groups[i].fields, f)
-		} else {
-			index[prefix] = len(groups)
-			groups = append(groups, fieldGroup{prefix: prefix, fields: []docmodel.Field{f}})
-		}
-	}
-	return groups
 }
 
 // --- Fields ---
@@ -326,14 +294,10 @@ func writeValidations(b *strings.Builder, validations []docmodel.Validation, fla
 
 // writeValidationMessage renders a validation's message with its severity
 // visually distinguished, mirroring writeDeprecationNotice's admonition
-// (material) / blockquote (plain) pattern.
+// (material) / blockquote (plain) pattern. The canonical severity key from
+// [render.Severity] doubles as the material admonition type.
 func writeValidationMessage(b *strings.Builder, v docmodel.Validation, flavor Flavor) {
-	label := "Warning"
-	admonition := "warning"
-	if v.Severity == "error" {
-		label = "Error"
-		admonition = "error"
-	}
+	admonition, label := render.Severity(v.Severity)
 	if flavor == Material {
 		fmt.Fprintf(b, "!!! %s %q\n", admonition, label)
 		fmt.Fprintf(b, "    %s\n\n", v.Message)
@@ -350,11 +314,7 @@ func writeExamples(b *strings.Builder, f docmodel.Field, flavor Flavor) {
 		return
 	}
 
-	names := make([]string, 0, len(f.Examples))
-	for name := range f.Examples {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := render.SortedExampleNames(f)
 
 	if flavor == Material && len(names) >= 2 {
 		fmt.Fprintln(b, "**Examples:**")
@@ -384,52 +344,27 @@ func writeExamples(b *strings.Builder, f docmodel.Field, flavor Flavor) {
 }
 
 func writeConstraints(b *strings.Builder, c *docmodel.Constraints) {
-	var lines []string
-	if c.Minimum != nil {
-		lines = append(lines, fmt.Sprintf("Minimum: %s", formatFloat(*c.Minimum)))
-	}
-	if c.Maximum != nil {
-		lines = append(lines, fmt.Sprintf("Maximum: %s", formatFloat(*c.Maximum)))
-	}
-	if c.ExclusiveMinimum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive minimum: %s", formatFloat(*c.ExclusiveMinimum)))
-	}
-	if c.ExclusiveMaximum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive maximum: %s", formatFloat(*c.ExclusiveMaximum)))
-	}
-	if c.MinLength != nil {
-		lines = append(lines, fmt.Sprintf("Min length: %d", *c.MinLength))
-	}
-	if c.MaxLength != nil {
-		lines = append(lines, fmt.Sprintf("Max length: %d", *c.MaxLength))
-	}
-	if c.Pattern != "" {
-		lines = append(lines, fmt.Sprintf("Pattern: `%s`", c.Pattern))
-	}
-	if len(c.Enum) > 0 {
-		lines = append(lines, fmt.Sprintf("Enum: %s", strings.Join(c.Enum, ", ")))
-	}
-	if c.JSONSchema != "" {
-		lines = append(lines, "JSON Schema: (see schema definition)")
-	}
-	if len(c.AllowedSchemes) > 0 {
-		lines = append(lines, fmt.Sprintf("Allowed schemes: %s", strings.Join(c.AllowedSchemes, ", ")))
-	}
+	lines := render.Constraints(c)
 	if len(lines) == 0 {
 		return
 	}
 	fmt.Fprintln(b, "**Constraints:**")
-	for _, l := range lines {
-		fmt.Fprintf(b, "- %s\n", l)
+	for _, k := range lines {
+		fmt.Fprintf(b, "- %s: %s\n", k.Label, constraintValue(k))
 	}
 	fmt.Fprintln(b)
 }
 
-// formatFloat formats f for display, omitting the decimal point when the
-// value is a whole number (e.g. 1.0 -> "1", 1.5 -> "1.5").
-func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return strconv.FormatInt(int64(f), 10)
+// constraintValue formats a constraint value for Markdown: a regex pattern
+// renders as a code span, list values join with commas, and scalars render
+// verbatim.
+func constraintValue(k render.Constraint) string {
+	switch k.Kind {
+	case render.CodeConstraint:
+		return fmt.Sprintf("`%s`", k.Value)
+	case render.ListConstraint:
+		return strings.Join(k.Values, ", ")
+	default:
+		return k.Value
 	}
-	return strconv.FormatFloat(f, 'g', -1, 64)
 }

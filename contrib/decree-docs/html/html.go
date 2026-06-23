@@ -17,11 +17,10 @@ package html
 import (
 	"fmt"
 	"html/template"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/opendecree/decree/contrib/decree-docs/docmodel"
+	"github.com/opendecree/decree/contrib/decree-docs/internal/render"
 )
 
 // Theme selects the built-in color scheme baked into the document.
@@ -58,9 +57,9 @@ func Render(doc *docmodel.Document, opts Options) (string, error) {
 		return "", fmt.Errorf("unknown theme %q (valid themes: %s, %s, %s)", theme, Light, Dark, Auto)
 	}
 
-	groups := groupByPrefix(doc.Schema.Fields)
+	groups := render.GroupByPrefix(doc.Schema.Fields)
 	page := pageView{
-		Title:       schemaTitle(doc.Schema),
+		Title:       render.Title(doc.Schema),
 		Sub:         schemaSubtitle(doc.Schema),
 		Groups:      make([]groupView, 0, len(groups)),
 		CSS:         template.CSS(buildCSS(theme, opts.CSS)),
@@ -69,8 +68,8 @@ func Render(doc *docmodel.Document, opts Options) (string, error) {
 		Validations: newValidationViews(doc.Schema.Validations),
 	}
 	for _, g := range groups {
-		gv := groupView{Prefix: g.prefix}
-		for _, f := range g.fields {
+		gv := groupView{Prefix: g.Prefix}
+		for _, f := range g.Fields {
 			gv.Fields = append(gv.Fields, newFieldView(f))
 		}
 		page.Groups = append(page.Groups, gv)
@@ -81,13 +80,6 @@ func Render(doc *docmodel.Document, opts Options) (string, error) {
 		return "", fmt.Errorf("render html: %w", err)
 	}
 	return b.String(), nil
-}
-
-func schemaTitle(s docmodel.Schema) string {
-	if s.Info != nil && s.Info.Title != "" {
-		return s.Info.Title
-	}
-	return s.Name
 }
 
 func schemaSubtitle(s docmodel.Schema) string {
@@ -107,34 +99,6 @@ func countTypes(fields []docmodel.Field) int {
 		seen[f.Type] = struct{}{}
 	}
 	return len(seen)
-}
-
-// --- Grouping ---
-
-type fieldGroup struct {
-	prefix string
-	fields []docmodel.Field
-}
-
-// groupByPrefix groups fields by their top-level path prefix. fields is
-// assumed sorted by path (docmodel guarantees this), so the first
-// occurrence of each prefix establishes deterministic group order.
-func groupByPrefix(fields []docmodel.Field) []fieldGroup {
-	var groups []fieldGroup
-	index := make(map[string]int)
-	for _, f := range fields {
-		prefix := f.Path
-		if i := strings.IndexByte(f.Path, '.'); i > 0 {
-			prefix = f.Path[:i]
-		}
-		if i, ok := index[prefix]; ok {
-			groups[i].fields = append(groups[i].fields, f)
-		} else {
-			index[prefix] = len(groups)
-			groups = append(groups, fieldGroup{prefix: prefix, fields: []docmodel.Field{f}})
-		}
-	}
-	return groups
 }
 
 // --- View model ---
@@ -183,10 +147,7 @@ func newValidationViews(validations []docmodel.Validation) []validationView {
 	}
 	out := make([]validationView, 0, len(validations))
 	for _, v := range validations {
-		severity, label := "warning", "Warning"
-		if v.Severity == "error" {
-			severity, label = "error", "Error"
-		}
+		severity, label := render.Severity(v.Severity)
 		out = append(out, validationView{
 			Rule:     v.Rule,
 			Message:  v.Message,
@@ -226,16 +187,9 @@ func newFieldView(f docmodel.Field) fieldView {
 	if f.Example != "" {
 		fv.Examples = append(fv.Examples, exampleView{Value: f.Example})
 	}
-	if len(f.Examples) > 0 {
-		names := make([]string, 0, len(f.Examples))
-		for name := range f.Examples {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			ex := f.Examples[name]
-			fv.Examples = append(fv.Examples, exampleView{Name: name, Value: ex.Value, Summary: ex.Summary})
-		}
+	for _, name := range render.SortedExampleNames(f) {
+		ex := f.Examples[name]
+		fv.Examples = append(fv.Examples, exampleView{Name: name, Value: ex.Value, Summary: ex.Summary})
 	}
 
 	fv.Constraints = constraintLines(f.Constraints)
@@ -243,48 +197,17 @@ func newFieldView(f docmodel.Field) fieldView {
 }
 
 func constraintLines(c *docmodel.Constraints) []string {
-	if c == nil {
+	cs := render.Constraints(c)
+	if len(cs) == 0 {
 		return nil
 	}
-	var lines []string
-	if c.Minimum != nil {
-		lines = append(lines, fmt.Sprintf("Minimum: %s", formatFloat(*c.Minimum)))
-	}
-	if c.Maximum != nil {
-		lines = append(lines, fmt.Sprintf("Maximum: %s", formatFloat(*c.Maximum)))
-	}
-	if c.ExclusiveMinimum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive minimum: %s", formatFloat(*c.ExclusiveMinimum)))
-	}
-	if c.ExclusiveMaximum != nil {
-		lines = append(lines, fmt.Sprintf("Exclusive maximum: %s", formatFloat(*c.ExclusiveMaximum)))
-	}
-	if c.MinLength != nil {
-		lines = append(lines, fmt.Sprintf("Min length: %d", *c.MinLength))
-	}
-	if c.MaxLength != nil {
-		lines = append(lines, fmt.Sprintf("Max length: %d", *c.MaxLength))
-	}
-	if c.Pattern != "" {
-		lines = append(lines, fmt.Sprintf("Pattern: %s", c.Pattern))
-	}
-	if len(c.Enum) > 0 {
-		lines = append(lines, fmt.Sprintf("Enum: %s", strings.Join(c.Enum, ", ")))
-	}
-	if c.JSONSchema != "" {
-		lines = append(lines, "JSON Schema: (see schema definition)")
-	}
-	if len(c.AllowedSchemes) > 0 {
-		lines = append(lines, fmt.Sprintf("Allowed schemes: %s", strings.Join(c.AllowedSchemes, ", ")))
+	lines := make([]string, len(cs))
+	for i, k := range cs {
+		if k.Kind == render.ListConstraint {
+			lines[i] = fmt.Sprintf("%s: %s", k.Label, strings.Join(k.Values, ", "))
+		} else {
+			lines[i] = fmt.Sprintf("%s: %s", k.Label, k.Value)
+		}
 	}
 	return lines
-}
-
-// formatFloat formats f for display, omitting the decimal point when the
-// value is a whole number (e.g. 1.0 -> "1", 1.5 -> "1.5").
-func formatFloat(f float64) string {
-	if f == float64(int64(f)) {
-		return strconv.FormatInt(int64(f), 10)
-	}
-	return strconv.FormatFloat(f, 'g', -1, 64)
 }
