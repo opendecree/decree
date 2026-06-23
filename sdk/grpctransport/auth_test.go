@@ -98,7 +98,7 @@ func TestInsecureConn_WithBearerToken_RPCRejected(t *testing.T) {
 	srv := grpc.NewServer()
 	pb.RegisterConfigServiceServer(srv, &pb.UnimplementedConfigServiceServer{})
 	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(func() { srv.Stop(); lis.Close() })
+	t.Cleanup(func() { srv.Stop(); _ = lis.Close() })
 
 	// Dial with insecure credentials (no TLS).
 	clientConn, err := grpc.NewClient(
@@ -111,7 +111,7 @@ func TestInsecureConn_WithBearerToken_RPCRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("grpc.NewClient: %v", err)
 	}
-	t.Cleanup(func() { clientConn.Close() })
+	t.Cleanup(func() { _ = clientConn.Close() })
 
 	transport, err := grpctransport.NewConfigTransport(clientConn,
 		grpctransport.WithBearerToken("super-secret-jwt"),

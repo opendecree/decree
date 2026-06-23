@@ -222,8 +222,8 @@ func ExampleWithAuditTenant() {
 		fmt.Println("error:", err)
 		return
 	}
-	fmt.Println(len(entries) >= 0)
-	// Output: true
+	fmt.Println("queried", len(entries), "entries without error")
+	// Output: queried 0 entries without error
 }
 
 func ExampleClient_QueryWriteLog() {
@@ -238,8 +238,8 @@ func ExampleClient_QueryWriteLog() {
 		fmt.Println("error:", err)
 		return
 	}
-	fmt.Println(len(entries) >= 0)
-	// Output: true
+	fmt.Println("queried", len(entries), "entries without error")
+	// Output: queried 0 entries without error
 }
 
 func ExampleClient_VerifyChain() {

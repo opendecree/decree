@@ -44,7 +44,7 @@ func newServerTransportWithStub(t *testing.T, stub pb.ServerServiceServer) *grpc
 	srv := grpc.NewServer()
 	pb.RegisterServerServiceServer(srv, stub)
 	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(func() { srv.Stop(); lis.Close() })
+	t.Cleanup(func() { srv.Stop(); _ = lis.Close() })
 
 	cc, err := grpc.NewClient(
 		"passthrough:///bufconn",
@@ -56,7 +56,7 @@ func newServerTransportWithStub(t *testing.T, stub pb.ServerServiceServer) *grpc
 	if err != nil {
 		t.Fatalf("grpc.NewClient: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	t.Cleanup(func() { _ = cc.Close() })
 
 	return grpctransport.NewServerTransport(cc)
 }

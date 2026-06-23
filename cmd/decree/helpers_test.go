@@ -62,7 +62,7 @@ func TestPrintOutput_JSON(t *testing.T) {
 	t.Cleanup(func() { os.Stdout = origStdout })
 
 	err := printOutput(map[string]string{"k": "v"})
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
@@ -86,7 +86,7 @@ func TestPrintOutput_YAML(t *testing.T) {
 	t.Cleanup(func() { os.Stdout = origStdout })
 
 	err := printOutput(map[string]string{"k": "v"})
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
@@ -110,7 +110,7 @@ func TestPrintOutput_Table(t *testing.T) {
 	t.Cleanup(func() { os.Stdout = origStdout })
 
 	err := printOutput([][]string{{"HEADER"}, {"row"}})
-	w.Close()
+	_ = w.Close()
 
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck

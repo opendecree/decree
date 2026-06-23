@@ -160,11 +160,11 @@ var auditUnusedCmd = &cobra.Command{
 // non-nil error when breaks are found so that the CLI exits non-zero.
 func printVerifyResult(w io.Writer, result adminclient.VerifyChainResult) error {
 	if result.OK {
-		fmt.Fprintf(w, "OK — %d entries, chain intact\n", result.Total)
+		_, _ = fmt.Fprintf(w, "OK — %d entries, chain intact\n", result.Total)
 		return nil
 	}
 
-	fmt.Fprintf(w, "FAIL — %d breaks in %d entries\n", len(result.Breaks), result.Total)
+	_, _ = fmt.Fprintf(w, "FAIL — %d breaks in %d entries\n", len(result.Breaks), result.Total)
 	rows := tableRows([]string{"POSITION", "ENTRY_ID", "GOT", "WANT"})
 	for _, b := range result.Breaks {
 		got := b.Got

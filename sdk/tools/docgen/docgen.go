@@ -217,16 +217,17 @@ func writeSchemaInfo(b *strings.Builder, info *SchemaInfo) {
 		fmt.Fprintf(b, "**Author:** %s\n\n", info.Author)
 	}
 	if info.Contact != nil {
-		if info.Contact.Email != "" {
+		switch {
+		case info.Contact.Email != "":
 			fmt.Fprintf(b, "**Contact:** %s <%s>\n\n", info.Contact.Name, info.Contact.Email)
-		} else if info.Contact.URL != "" {
+		case info.Contact.URL != "":
 			fmt.Fprintf(b, "**Contact:** [%s](%s)\n\n", info.Contact.Name, info.Contact.URL)
-		} else if info.Contact.Name != "" {
+		case info.Contact.Name != "":
 			fmt.Fprintf(b, "**Contact:** %s\n\n", info.Contact.Name)
 		}
 	}
 	if len(info.Labels) > 0 {
-		var labels []string
+		labels := make([]string, 0, len(info.Labels))
 		for k, v := range info.Labels {
 			labels = append(labels, fmt.Sprintf("`%s: %s`", k, v))
 		}

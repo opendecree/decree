@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
 
 func TestRetry_NoRetryByDefault(t *testing.T) {
@@ -169,29 +171,29 @@ func TestRetryConfig_PreservesCustomValues(t *testing.T) {
 }
 
 func TestBackoffDuration(t *testing.T) {
-	b0 := backoffDuration(0, 100*time.Millisecond, 5*time.Second, false)
+	b0 := sdkretry.BackoffDuration(0, 100*time.Millisecond, 5*time.Second, false)
 	if b0 != 100*time.Millisecond {
 		t.Errorf("got %v, want %v", b0, 100*time.Millisecond)
 	}
 
-	b1 := backoffDuration(1, 100*time.Millisecond, 5*time.Second, false)
+	b1 := sdkretry.BackoffDuration(1, 100*time.Millisecond, 5*time.Second, false)
 	if b1 != 200*time.Millisecond {
 		t.Errorf("got %v, want %v", b1, 200*time.Millisecond)
 	}
 
-	b2 := backoffDuration(2, 100*time.Millisecond, 5*time.Second, false)
+	b2 := sdkretry.BackoffDuration(2, 100*time.Millisecond, 5*time.Second, false)
 	if b2 != 400*time.Millisecond {
 		t.Errorf("got %v, want %v", b2, 400*time.Millisecond)
 	}
 
-	b10 := backoffDuration(10, 100*time.Millisecond, 5*time.Second, false)
+	b10 := sdkretry.BackoffDuration(10, 100*time.Millisecond, 5*time.Second, false)
 	if b10 != 5*time.Second {
 		t.Errorf("got %v, want %v", b10, 5*time.Second)
 	}
 }
 
 func TestBackoffDuration_WithJitter(t *testing.T) {
-	b := backoffDuration(2, 100*time.Millisecond, 5*time.Second, true)
+	b := sdkretry.BackoffDuration(2, 100*time.Millisecond, 5*time.Second, true)
 	if b >= 400*time.Millisecond {
 		t.Errorf("got %v, want < %v", b, 400*time.Millisecond)
 	}

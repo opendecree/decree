@@ -44,7 +44,7 @@ func TestNewGroup_FillAllTypes(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	var cfg Config
 	if err := g.Fill(&cfg); err != nil {

@@ -2,7 +2,6 @@ package adminclient
 
 import (
 	"context"
-	"time"
 
 	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
@@ -15,10 +14,4 @@ type RetryConfig = sdkretry.Config
 // Only idempotent operations (reads: List*, Get*) should be wrapped with retry.
 func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (T, error)) (T, error) {
 	return sdkretry.Run(ctx, c.opts.retryEnabled, c.opts.retry, fn)
-}
-
-// backoffDuration computes exponential backoff with optional jitter.
-// Exposed for tests.
-func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
-	return sdkretry.BackoffDuration(attempt, initial, max, jitter)
 }

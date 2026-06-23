@@ -152,10 +152,6 @@ func TestApplyAuth_TokenSource_TakesPrecedenceOverBearerToken(t *testing.T) {
 		t.Fatalf("expected 1 call option, got %d", len(callOpts))
 	}
 	// Verify the credential resolves the tokenSource token (not the static one).
-	// Extract the PerRPCCredentials from the call option by casting via interface.
-	type perRPCOption interface {
-		GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error)
-	}
 	// The call option wraps credentials; test it indirectly by verifying only
 	// one call option is returned (correct path taken).
 	_ = callOpts[0]

@@ -288,44 +288,45 @@ func computeClientHash(previousHash string, e *AuditEntry) string {
 	h := sha256.New()
 	if e.ChainEpoch == 0 {
 		// Epoch 0: structural fields only (legacy, backward compat).
-		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
+		// hash.Hash.Write/Fprintf never return an error per the hash.Hash contract.
+		_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d",
 			previousHash, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt.UnixNano())
 		return hex.EncodeToString(h.Sum(nil))
 	}
 	// Epoch 1+: structural fields followed by payload fields.
 	// Mirrors internal/audit.ComputeEntryHash epoch-1 logic exactly.
-	fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00",
 		previousHash, e.ID, e.TenantID, e.Actor, e.Action, e.ObjectKind, e.CreatedAt.UnixNano())
 	writeNullableStr(h, e.FieldPath)
 	writeNullableStr(h, e.OldValue)
 	writeNullableStr(h, e.NewValue)
 	writeNullableI32(h, e.ConfigVersion)
 	if len(e.Metadata) == 0 {
-		h.Write([]byte{0x00})
+		_, _ = h.Write([]byte{0x00})
 	} else {
 		// Metadata is hashed as sorted JSON to produce a deterministic encoding
 		// that matches the server's encoding of the JSONB bytes.
-		h.Write([]byte{0x01})
+		_, _ = h.Write([]byte{0x01})
 		b, _ := marshalSortedJSON(e.Metadata)
-		fmt.Fprint(h, hex.EncodeToString(b))
+		_, _ = fmt.Fprint(h, hex.EncodeToString(b))
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
 func writeNullableStr(h interface{ Write([]byte) (int, error) }, s string) {
 	if s == "" {
-		h.Write([]byte{0x00})
+		_, _ = h.Write([]byte{0x00})
 	} else {
-		h.Write([]byte{0x01})
-		fmt.Fprintf(h, "%s\x00", s)
+		_, _ = h.Write([]byte{0x01})
+		_, _ = fmt.Fprintf(h, "%s\x00", s)
 	}
 }
 
 func writeNullableI32(h interface{ Write([]byte) (int, error) }, v *int32) {
 	if v == nil {
-		h.Write([]byte{0x00})
+		_, _ = h.Write([]byte{0x00})
 	} else {
-		fmt.Fprintf(h, "\x01%d\x00", *v)
+		_, _ = fmt.Fprintf(h, "\x01%d\x00", *v)
 	}
 }
 

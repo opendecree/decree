@@ -383,7 +383,7 @@ func TestRetryableError(t *testing.T) {
 	if re.Error() != "unavailable" {
 		t.Errorf("Error(): got %v, want unavailable", re.Error())
 	}
-	if re.Unwrap() != inner {
+	if !errors.Is(re.Unwrap(), inner) {
 		t.Errorf("Unwrap(): got %v, want %v", re.Unwrap(), inner)
 	}
 }

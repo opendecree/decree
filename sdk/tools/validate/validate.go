@@ -136,33 +136,33 @@ func Strict() Option {
 	return func(o *options) { o.strict = true }
 }
 
-// --- Result ---
+// --- ResultError ---
 
-// Violation describes a single validation error.
-type Violation struct {
+// ViolationError describes a single validation error.
+type ViolationError struct {
 	FieldPath string
 	Message   string
 }
 
-func (v Violation) Error() string {
+func (v ViolationError) Error() string {
 	if v.FieldPath != "" {
 		return fmt.Sprintf("%s: %s", v.FieldPath, v.Message)
 	}
 	return v.Message
 }
 
-// Result holds all validation violations.
-type Result struct {
-	Violations []Violation
+// ResultError holds all validation violations.
+type ResultError struct {
+	Violations []ViolationError
 }
 
 // IsValid returns true if there are no violations.
-func (r *Result) IsValid() bool {
+func (r *ResultError) IsValid() bool {
 	return len(r.Violations) == 0
 }
 
 // Error returns a multi-line summary of all violations.
-func (r *Result) Error() string {
+func (r *ResultError) Error() string {
 	if r.IsValid() {
 		return ""
 	}
@@ -176,8 +176,8 @@ func (r *Result) Error() string {
 	return b.String()
 }
 
-func (r *Result) add(fieldPath, msg string) {
-	r.Violations = append(r.Violations, Violation{FieldPath: fieldPath, Message: msg})
+func (r *ResultError) add(fieldPath, msg string) {
+	r.Violations = append(r.Violations, ViolationError{FieldPath: fieldPath, Message: msg})
 }
 
 // --- Public API ---
@@ -214,7 +214,7 @@ func ParseSchema(data []byte) (*SchemaFile, error) {
 			if err != nil {
 				return nil, fmt.Errorf("field %s: invalid default: %w", path, err)
 			}
-			r := &Result{}
+			r := &ResultError{}
 			validateValue(r, path, dv, f)
 			if !r.IsValid() {
 				return nil, fmt.Errorf("field %s: default %q violates constraints: %s", path, f.Default, r.Error())
@@ -241,7 +241,7 @@ func ParseConfig(data []byte) (*ConfigFile, error) {
 
 // Validate checks a config file against a schema file.
 // Both are provided as raw YAML bytes.
-func Validate(schemaYAML, configYAML []byte, opts ...Option) (*Result, error) {
+func Validate(schemaYAML, configYAML []byte, opts ...Option) (*ResultError, error) {
 	schema, err := ParseSchema(schemaYAML)
 	if err != nil {
 		return nil, fmt.Errorf("schema: %w", err)
@@ -255,13 +255,13 @@ func Validate(schemaYAML, configYAML []byte, opts ...Option) (*Result, error) {
 }
 
 // ValidateParsed checks a parsed config against a parsed schema.
-func ValidateParsed(schema *SchemaFile, config *ConfigFile, opts ...Option) *Result {
+func ValidateParsed(schema *SchemaFile, config *ConfigFile, opts ...Option) *ResultError {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 
-	result := &Result{}
+	result := &ResultError{}
 
 	// Sort paths for deterministic output.
 	configPaths := sortedKeys(config.Values)
@@ -282,7 +282,7 @@ func ValidateParsed(schema *SchemaFile, config *ConfigFile, opts ...Option) *Res
 }
 
 // ValidateFiles is a convenience that reads files from disk.
-func ValidateFiles(schemaPath, configPath string, opts ...Option) (*Result, error) {
+func ValidateFiles(schemaPath, configPath string, opts ...Option) (*ResultError, error) {
 	schemaData, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading schema file: %w", err)
@@ -296,7 +296,7 @@ func ValidateFiles(schemaPath, configPath string, opts ...Option) (*Result, erro
 
 // --- Validation logic ---
 
-func validateValue(result *Result, path string, value any, fd FieldDef) {
+func validateValue(result *ResultError, path string, value any, fd FieldDef) {
 	if value == nil {
 		if !fd.Nullable {
 			result.add(path, "null value for non-nullable field")
@@ -338,7 +338,7 @@ func validateValue(result *Result, path string, value any, fd FieldDef) {
 	}
 }
 
-func validateInteger(result *Result, path string, value any, c *ConstraintsDef) bool {
+func validateInteger(result *ResultError, path string, value any, c *ConstraintsDef) bool {
 	var n float64
 	switch v := value.(type) {
 	case int:
@@ -365,7 +365,7 @@ func validateInteger(result *Result, path string, value any, c *ConstraintsDef) 
 	return true
 }
 
-func validateNumber(result *Result, path string, value any, c *ConstraintsDef) bool {
+func validateNumber(result *ResultError, path string, value any, c *ConstraintsDef) bool {
 	var n float64
 	switch v := value.(type) {
 	case int:
@@ -392,7 +392,7 @@ func validateNumber(result *Result, path string, value any, c *ConstraintsDef) b
 	return true
 }
 
-func validateString(result *Result, path string, value any, c *ConstraintsDef) bool {
+func validateString(result *ResultError, path string, value any, c *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected string, got %T", value))
@@ -418,7 +418,7 @@ func validateString(result *Result, path string, value any, c *ConstraintsDef) b
 	return true
 }
 
-func validateBool(result *Result, path string, value any) bool {
+func validateBool(result *ResultError, path string, value any) bool {
 	if _, ok := value.(bool); !ok {
 		result.add(path, fmt.Sprintf("expected bool, got %T", value))
 		return false
@@ -426,7 +426,7 @@ func validateBool(result *Result, path string, value any) bool {
 	return true
 }
 
-func validateStringType(result *Result, path string, value any, typeName string) bool {
+func validateStringType(result *ResultError, path string, value any, typeName string) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected %s (string), got %T", typeName, value))
@@ -440,7 +440,7 @@ func validateStringType(result *Result, path string, value any, typeName string)
 	return true
 }
 
-func validateDuration(result *Result, path string, value any, _ *ConstraintsDef) bool {
+func validateDuration(result *ResultError, path string, value any, _ *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected duration (string), got %T", value))
@@ -454,7 +454,7 @@ func validateDuration(result *Result, path string, value any, _ *ConstraintsDef)
 	return true
 }
 
-func validateURL(result *Result, path string, value any, c *ConstraintsDef) bool {
+func validateURL(result *ResultError, path string, value any, c *ConstraintsDef) bool {
 	s, ok := value.(string)
 	if !ok {
 		result.add(path, fmt.Sprintf("expected url (string), got %T", value))
@@ -479,7 +479,7 @@ func validateURL(result *Result, path string, value any, c *ConstraintsDef) bool
 	return true
 }
 
-func validateJSON(result *Result, path string, value any, c *ConstraintsDef) {
+func validateJSON(result *ResultError, path string, value any, c *ConstraintsDef) {
 	var jsonStr string
 	switch v := value.(type) {
 	case string:
@@ -529,7 +529,7 @@ func validateJSON(result *Result, path string, value any, c *ConstraintsDef) {
 	}
 }
 
-func validateEnum(result *Result, path string, value any, enum []string) {
+func validateEnum(result *ResultError, path string, value any, enum []string) {
 	s := stringifyForEnum(value)
 	for _, e := range enum {
 		if s == e {
@@ -539,7 +539,7 @@ func validateEnum(result *Result, path string, value any, enum []string) {
 	result.add(path, fmt.Sprintf("value %q is not in enum %v", s, enum))
 }
 
-func validateNumericConstraints(result *Result, path string, n float64, c *ConstraintsDef) {
+func validateNumericConstraints(result *ResultError, path string, n float64, c *ConstraintsDef) {
 	if c.Minimum != nil && n < *c.Minimum {
 		result.add(path, fmt.Sprintf("value %s is less than minimum %s", format.Float(n), format.Float(*c.Minimum)))
 	}

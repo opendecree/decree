@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"slices"
@@ -376,8 +377,8 @@ func TestMain_PrintsErrorBeforeExit(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected child process to exit non-zero, got nil error")
 	}
-	exitErr, ok := err.(*exec.ExitError)
-	if !ok {
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatalf("expected *exec.ExitError, got %T: %v", err, err)
 	}
 	if got := exitErr.ExitCode(); got != 1 {

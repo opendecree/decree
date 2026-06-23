@@ -230,6 +230,17 @@ jobs:
       - name: Go format check
         run: golangci-lint fmt --diff
 
+      - name: Go lint (contrib + SDK modules + CLI)
+        # golangci-lint-action only lints the root module's working directory.
+        # Loop over the same module list used by `make test`/`build`/`vet` so
+        # contrib/decree-docs, the SDK modules, and cmd/decree are covered too.
+        run: |
+          for mod in sdk/retry sdk/configclient sdk/adminclient sdk/configwatcher sdk/grpctransport sdk/tools sdk/contrib/viper sdk/contrib/envconfig sdk/contrib/koanf contrib/decree-docs cmd/decree; do
+            echo "::group::golangci-lint: $mod"
+            (cd "$mod" && golangci-lint run ./... && golangci-lint fmt --diff)
+            echo "::endgroup::"
+          done
+
       - name: Install buf
         run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
         env:

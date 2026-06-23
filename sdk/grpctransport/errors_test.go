@@ -125,7 +125,7 @@ func TestMapConfigError_RetryableWrapsOriginalError(t *testing.T) {
 	if !errors.As(err, &re) {
 		t.Fatalf("got %v, want *RetryableError", err)
 	}
-	if re.Err != orig {
+	if !errors.Is(re.Err, orig) {
 		t.Errorf("RetryableError.Err = %v, want original gRPC error", re.Err)
 	}
 }
@@ -133,7 +133,7 @@ func TestMapConfigError_RetryableWrapsOriginalError(t *testing.T) {
 func TestMapConfigError_NonGRPC_PassThrough(t *testing.T) {
 	orig := errors.New("some non-grpc error")
 	err := mapConfigError(orig)
-	if err != orig {
+	if !errors.Is(err, orig) {
 		t.Errorf("got %v, want original error passed through", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestMapConfigError_NonGRPC_PassThrough(t *testing.T) {
 func TestMapConfigError_Default_PassThrough(t *testing.T) {
 	orig := status.Error(codes.Internal, "internal")
 	err := mapConfigError(orig)
-	if err != orig {
+	if !errors.Is(err, orig) {
 		t.Errorf("got %v, want original gRPC error passed through for default code", err)
 	}
 }
@@ -213,7 +213,7 @@ func TestMapAdminError_RetryableWrapsOriginalError(t *testing.T) {
 	if !errors.As(err, &re) {
 		t.Fatalf("got %v, want *RetryableError", err)
 	}
-	if re.Err != orig {
+	if !errors.Is(re.Err, orig) {
 		t.Errorf("RetryableError.Err = %v, want original gRPC error", re.Err)
 	}
 }
@@ -221,7 +221,7 @@ func TestMapAdminError_RetryableWrapsOriginalError(t *testing.T) {
 func TestMapAdminError_NonGRPC_PassThrough(t *testing.T) {
 	orig := errors.New("some non-grpc error")
 	err := mapAdminError(orig)
-	if err != orig {
+	if !errors.Is(err, orig) {
 		t.Errorf("got %v, want original error passed through", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestMapAdminError_NonGRPC_PassThrough(t *testing.T) {
 func TestMapAdminError_Default_PassThrough(t *testing.T) {
 	orig := status.Error(codes.Internal, "internal")
 	err := mapAdminError(orig)
-	if err != orig {
+	if !errors.Is(err, orig) {
 		t.Errorf("got %v, want original gRPC error passed through for default code", err)
 	}
 }

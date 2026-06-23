@@ -2,7 +2,6 @@ package configclient
 
 import (
 	"context"
-	"time"
 
 	sdkretry "github.com/opendecree/decree/sdk/retry"
 )
@@ -23,10 +22,4 @@ func WithRetry(cfg RetryConfig) Option {
 // retry executes fn with retries if retry is enabled. Otherwise calls fn once.
 func retry[T any](ctx context.Context, c *Client, fn func(ctx context.Context) (T, error)) (T, error) {
 	return sdkretry.Run(ctx, c.opts.retryEnabled, c.opts.retry, fn)
-}
-
-// backoffDuration computes exponential backoff with optional jitter.
-// Exposed for tests.
-func backoffDuration(attempt int, initial, max time.Duration, jitter bool) time.Duration {
-	return sdkretry.BackoffDuration(attempt, initial, max, jitter)
 }

@@ -52,7 +52,7 @@ func newBufconnServer(
 		pb.RegisterAuditServiceServer(srv, auditSvc)
 	}
 	go func() { _ = srv.Serve(lis) }()
-	t.Cleanup(func() { srv.Stop(); lis.Close() })
+	t.Cleanup(func() { srv.Stop(); _ = lis.Close() })
 
 	cc, err := grpc.NewClient(
 		"passthrough:///bufconn",
@@ -64,7 +64,7 @@ func newBufconnServer(
 	if err != nil {
 		t.Fatalf("grpc.NewClient: %v", err)
 	}
-	t.Cleanup(func() { cc.Close() })
+	t.Cleanup(func() { _ = cc.Close() })
 	return cc
 }
 
@@ -1581,7 +1581,7 @@ func TestDial_WithInsecure_Succeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	cc.Close()
+	_ = cc.Close()
 }
 
 func TestDefaultKeepalive_HasExpectedDefaults(t *testing.T) {

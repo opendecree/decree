@@ -39,11 +39,7 @@ var genDocsCmd = &cobra.Command{
 			return fmt.Sprintf("---\ntitle: %s\n---\n\n", title)
 		}
 
-		linkHandler := func(name string) string {
-			return strings.ToLower(name)
-		}
-
-		if err := doc.GenMarkdownTreeCustom(rootCmd, outDir, prepender, linkHandler); err != nil {
+		if err := doc.GenMarkdownTreeCustom(rootCmd, outDir, prepender, strings.ToLower); err != nil {
 			return fmt.Errorf("generate docs: %w", err)
 		}
 
