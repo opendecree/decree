@@ -4,7 +4,7 @@ A standalone, multi-format documentation generator for decree schemas. It loads 
 
 > **Alpha**: This module is part of the OpenDecree alpha release. The CLI and output formats may change.
 
-> **Status**: in development — this build loads schemas from local YAML files and emits the json, md, and html documentation formats. The mdx backend, server mode, and the config/template system land in upcoming releases.
+> **Status**: in development — this build loads schemas from local YAML files and emits the json, md, mdx, and html documentation formats. Server mode and the config/template system land in upcoming releases.
 
 `decree-docs` lives under `contrib/` (standalone tools built on decree), as opposed to `sdk/contrib/` (SDK framework adapters such as viper, koanf, and envconfig). It composes on top of the minimal, zero-dependency `sdk/tools/docgen` library rather than replacing it.
 
@@ -26,6 +26,7 @@ decree-docs generate --file decree.schema.yaml --format md --flavor material
 decree-docs generate --file decree.schema.yaml --format md --pages multi --out-dir docs/
 decree-docs generate --file decree.schema.yaml --format html --theme dark
 decree-docs generate --file decree.schema.yaml --format html --css brand.css --out-dir docs/
+decree-docs generate --file decree.schema.yaml --format mdx --out-dir docs/
 decree-docs --help
 decree-docs version
 ```
@@ -84,6 +85,16 @@ The page anatomy (left nav grouped by field-path prefix, content pane of per-fie
 
 `--format html` always renders to a single file: stdout, or `<out-dir>/index.html` with `--out-dir`.
 
+## The mdx format
+
+`--format mdx` renders a Docusaurus-compatible doc tree: an `index.mdx` overview page, plus one category folder per top-level field-path-prefix group, each holding a `_category_.json` (sidebar label and position) and an `index.mdx` with that group's fields. Drop the tree directly into a Docusaurus `docs/` folder. `--out-dir` is required — there is no single-file/stdout mode, since the format only makes sense as a directory tree.
+
+MDX v3 parses `{` and `<` as the start of a JSX expression or tag, so every piece of schema-sourced text (descriptions, examples, enum values, defaults, patterns, tags) is neutralized before it reaches the output: prose is backslash-escaped (also defanging `<!--` HTML-comment sequences), and values that are naturally code-like (examples, defaults, enum members, patterns) are wrapped in backticks as a code span instead, which MDX reads as literal text. Deprecated fields render as a `:::caution[Deprecated]` admonition; sensitive/nullable/read-only/write-once fields get a badge line under the field heading.
+
+```sh
+decree-docs generate --file decree.schema.yaml --format mdx --out-dir docs/
+```
+
 ## Testing
 
 ```sh
@@ -91,4 +102,5 @@ go test ./...
 go test . -run TestGenerate_JSONGolden -update          # rewrite CLI JSON golden files
 go test ./markdown -run TestRender_Golden -update       # rewrite markdown golden files
 go test ./html -run TestRender_Golden -update           # rewrite html golden files
+go test ./mdx -run TestRender_Golden -update            # rewrite mdx golden files
 ```

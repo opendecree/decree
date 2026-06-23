@@ -402,6 +402,74 @@ func TestGenerate_HTML_WriteFileError(t *testing.T) {
 	}
 }
 
+func TestGenerate_MDX_RequiresOutDir(t *testing.T) {
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "mdx")
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "--out-dir is required") {
+		t.Errorf("expected out-dir-required error, got %q", stderr)
+	}
+	if stdout != "" {
+		t.Errorf("expected empty stdout, got %q", stdout)
+	}
+}
+
+func TestGenerate_MDX_WritesTree(t *testing.T) {
+	outDir := t.TempDir()
+	code, stdout, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/full.schema.yaml", "--format", "mdx", "--out-dir", outDir)
+	if code != 0 {
+		t.Fatalf("got exit code %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("expected empty stdout when writing to --out-dir, got %q", stdout)
+	}
+	for _, name := range []string{"index.mdx", "payments/_category_.json", "payments/index.mdx"} {
+		path := filepath.Join(outDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("expected %s to be written: %v", path, err)
+			continue
+		}
+		if len(data) == 0 {
+			t.Errorf("expected %s to be non-empty", path)
+		}
+	}
+}
+
+func TestGenerate_MDX_OutDirNotADirectory(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(outDir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write blocker file: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "mdx", "--out-dir", filepath.Join(outDir, "docs"))
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "create") {
+		t.Errorf("expected create error, got %q", stderr)
+	}
+}
+
+func TestGenerate_MDX_WriteFileError(t *testing.T) {
+	outDir := t.TempDir()
+	// index.mdx as a directory makes the write to that path fail.
+	if err := os.Mkdir(filepath.Join(outDir, "index.mdx"), 0o755); err != nil {
+		t.Fatalf("mkdir blocker: %v", err)
+	}
+	code, _, stderr := runGenerateCLI(t,
+		"generate", "--file", "testdata/minimal.schema.yaml", "--format", "mdx", "--out-dir", outDir)
+	if code != 1 {
+		t.Errorf("got exit code %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "write") {
+		t.Errorf("expected write error, got %q", stderr)
+	}
+}
+
 func TestGenerate_InvalidSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "bad.yaml")
 	if err := os.WriteFile(path, []byte("name: no-spec-version\n"), 0o600); err != nil {
