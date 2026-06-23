@@ -1,0 +1,124 @@
+---
+id: "index"
+title: "payments"
+sidebar_label: "payments"
+sidebar_position: 1
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.api_key</span>
+<span className="badge badge--info" title="Can only be set once; immutable after that">Write-once</span> <span className="badge badge--danger" title="Value is not displayed in clear text">Sensitive</span>
+
+Gateway API key.
+
+type `string` · format `password`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.cutoff</span>
+<span style={{"background": "transparent", "border": "1px solid var(--ifm-color-emphasis-400)", "color": "var(--ifm-color-emphasis-700)", "border-radius": "var(--ifm-badge-border-radius,0.4rem)", "padding": "0.2em 0.6em", "font-size": "0.75em", "font-weight": "700"}} title="Accepts a null value">Nullable</span>
+
+Daily settlement cutoff.
+
+type `time`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.enabled</span>
+Payments Enabled
+
+Master switch for payment processing.
+
+type `bool` · default `true`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.environment</span>
+<span style={{"background": "transparent", "border": "1px solid var(--ifm-color-emphasis-400)", "color": "var(--ifm-color-emphasis-700)", "border-radius": "var(--ifm-badge-border-radius,0.4rem)", "padding": "0.2em 0.6em", "font-size": "0.75em", "font-weight": "700"}} title="Clients cannot write this field">Read-only</span>
+
+Deployment environment label.
+
+type `string`
+
+**Constraints:**
+- Min length: 2
+- Max length: 32
+- Pattern: `^[a-z][a-z0-9-]*$`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.fee</span>
+<span style={{"background": "transparent", "border": "1px solid var(--ifm-color-emphasis-400)", "color": "var(--ifm-color-emphasis-700)", "border-radius": "var(--ifm-badge-border-radius,0.4rem)", "padding": "0.2em 0.6em", "font-size": "0.75em", "font-weight": "700"}} title="Accepts a null value">Nullable</span>
+
+Per-transaction fee rate.
+
+type `number` · default `0.01` · tags `billing` `rates`
+
+**Examples:**
+- `0.02`
+- **high:** `0.99`
+- **low:** `0.01` — Promotional rate
+
+**See also:** [Fee guide](https://docs.example.com/fees)
+
+**Constraints:**
+- Minimum: 0
+- Maximum: 1
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.metadata</span>
+
+Free-form gateway metadata.
+
+type `json`
+
+**Constraints:**
+- JSON Schema: (see schema definition)
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.mode</span>
+
+Processing mode.
+
+type `string` · default `test`
+
+:::caution[Deprecated]
+Use `payments.environment` instead.
+:::
+
+**Constraints:**
+- Enum: `live`, `test`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.refund_window</span>
+
+Window during which refunds are accepted.
+
+type `duration` · default `72h`
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.retries</span>
+
+Delivery attempts per webhook event.
+
+type `integer` · default `3`
+
+**Constraints:**
+- Exclusive minimum: 0
+- Exclusive maximum: 10
+
+---
+
+### <span style={{fontFamily: "var(--ifm-font-family-monospace)"}}>payments.webhook</span>
+Webhook URL
+
+Endpoint receiving payment events.
+
+type `url`
+
+**Constraints:**
+- Allowed schemes: `https`, `sftp`
+

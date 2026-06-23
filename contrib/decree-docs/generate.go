@@ -14,11 +14,11 @@ import (
 	"github.com/opendecree/decree/contrib/decree-docs/html"
 	"github.com/opendecree/decree/contrib/decree-docs/loader"
 	"github.com/opendecree/decree/contrib/decree-docs/markdown"
+	"github.com/opendecree/decree/contrib/decree-docs/mdx"
 )
 
-// docFormats lists the formats generate can emit. The mdx backend lands in
-// an upcoming release (#917).
-var docFormats = []string{"json", "md", "html"}
+// docFormats lists the formats generate can emit.
+var docFormats = []string{"json", "md", "html", "mdx"}
 
 // mdFlavors lists the --flavor values valid with --format md.
 var mdFlavors = []string{string(markdown.Plain), string(markdown.Material)}
@@ -53,7 +53,12 @@ external assets, no network requests) to stdout or to <out-dir>/index.html
 with --out-dir. --theme selects a built-in color scheme (light, dark, or
 auto, which follows the reader's OS preference). --css <file> appends the
 file's contents in a trailing CSS cascade layer, so user overrides take
-precedence over the built-in theme without needing !important.`,
+precedence over the built-in theme without needing !important.
+
+The mdx format renders a Docusaurus-compatible doc tree to <out-dir>: an
+index.mdx overview page, plus one category folder per top-level field group,
+each with a _category_.json (sidebar label and position) and an index.mdx.
+--out-dir is required. Drop the tree into a Docusaurus docs/ folder.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runGenerate,
 }
@@ -107,6 +112,8 @@ func runGenerate(cmd *cobra.Command, args []string) error {
 		return runGenerateMD(cmd, doc)
 	case "html":
 		return runGenerateHTML(cmd, doc)
+	case "mdx":
+		return runGenerateMDX(cmd, doc)
 	default:
 		return doc.EncodeJSON(cmd.OutOrStdout())
 	}
@@ -181,6 +188,28 @@ func runGenerateHTML(cmd *cobra.Command, doc *docmodel.Document) error {
 	path := filepath.Join(outDir, "index.html")
 	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+func runGenerateMDX(cmd *cobra.Command, doc *docmodel.Document) error {
+	outDir, _ := cmd.Flags().GetString("out-dir")
+	if outDir == "" {
+		return fmt.Errorf("--out-dir is required for mdx output")
+	}
+
+	pages, err := mdx.Render(doc)
+	if err != nil {
+		return err
+	}
+	for _, p := range pages {
+		path := filepath.Join(outDir, p.Path)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(p.Content), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
 	}
 	return nil
 }
