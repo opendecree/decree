@@ -61,6 +61,7 @@ func FromYAML(data []byte) (*docmodel.Document, error) {
 		s.Fields = append(s.Fields, fieldFromYAML(path, fd))
 	}
 	sortFields(s.Fields)
+	s.Validations = validationsFromYAML(sf.Validations)
 	return docmodel.New(s), nil
 }
 
@@ -120,6 +121,22 @@ func fieldFromYAML(path string, fd validate.FieldDef) docmodel.Field {
 		})
 	}
 	return f
+}
+
+// validationsFromYAML maps validation rules from the schema YAML format.
+func validationsFromYAML(in []validate.ValidationDef) []docmodel.Validation {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]docmodel.Validation, 0, len(in))
+	for _, v := range in {
+		out = append(out, docmodel.Validation{
+			Rule:     v.Rule,
+			Message:  v.Message,
+			Severity: v.Severity,
+		})
+	}
+	return out
 }
 
 // --- Server loader ---

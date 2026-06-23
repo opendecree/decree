@@ -79,6 +79,10 @@ fields:
       allowed_schemes: [https, sftp]
   payments.fee:
     type: number
+validations:
+  - rule: self.payments.min_amount < self.payments.max_amount
+    message: min_amount must be less than max_amount
+    severity: error
 `
 
 func equivalenceAdminSchema() *adminclient.Schema {
@@ -208,6 +212,21 @@ func expectedDocument() *docmodel.Document {
 	}
 }
 
+// expectedFileDocument is the doc model the file loader must produce from
+// equivalenceYAML: it carries the schema-level validations the YAML format
+// expresses but adminclient does not (yet) surface.
+func expectedFileDocument() *docmodel.Document {
+	d := expectedDocument()
+	d.Schema.Validations = []docmodel.Validation{
+		{
+			Rule:     "self.payments.min_amount < self.payments.max_amount",
+			Message:  "min_amount must be less than max_amount",
+			Severity: "error",
+		},
+	}
+	return d
+}
+
 // --- File loader ---
 
 func TestFromYAML_Full(t *testing.T) {
@@ -215,7 +234,7 @@ func TestFromYAML_Full(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if want := expectedDocument(); !reflect.DeepEqual(got, want) {
+	if want := expectedFileDocument(); !reflect.DeepEqual(got, want) {
 		t.Errorf("FromYAML mismatch:\ngot:  %+v\nwant: %+v", got, want)
 	}
 }
@@ -248,7 +267,7 @@ func TestFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if want := expectedDocument(); !reflect.DeepEqual(got, want) {
+	if want := expectedFileDocument(); !reflect.DeepEqual(got, want) {
 		t.Errorf("FromFile mismatch:\ngot:  %+v\nwant: %+v", got, want)
 	}
 }
@@ -344,6 +363,12 @@ func TestFromServer_Error(t *testing.T) {
 // schema content produces a deep-equal doc model whether it is read from a
 // YAML file or fetched from a server via the admin client (with the admin
 // side listing fields in a different order and carrying server bookkeeping).
+//
+// Validations are a known, temporary exception (issue #957): adminclient
+// does not yet surface the schema's validations: block, so the file loader
+// carries Schema.Validations and the server loader does not. The comparison
+// below clears Validations on the file-loaded document before comparing so
+// the rest of the model is still held to the equivalence guarantee.
 func TestLoaderEquivalence(t *testing.T) {
 	fromFile, err := loader.FromYAML([]byte(equivalenceYAML))
 	if err != nil {
@@ -356,6 +381,11 @@ func TestLoaderEquivalence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	if len(fromFile.Schema.Validations) == 0 {
+		t.Fatalf("expected file loader to carry validations from equivalenceYAML")
+	}
+	fromFile.Schema.Validations = nil
 
 	if !reflect.DeepEqual(fromFile, fromServer) {
 		t.Errorf("file and server loaders disagree on the same schema content:\nfile:   %+v\nserver: %+v", fromFile, fromServer)

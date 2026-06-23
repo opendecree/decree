@@ -1,5 +1,5 @@
 {
-  "docModelVersion": 1,
+  "docModelVersion": 2,
   "schema": {
     "name": "payments",
     "description": "Payment processing configuration.",

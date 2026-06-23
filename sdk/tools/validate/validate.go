@@ -34,6 +34,17 @@ type SchemaFile struct {
 	VersionDescription string              `yaml:"version_description,omitempty"`
 	Info               *SchemaInfoDef      `yaml:"info,omitempty"`
 	Fields             map[string]FieldDef `yaml:"fields"`
+	// Validations declares cross-field rules expressed in CEL. The offline
+	// validator persists and round-trips these rules but does not evaluate
+	// them; CEL evaluation lives server-side (internal/schema/cel).
+	Validations []ValidationDef `yaml:"validations,omitempty"`
+}
+
+// ValidationDef describes a single cross-field CEL validation rule.
+type ValidationDef struct {
+	Rule     string `yaml:"rule"`
+	Message  string `yaml:"message"`
+	Severity string `yaml:"severity,omitempty"`
 }
 
 // SchemaInfoDef contains optional schema-level metadata.
