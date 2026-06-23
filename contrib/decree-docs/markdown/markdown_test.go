@@ -180,6 +180,118 @@ func TestRender_EdgeCases(t *testing.T) {
 	}
 }
 
+// TestRender_Validations_Golden pins rendering of schema-level CEL
+// validation rules (added in #958): both flavors, with one error-severity
+// and one warning-severity rule to exercise the severity distinction.
+func TestRender_Validations_Golden(t *testing.T) {
+	doc := docmodel.New(docmodel.Schema{
+		Name: "payments",
+		Fields: []docmodel.Field{
+			{Path: "payments.fee", Type: "number"},
+			{Path: "payments.retries", Type: "integer"},
+		},
+		Validations: []docmodel.Validation{
+			{
+				Rule:     "self.payments.fee < self.payments.retries",
+				Message:  "Fee rate must be less than the retry count.",
+				Severity: "error",
+			},
+			{
+				Rule:     `self.payments.webhook.startsWith("https://")`,
+				Message:  "Webhook URLs should use https.",
+				Severity: "warning",
+			},
+		},
+	})
+
+	tests := []struct {
+		name   string
+		flavor Flavor
+		golden string
+	}{
+		{name: "plain", flavor: Plain, golden: "testdata/validations-plain.golden.md"},
+		{name: "material", flavor: Material, golden: "testdata/validations-material.golden.md"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pages, err := Render(doc, Options{Flavor: tt.flavor, Pages: SinglePage})
+			if err != nil {
+				t.Fatalf("Render: %v", err)
+			}
+			content := pages[0].Content
+			if *update {
+				if err := os.WriteFile(tt.golden, []byte(content), 0o644); err != nil {
+					t.Fatalf("update golden: %v", err)
+				}
+			}
+			want, err := os.ReadFile(tt.golden)
+			if err != nil {
+				t.Fatalf("read golden: %v", err)
+			}
+			if content != string(want) {
+				t.Errorf("content does not match %s:\ngot:\n%s\nwant:\n%s", tt.golden, content, want)
+			}
+		})
+	}
+}
+
+// TestRender_NoValidations ensures schemas with no validations render no
+// "## Validations" section, in both single- and multi-page modes.
+func TestRender_NoValidations(t *testing.T) {
+	doc, err := loader.FromFile("../testdata/minimal.schema.yaml")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	for _, pages := range []PageMode{SinglePage, MultiPage} {
+		rendered, err := Render(doc, Options{Flavor: Plain, Pages: pages})
+		if err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+		for _, p := range rendered {
+			if strings.Contains(p.Content, "Validations") {
+				t.Errorf("unexpected Validations section in page %q:\n%s", p.Name, p.Content)
+			}
+		}
+	}
+}
+
+// TestRender_Validations_MultiPageIndex ensures validations render on the
+// multi-page index (not on a group page), since a rule can span fields in
+// more than one group.
+func TestRender_Validations_MultiPageIndex(t *testing.T) {
+	doc := docmodel.New(docmodel.Schema{
+		Name: "payments",
+		Fields: []docmodel.Field{
+			{Path: "alpha.value", Type: "string"},
+			{Path: "beta.value", Type: "string"},
+		},
+		Validations: []docmodel.Validation{
+			{Rule: "self.alpha.value != self.beta.value", Message: "alpha and beta must differ.", Severity: "error"},
+		},
+	})
+
+	pages, err := Render(doc, Options{Flavor: Plain, Pages: MultiPage})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	var index, alpha string
+	for _, p := range pages {
+		switch p.Name {
+		case "index":
+			index = p.Content
+		case "alpha":
+			alpha = p.Content
+		}
+	}
+	if !strings.Contains(index, "## Validations") {
+		t.Errorf("expected Validations section on index page, got:\n%s", index)
+	}
+	if strings.Contains(alpha, "Validations") {
+		t.Errorf("unexpected Validations section on group page, got:\n%s", alpha)
+	}
+}
+
 func TestRender_NameOnlyContact(t *testing.T) {
 	doc := docmodel.New(docmodel.Schema{
 		Name: "edge",
