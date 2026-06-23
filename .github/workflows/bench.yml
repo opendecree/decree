@@ -1,0 +1,58 @@
+# Nightly benchmarks for OpenDecree server + CLI.
+#
+# Split out of ci.yml (issue #970): the bench job was push-to-main only and
+# purely informational (it never blocked anything), yet it sat in the CI
+# `check` alls-green gate's `needs:`, forcing that gate to wait 7-10 min for
+# benchmarks on every push to main. Relocating to a standalone nightly schedule
+# lets the per-push CI gate go green ~2x faster while still tracking benchmark
+# results over time.
+#
+# Runs hot-path and infrastructure benchmarks against main; uploads results as
+# a workflow artifact for tracking over time. Storage (dbstore) and Redis
+# benchmarks are skipped: no DB/Redis services here.
+
+name: Benchmarks
+
+on:
+  schedule:
+    # Nightly at 07:00 UTC.
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "**/go.sum"
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -run='^$' -benchtime=5s -count=5 \
+            ./internal/authz/ ./internal/cache/ ./internal/pubsub/ ./cmd/server/ \
+            | tee bench.txt
+
+      - name: Compute p50/p95 with benchstat
+        run: |
+          go run golang.org/x/perf/cmd/benchstat@latest bench.txt | tee bench-stats.txt
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-${{ github.sha }}
+          path: |
+            bench.txt
+            bench-stats.txt
