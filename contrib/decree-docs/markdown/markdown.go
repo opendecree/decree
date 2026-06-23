@@ -4,15 +4,24 @@
 // Two flavors are supported. "plain" emits portable CommonMark. "material"
 // emits Markdown that additionally relies on the MkDocs Material extensions
 // this repo's mkdocs.yml already enables: admonition blocks for deprecation
-// notices, and pymdownx.tabbed content tabs for fields with two or more
-// named examples. In both flavors, field flags (deprecated, sensitive,
-// read-only, write-once) render as a bold badge line distinct from the
-// field's type/format meta line; material adds an icon per badge.
+// notices and validation severity, and pymdownx.tabbed content tabs for
+// fields with two or more named examples. In both flavors, field flags
+// (deprecated, sensitive, read-only, write-once) render as a bold badge line
+// distinct from the field's type/format meta line; material adds an icon
+// per badge.
 //
 // Two page modes are supported. [SinglePage] renders the whole schema as one
 // page. [MultiPage] renders an index page plus one page per top-level
 // path-prefix group (the same grouping sdk/tools/docgen uses for "##"
 // sections), each holding the fields under that group.
+//
+// Schema-level cross-field validation rules ([docmodel.Schema.Validations])
+// render as a "## Validations" section on the single page (right after the
+// header) or on the multi-page index (since a rule can span multiple
+// groups). Each rule's CEL expression renders as an untagged fenced code
+// block — CEL isn't a Prism/standard-highlighter language, so tagging the
+// fence would invite a wrong language guess and mismatched-keyword
+// highlighting.
 package markdown
 
 import (
@@ -72,6 +81,7 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 	case SinglePage, "":
 		var b strings.Builder
 		writeHeader(&b, doc.Schema)
+		writeValidations(&b, doc.Schema.Validations, opts.Flavor)
 		for _, g := range groups {
 			fmt.Fprintf(&b, "## %s\n\n", g.prefix)
 			for _, f := range g.fields {
@@ -80,7 +90,7 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 		}
 		return []Page{{Name: "index", Content: b.String()}}, nil
 	case MultiPage:
-		pages := []Page{indexPage(doc.Schema, groups)}
+		pages := []Page{indexPage(doc.Schema, groups, opts.Flavor)}
 		for _, g := range groups {
 			var b strings.Builder
 			fmt.Fprintf(&b, "# %s\n\n", g.prefix)
@@ -95,9 +105,10 @@ func Render(doc *docmodel.Document, opts Options) ([]Page, error) {
 	}
 }
 
-func indexPage(s docmodel.Schema, groups []fieldGroup) Page {
+func indexPage(s docmodel.Schema, groups []fieldGroup, flavor Flavor) Page {
 	var b strings.Builder
 	writeHeader(&b, s)
+	writeValidations(&b, s.Validations, flavor)
 	fmt.Fprintln(&b, "## Groups")
 	fmt.Fprintln(&b)
 	for _, g := range groups {
@@ -288,6 +299,47 @@ func writeDeprecationNotice(b *strings.Builder, f docmodel.Field, flavor Flavor)
 		return
 	}
 	fmt.Fprintf(b, "> **Deprecated** — %s\n\n", body)
+}
+
+// writeValidations renders the schema's cross-field CEL validation rules as
+// a list, one entry per rule: the rule expression as a fenced code block
+// (deliberately untagged — CEL isn't a Prism/standard-highlighter language,
+// so an untagged fence avoids mismatched-keyword highlighting from a wrong
+// language guess) followed by the human-readable message. Severity is
+// distinguished using the same admonition/blockquote treatment as
+// writeDeprecationNotice: material gets a `!!!` admonition (error or
+// warning), plain gets a bold-prefixed blockquote.
+func writeValidations(b *strings.Builder, validations []docmodel.Validation, flavor Flavor) {
+	if len(validations) == 0 {
+		return
+	}
+	fmt.Fprintln(b, "## Validations")
+	fmt.Fprintln(b)
+	for _, v := range validations {
+		fmt.Fprintln(b, "```")
+		fmt.Fprintln(b, v.Rule)
+		fmt.Fprintln(b, "```")
+		fmt.Fprintln(b)
+		writeValidationMessage(b, v, flavor)
+	}
+}
+
+// writeValidationMessage renders a validation's message with its severity
+// visually distinguished, mirroring writeDeprecationNotice's admonition
+// (material) / blockquote (plain) pattern.
+func writeValidationMessage(b *strings.Builder, v docmodel.Validation, flavor Flavor) {
+	label := "Warning"
+	admonition := "warning"
+	if v.Severity == "error" {
+		label = "Error"
+		admonition = "error"
+	}
+	if flavor == Material {
+		fmt.Fprintf(b, "!!! %s %q\n", admonition, label)
+		fmt.Fprintf(b, "    %s\n\n", v.Message)
+		return
+	}
+	fmt.Fprintf(b, "> **%s** — %s\n\n", label, v.Message)
 }
 
 func writeExamples(b *strings.Builder, f docmodel.Field, flavor Flavor) {
