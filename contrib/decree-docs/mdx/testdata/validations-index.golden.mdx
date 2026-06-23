@@ -1,0 +1,29 @@
+---
+id: "index"
+title: "payments"
+sidebar_label: "Overview"
+sidebar_position: 0
+---
+
+## Validations
+
+```
+self.payments.fee < self.payments.retries
+```
+
+:::danger[Error]
+Fee rate must be less than the retry count.
+:::
+
+```
+self.payments.webhook.startsWith("https://")
+```
+
+:::caution[Warning]
+Webhook URLs should use https.
+:::
+
+## Groups
+
+- [payments](./payments/index) — 2 fields
+
