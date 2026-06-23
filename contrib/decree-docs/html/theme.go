@@ -210,5 +210,29 @@ const componentsLayer = `
     font-size: 14px; color: var(--decree-muted); margin-top: 12px;
   }
   .sensitive-mask .note { margin-left: auto; font-size: 11px; font-family: ui-sans-serif, system-ui, sans-serif; }
+
+  .validations { padding: 18px 40px 0; max-width: 880px; }
+  .validations h2.group { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 8px 0 18px; }
+  .validation-item {
+    border-radius: 9px; padding: 12px 16px; margin-bottom: 12px;
+    border: 1px solid color-mix(in srgb, var(--decree-danger) 30%, var(--decree-surface));
+    background: color-mix(in srgb, var(--decree-danger) 8%, var(--decree-surface));
+  }
+  .validation-item.warning {
+    border-color: color-mix(in srgb, var(--decree-warn) 30%, var(--decree-surface));
+    background: color-mix(in srgb, var(--decree-warn) 8%, var(--decree-surface));
+  }
+  .validation-item .validation-head {
+    display: flex; align-items: center; gap: 7px; margin-bottom: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--decree-danger);
+  }
+  .validation-item.warning .validation-head { color: var(--decree-warn); }
+  .validation-item pre {
+    margin: 0 0 8px; padding: 9px 12px; border-radius: 7px; overflow-x: auto;
+    background: var(--decree-surface); border: 1px solid var(--decree-line);
+  }
+  .validation-item pre code { font-size: 13px; color: var(--decree-ink); }
+  .validation-item .validation-message { font-size: 13.5px; margin: 0; }
 }
 `

@@ -39,6 +39,18 @@ const pageTemplateSrc = `<!DOCTYPE html>
       {{- end }}
     </div>
   </header>
+  {{- if .Validations }}
+  <section class="validations">
+    <h2 class="group">Validations</h2>
+    {{- range .Validations }}
+    <div class="validation-item {{ .Severity }}">
+      <div class="validation-head">{{ .Label }}</div>
+      <pre><code>{{ .Rule }}</code></pre>
+      <p class="validation-message">{{ .Message }}</p>
+    </div>
+    {{- end }}
+  </section>
+  {{- end }}
   <div class="decree-body">
     <nav class="decree-nav">
       {{- range .Groups }}
