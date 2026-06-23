@@ -169,7 +169,8 @@ END $$;
 -- +goose StatementEnd
 
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON tenants, config_versions, config_values,
+    ON schemas, schema_versions, schema_fields,
+       tenants, config_versions, config_values,
        tenant_field_locks, audit_write_log, usage_stats
     TO decree_app;
 
