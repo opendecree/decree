@@ -60,12 +60,13 @@ func Render(doc *docmodel.Document, opts Options) (string, error) {
 
 	groups := groupByPrefix(doc.Schema.Fields)
 	page := pageView{
-		Title:    schemaTitle(doc.Schema),
-		Sub:      schemaSubtitle(doc.Schema),
-		Groups:   make([]groupView, 0, len(groups)),
-		CSS:      template.CSS(buildCSS(theme, opts.CSS)),
-		NumField: len(doc.Schema.Fields),
-		NumType:  countTypes(doc.Schema.Fields),
+		Title:       schemaTitle(doc.Schema),
+		Sub:         schemaSubtitle(doc.Schema),
+		Groups:      make([]groupView, 0, len(groups)),
+		CSS:         template.CSS(buildCSS(theme, opts.CSS)),
+		NumField:    len(doc.Schema.Fields),
+		NumType:     countTypes(doc.Schema.Fields),
+		Validations: newValidationViews(doc.Schema.Validations),
 	}
 	for _, g := range groups {
 		gv := groupView{Prefix: g.prefix}
@@ -139,12 +140,13 @@ func groupByPrefix(fields []docmodel.Field) []fieldGroup {
 // --- View model ---
 
 type pageView struct {
-	Title    string
-	Sub      string
-	Groups   []groupView
-	CSS      template.CSS
-	NumField int
-	NumType  int
+	Title       string
+	Sub         string
+	Groups      []groupView
+	CSS         template.CSS
+	NumField    int
+	NumType     int
+	Validations []validationView
 }
 
 type groupView struct {
@@ -162,6 +164,37 @@ type exampleView struct {
 	Name    string
 	Value   string
 	Summary string
+}
+
+// validationView is the rendered form of a schema-level CEL validation
+// rule. Severity is normalized to "error" or "warning" (anything other
+// than "error" is treated as a warning) so the template can select the
+// matching CSS class without re-deriving the default.
+type validationView struct {
+	Rule     string
+	Message  string
+	Severity string // "error" or "warning"
+	Label    string // "Error" or "Warning"
+}
+
+func newValidationViews(validations []docmodel.Validation) []validationView {
+	if len(validations) == 0 {
+		return nil
+	}
+	out := make([]validationView, 0, len(validations))
+	for _, v := range validations {
+		severity, label := "warning", "Warning"
+		if v.Severity == "error" {
+			severity, label = "error", "Error"
+		}
+		out = append(out, validationView{
+			Rule:     v.Rule,
+			Message:  v.Message,
+			Severity: severity,
+			Label:    label,
+		})
+	}
+	return out
 }
 
 type fieldView struct {
