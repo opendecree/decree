@@ -108,6 +108,7 @@ type ConstraintsDef struct {
 	Pattern          string   `yaml:"pattern,omitempty"`
 	Enum             []string `yaml:"enum,omitempty"`
 	JSONSchema       string   `yaml:"json_schema,omitempty"`
+	AllowedSchemes   []string `yaml:"allowed_schemes,omitempty"`
 }
 
 // TenantDef defines the tenant to create or reuse.

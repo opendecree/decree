@@ -200,5 +200,8 @@ func convertConstraints(c *adminclient.FieldConstraints) *seed.ConstraintsDef {
 	if len(c.Enum) > 0 {
 		cd.Enum = c.Enum
 	}
+	if len(c.AllowedSchemes) > 0 {
+		cd.AllowedSchemes = c.AllowedSchemes
+	}
 	return cd
 }

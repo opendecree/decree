@@ -128,6 +128,7 @@ type ConstraintsYAML struct {
 	Pattern          string         `yaml:"pattern,omitempty"`
 	Enum             []string       `yaml:"enum,omitempty"`
 	JSONSchema       string         `yaml:"json_schema,omitempty"`
+	AllowedSchemes   []string       `yaml:"allowed_schemes,omitempty"`
 	Extensions       map[string]any `yaml:",inline"`
 }
 
@@ -445,9 +446,13 @@ func protoConstraintsToYAML(c *pb.FieldConstraints) *ConstraintsYAML {
 	if len(c.EnumValues) > 0 {
 		yc.Enum = c.EnumValues
 	}
+	if len(c.AllowedSchemes) > 0 {
+		yc.AllowedSchemes = c.AllowedSchemes
+	}
 	// Return nil if all fields are zero-valued.
 	if yc.Minimum == nil && yc.Maximum == nil && yc.ExclusiveMinimum == nil && yc.ExclusiveMaximum == nil &&
-		yc.MinLength == nil && yc.MaxLength == nil && yc.Pattern == "" && len(yc.Enum) == 0 && yc.JSONSchema == "" {
+		yc.MinLength == nil && yc.MaxLength == nil && yc.Pattern == "" && len(yc.Enum) == 0 && yc.JSONSchema == "" &&
+		len(yc.AllowedSchemes) == 0 {
 		return nil
 	}
 	return yc
@@ -610,6 +615,9 @@ func yamlConstraintsToProto(yc *ConstraintsYAML) *pb.FieldConstraints {
 	}
 	if len(yc.Enum) > 0 {
 		c.EnumValues = yc.Enum
+	}
+	if len(yc.AllowedSchemes) > 0 {
+		c.AllowedSchemes = yc.AllowedSchemes
 	}
 	if yc.JSONSchema != "" {
 		c.JsonSchema = &yc.JSONSchema
