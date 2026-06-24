@@ -221,6 +221,13 @@ jobs:
         # anchore/sbom-action/download-syft@v0.24.0
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
 
+      # GoReleaser shells out to cosign for its signing steps; it is no longer
+      # preinstalled on the GitHub runner image, so install it explicitly to
+      # keep binary/image signing from being silently skipped.
+      - name: Install Cosign for signing
+        # sigstore/cosign-installer@v3.10.1
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5
+
       - name: Run goreleaser
         # goreleaser/goreleaser-action@v7
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89
