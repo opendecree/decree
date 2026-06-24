@@ -95,6 +95,7 @@ jobs:
               - 'proto/**'
               - 'db/**'
               - 'build/**'
+              - '.dockerignore'
               - 'Makefile'
               - 'docker-compose*.yml'
               - '.github/workflows/**'
