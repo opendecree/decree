@@ -16,8 +16,27 @@ site/
 .tools-image-built
 ccs
 
-# Note: e2e/ is NOT excluded — go.work references it and the workspace
-# needs all modules present. Test files won't compile (build tag guarded).
+# Go workspace file — excluded so the image build is deterministically in
+# module mode (CI has no go.work). The root module builds ./cmd/server via
+# go.mod and its single `replace github.com/opendecree/decree/api => ./api`,
+# so no other local module needs to be present in the context.
+go.work
+go.work.sum
+
+# Separate Go modules and non-server assets not needed by `go build ./cmd/server`.
+# Excluding them keeps the `COPY . .` layer stable when they change, so PRs that
+# touch only non-server code hit the cached server build instead of rebuilding.
+cmd/decree/
+sdk/
+contrib/
+chaos/
+stress/
+examples/
+fixtures/
+scripts/
+
+# e2e/ is kept in context (separate module, occasionally referenced by local
+# tooling); it could be excluded too now that go.work is, if desired later.
 
 # Docs (not needed in images)
 docs/
