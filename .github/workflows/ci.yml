@@ -314,10 +314,12 @@ jobs:
       - name: Proto lint + breaking
         run: buf lint && buf breaking --against ".git#branch=main"
 
-  # Builds the server + CLI, runs unit, SDK, and CLI tests in parallel, then
-  # enforces the coverage ratchet defined in coverage-thresholds.json.
-  test:
-    name: Test
+  # Runs the unit tests under the race detector with coverage, then enforces
+  # the internal-module coverage ratchet. Split from the SDK/CLI/tools tests
+  # (test-modules) so the two heavy sequential steps run on separate runners
+  # concurrently. -race coverage of internal/ is preserved here unchanged.
+  test-internal:
+    name: Test (internal)
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -336,6 +338,37 @@ jobs:
 
       - name: Unit tests
         run: go test ./internal/... -race -count=1 -coverprofile=coverage-internal.out -covermode=atomic
+
+      - name: Coverage ratchet
+        run: ./scripts/check-coverage.sh --profiles-only --profile internal=coverage-internal.out
+
+      - name: Upload coverage to Codecov
+        # codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        with:
+          files: coverage-internal.out
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  # Runs the SDK, CLI, and tools module tests in parallel, then enforces the
+  # coverage ratchet for those modules. Split from test-internal so it runs on
+  # a separate runner concurrently with the race-enabled unit tests.
+  test-modules:
+    name: Test (modules)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: "**/go.sum"
 
       - name: SDK + CLI + tools tests
         run: |
@@ -356,8 +389,7 @@ jobs:
 
       - name: Coverage ratchet
         run: |
-          ./scripts/check-coverage.sh \
-            --profile internal=coverage-internal.out \
+          ./scripts/check-coverage.sh --profiles-only \
             --profile sdk/configclient=cov-configclient.out \
             --profile sdk/adminclient=cov-adminclient.out \
             --profile sdk/configwatcher=cov-configwatcher.out \
@@ -369,7 +401,7 @@ jobs:
       - name: Merge coverage profiles
         run: |
           echo "mode: atomic" > coverage.out
-          for f in coverage-internal.out cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-grpctransport.out cov-tools.out cov-contrib-viper.out cov-contrib-envconfig.out cov-contrib-koanf.out cov-decree-docs.out cov-decree.out; do
+          for f in cov-configclient.out cov-adminclient.out cov-configwatcher.out cov-grpctransport.out cov-tools.out cov-contrib-viper.out cov-contrib-envconfig.out cov-contrib-koanf.out cov-decree-docs.out cov-decree.out; do
             [ -f "$f" ] && grep -v "^mode:" "$f" >> coverage.out || true
           done
 
@@ -794,7 +826,7 @@ jobs:
   check:
     name: CI check
     if: always()
-    needs: [lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, meta-schemas, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only]
+    needs: [lint, test-internal, test-modules, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, meta-schemas, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -803,4 +835,4 @@ jobs:
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only
+          allowed-skips: lint, test-internal, test-modules, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only

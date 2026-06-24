@@ -4,11 +4,14 @@
 # Usage:
 #   ./scripts/check-coverage.sh                            # Run tests + check thresholds
 #   ./scripts/check-coverage.sh --profile mod=path ...    # Check using pre-computed profiles
+#   ./scripts/check-coverage.sh --profiles-only --profile mod=path ...  # Check ONLY supplied profiles
 #   ./scripts/check-coverage.sh --update                   # Update thresholds (always runs tests)
 #
 # --profile can be repeated once per module. Paths are relative to the
 # directory from which the script is invoked (typically the repo root).
-# Modules with no --profile arg fall back to running go test.
+# Modules with no --profile arg fall back to running go test, unless
+# --profiles-only is set, in which case they are skipped (lets CI split the
+# ratchet across parallel jobs, each validating only the profiles it produced).
 set -euo pipefail
 
 THRESHOLDS_FILE="coverage-thresholds.json"
@@ -58,12 +61,17 @@ declare -A FAIL_LOGS
 
 # Parse arguments.
 UPDATE=false
+PROFILES_ONLY=false
 declare -A PROFILES=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --update)
       UPDATE=true
+      shift
+      ;;
+    --profiles-only)
+      PROFILES_ONLY=true
       shift
       ;;
     --profile)
@@ -207,6 +215,10 @@ print_fail_logs() {
 for module in "${!MODULES[@]}"; do
   if [ "$UPDATE" = false ] && [ -n "${PROFILES[$module]:-}" ]; then
     read_coverage "$module" "${MODULE_DIRS[$module]}" "${PROFILES[$module]}"
+  elif [ "$UPDATE" = false ] && [ "$PROFILES_ONLY" = true ]; then
+    # No profile supplied and --profiles-only set: skip this module rather than
+    # running its tests. Another (parallel) invocation validates it.
+    continue
   else
     run_coverage "$module" "${MODULE_DIRS[$module]}" "${MODULES[$module]}"
   fi
@@ -247,7 +259,8 @@ fi
 # Check mode: compare against thresholds.
 failed=0
 for module in $(echo "${!MODULES[@]}" | tr ' ' '\n' | sort); do
-  current=${COVERAGES[$module]}
+  current=${COVERAGES[$module]:-}
+  [ -z "$current" ] && continue  # skipped under --profiles-only
   threshold=$(get_threshold "$module")
   if [ "$current" = "FAIL" ]; then
     printf "%-25s %7s   ✗ TESTS FAILED (%s)\n" "$module" "--" "${FAIL_REASONS[$module]}"
