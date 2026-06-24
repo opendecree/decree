@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -559,4 +560,107 @@ func TestConstraintsNilWhenEmpty(t *testing.T) {
 		Fields: []*pb.SchemaField{field},
 	})
 	assert.Nil(t, doc.Fields["x"].Constraints)
+}
+
+// TestYAMLRoundtrip_AllowedSchemes verifies that the allowed_schemes URL
+// constraint survives a full proto → YAML → proto round-trip through the
+// import/export codec. Mirrors the enum handling in TestYAMLRoundtrip.
+func TestYAMLRoundtrip_AllowedSchemes(t *testing.T) {
+	original := &pb.Schema{
+		Name:    "links",
+		Version: 1,
+		Fields: []*pb.SchemaField{
+			{
+				Path: "links.webhook",
+				Type: pb.FieldType_FIELD_TYPE_URL,
+				Constraints: &pb.FieldConstraints{
+					AllowedSchemes: []string{"https", "sftp"},
+				},
+			},
+		},
+	}
+
+	// Proto → YAML: the constraint is emitted under the OAS-style key.
+	doc := schemaToYAML(original)
+	webhook := doc.Fields["links.webhook"]
+	require.NotNil(t, webhook.Constraints)
+	assert.Equal(t, []string{"https", "sftp"}, webhook.Constraints.AllowedSchemes)
+
+	// Marshal → Unmarshal → proto: the value must still be present.
+	data, err := marshalSchemaYAML(doc)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "allowed_schemes")
+
+	parsed, err := unmarshalSchemaYAML(data)
+	require.NoError(t, err)
+
+	fields := yamlToProtoFields(parsed)
+	require.Len(t, fields, 1)
+	assert.Equal(t, []string{"https", "sftp"}, fields[0].Constraints.AllowedSchemes)
+}
+
+// TestProtoConstraintsToYAML_PropertyDrift reflects over every exported field
+// of the proto FieldConstraints message and asserts each one is either copied
+// into ConstraintsYAML by protoConstraintsToYAML or explicitly recorded below
+// as intentionally absent. A constraint added to the proto fails this test
+// until it is mapped in the codec (both directions) or recorded here. Mirrors
+// the drift-guard approach used for the docgen mapping in #912.
+func TestProtoConstraintsToYAML_PropertyDrift(t *testing.T) {
+	// Populate every proto constraint with a distinct non-zero value.
+	in := &pb.FieldConstraints{
+		Min:            ptr(1.0),
+		Max:            ptr(9.0),
+		ExclusiveMin:   ptr(0.5),
+		ExclusiveMax:   ptr(9.5),
+		MinLength:      ptr(int32(2)),
+		MaxLength:      ptr(int32(64)),
+		Regex:          ptr("^https://"),
+		EnumValues:     []string{"a", "b"},
+		JsonSchema:     ptr(`{"type":"string"}`),
+		AllowedSchemes: []string{"https", "sftp"},
+	}
+	out := protoConstraintsToYAML(in)
+	require.NotNil(t, out)
+
+	// notMapped lists proto FieldConstraints fields that intentionally have no
+	// ConstraintsYAML counterpart. All current constraints are mapped, so this
+	// is empty; it documents intent and gives future fields a clear opt-out.
+	notMapped := map[string]bool{}
+
+	// yamlByProto maps each mapped proto field name to the corresponding
+	// ConstraintsYAML field name (they differ for several constraints).
+	yamlByProto := map[string]string{
+		"Min":            "Minimum",
+		"Max":            "Maximum",
+		"ExclusiveMin":   "ExclusiveMinimum",
+		"ExclusiveMax":   "ExclusiveMaximum",
+		"MinLength":      "MinLength",
+		"MaxLength":      "MaxLength",
+		"Regex":          "Pattern",
+		"EnumValues":     "Enum",
+		"JsonSchema":     "JSONSchema",
+		"AllowedSchemes": "AllowedSchemes",
+	}
+
+	iv := reflect.ValueOf(in).Elem()
+	ov := reflect.ValueOf(out).Elem()
+	for i := 0; i < iv.NumField(); i++ {
+		sf := iv.Type().Field(i)
+		// Skip unexported protobuf bookkeeping (state, unknownFields, sizeCache).
+		if sf.PkgPath != "" {
+			continue
+		}
+		name := sf.Name
+		if notMapped[name] {
+			continue
+		}
+		require.Falsef(t, iv.Field(i).IsZero(),
+			"proto FieldConstraints.%s is zero in this test — populate it so the drift check can verify the mapping", name)
+
+		yamlName, ok := yamlByProto[name]
+		require.Truef(t, ok,
+			"proto FieldConstraints.%s has no ConstraintsYAML mapping — map it in protoConstraintsToYAML/yamlConstraintsToProto or record it in notMapped", name)
+		assert.Falsef(t, ov.FieldByName(yamlName).IsZero(),
+			"proto FieldConstraints.%s is dropped by protoConstraintsToYAML", name)
+	}
 }
