@@ -1,0 +1,16 @@
+# gitleaks configuration for OpenDecree.
+#
+# Extends the upstream default ruleset (so all built-in secret detectors stay
+# active) and only adds allowlist entries for intentional, non-secret fixtures.
+title = "OpenDecree"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional fake secrets used in tests, not real credentials"
+# The sensitive-field redaction e2e test (regression for decree#215) hard-codes a
+# placeholder token to assert it is redacted on every read path. It is not a real
+# secret. Allowlisted by path + value so historical commits scan clean too.
+paths = ['''e2e/security_test\.go''']
+regexes = ['''s3cr3t-t0k3n-abc123''']

@@ -59,7 +59,7 @@ modify specs → generate code → test → lint → build → deploy → e2e te
 
 1. **Protobuf** — edit `.proto` files under `proto/centralconfig/v1/`, then run `make generate`
 2. **SQL queries** — edit `.sql` files under `db/queries/`, then run `make generate`
-3. **Migrations** — edit `db/migrations/001_initial_schema.sql` (pre-production, single migration)
+3. **Migrations** — edit `db/migrations/00001_baseline.sql` (pre-production, single squashed migration)
 
 Generated code is **checked into git** — `go build` works immediately after cloning. Run `make generate` after modifying proto or SQL specs.
 

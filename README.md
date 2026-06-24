@@ -292,7 +292,7 @@ The entire gRPC API is also available as REST/JSON (via grpc-gateway). Set `HTTP
 
 ```bash
 # Version check
-curl http://localhost:8080/v1/version
+curl http://localhost:8080/v1/server/info
 
 # List schemas
 curl -H "x-subject: admin" http://localhost:8080/v1/schemas
@@ -386,7 +386,7 @@ JWT is **opt-in**. By default, the service uses metadata-based auth:
 
 Without JWT, pass identity via gRPC metadata headers:
 - `x-subject` (required) — actor identity
-- `x-role` — `superadmin` (default), `admin`, or `user`
+- `x-role` — `superadmin`, `admin`, or `user`; omitted defaults to `user` (least privilege)
 - `x-tenant-id` — required for non-superadmin roles
 
 ### Observability (all opt-in)
