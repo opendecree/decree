@@ -299,9 +299,17 @@ jobs:
           done
 
       - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
         env:
-          GOTOOLCHAIN: auto
+          BUF_VERSION: v1.66.1
+          # sha256 of buf-Linux-x86_64 from the official v1.66.1 release (sha256.txt).
+          BUF_SHA256: ef835cb38ed973849f68e0e6a88153cb2168507e09eecbec43a2ada2f6a698be
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/bufbuild/buf/releases/download/${BUF_VERSION}/buf-Linux-x86_64" -o "$HOME/.local/bin/buf"
+          echo "${BUF_SHA256}  $HOME/.local/bin/buf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/buf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buf" --version
 
       - name: Proto lint + breaking
         run: buf lint && buf breaking --against ".git#branch=main"
@@ -434,9 +442,17 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
         env:
-          GOTOOLCHAIN: auto
+          BUF_VERSION: v1.66.1
+          # sha256 of buf-Linux-x86_64 from the official v1.66.1 release (sha256.txt).
+          BUF_SHA256: ef835cb38ed973849f68e0e6a88153cb2168507e09eecbec43a2ada2f6a698be
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/bufbuild/buf/releases/download/${BUF_VERSION}/buf-Linux-x86_64" -o "$HOME/.local/bin/buf"
+          echo "${BUF_SHA256}  $HOME/.local/bin/buf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/buf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buf" --version
 
       - name: Install protoc-gen-doc
         run: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
