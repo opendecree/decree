@@ -298,6 +298,75 @@ tenant:
 	}
 }
 
+// TestParseFile_AllowedSchemes verifies the allowed_schemes URL constraint is
+// parsed into ConstraintsDef. Mirrors the enum assertion above.
+func TestParseFile_AllowedSchemes(t *testing.T) {
+	data := `spec_version: "v1"
+schema:
+  name: constrained
+  fields:
+    webhook:
+      type: url
+      constraints:
+        allowed_schemes: [https, sftp]
+tenant:
+  name: t
+`
+	f, err := ParseFile([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	webhook := f.Schema.Fields["webhook"]
+	if webhook.Constraints == nil {
+		t.Fatal("webhook constraints is nil")
+	}
+	if got := webhook.Constraints.AllowedSchemes; len(got) != 2 || got[0] != "https" || got[1] != "sftp" {
+		t.Errorf("webhook allowed_schemes: %v, want [https sftp]", got)
+	}
+}
+
+// TestMarshal_AllowedSchemesRoundTrip mirrors the dump → seed round-trip: a
+// ConstraintsDef carrying allowed_schemes is marshaled to YAML and re-parsed,
+// and the value must survive both directions. This guards the dump/seed path
+// from the drop described in #927.
+func TestMarshal_AllowedSchemesRoundTrip(t *testing.T) {
+	schemes := []string{"https", "sftp"}
+	original := &File{
+		SpecVersion: "v1",
+		Schema: SchemaDef{
+			Name: "links",
+			Fields: map[string]FieldDef{
+				"webhook": {
+					Type:        "url",
+					Constraints: &ConstraintsDef{AllowedSchemes: schemes},
+				},
+			},
+		},
+		Tenant: TenantDef{Name: "t"},
+	}
+
+	data, err := Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "allowed_schemes") {
+		t.Fatalf("marshaled YAML missing allowed_schemes:\n%s", data)
+	}
+
+	reparsed, err := ParseFile(data)
+	if err != nil {
+		t.Fatalf("re-parse failed: %v\nYAML:\n%s", err, data)
+	}
+	c := reparsed.Schema.Fields["webhook"].Constraints
+	if c == nil {
+		t.Fatal("round-trip dropped constraints entirely")
+	}
+	if got := c.AllowedSchemes; len(got) != 2 || got[0] != "https" || got[1] != "sftp" {
+		t.Errorf("round-trip allowed_schemes: %v, want %v", got, schemes)
+	}
+}
+
 // --- Run tests with mocks ---
 
 func TestRun_NewSchemaNewTenantWithConfig(t *testing.T) {

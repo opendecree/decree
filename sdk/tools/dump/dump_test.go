@@ -370,15 +370,16 @@ func TestConvertConstraints(t *testing.T) {
 	maxLen := int32(50)
 
 	c := &adminclient.FieldConstraints{
-		Min:          &min,
-		Max:          &max,
-		ExclusiveMin: &exMin,
-		ExclusiveMax: &exMax,
-		MinLength:    &minLen,
-		MaxLength:    &maxLen,
-		Pattern:      "^[a-z]+$",
-		Enum:         []string{"a", "b"},
-		JSONSchema:   `{"type":"object"}`,
+		Min:            &min,
+		Max:            &max,
+		ExclusiveMin:   &exMin,
+		ExclusiveMax:   &exMax,
+		MinLength:      &minLen,
+		MaxLength:      &maxLen,
+		Pattern:        "^[a-z]+$",
+		Enum:           []string{"a", "b"},
+		JSONSchema:     `{"type":"object"}`,
+		AllowedSchemes: []string{"https", "sftp"},
 	}
 
 	cd := convertConstraints(c)
@@ -399,6 +400,9 @@ func TestConvertConstraints(t *testing.T) {
 	}
 	if cd.JSONSchema != `{"type":"object"}` {
 		t.Errorf("jsonSchema = %q", cd.JSONSchema)
+	}
+	if got := cd.AllowedSchemes; len(got) != 2 || got[0] != "https" || got[1] != "sftp" {
+		t.Errorf("allowedSchemes = %v, want [https sftp]", got)
 	}
 }
 

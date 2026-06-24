@@ -1,20 +1,24 @@
 # CI pipeline for OpenDecree server, SDKs, and CLI.
 #
-# Jobs: changes ──┬── tools → integration (e2e|examples|stress) ──────→ check (alls-green gate)
-#                 ├── lint, docs ──────────────────────────────────────────────┘
+# Jobs: changes ──┬── tools, server-image → integration (e2e|examples|stress) ─→ check (alls-green gate)
+#                 ├──                      → upgrade ───────────────────────────┤
+#                 ├── lint, docs ──────────────────────────────────────────────┤
 #                 └── test, sdk-compat, govulncheck, deps-review ──────────────┘
 #
 # The changes job runs dorny/paths-filter; code jobs skip on docs-only PRs;
 # the docs job additionally skips unless proto/CLI/mkdocs files changed.
 #
-# The tools job builds/caches the Docker image used by e2e, examples, and
-# stress, with a registry-backed buildx cache (:buildcache tag) so unchanged
-# layers are pulled from ghcr and only modified layers rebuild.
+# The tools job builds/caches the decree-tools Docker image (goose/migrate),
+# and the server-image job builds the decree server image ONCE and pushes it to
+# ghcr by digest. Both use a registry-backed buildx cache (:buildcache tag) so
+# unchanged layers are pulled from ghcr and only modified layers rebuild. The
+# integration legs (e2e/examples/stress) and the upgrade job then just `docker
+# pull` the prebuilt server image instead of rebuilding it once per leg.
 #
 # Security posture (issue #8):
 #   - Workflow-level permissions default to `contents: read` — jobs opt into more.
-#   - Only `tools` has `packages: write` (pushes the tools image); consumers get
-#     `packages: read` to pull.
+#   - Only `tools` and `server-image` have `packages: write` (they push the
+#     tools and server images); consumers get `packages: read` to pull.
 #   - All actions/checkout steps use `persist-credentials: false` so the
 #     GITHUB_TOKEN isn't left in .git/config for later steps.
 #   - `deps-review` blocks PRs that add dependencies with known high-severity
@@ -23,13 +27,19 @@
 #
 # The check job aggregates all results for branch protection (skipped jobs allowed).
 #
-# Cache budget: all Docker layer caches live on ghcr.io as `:buildcache` tags on
+# Cache budget: Docker layer caches live on ghcr.io as `:buildcache` tags on
 # their respective image repos (no 10GB GHA cache limit). Writers:
 #   - main.yml  → ghcr.io/<owner>/decree:buildcache, decree-cli:buildcache
 #   - release.yml → same refs (shared with main.yml, mode=max)
 #   - tools job → ghcr.io/<owner>/decree-tools:buildcache
-# ci.yml e2e/examples/stress are read-only consumers.
+#   - server-image job → reads ghcr.io/<owner>/decree:buildcache (main.yml is
+#     the canonical writer) and writes the shared `server-build` GHA scope.
+# ci.yml integration (e2e/examples/stress) and upgrade are read-only consumers:
+# they `docker pull` the prebuilt server image and no longer build it.
 # E2E benchmarks moved to release.yml — too slow for per-PR CI.
+# The unit/infra `bench` job lives in bench.yml — it ran push-to-main only and
+# was purely informational, but sat in check.needs and so delayed the alls-green
+# gate 7-10 min on every push. Relocated to a nightly schedule (issue #970).
 
 name: CI
 
@@ -49,6 +59,7 @@ permissions:
 
 env:
   TOOLS_IMAGE: ghcr.io/${{ github.repository_owner }}/decree-tools
+  SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/decree
 
 jobs:
   # Detects which paths changed so downstream jobs can skip on docs-only PRs.
@@ -178,6 +189,52 @@ jobs:
     outputs:
       image: ${{ env.TOOLS_IMAGE }}:${{ steps.hash.outputs.tag }}
 
+  # Builds the server image ONCE and pushes it to ghcr by digest, so the
+  # integration matrix (e2e/examples/stress) and the upgrade job each pull a
+  # single prebuilt image instead of rebuilding it 4×. Runs parallel to `tools`
+  # (both gated only on `changes`). Uses the same two-tier cache as before:
+  # the registry :buildcache (read-only; main.yml is the canonical writer) plus
+  # the shared GHA scope. Pushing by digest avoids tag churn on ghcr.
+  server-image:
+    name: Server image
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push server image by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: build/Dockerfile
+          cache-from: |
+            type=registry,ref=${{ env.SERVER_IMAGE }}:buildcache
+            type=gha,scope=server-build
+          cache-to: type=gha,scope=server-build,mode=max
+          outputs: type=image,name=${{ env.SERVER_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+    outputs:
+      image: ${{ env.SERVER_IMAGE }}@${{ steps.build.outputs.digest }}
+
   # Runs golangci-lint against Go code and buf lint/breaking against protos.
   # buf is installed via go install (no Docker image needed), so this job runs
   # parallel to tools instead of waiting for it.
@@ -242,9 +299,17 @@ jobs:
           done
 
       - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
         env:
-          GOTOOLCHAIN: auto
+          BUF_VERSION: v1.66.1
+          # sha256 of buf-Linux-x86_64 from the official v1.66.1 release (sha256.txt).
+          BUF_SHA256: ef835cb38ed973849f68e0e6a88153cb2168507e09eecbec43a2ada2f6a698be
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/bufbuild/buf/releases/download/${BUF_VERSION}/buf-Linux-x86_64" -o "$HOME/.local/bin/buf"
+          echo "${BUF_SHA256}  $HOME/.local/bin/buf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/buf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buf" --version
 
       - name: Proto lint + breaking
         run: buf lint && buf breaking --against ".git#branch=main"
@@ -377,9 +442,17 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.66.1
         env:
-          GOTOOLCHAIN: auto
+          BUF_VERSION: v1.66.1
+          # sha256 of buf-Linux-x86_64 from the official v1.66.1 release (sha256.txt).
+          BUF_SHA256: ef835cb38ed973849f68e0e6a88153cb2168507e09eecbec43a2ada2f6a698be
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/bufbuild/buf/releases/download/${BUF_VERSION}/buf-Linux-x86_64" -o "$HOME/.local/bin/buf"
+          echo "${BUF_SHA256}  $HOME/.local/bin/buf" | sha256sum -c -
+          chmod +x "$HOME/.local/bin/buf"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/buf" --version
 
       - name: Install protoc-gen-doc
         run: go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@v1.5.1
@@ -402,12 +475,12 @@ jobs:
           fi
 
   # E2E, examples, and stress share identical setup (checkout, Go, Docker,
-  # tools image, server image prebuild). Collapsed into one matrix job to
-  # eliminate the 3× YAML duplication. Legs run in parallel by default.
+  # pull tools image, pull prebuilt server image). Collapsed into one matrix job
+  # to eliminate the 3× YAML duplication. Legs run in parallel by default.
   integration:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    needs: [tools, changes]
+    needs: [tools, server-image, changes]
     if: needs.changes.outputs.code == 'true'
     permissions:
       contents: read
@@ -445,28 +518,8 @@ jobs:
       - name: Pull tools image
         run: docker pull "${{ needs.tools.outputs.image }}" && docker tag "${{ needs.tools.outputs.image }}" decree-tools
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver: docker-container
-          driver-opts: network=host
-
-      - name: Pre-build server image with layer cache
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: build/Dockerfile
-          load: true
-          tags: decree-service
-          # Two-tier cache:
-          #   - registry buildcache (read-only; main.yml is canonical writer)
-          #     supplies stable layers like base image + go mod download.
-          #   - GHA cache (read/write, shared scope) carries warm layers
-          #     forward from previous PR runs without round-tripping ghcr.
-          cache-from: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
-            type=gha,scope=server-build
-          cache-to: type=gha,scope=server-build,mode=max
+      - name: Pull server image
+        run: docker pull "${{ needs.server-image.outputs.image }}"
 
       - name: Run ${{ matrix.name }}
         run: |
@@ -485,6 +538,7 @@ jobs:
           esac
         env:
           TOOLS_IMAGE: ${{ needs.tools.outputs.image }}
+          SERVICE_IMAGE: ${{ needs.server-image.outputs.image }}
 
   # Runs Postgres integration tests using testcontainers-go. Docker is
   # available on ubuntu-latest runners; no server image or tools image required.
@@ -618,48 +672,6 @@ jobs:
       - name: Run chart render tests
         run: ./deploy/helm/decree/tests/template_test.sh
 
-  # Runs hot-path and infrastructure benchmarks; uploads results as a workflow
-  # artifact for tracking over time. Informational — push-to-main only, never
-  # blocks PRs. Storage (dbstore) and Redis benchmarks are skipped: no DB/Redis
-  # services here.
-  bench:
-    name: Benchmarks
-    runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.code == 'true'
-    permissions:
-      contents: read
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: "**/go.sum"
-
-      - name: Run benchmarks
-        run: |
-          go test -bench=. -benchmem -run='^$' -benchtime=5s -count=5 \
-            ./internal/authz/ ./internal/cache/ ./internal/pubsub/ ./cmd/server/ \
-            | tee bench.txt
-
-      - name: Compute p50/p95 with benchstat
-        run: |
-          go run golang.org/x/perf/cmd/benchstat@latest bench.txt | tee bench-stats.txt
-
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@v7
-        with:
-          name: bench-${{ github.sha }}
-          path: |
-            bench.txt
-            bench-stats.txt
-
   # Upgrade safety: runs the previous-release binary against a fresh DB,
   # populates fixture data, applies new migrations, then asserts the new binary
   # can read the old data and accept new writes. Only runs on PRs that touch
@@ -667,7 +679,7 @@ jobs:
   upgrade:
     name: Upgrade test
     runs-on: ubuntu-latest
-    needs: [tools, changes]
+    needs: [tools, server-image, changes]
     if: needs.changes.outputs.migrations == 'true'
     permissions:
       contents: read
@@ -696,29 +708,14 @@ jobs:
       - name: Pull tools image
         run: docker pull "${{ needs.tools.outputs.image }}" && docker tag "${{ needs.tools.outputs.image }}" decree-tools
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-        with:
-          driver: docker-container
-          driver-opts: network=host
-
-      - name: Pre-build server image with layer cache
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: build/Dockerfile
-          load: true
-          tags: decree-service
-          cache-from: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/decree:buildcache
-            type=gha,scope=server-build
-          cache-to: type=gha,scope=server-build,mode=max
+      - name: Pull server image
+        run: docker pull "${{ needs.server-image.outputs.image }}"
 
       - name: Run upgrade test
         run: ./scripts/run-upgrade-test.sh
         env:
           TOOLS_IMAGE: decree-tools
-          SERVICE_IMAGE: decree-service
+          SERVICE_IMAGE: ${{ needs.server-image.outputs.image }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Posts a synthetic codecov/patch:success status when no Go code changed so
@@ -797,7 +794,7 @@ jobs:
   check:
     name: CI check
     if: always()
-    needs: [lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, meta-schemas, helm, bench, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only]
+    needs: [lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, meta-schemas, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -806,4 +803,4 @@ jobs:
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
         with:
           jobs: ${{ toJSON(needs) }}
-          allowed-skips: lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, helm, bench, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only
+          allowed-skips: lint, test, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only
