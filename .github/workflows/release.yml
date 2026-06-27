@@ -226,7 +226,7 @@ jobs:
       # keep binary/image signing from being silently skipped.
       - name: Install Cosign for signing
         # sigstore/cosign-installer@v3.10.1
-        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
 
       - name: Run goreleaser
         # goreleaser/goreleaser-action@v7
