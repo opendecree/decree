@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/opendecree/decree/main/assets/logo.png" alt="OpenDecree" width="150">
+  <img src="https://raw.githubusercontent.com/opendecree/decree/main/assets/opendecree_banner.png" alt="OpenDecree — Define once. Typed Everywhere." width="100%">
 </p>
-
-<h1 align="center">OpenDecree</h1>
 
 <p align="center">
   <a href="https://github.com/opendecree/decree/actions/workflows/ci.yml"><img src="https://github.com/opendecree/decree/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
