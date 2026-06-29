@@ -20,7 +20,7 @@ start at [`decree`](decree.md). For the authentication model in depth, see
 ## Installing
 
 ```
-go install github.com/opendecree/decree/cmd/decree@latest
+go install github.com/opendecree/decree/cmd/decree@v0.12.0-alpha.5
 ```
 
 Verify the install and print the version:

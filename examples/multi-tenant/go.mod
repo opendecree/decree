@@ -3,16 +3,16 @@ module github.com/opendecree/decree/examples/multi-tenant
 go 1.25.0
 
 require (
-	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.4
-	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.4
+	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5
+	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.5
 )
 
 require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
-	github.com/opendecree/decree/api v0.12.0-alpha.4 // indirect
-	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.4 // indirect
-	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.4 // indirect
-	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.4 // indirect
+	github.com/opendecree/decree/api v0.12.0-alpha.5 // indirect
+	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.5 // indirect
+	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.5 // indirect
+	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect

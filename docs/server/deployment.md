@@ -9,7 +9,7 @@ Run with in-memory storage — zero external dependencies:
 ```bash
 # go install names the server binary "server" after its directory; the canonical
 # name is decree-server, matching the release archives and Docker image.
-go install github.com/opendecree/decree/cmd/server@latest
+go install github.com/opendecree/decree/cmd/server@v0.12.0-alpha.5
 mv "$(go env GOPATH)/bin/server" "$(go env GOPATH)/bin/decree-server"
 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
 

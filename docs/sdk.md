@@ -39,7 +39,7 @@ if err != nil {
 
 Runtime config reads and writes for application code.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/configclient@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/configclient@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/configclient](https://pkg.go.dev/github.com/opendecree/decree/sdk/configclient)
 
 Features: Get, GetAll, GetFields, Set, SetMany, typed getters/setters (GetInt, SetBool, etc.), Snapshot for pinned-version reads, GetForUpdate + Update for optimistic concurrency, null support, opt-in retry with exponential backoff (`WithRetry`).
@@ -48,7 +48,7 @@ Features: Get, GetAll, GetFields, Set, SetMany, typed getters/setters (GetInt, S
 
 Schema, tenant, audit, and config admin operations for tooling and CI/CD.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/adminclient@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/adminclient@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/adminclient](https://pkg.go.dev/github.com/opendecree/decree/sdk/adminclient)
 
 Features: Schema CRUD, publish, import/export (YAML), tenant CRUD, field locks, config versioning, rollback, audit log queries, usage stats.
@@ -57,7 +57,7 @@ Features: Schema CRUD, publish, import/export (YAML), tenant CRUD, field locks, 
 
 Live typed configuration values with automatic subscription and reconnect.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/configwatcher@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/configwatcher@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/configwatcher](https://pkg.go.dev/github.com/opendecree/decree/sdk/configwatcher)
 
 Features: `Value[T]` generic type with `Get()`, `GetWithNull()`, `Changes()` channel. Typed accessors (String, Int, Float, Bool, Duration). Auto-reconnect with exponential backoff. Thread-safe.
@@ -66,7 +66,7 @@ Features: `Value[T]` generic type with `Get()`, `GetWithNull()`, `Changes()` cha
 
 Reusable power tools for config management — importable as Go packages for integration into servers, CI, or custom tooling.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/tools@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/tools@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/tools](https://pkg.go.dev/github.com/opendecree/decree/sdk/tools)
 
 Packages: `diff` (config version diffing), `docgen` (schema → markdown), `validate` (offline YAML validation), `seed` (bootstrap from YAML), `dump` (full tenant backup). Offline tools have zero gRPC/proto dependencies.
@@ -75,7 +75,7 @@ Packages: `diff` (config version diffing), `docgen` (schema → markdown), `vali
 
 gRPC connection management and the gRPC implementation of the `Transport` the clients depend on.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/grpctransport@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/grpctransport@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/grpctransport](https://pkg.go.dev/github.com/opendecree/decree/sdk/grpctransport)
 
 `Dial(target, ...)` returns a `*grpc.ClientConn` (TLS with system roots by default; `WithInsecure()`, `WithCustomCA()`, and `WithKeepalive()` adjust it). The convenience constructors `NewConfigClient`, `NewAdminClient`, and `NewWatcher` wrap a connection into the matching client. For a custom connection — for example one with interceptors — construct the `*grpc.ClientConn` yourself and pass it to one of those constructors.
@@ -84,7 +84,7 @@ gRPC connection management and the gRPC implementation of the `Transport` the cl
 
 The shared retry policy used by the clients: exponential backoff with optional jitter, applied to transient (retryable) errors. Enable it on a client with that client's `WithRetry` option. The package also exposes `Config`, `IsRetryable`, and backoff helpers for use in custom tooling.
 
-- **Install:** `go get github.com/opendecree/decree/sdk/retry@latest`
+- **Install:** `go get github.com/opendecree/decree/sdk/retry@v0.12.0-alpha.5`
 - **API Reference:** [pkg.go.dev/github.com/opendecree/decree/sdk/retry](https://pkg.go.dev/github.com/opendecree/decree/sdk/retry)
 
 ## OpenTelemetry instrumentation (Go)

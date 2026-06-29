@@ -58,20 +58,34 @@ Standard development workflow checklists.
 
 ## Release Tag Process
 
-1. Tag root + all submodules:
+Published modules carry local-dev `replace` directives on `main`, which make
+`go install`/`go get` impossible. Per
+[ADR-007](../adr/ADR-007-strip-replaces-at-release.md) they are stripped from the
+tagged commit only — `main` is never changed. Follow ADR-007's "Release
+procedure" exactly; the outline:
+
+1. Merge the require-version-bump PR (every intra-repo `require` → new version;
+   README/docs install commands pinned to the new version). `main` keeps its
+   `replace` directives.
+2. On the release commit: `./scripts/release/strip-replaces.sh strip`.
+3. Tag **leaf-first**, in the order below, tidying each module
+   (`strip-replaces.sh tidy <module>`) and pushing it before the next so its
+   intra-repo dependencies resolve from the module proxy. Push **≤3 tags per
+   `git push`** (GitHub drops tag events past 3 in one push). Tag the root
+   `v{X.Y.Z}` **last** — only it matches the `v*` trigger and creates the GitHub
+   release.
    ```
-   git tag -a v{X.Y.Z} -m "v{X.Y.Z}"
-   git tag -a api/v{X.Y.Z} -m "api v{X.Y.Z}"
-   git tag -a sdk/configclient/v{X.Y.Z} -m "sdk/configclient v{X.Y.Z}"
-   git tag -a sdk/adminclient/v{X.Y.Z} -m "sdk/adminclient v{X.Y.Z}"
-   git tag -a sdk/configwatcher/v{X.Y.Z} -m "sdk/configwatcher v{X.Y.Z}"
-   git tag -a sdk/grpctransport/v{X.Y.Z} -m "sdk/grpctransport v{X.Y.Z}"
-   git tag -a sdk/tools/v{X.Y.Z} -m "sdk/tools v{X.Y.Z}"
-   git tag -a cmd/decree/v{X.Y.Z} -m "cmd/decree v{X.Y.Z}"
+   api → sdk/retry → sdk/configclient → sdk/configwatcher → sdk/adminclient →
+   sdk/grpctransport → sdk/tools → sdk/contrib/envconfig → sdk/contrib/koanf →
+   sdk/contrib/viper → contrib/decree-docs → cmd/decree → (root) v{X.Y.Z}
    ```
-2. Push tags: `git push origin --tags`
-3. If release workflow doesn't trigger: `gh workflow run release.yml --ref v{X.Y.Z}`
-4. Monitor: `gh run list --workflow=release.yml --limit 1`
+4. `./scripts/release/strip-replaces.sh check` must pass on the tagged tree.
+5. If the release workflow doesn't trigger: `gh workflow run release.yml --ref v{X.Y.Z}`
+6. Monitor: `gh run list --workflow=release.yml --limit 1`
+
+> The tagged commit intentionally diverges from `main` (no `replace` directives)
+> and is **not** merged back. During alpha, install commands must pin an explicit
+> version (`@v{X.Y.Z}`) — `@latest` skips pre-releases.
 
 ## Post-Release Verification
 
