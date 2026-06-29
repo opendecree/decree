@@ -1,0 +1,59 @@
+# Build-context ignore specific to build/Dockerfile.decree (the decree CLI image).
+#
+# BuildKit uses a Dockerfile-specific ignore file (<dockerfile-path>.dockerignore)
+# in preference to the root .dockerignore when one exists, and does NOT merge the
+# two. The root .dockerignore excludes cmd/decree/ and sdk/ to keep the SERVER
+# image's `COPY . .` layer cache-stable (commit ba94c76). But the CLI image is
+# built FROM those modules, so excluding them starved its COPYs and broke the
+# build ("/sdk/tools/go.mod: not found"). This file re-includes cmd/decree/ and
+# sdk/ by omitting those two excludes; everything else mirrors the root ignore.
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/IDE
+.github/
+.claude/
+.idea/
+.vscode/
+
+# Build artifacts
+bin/
+dist/
+site/
+.tools-image-built
+ccs
+
+# Go workspace file — excluded so the build is deterministically in module mode
+# (CI has no go.work; the CLI builds cmd/decree as a standalone module).
+go.work
+go.work.sum
+
+# Separate modules / assets the CLI build does NOT compile. cmd/decree/ and sdk/
+# are intentionally NOT excluded here — the CLI image is built from them.
+contrib/
+chaos/
+stress/
+examples/
+fixtures/
+scripts/
+
+# Docs (not needed in images)
+docs/
+mkdocs.yml
+schemas/
+*.md
+LICENSE
+
+# Deploy configs (not needed inside images)
+deploy/
+
+# Environment & secrets
+.env
+.env.*
+
+# Temporary
+tmp/
+*.log
