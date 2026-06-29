@@ -319,16 +319,19 @@ func (w *Watcher) Close() error {
 	}
 	w.closed = true
 	started := w.started
+	// Capture cancelReady atomically with started. A concurrent Start that
+	// fails its snapshot rolls back and replaces w.cancelReady, closing only
+	// the original channel (see Start's rollback branch). Reading cancelReady
+	// in a separate, later lock section could capture the fresh replacement —
+	// which is never closed — and deadlock the <-ready wait below. This is the
+	// failed-snapshot race that hung TestWatcher_StartCloseConcurrent_SnapshotFails.
+	ready := w.cancelReady
 	w.mu.Unlock()
 
 	if started {
-		// Wait until Start has finished assigning w.cancel. This prevents a
-		// race where Close is called while Start is executing but hasn't yet
-		// stored the cancel function.
-		w.mu.RLock()
-		ready := w.cancelReady
-		w.mu.RUnlock()
-
+		// Wait until Start has finished assigning w.cancel (or rolled back).
+		// This prevents a race where Close runs while Start is executing but
+		// hasn't yet stored the cancel function.
 		if ready != nil {
 			<-ready
 		}
