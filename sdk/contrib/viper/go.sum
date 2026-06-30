@@ -18,6 +18,10 @@ github.com/magiconair/properties v1.8.7 h1:IeQXZAiQcpL9mgcAe1Nu6cX9LLw6ExEHKjN0V
 github.com/magiconair/properties v1.8.7/go.mod h1:Dhd985XPs7jluiymwWYZ0G4Z61jb3vdS329zhj2hYo0=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5 h1:Tq+T+bRXHoWhH8oJ7XFjrMNCZ2djpOseaGTe/C7a7I4=
+github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5/go.mod h1:t9myZiP/tUTxGzRq0ldVdPMLMD83Q3gjgPLrC4GDYJE=
+github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 h1:T3g+wnx65Ao4QcQ3zNI7mKpOJgXqovVvklCmJ88x5Ro=
+github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5/go.mod h1:1PLOEQC/m0Pg8tvyEpRVeIdL3OLCvrlD/QtbJpm0nOE=
 github.com/pelletier/go-toml/v2 v2.2.2 h1:aYUidT7k73Pcl9nb2gScu7NSrKCSHIDE89b3+6Wq+LM=
 github.com/pelletier/go-toml/v2 v2.2.2/go.mod h1:1t835xjRzz80PqgE6HHgN2JOsmgYu/h4qDAS4n929Rs=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
