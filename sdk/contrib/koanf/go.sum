@@ -8,3 +8,7 @@ github.com/mitchellh/copystructure v1.2.0 h1:vpKXTN4ewci03Vljg/q9QvCGUDttBOGBIa1
 github.com/mitchellh/copystructure v1.2.0/go.mod h1:qLl+cE2AmVv+CoeAwDPye/v+N2HKCj9FbZEVFJRxO9s=
 github.com/mitchellh/reflectwalk v1.0.2 h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zxSIeXaQ=
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
+github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5 h1:Tq+T+bRXHoWhH8oJ7XFjrMNCZ2djpOseaGTe/C7a7I4=
+github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5/go.mod h1:t9myZiP/tUTxGzRq0ldVdPMLMD83Q3gjgPLrC4GDYJE=
+github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 h1:T3g+wnx65Ao4QcQ3zNI7mKpOJgXqovVvklCmJ88x5Ro=
+github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5/go.mod h1:1PLOEQC/m0Pg8tvyEpRVeIdL3OLCvrlD/QtbJpm0nOE=

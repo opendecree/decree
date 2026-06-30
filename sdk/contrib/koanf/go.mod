@@ -14,5 +14,3 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 // indirect
 )
-
-
