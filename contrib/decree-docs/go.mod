@@ -24,5 +24,3 @@ require (
 
 // Intra-repo dependencies build against the working tree (pattern shared with
 // sdk/contrib and cmd/decree).
-
-
