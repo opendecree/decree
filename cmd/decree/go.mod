@@ -4,10 +4,10 @@ go 1.25.7
 
 require (
 	github.com/lib/pq v1.12.3
-	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.4
-	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.4
-	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.4
-	github.com/opendecree/decree/sdk/tools v0.12.0-alpha.4
+	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.5
+	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5
+	github.com/opendecree/decree/sdk/grpctransport v0.12.0-alpha.5
+	github.com/opendecree/decree/sdk/tools v0.12.0-alpha.5
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/spf13/cobra v1.10.2
 	google.golang.org/grpc v1.80.0
@@ -20,9 +20,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/opendecree/decree/api v0.12.0-alpha.4 // indirect
-	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.4 // indirect
-	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.4 // indirect
+	github.com/opendecree/decree/api v0.12.0-alpha.5 // indirect
+	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.5 // indirect
+	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect

@@ -116,9 +116,9 @@ Beyond the table, OpenDecree also includes **import/export** of portable YAML sc
 ```bash
 # go install names the server binary "server" after its directory; the canonical
 # name is decree-server, matching the release archives and Docker image.
-go install github.com/opendecree/decree/cmd/server@latest
+go install github.com/opendecree/decree/cmd/server@v0.12.0-alpha.5
 mv "$(go env GOPATH)/bin/server" "$(go env GOPATH)/bin/decree-server"
-go install github.com/opendecree/decree/cmd/decree@latest
+go install github.com/opendecree/decree/cmd/decree@v0.12.0-alpha.5
 
 # Start with in-memory storage — zero dependencies
 INSECURE_LISTEN=1 STORAGE_BACKEND=memory HTTP_PORT=8080 decree-server
@@ -145,7 +145,7 @@ docker compose up -d --wait service
 
 ```bash
 # Go install
-go install github.com/opendecree/decree/cmd/decree@latest
+go install github.com/opendecree/decree/cmd/decree@v0.12.0-alpha.5
 
 # Homebrew (macOS / Linux) — coming in beta
 brew install opendecree/tap/decree
@@ -160,7 +160,7 @@ brew install opendecree/tap/decree
 
 | SDK | Language | Protocol | Status | Version | Install |
 |-----|----------|----------|--------|---------|---------|
-| [decree](sdk/) | ![Go](https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![Go release](https://img.shields.io/github/v/release/opendecree/decree?include_prereleases&label=)](https://github.com/opendecree/decree/releases) | `go get github.com/opendecree/decree/sdk/grpctransport@latest` |
+| [decree](sdk/) | ![Go](https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![Go release](https://img.shields.io/github/v/release/opendecree/decree?include_prereleases&label=)](https://github.com/opendecree/decree/releases) | `go get github.com/opendecree/decree/sdk/grpctransport@v0.12.0-alpha.5` |
 | [decree-python](https://github.com/opendecree/decree-python) | ![Python](https://img.shields.io/badge/-Python-3776AB?logo=python&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![PyPI](https://img.shields.io/pypi/v/opendecree?label=)](https://pypi.org/project/opendecree/) | `pip install opendecree` |
 | [decree-typescript](https://github.com/opendecree/decree-typescript) | ![TypeScript](https://img.shields.io/badge/-TypeScript-3178C6?logo=typescript&logoColor=white) | ![gRPC](https://img.shields.io/badge/-gRPC-244c5a?logo=grpc&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | [![npm](https://img.shields.io/npm/v/@opendecree/sdk?label=)](https://www.npmjs.com/package/@opendecree/sdk) | `npm install @opendecree/sdk` |
 | [REST API](#rest-api) | Any | ![REST](https://img.shields.io/badge/-REST%2FJSON-0a7ea4?logo=openapiinitiative&logoColor=white) | ![alpha](https://img.shields.io/badge/status-alpha-orange) | — | `curl` |
@@ -182,11 +182,11 @@ fmt.Println(fee.Get()) // always fresh
 ```
 
 ```bash
-go get github.com/opendecree/decree/sdk/grpctransport@latest  # gRPC transport (pulls in configclient, etc.)
-go get github.com/opendecree/decree/sdk/configclient@latest   # core client (no gRPC dependency)
-go get github.com/opendecree/decree/sdk/adminclient@latest    # admin operations
-go get github.com/opendecree/decree/sdk/configwatcher@latest  # live config watcher
-go get github.com/opendecree/decree/sdk/tools@latest          # diff, docgen, validate, seed, dump
+go get github.com/opendecree/decree/sdk/grpctransport@v0.12.0-alpha.5  # gRPC transport (pulls in configclient, etc.)
+go get github.com/opendecree/decree/sdk/configclient@v0.12.0-alpha.5   # core client (no gRPC dependency)
+go get github.com/opendecree/decree/sdk/adminclient@v0.12.0-alpha.5    # admin operations
+go get github.com/opendecree/decree/sdk/configwatcher@v0.12.0-alpha.5  # live config watcher
+go get github.com/opendecree/decree/sdk/tools@v0.12.0-alpha.5          # diff, docgen, validate, seed, dump
 ```
 
 Go API docs on pkg.go.dev:
@@ -252,7 +252,7 @@ cd quickstart && go run .   # run any example
 ## CLI
 
 ```bash
-go install github.com/opendecree/decree/cmd/decree@latest
+go install github.com/opendecree/decree/cmd/decree@v0.12.0-alpha.5
 
 decree schema list
 decree schema import --publish decree.schema.yaml  # import + auto-publish

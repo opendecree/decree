@@ -33,7 +33,7 @@ brew install decree
 ### Go install
 
 ```bash
-go install github.com/opendecree/decree/cmd/decree@latest
+go install github.com/opendecree/decree/cmd/decree@v0.12.0-alpha.5
 ```
 
 Set your identity (required for all operations):
@@ -137,7 +137,7 @@ decree config get-all <tenant-id>
 Install the SDK:
 
 ```bash
-go get github.com/opendecree/decree/sdk/configclient@latest
+go get github.com/opendecree/decree/sdk/configclient@v0.12.0-alpha.5
 ```
 
 Read configuration values with typed getters:
@@ -210,7 +210,7 @@ currency, _ := snap.Get(ctx, "payments.currency")
 For long-running services that need to react to config changes in real-time, use the configwatcher SDK:
 
 ```bash
-go get github.com/opendecree/decree/sdk/configwatcher@latest
+go get github.com/opendecree/decree/sdk/configwatcher@v0.12.0-alpha.5
 ```
 
 ```go

@@ -171,7 +171,14 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          gh release create "$GITHUB_REF_NAME" \
+          # Mark semver pre-releases (tags containing a hyphen, e.g.
+          # v0.12.0-alpha.5) as pre-releases so GitHub's "Latest" release never
+          # points at an alpha. Stable tags (v1.2.3) create a full release.
+          PRERELEASE_FLAG=""
+          case "$GITHUB_REF_NAME" in
+            *-*) PRERELEASE_FLAG="--prerelease" ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" $PRERELEASE_FLAG \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
             --notes-start-tag "${{ steps.prev.outputs.tag }}" \
