@@ -30,6 +30,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/opendecree/decree/sdk/configclient => ../../../sdk/configclient
 
-replace github.com/opendecree/decree/sdk/retry => ../../../sdk/retry

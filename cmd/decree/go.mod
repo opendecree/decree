@@ -39,16 +39,9 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/opendecree/decree/api => ../../api
 
-replace github.com/opendecree/decree/sdk/retry => ../../sdk/retry
 
-replace github.com/opendecree/decree/sdk/adminclient => ../../sdk/adminclient
 
-replace github.com/opendecree/decree/sdk/configclient => ../../sdk/configclient
 
-replace github.com/opendecree/decree/sdk/grpctransport => ../../sdk/grpctransport
 
-replace github.com/opendecree/decree/sdk/configwatcher => ../../sdk/configwatcher
 
-replace github.com/opendecree/decree/sdk/tools => ../../sdk/tools

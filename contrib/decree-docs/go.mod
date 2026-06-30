@@ -24,8 +24,5 @@ require (
 
 // Intra-repo dependencies build against the working tree (pattern shared with
 // sdk/contrib and cmd/decree).
-replace github.com/opendecree/decree/sdk/tools => ../../sdk/tools
 
-replace github.com/opendecree/decree/sdk/adminclient => ../../sdk/adminclient
 
-replace github.com/opendecree/decree/sdk/retry => ../../sdk/retry

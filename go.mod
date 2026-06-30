@@ -104,4 +104,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 )
 
-replace github.com/opendecree/decree/api => ./api

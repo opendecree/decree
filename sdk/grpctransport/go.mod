@@ -21,12 +21,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 )
 
-replace github.com/opendecree/decree/api => ../../api
 
-replace github.com/opendecree/decree/sdk/retry => ../retry
 
-replace github.com/opendecree/decree/sdk/configclient => ../configclient
 
-replace github.com/opendecree/decree/sdk/adminclient => ../adminclient
 
-replace github.com/opendecree/decree/sdk/configwatcher => ../configwatcher
