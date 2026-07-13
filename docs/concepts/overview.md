@@ -85,6 +85,7 @@ The storage layer persists schemas, config values, and audit entries. A cache an
 
 | Concept | Page |
 |---------|------|
+| How OpenDecree compares to alternatives | [Comparison: Why not X?](comparison.md) |
 | Schemas and fields | [Schemas & Fields](schemas-and-fields.md) |
 | Tenants and multi-tenancy | [Tenants](tenants.md) |
 | The type system | [Typed Values](typed-values.md) |
