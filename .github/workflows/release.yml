@@ -237,7 +237,7 @@ jobs:
 
       - name: Run goreleaser
         # goreleaser/goreleaser-action@v7
-        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94
         with:
           version: "~> v2"
           args: release --clean
@@ -493,7 +493,7 @@ jobs:
     steps:
       - name: Dispatch to decree-python
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/decree-python
@@ -502,7 +502,7 @@ jobs:
 
       - name: Dispatch to decree-typescript
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/decree-typescript
@@ -511,7 +511,7 @@ jobs:
 
       - name: Dispatch to demos
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@0e0cf047c08f936c436da4399814cdb4880c8cbf
+        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/demos
