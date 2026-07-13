@@ -37,6 +37,7 @@ nav:
   - Getting Started: getting-started.md
   - Concepts:
       - Overview: concepts/overview.md
+      - Comparison (Why not X?): concepts/comparison.md
       - Schemas & Fields: concepts/schemas-and-fields.md
       - Schema Format: concepts/schema-format.md
       - Meta-schema: concepts/meta-schema.md

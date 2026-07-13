@@ -107,6 +107,8 @@ OpenDecree manages **business-oriented configuration** — approval rules, fee s
 
 Beyond the table, OpenDecree also includes **import/export** of portable YAML schemas and configs, **optimistic concurrency** (checksum-validated read-modify-write), and **first-class null support** (null and empty string are distinct values).
 
+Wondering *why not LaunchDarkly, Consul, or a secrets manager?* See [Comparison: Why not X?](docs/concepts/comparison.md) for an honest, per-tool breakdown — including why config is not secrets.
+
 ---
 
 ## Quick Start
