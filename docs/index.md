@@ -14,6 +14,8 @@ OpenDecree manages **business-oriented configuration** — approval rules, fee s
 | **Infra config** | etcd, Consul, Spring Cloud Config | Low-level KV stores — no typed schemas, validation, or multi-tenancy |
 | **Cloud config** | AWS AppConfig, Azure App Config | Some validation, but vendor-locked, no schema registry, no gRPC streaming |
 
+See [Comparison: Why not X?](concepts/comparison.md) for an honest, per-tool breakdown — including why config is not secrets.
+
 **OpenDecree** is the first open-source tool to combine:
 
 - **Schema-first design** — define your config structure, types, and constraints before setting values
