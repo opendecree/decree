@@ -21,12 +21,26 @@ from pathlib import Path
 
 VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
+SITE_URL = "https://schemas.opendecree.dev/"
+DESCRIPTION = "JSON Schema 2020-12 documents that describe the OpenDecree configuration format."
+OG_IMAGE = "https://raw.githubusercontent.com/opendecree/decree/main/assets/social-preview.png"
+
 PAGE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>OpenDecree Meta-Schemas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{description}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{site_url}">
+  <meta property="og:title" content="OpenDecree Meta-Schemas">
+  <meta property="og:description" content="{description}">
+  <meta property="og:image" content="{og_image}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="OpenDecree Meta-Schemas">
+  <meta name="twitter:description" content="{description}">
+  <meta name="twitter:image" content="{og_image}">
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1f2937; }}
     h1 {{ font-size: 1.6rem; margin-bottom: 0.25rem; }}
@@ -84,7 +98,14 @@ def main() -> int:
             )
 
     body = "\n".join(rows) or '      <tr><td colspan="2">No versions published yet.</td></tr>'
-    (site / "index.html").write_text(PAGE_TEMPLATE.format(rows=body))
+    (site / "index.html").write_text(
+        PAGE_TEMPLATE.format(
+            rows=body,
+            description=html.escape(DESCRIPTION),
+            site_url=html.escape(SITE_URL),
+            og_image=html.escape(OG_IMAGE),
+        )
+    )
     (site / "robots.txt").write_text("User-agent: *\nDisallow: /\n")
     print(f"Wrote {site / 'index.html'} ({len(versions)} versions)")
     return 0
