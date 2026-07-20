@@ -19,10 +19,14 @@ You should receive a response within 48 hours. We will work with you to understa
 
 | Version | Supported |
 |---------|-----------|
-| 0.10.x (alpha) | ✅ |
-| < 0.10 | ❌ |
+| Latest release | ✅ |
+| Anything earlier | ❌ |
 
-During alpha, only the latest minor release receives security backports. See [GitHub Releases](https://github.com/opendecree/decree/releases) for the current version.
+During alpha, only the latest release receives security fixes — there are no backports to earlier alpha releases. See [GitHub Releases](https://github.com/opendecree/decree/releases) for the current version, or the [Current Versions table](https://github.com/opendecree/.github/blob/main/RELEASING.md#current-versions) for every OpenDecree repo at once.
+
+This is deliberately stated without a version number so it cannot drift out of date between releases.
+
+**If you have pinned a version**, note that pinning and security coverage pull in opposite directions during alpha: we recommend pinning for reproducibility, but a pinned release stops receiving security fixes as soon as a newer one exists. Upgrade to pick them up.
 
 ## Artifact Attestations
 
