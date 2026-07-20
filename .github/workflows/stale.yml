@@ -1,8 +1,12 @@
 name: Stale issues and PRs
 
-# Daily sweep: marks inactive issues/PRs as stale and eventually closes
-# them. The `keep` label opts an item out entirely; `good first issue`
-# and `bug` are also exempt for issues. Issues #162 (decree).
+# Daily sweep. Issues are marked stale for visibility but are never closed
+# automatically — on this project the issue tracker doubles as the roadmap,
+# and a parked item is not an abandoned one. Pull requests still auto-close,
+# since a stale PR is genuinely abandoned work.
+#
+# Issue exemptions: anything with a milestone, plus the `keep`,
+# `good first issue`, and `bug` labels. Issues #162, #1028 (decree).
 #
 # Tuning happens here per-repo so each project can adjust independently
 # if traffic patterns diverge.
@@ -25,23 +29,22 @@ jobs:
         with:
           stale-issue-message: >
             This issue has been inactive for 60 days and is being marked
-            stale. It will be closed in 14 days unless there is new
-            activity. Add the `keep` label to opt out of future sweeps.
+            stale. It will not be closed automatically — comment, or remove
+            the `stale` label, if it is still relevant. Add the `keep` label
+            to opt out of future sweeps.
           stale-pr-message: >
             This PR has been inactive for 30 days and is being marked
             stale. It will be closed in 7 days unless there is new
             activity. Add the `keep` label to opt out of future sweeps.
-          close-issue-message: >
-            Closing for inactivity. Reopen if this is still relevant.
           close-pr-message: >
             Closing for inactivity. Reopen if this is still relevant.
           stale-issue-label: stale
           stale-pr-label: stale
           days-before-issue-stale: 60
-          days-before-issue-close: 14
+          days-before-issue-close: -1  # never auto-close issues
           days-before-pr-stale: 30
           days-before-pr-close: 7
+          exempt-all-issue-milestones: true
           exempt-issue-labels: 'keep,good first issue,bug'
           exempt-pr-labels: 'keep'
-          close-issue-reason: not_planned
           operations-per-run: 100
