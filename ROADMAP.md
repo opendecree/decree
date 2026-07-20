@@ -4,7 +4,7 @@
 
 This roadmap is the honest counterpart to that warning: what you can already build on, what is still moving, and the milestones between here and a stable **1.0**. It stays high-level on purpose — milestones, not dated promises — so it remains accurate as work lands.
 
-For live status, see the [GitHub milestones](https://github.com/opendecree/decree/milestones) and the [project board](https://github.com/orgs/opendecree/projects/1). Raw feature ideas live in [Discussions → Ideas](https://github.com/opendecree/decree/discussions/categories/ideas).
+For live status, see the [GitHub milestones](https://github.com/opendecree/decree/milestones). Raw feature ideas live in [Discussions → Ideas](https://github.com/opendecree/decree/discussions/categories/ideas).
 
 ## Where we are
 
@@ -17,6 +17,7 @@ Alpha means we reserve the right to break anything — but in practice these sur
 | Surface | Maturity |
 |---------|----------|
 | Core type system — `TypedValue`: integer, number, string, bool, time, duration, url, json | **Stable** |
+| Schema format — `spec_version: v0.1.0`, [published meta-schema](https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json) | **Stable** |
 | gRPC API — SchemaService, ConfigService, AuditService | **Stable** |
 | Multi-tenancy & RBAC — roles, tenant scoping, field-level locking | **Stable** |
 | Audit trail & versioning — full history, rollback to any version | **Stable** |
@@ -43,10 +44,12 @@ High-level milestones, roughly in order. Live status lives on the [GitHub milest
 - **Hardening** — usage stats, cursor pagination, security review, stress testing.
 - **Admin GUI** — embedded in the server binary and released.
 - **Lightweight SDKs** — testify dropped, transport decoupled from gRPC, lower Go floor.
+- **Beta Readiness** — findings from the beta-readiness audit across server, storage, tests, and the Go SDK.
+- **Schema Spec v0.1.0** — the schema format is now defined by a [meta-schema](https://schemas.opendecree.dev/schema/v0.1.0/decree-schema.json) authored as JSON Schema 2020-12, published and submitted to schemastore.org, with a pluggable server-side parser registry so spec versions move independently of the SDK.
 
 **In progress**
 
-- **Beta Readiness** — findings from the beta-readiness audit across server, storage, tests, and the Go SDK. Nearly complete; remaining work is documentation polish.
+- **Docs Toolkit** — reference documentation generation and the surrounding tooling.
 
 **Toward 1.0**
 
