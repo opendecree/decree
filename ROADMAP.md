@@ -4,7 +4,7 @@
 
 This roadmap is the honest counterpart to that warning: what you can already build on, what is still moving, and the milestones between here and a stable **1.0**. It stays high-level on purpose — milestones, not dated promises — so it remains accurate as work lands.
 
-For live status, see the [GitHub milestones](https://github.com/opendecree/decree/milestones). Raw feature ideas live in [Discussions → Ideas](https://github.com/opendecree/decree/discussions/categories/ideas).
+For live status, see the [GitHub milestones](https://github.com/opendecree/decree/milestones) and the [project board](https://github.com/orgs/opendecree/projects/1). Raw feature ideas live in [Discussions → Ideas](https://github.com/opendecree/decree/discussions/categories/ideas).
 
 ## Where we are
 
