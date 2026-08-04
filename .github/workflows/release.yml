@@ -493,7 +493,7 @@ jobs:
     steps:
       - name: Dispatch to decree-python
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
+        uses: peter-evans/repository-dispatch@ee5821560769e275d14326eff187898529fb6943
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/decree-python
@@ -502,7 +502,7 @@ jobs:
 
       - name: Dispatch to decree-typescript
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
+        uses: peter-evans/repository-dispatch@ee5821560769e275d14326eff187898529fb6943
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/decree-typescript
@@ -511,7 +511,7 @@ jobs:
 
       - name: Dispatch to demos
         # peter-evans/repository-dispatch@v3
-        uses: peter-evans/repository-dispatch@428de239af282baa9ed57c8003ca2082586703c3
+        uses: peter-evans/repository-dispatch@ee5821560769e275d14326eff187898529fb6943
         with:
           token: ${{ secrets.PROJECT_TOKEN }}
           repository: opendecree/demos
