@@ -127,9 +127,6 @@ jobs:
               - '**/go.sum'
               - 'proto/**'
               - 'db/**'
-              - 'build/**'
-              - 'Makefile'
-              - 'docker-compose*.yml'
 
   # Builds/pushes the shared decree-tools Docker image used by downstream jobs.
   # Skips the build if an image tagged with the Dockerfile hash already exists
@@ -799,9 +796,10 @@ jobs:
             -f description="No coverage change (grpctransport-only PR)" \
             -f target_url="https://codecov.io/gh/${{ github.repository }}"
 
-  # Posts a synthetic codecov/patch:success when only CI/workflow files changed.
-  # .github/workflows/** counts as code (so the test job runs) but Go code is
-  # absent, so Codecov never uploads — leaving codecov/patch pending forever.
+  # Posts a synthetic codecov/patch:success when no Go/proto/db source changed
+  # (e.g. .github/workflows/**, build/** Dockerfiles, Makefile, docker-compose).
+  # Those paths count as "code" (so the test job runs) but produce no coverage
+  # diff, so Codecov never uploads — leaving codecov/patch pending forever.
   codecov-skip-ci-only:
     name: Codecov skip (ci-only)
     runs-on: ubuntu-latest
