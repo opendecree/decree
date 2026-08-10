@@ -6,7 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.5
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	gopkg.in/yaml.v3 v3.0.1
 )
 
