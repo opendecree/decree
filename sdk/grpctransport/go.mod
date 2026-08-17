@@ -8,7 +8,7 @@ require (
 	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5
 	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.5
 	google.golang.org/grpc v1.80.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
