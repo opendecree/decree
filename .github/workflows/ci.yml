@@ -831,7 +831,7 @@ jobs:
     steps:
       - name: All green gate
         # re-actors/alls-green@release/v1
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
+        uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: lint, test-internal, test-modules, sdk-compat, docs, integration, pg-integration, govulncheck, deps-review, helm, upgrade, codecov-skip, codecov-skip-grpctransport, codecov-skip-ci-only
