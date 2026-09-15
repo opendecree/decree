@@ -72,6 +72,9 @@ updates:
       # x/net 0.51+ requires go 1.25.
       - dependency-name: "golang.org/x/net"
         versions: [">=0.51.0"]
+      # goose 3.28+ requires go 1.26.
+      - dependency-name: "github.com/pressly/goose/v3"
+        versions: [">=3.28.0"]
 
   # ── Tier: 1.22-floor (SDK core: configclient, adminclient, configwatcher) ─
   # Consumer-facing SDK modules; must stay installable with go 1.22 toolchains.
