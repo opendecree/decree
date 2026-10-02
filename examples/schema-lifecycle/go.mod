@@ -1,6 +1,6 @@
 module github.com/opendecree/decree/examples/schema-lifecycle
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/opendecree/decree/sdk/adminclient v0.12.0-alpha.5
@@ -8,17 +8,17 @@ require (
 )
 
 require (
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
 	github.com/opendecree/decree/api v0.12.0-alpha.5 // indirect
 	github.com/opendecree/decree/sdk/configclient v0.12.0-alpha.5 // indirect
 	github.com/opendecree/decree/sdk/configwatcher v0.12.0-alpha.5 // indirect
 	github.com/opendecree/decree/sdk/retry v0.12.0-alpha.5 // indirect
-	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/grpc v1.83.2 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260921155816-b14227669459 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260918162117-cecb64721679 // indirect
+	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
