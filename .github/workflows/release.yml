@@ -226,7 +226,7 @@ jobs:
       # preinstalled on the GitHub runner image, so install it explicitly.
       - name: Install Syft for SBOM generation
         # anchore/sbom-action/download-syft@v0.24.0
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c
 
       # GoReleaser shells out to cosign for its signing steps; it is no longer
       # preinstalled on the GitHub runner image, so install it explicitly to
@@ -237,7 +237,7 @@ jobs:
 
       - name: Run goreleaser
         # goreleaser/goreleaser-action@v7
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de
         with:
           version: "~> v2"
           args: release --clean
@@ -266,7 +266,7 @@ jobs:
 
       - name: Push to BSR
         # bufbuild/buf-action@v1
-        uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3
+        uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7
         with:
           token: ${{ secrets.BUF_TOKEN }}
           push: true
