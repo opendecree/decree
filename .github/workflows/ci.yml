@@ -342,7 +342,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         # codecov/codecov-action@v6.0.0
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           files: coverage-internal.out
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -405,7 +405,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         # codecov/codecov-action@v6.0.0
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5
         with:
           files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -699,7 +699,7 @@ jobs:
 
       - name: Set up Helm
         # azure/setup-helm@v4.3.1
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310
+        uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e
         with:
           version: v3.18.4
 
